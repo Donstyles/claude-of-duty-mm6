@@ -1,0 +1,117 @@
+/* ==========================================================================
+   Base layout + boot veil.
+   Panel/HUD styling lives in ui.panels.css, owned by the UI subsystem.
+   ========================================================================== */
+
+:root {
+  --ink: #e8dcc0;
+  --ink-dim: #b3a482;
+  --gold: #d8b25c;
+  --gold-bright: #f4d98a;
+  --blood: #8e2b21;
+  --frame-dark: #16110b;
+  --frame-mid: #2a1f14;
+  --frame-light: #4a3722;
+  --shadow: rgba(0, 0, 0, 0.75);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--ink);
+  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#app { position: fixed; inset: 0; }
+
+#viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#ui-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+#ui-root > * { pointer-events: auto; }
+
+/* ── boot veil ───────────────────────────────────────────────────────────── */
+
+#boot {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at 50% 42%, #22180f 0%, #0b0805 55%, #000 100%);
+  transition: opacity 0.85s ease-out;
+}
+#boot.boot-hidden { opacity: 0; pointer-events: none; }
+
+.boot-inner { text-align: center; width: min(560px, 82vw); }
+
+.boot-title {
+  font-size: clamp(30px, 5.2vw, 62px);
+  letter-spacing: 0.24em;
+  font-weight: 700;
+  color: var(--gold-bright);
+  text-shadow:
+    0 0 24px rgba(216, 178, 92, 0.35),
+    0 2px 0 #3a2a13,
+    0 4px 14px #000;
+}
+
+.boot-sub {
+  margin-top: 0.5em;
+  font-size: clamp(12px, 1.5vw, 17px);
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.boot-bar {
+  margin: 2.6em auto 1em;
+  width: 100%;
+  height: 5px;
+  background: #1a130c;
+  border: 1px solid #3d2d18;
+  box-shadow: inset 0 1px 3px #000;
+  overflow: hidden;
+}
+
+.boot-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #6b4a1c, var(--gold), var(--gold-bright));
+  box-shadow: 0 0 12px rgba(216, 178, 92, 0.55);
+  transition: width 0.25s ease-out;
+}
+
+.boot-status {
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: #8a7c60;
+  font-style: italic;
+  min-height: 1.4em;
+}
+
+.boot-status.boot-error {
+  color: #d9564a;
+  font-style: normal;
+  white-space: pre-wrap;
+  text-align: left;
+}

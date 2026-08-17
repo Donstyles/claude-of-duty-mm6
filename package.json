@@ -1,0 +1,21 @@
+{
+  "name": "claude-of-duty-mm6",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A Might & Magic VI-class first-person party RPG rendered in Three.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "shoot": "node tools/shoot.mjs",
+    "check": "node tools/check.mjs"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1",
+    "vite": "^8.2.1"
+  }
+}
