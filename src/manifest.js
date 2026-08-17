@@ -41,5 +41,8 @@ export const SYSTEM_MANIFEST = [
   { path: './game/SaveSystem.js', export: 'SaveSystem' },
 
   // ── Harness (always last) ────────────────────────────────────────────────
+  // Material lab: inert unless the URL carries ?lab=1. Exists so the visual
+  // review loop can photograph raw materials up close, not just in situ.
+  { path: './render/TextureLabSystem.js', export: 'TextureLabSystem' },
   { path: './core/CaptureSystem.js', export: 'CaptureSystem' },
 ];
