@@ -6,3 +6,4 @@ shots/
 .DS_Store
 dist-check-*/
 .agent-tmp/
+reference/mm6/
