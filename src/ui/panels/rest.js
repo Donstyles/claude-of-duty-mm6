@@ -413,7 +413,9 @@ function moonSvg(lit, waxing) {
   const k = clamp(lit, 0, 1);
   const r = 11;
   const rx = (r * Math.abs(1 - 2 * k)).toFixed(2);
-  const sweep = k < 0.5 ? 1 : 0;
+  // Past half, the terminator bulges away from the lit limb and the arc has to
+  // travel the far side of the disc to enclose it.
+  const sweep = k < 0.5 ? 0 : 1;
   const path = `M 0 ${-r} A ${r} ${r} 0 0 1 0 ${r} A ${rx} ${r} 0 0 ${sweep} 0 ${-r} Z`;
   return `<svg viewBox="-14 -14 28 28" width="100%" height="100%" role="img" aria-hidden="true">`
     + `<circle cx="0" cy="0" r="${r}" fill="#1b2418"/>`

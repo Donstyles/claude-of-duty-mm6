@@ -1,14 +1,18 @@
 import './guild.css';
 import { Panel } from './base.js';
 import {
-  el, setChildren, tooltip, tipMarkup, fmt, ellipsis, engraved, goldOval,
+  el, setChildren, tooltip, tipMarkup, fmt, ellipsis, goldOval,
 } from '../widgets.js';
 import { icon } from '../Icons.js';
 import { MASTERY_LABEL, masteryRank } from '../../game/data/Skills.js';
 import { GuildSystem } from '../../game/GuildSystem.js';
 
-/** Where the painted spell plates live. Committed art, never fetched. */
-const PLATE_BASE = '/art/spells/';
+/**
+ * Where the painted spell plates live. Committed art, never fetched, and the
+ * path is document-relative so the build survives being served from anywhere —
+ * the same rule the portrait plates follow.
+ */
+const PLATE_BASE = 'art/spells/';
 
 /** The sigil each order hangs over its door. */
 const DEVICE_ICON = {
@@ -136,9 +140,14 @@ export class GuildPanel extends Panel {
     this.el.dataset.kind = hall.order.school ? 'magic' : 'lay';
     this.el.dataset.view = this.view;
     this.titleEl.textContent = hall.name;
+    // A tier-one hall is licensed to teach the trade and no rank of it at all,
+    // and saying "teaches to Normal" would hide that rather than state it.
+    const licence = hall.teaches === 'normal'
+      ? 'teaches the trade only'
+      : `teaches to ${MASTERY_LABEL[hall.teaches]}`;
     this.subEl.textContent = hall.school
-      ? `${hall.townName} · spells to level ${hall.maxSpellLevel} · teaches to ${MASTERY_LABEL[hall.teaches]}`
-      : `${hall.townName} · teaches to ${MASTERY_LABEL[hall.teaches]}`;
+      ? `${hall.townName} · spells to level ${hall.maxSpellLevel} · ${licence}`
+      : `${hall.townName} · ${licence}`;
     this.portraitEl.style.backgroundImage = `url("${T.portrait(hall.portrait)}")`;
     this.nameEl.textContent = hall.keeper;
     this.mottoEl.textContent = guilds.say(hall, 'motto');

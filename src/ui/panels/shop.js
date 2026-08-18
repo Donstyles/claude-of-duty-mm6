@@ -499,7 +499,11 @@ export class ShopPanel extends Panel {
       'The goods: stock hung large on the forge wall at irregular heights behind a scrim, with '
       + '"Select the Item to Buy" in the message strip.');
     shot('shop-sell', 'town_millhaven_alchemist', 'sell',
-      'Sell: the party\'s own 14x9 leather pack laid on the apothecary\'s counter.');
+      'Sell: the party\'s own 14x9 leather pack laid on the apothecary\'s counter, with the goods '
+      + 'this counter will not take faded back.');
+    shot('shop-salvage', 'town_duskorn_magicshop', 'buy',
+      'A scavenger\'s stall in dead Duskorn: half the wall is unlabelled and some of it is bent, '
+      + 'which is what Identify and Repair are for.');
   }
 }
 

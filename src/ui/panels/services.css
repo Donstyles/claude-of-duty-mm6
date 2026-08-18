@@ -287,9 +287,9 @@
 }
 .mm-svc-portrait {
   flex: none;
-  width: calc(var(--u) * 70);
-  height: calc(var(--u) * 88);
-  margin: calc(var(--u) * 8) auto 0;
+  width: calc(var(--u) * 66);
+  height: calc(var(--u) * 82);
+  margin: calc(var(--u) * 6) auto 0;
   background: center / cover no-repeat;
   background-color: #211a12;
   box-shadow: 0 0 0 calc(var(--u) * 2) #6e7a6e, 0 0 0 calc(var(--u) * 3) #2a2e2a;
@@ -309,11 +309,11 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  margin-top: calc(var(--u) * 10);
+  margin-top: calc(var(--u) * 8);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(var(--u) * 9);
+  gap: calc(var(--u) * 8);
 }
 .mm-svc-option {
   font-size: calc(var(--u) * 16);
@@ -324,11 +324,10 @@
 }
 .mm-svc-option:hover { color: var(--gold); }
 .mm-svc-option.is-current { color: var(--gold); }
-.mm-svc-option.is-door { font-size: calc(var(--u) * 14); color: var(--gold-deep); }
+.mm-svc-option.is-door { font-size: calc(var(--u) * 13); line-height: calc(var(--u) * 14); color: var(--gold-deep); }
 .mm-svc-option.is-door:hover { color: var(--gold); }
 .mm-svc-doors {
-  margin-top: calc(var(--u) * 2);
-  font-size: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 11);
   font-style: italic;
   color: #b8ae98;
 }

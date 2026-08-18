@@ -160,36 +160,16 @@ const SURNAMES = Object.freeze([
 // ── class prose ─────────────────────────────────────────────────────────────
 
 /**
- * What the nine professions are in *this* kingdom. `Classes.js` carries the
- * mechanics and a one-line role, and both are used verbatim; the paragraph is
- * written here because the class table's own flavour text names another
- * world's geography, and creation is where the setting introduces itself.
+ * Skill prose is quoted from the skill table and class prose from the class
+ * table — creation does not keep a second copy of either. It only asks for
+ * them here so the screen has one import for everything it prints.
  */
-export const CLASS_LORE = Object.freeze({
-  knight: 'Sworn to the crown at Thornwick and drilled by the Sword Chapter. Never opens a spellbook, and never needs to.',
-  paladin: 'A soldier who took the oath of the Kindled Lamp and kept the sword. A knight\'s steel, and wounds closed after.',
-  archer: 'Trained on the march roads, where a longbow and a fire bolt count as one tool used at two ranges.',
-  druid: 'The old faith of the Verdant Weald, licensed by nobody. An answer to every problem, rarely the strongest one.',
-  cleric: 'Ordained in the Order of the Kindled Lamp. Keeps three other people breathing, and settles the rest with a mace.',
-  sorcerer: 'Guild-trained by the Ninefold Concord in the four elements. Lethal at forty paces, a liability at arm\'s length.',
-  ranger: 'Border scouts of the fens and the fjords, with hedge-magic enough to winter alone under the Whitemantle.',
-  monk: 'Raised in the cliff houses above Coldwater Sound. Outfights a knight in plate, given enough years of it.',
-  thief: 'Saltmarch turns out shipping contracts and the people who lift them. No magic — and no locked chest either.',
-});
-
-/**
- * Skill notes for the handful whose entry in `Skills.js` names a place outside
- * this setting. Everything else is quoted from the skill table itself.
- */
-const SKILL_NOTE = Object.freeze({
-  repair_item: 'Straightening a bent blade at the camp fire beats carrying it back to Thornwick.',
-  disarm_trap: 'Chests in Caerwen are rarely just chests. Wire cutters and a steady hand.',
-  stealing: 'The other economy. The Ledger\'s guards in Saltmarch have opinions about it.',
-});
-
-/** What a skill does, in one line, for the creation screen's detail strip. */
 export function skillNote(skillId) {
-  return SKILL_NOTE[skillId] ?? SKILLS[skillId]?.description ?? '';
+  return SKILLS[skillId]?.description ?? '';
+}
+
+export function classNote(classId) {
+  return getClass(classId)?.description ?? '';
 }
 
 /** The professions offered at creation: the nine that start a promotion line. */

@@ -20,9 +20,11 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 50%;
-  width: min(100%, calc(var(--u) * 460));
-  transform: translateX(-50%);
+  /* Centred by insets rather than a transform: a translated element is promoted
+     to its own composited layer, and the page is large enough that it is not
+     worth handing the compositor for the sake of one `translateX`. */
+  left: max(0px, calc((100% - var(--u) * 460) / 2));
+  right: max(0px, calc((100% - var(--u) * 460) / 2));
 }
 
 /* One broad leaf, brightest a third of the way across and falling off into the

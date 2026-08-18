@@ -34,7 +34,7 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 64% 58% at 50% 46%, rgba(12, 7, 3, 0.30) 0%, rgba(9, 5, 2, 0.66) 100%),
+    radial-gradient(ellipse 64% 58% at 50% 46%, rgba(12, 7, 3, 0.38) 0%, rgba(9, 5, 2, 0.72) 100%),
     linear-gradient(180deg, rgba(6, 4, 2, 0.50) 0%, rgba(6, 4, 2, 0.10) 36%, rgba(6, 4, 2, 0.34) 100%);
   pointer-events: none;
 }
@@ -45,6 +45,8 @@
    throwing a shadow back onto the wall behind it. */
 .mm-panel[data-panel='shop'] .mm-shop-item {
   filter:
+    drop-shadow(calc(var(--u) * -0.6) calc(var(--u) * -0.6) 0 rgba(18, 10, 4, 0.85))
+    drop-shadow(calc(var(--u) * 0.6) calc(var(--u) * 0.6) 0 rgba(18, 10, 4, 0.85))
     drop-shadow(calc(var(--u) * 3) calc(var(--u) * 5) calc(var(--u) * 3) rgba(0, 0, 0, 0.75))
     drop-shadow(0 0 calc(var(--u) * 8) rgba(0, 0, 0, 0.45));
   transition: filter 90ms linear;

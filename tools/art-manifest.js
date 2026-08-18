@@ -231,11 +231,98 @@ export const FIGURES = Object.entries(FIGURE_CLASSES).flatMap(([cls, [male, fema
   { id: `figures/f-${cls}`, prompt: `${female}. ${FIGURE_STYLE}`, aspect: '9:16' },
 ]);
 
+/**
+ * Inventory item sprites.
+ *
+ * MM6's items are pre-rendered objects, not icons: a long sword is a long
+ * sword, lit from one side and hung on the wall of the shop at nearly full
+ * panel height. The procedural painter draws a recognisable silhouette and
+ * then stops — a blue teardrop is a potion in the sense that a road sign is a
+ * car — and it is the last place in the interface still doing that.
+ *
+ * Not one plate per item. Ninety-nine scrolls are one rolled scroll, and the
+ * potion ladder is one bottle in twelve tints, so those are drawn once and
+ * varied in code. What gets its own plate is anything whose shape differs.
+ */
+const ITEM_STYLE =
+  'A single object centred on a plain flat mid-grey background, rendered in ' +
+  'the style of a 1998 pre-rendered CRPG inventory sprite: 3D-rendered, ' +
+  'crisp detail, strong directional light from the upper left, believable ' +
+  'worn materials, the object filling the frame. Nothing else in the image — ' +
+  'no hand, no stand, no surface, no shadow cast on any ground, no text, ' +
+  'no border, no frame.';
+
+/** How each family is posed, so a rack of them reads as a rack. */
+const ITEM_POSE = {
+  weapon: 'seen from the side, held vertically with the point upward, blade unsheathed',
+  armour: 'displayed front-on as if worn, empty, arms absent',
+  shield: 'seen face-on, front of the shield toward the viewer',
+  helm: 'seen three-quarters from the front, slightly above',
+  gauntlets: 'a single gauntlet, seen from the back of the hand',
+  boots: 'a pair, side by side, seen from the side',
+  belt: 'laid out horizontally, buckle to the left',
+  cloak: 'hanging from the shoulders, seen from the front',
+  amulet: 'hanging on its chain, pendant toward the viewer',
+  ring: 'seen at a slight angle, stone uppermost',
+  wand: 'held vertically, tip upward',
+  gem: 'a single cut stone, faceted, catching the light',
+  reagent: 'a small quantity, as it would be gathered',
+  artifact: 'seen from the side, posed to show what makes it singular',
+  misc: 'seen from a natural angle',
+  quest: 'seen from a natural angle',
+};
+
+/**
+ * Categories where every entry gets its own plate, because their shapes really
+ * do differ. Everything else shares a family plate — see FAMILY_PLATES.
+ */
+const PER_ITEM = new Set([
+  'weapon', 'armour', 'shield', 'helm', 'gauntlets', 'boots', 'belt',
+  'cloak', 'amulet', 'ring', 'gem', 'reagent', 'misc', 'artifact',
+]);
+
+/** One plate for a whole family, varied in code rather than in credits. */
+const FAMILY_PLATES = [
+  ['scroll', 'A rolled vellum scroll tied with a cord, slightly unrolled at one end'],
+  ['potion_tall', 'A tall corked glass apothecary bottle, empty and clear, catching the light'],
+  ['potion_round', 'A round-bellied corked glass flask, empty and clear'],
+  ['potion_flat', 'A small flat stoppered glass vial, empty and clear'],
+  ['key', 'An iron key with a decorative bow, dark with age'],
+  ['letter', 'A folded paper letter closed with a wax seal'],
+  ['pouch', 'A drawstring leather pouch, tied shut'],
+  ['book', 'A thick leather-bound book, closed, brass corners'],
+];
+
+export function itemPlates(ITEMS) {
+  const out = [];
+  for (const [id, item] of Object.entries(ITEMS)) {
+    if (!PER_ITEM.has(item.category)) continue;
+    const pose = ITEM_POSE[item.category] ?? ITEM_POSE.misc;
+    out.push({
+      id: `items/${id}`,
+      // The item's own description is worth more than its name: "Gullwing
+      // Mail" means nothing to a generator, what it is made of does.
+      prompt: `${item.name}, a fantasy ${item.category}, ${pose}. ${item.desc ?? ''} ${ITEM_STYLE}`,
+      aspect: item.category === 'weapon' || item.category === 'wand' ? '9:16' : '1:1',
+    });
+  }
+  for (const [key, subject] of FAMILY_PLATES) {
+    out.push({
+      id: `items/_${key}`,
+      prompt: `${subject}. ${ITEM_STYLE}`,
+      aspect: key === 'scroll' ? '1:1' : '1:1',
+    });
+  }
+  return out;
+}
+
 import { SPELLS } from '../src/game/data/Spells.js';
+import { ITEMS } from '../src/game/data/Items.js';
 
 export const SPELL_ART = spellPlates(SPELLS);
+export const ITEM_ART = itemPlates(ITEMS);
 
 export const ALL = [
   ...PORTRAITS, ...MISC, ...SPELL_ART, ...SPELL_COVERS, ...VENUE_INTERIORS,
-  ...FIGURES,
+  ...FIGURES, ...ITEM_ART,
 ];

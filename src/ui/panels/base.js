@@ -26,6 +26,7 @@ import { icon, paintedIcon, itemMaterial } from '../Icons.js';
 import { MAGIC_SCHOOLS, ATTRIBUTES, ATTRIBUTE_LABEL, MASTERY_LABEL, masteryRank } from '../../game/data/Skills.js';
 import { spellsForSchool } from '../../game/data/Spells.js';
 import { VENUES } from '../../game/data/Venues.js';
+import { ITEM_PLATES, ITEM_PLATE_BASE } from '../itemPlates.js';
 
 /**
  * venue id -> venue kind, so a panel can find its room from the id the venue
@@ -307,15 +308,68 @@ export function itemTooltip(item, opts = {}) {
 
 /** A free-floating item sprite at its natural size — never a slotted icon. */
 export function itemSprite(item, w, h, cls = 'mm-item') {
+  const plate = itemPlateUrl(item);
   const node = el('div', {
-    className: `${cls} is-${itemQuality(item)}`,
+    className: `${cls} is-${itemQuality(item)}${plate ? ' has-plate' : ''}`,
     dataset: { cat: item.category ?? 'misc' },
-    html: paintedIcon(itemIconName(item), itemMaterial(item)),
     style: { width: w, height: h },
   });
+
+  if (plate) {
+    // A potion is one bottle in twelve colours, so the glass is a plate and the
+    // liquid is a wash behind it. Painting twelve bottles would have cost the
+    // same as twelve more weapons and told the player nothing extra.
+    const tint = POTION_TINT[item.id] ?? POTION_TINT[item.baseId];
+    if (tint) node.appendChild(el('div', { className: 'mm-item-fill', style: { background: tint } }));
+    node.appendChild(el('div', { className: 'mm-item-plate', style: { backgroundImage: `url("${plate}")` } }));
+  } else {
+    node.innerHTML = paintedIcon(itemIconName(item), itemMaterial(item));
+  }
+
   if (item.count > 1) node.appendChild(el('span', { className: 'mm-item-count', text: String(item.count) }));
   return node;
 }
+
+/**
+ * The generated sprite for an item, or null when there is none.
+ *
+ * Falls back through the family plates before giving up: ninety-nine scrolls
+ * are one rolled scroll, and the potion ladder is one bottle, so those were
+ * drawn once rather than ninety-nine and twelve times.
+ */
+export function itemPlateUrl(item) {
+  const id = item?.baseId ?? item?.id;
+  if (id && ITEM_PLATES.has(id)) return `${ITEM_PLATE_BASE}${id}.plate.png`;
+  const family = ITEM_FAMILY[item?.category];
+  if (family && ITEM_PLATES.has(family)) return `${ITEM_PLATE_BASE}${family}.plate.png`;
+  return null;
+}
+
+/** Categories that share one drawn object. */
+const ITEM_FAMILY = Object.freeze({
+  scroll: '_scroll',
+  potion: '_potion_round',
+  quest: '_letter',
+  misc: '_pouch',
+});
+
+/**
+ * The liquid behind the glass, keyed off MM6's coloured potion ladder. Only
+ * potions carry one; everything else is opaque and needs no wash.
+ */
+const POTION_TINT = Object.freeze({
+  potion_red: 'radial-gradient(ellipse at 50% 68%, #d63a2e 0 38%, transparent 62%)',
+  potion_blue: 'radial-gradient(ellipse at 50% 68%, #2f6fd6 0 38%, transparent 62%)',
+  potion_yellow: 'radial-gradient(ellipse at 50% 68%, #d8bb2a 0 38%, transparent 62%)',
+  potion_green: 'radial-gradient(ellipse at 50% 68%, #3aa350 0 38%, transparent 62%)',
+  potion_purple: 'radial-gradient(ellipse at 50% 68%, #7a3ac0 0 38%, transparent 62%)',
+  potion_cyan: 'radial-gradient(ellipse at 50% 68%, #2fb6c0 0 38%, transparent 62%)',
+  potion_grey: 'radial-gradient(ellipse at 50% 68%, #8a8d92 0 38%, transparent 62%)',
+  potion_white: 'radial-gradient(ellipse at 50% 68%, #e8e4dc 0 38%, transparent 62%)',
+  potion_pink: 'radial-gradient(ellipse at 50% 68%, #d97fa8 0 38%, transparent 62%)',
+  potion_golden: 'radial-gradient(ellipse at 50% 68%, #d9a441 0 38%, transparent 62%)',
+  potion_black: 'radial-gradient(ellipse at 50% 68%, #26242a 0 38%, transparent 62%)',
+});
 
 // ── character sheet ─────────────────────────────────────────────────────────
 export default Panel;

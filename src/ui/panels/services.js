@@ -340,7 +340,7 @@ export class ServicesPanel extends Panel {
 
     const foot = refusal
       ? el('div', { className: 'mm-svc-refusal mm-engraved' },
-        el('div', { className: 'mm-svc-refusal-head', text: `${refusal.feast}` }),
+        el('div', { className: 'mm-svc-refusal-head', text: sentence(refusal.feast) }),
         el('div', { text: refusal.text }),
         el('div', { className: 'mm-svc-note', text: refusal.remedy }))
       : this._plaque('Make the party whole', bill,
@@ -588,9 +588,11 @@ export class ServicesPanel extends Panel {
       const refusal = this.model.refusal(v);
       if (refusal) return refusal.text;
       if (!v?.keeper) return 'Nobody keeps this house. The lamps are lit all the same.';
+      // The strip is 460 native pixels and truncates about eighty characters
+      // in, so the price goes in the sentence rather than after it.
       const bill = this.model.templeBill(v);
       return bill > 0
-        ? `${keeper}: "Sit down and tell me where it hurts." Making the party whole would be ${fmt(bill)} gold.`
+        ? `${keeper}: "Sit down. Mending the four of you is ${fmt(bill)} gold."`
         : `${keeper}: "The lamp is lit, and none of you needs it. Long may that last."`;
     }
     return `${keeper}: "Bed, board, beer and gossip, and the gossip is free."`;
@@ -668,6 +670,25 @@ export class ServicesPanel extends Panel {
       },
     });
 
+    cap.registerShot('ui-services-refused', {
+      description: 'A holy day at the Great Lamp: a party in ill odour with two of them still '
+        + 'drunk, turned away at the door, and the alms box named as the way back in.',
+      apply: () => {
+        this._snapshot();
+        purse(3600);
+        this._woundParty();
+        // The campaign opens on the Long Kindling, so the party need only be
+        // in bad odour — which two drunks and an unlicensed Dark caster manage.
+        const members = this.ui.members().map((vm) => vm.source ?? vm);
+        for (const m of members.slice(0, 2)) {
+          if (typeof m.addCondition === 'function') m.addCondition('drunk');
+          else (m.conditions ??= []).push('drunk');
+        }
+        const venue = this.model.resolve({ service: 'temple', venue: 'town_thornwick_temple' });
+        this.ui.openPanel('services', { service: 'temple', venue: venue?.id, page: 'healing' });
+      },
+    });
+
     cap.registerShot('ui-services-donation', {
       description: 'The temple\'s alms box: three ways of giving, what each kindles over the '
         + 'party, and how long it burns.',
@@ -737,7 +758,10 @@ export class ServicesPanel extends Panel {
    * when the screen closes, which is the moment the next shot opens its own.
    */
   _snapshot() {
-    if (this._held) return;
+    // Each shot starts from the world as it really is: the harness photographs
+    // several of these in a row without ever closing the screen between them,
+    // so put the previous shot's staging back before staging this one.
+    this.onClose();
     const party = this.ui.ctx?.get?.('party');
     const members = this.ui.members().map((vm) => vm.source ?? vm);
     this._held = {
@@ -825,6 +849,12 @@ const FEMALE = /\b(sister|madame|matron|priestess|lady|dame|widow|goodwife|[a-z]
 
 function femaleName(name) {
   return FEMALE.test(String(name ?? ''));
+}
+
+/** "the Long Kindling" as a heading rather than as part of a sentence. */
+function sentence(text) {
+  const s = String(text ?? '');
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
 /** The town's plain name, from its id, since the panel never sees the record. */

@@ -2309,9 +2309,13 @@ export class UITextures {
     // panel's stone. Only the body on top of it is a plate — the procedural
     // painter builds a correct silhouette and then reads as a flat cartoon,
     // which is the same wall the portraits hit for the same reason.
-    return this._make(key, 300, 640, (g, w, h, rng) => {
+    // When a painted plate exists the procedural body must not be drawn at
+    // all: it is a different height and a different silhouette, so the two
+    // together left a cartoon head sticking out above an armoured knight.
+    const plated = !!FIGURE_PLATES.pick(spec);
+    return this._make(plated ? `niche-${key}` : key, 300, 640, (g, w, h, rng) => {
       UITextures.paintNiche(g, w, h, rng);
-      paintFigure(g, w, h, spec, rng);
+      if (!plated) paintFigure(g, w, h, spec, rng);
     });
   }
 

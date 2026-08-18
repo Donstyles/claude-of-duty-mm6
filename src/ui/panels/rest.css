@@ -8,21 +8,24 @@
 
 .mm-rest { inset: calc(var(--u) * 12) calc(var(--u) * 14); }
 
-/* The landscape plate loses a little height to the camp plaque below it. */
-.mm-rest-plate { height: calc(var(--u) * 92); }
+/* The landscape plate gives up height to the camp plaque below it: the screen
+   has to fit inside the viewport exactly, with nothing running under the bar. */
+.mm-rest-plate { height: calc(var(--u) * 74); }
 
 .mm-rest-cols {
   gap: calc(var(--u) * 12);
-  margin-top: calc(var(--u) * 10);
-  height: calc(100% - var(--u) * 104);
+  margin-top: calc(var(--u) * 8);
+  height: calc(100% - var(--u) * 84);
+  min-height: 0;
 }
-.mm-rest-left { flex: 250; gap: calc(var(--u) * 6); }
-.mm-rest-right { flex: 176; gap: calc(var(--u) * 8); }
+.mm-rest-left { flex: 250; gap: calc(var(--u) * 5); min-height: 0; }
+.mm-rest-right { flex: 176; gap: calc(var(--u) * 8); min-height: 0; }
 
 .mm-rest-btn {
-  height: calc(var(--u) * 24);
+  height: calc(var(--u) * 22);
+  flex: 0 0 auto;
   justify-content: space-between;
-  font-size: calc(var(--u) * 14);
+  font-size: calc(var(--u) * 13);
 }
 .mm-rest-btn > span:first-child { flex: 1; text-align: center; }
 .mm-rest-btn.is-barred { color: #f0c0b0; }
@@ -36,28 +39,29 @@
   opacity: 0.75;
 }
 
-.mm-rest-group-head { height: calc(var(--u) * 20); font-size: calc(var(--u) * 13); }
-.mm-rest-group { gap: calc(var(--u) * 4); padding: calc(var(--u) * 5); }
+.mm-rest-group-head { height: calc(var(--u) * 18); flex: 0 0 auto; font-size: calc(var(--u) * 12); }
+.mm-rest-group { flex: 0 0 auto; gap: calc(var(--u) * 4); padding: calc(var(--u) * 4); }
 
 /* ── the camp plaque ──────────────────────────────────────────────────────── */
 
 .mm-rest-camp {
   flex: 1;
   min-height: 0;
-  padding: calc(var(--u) * 6) calc(var(--u) * 2) calc(var(--u) * 5);
+  overflow: hidden;
+  padding: calc(var(--u) * 5) calc(var(--u) * 2) calc(var(--u) * 4);
   display: flex;
   flex-direction: column;
-  gap: calc(var(--u) * 1);
   background: rgba(120, 62, 44, 0.24);
-  font-size: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 11);
 }
-.mm-rest-camp .mm-row { line-height: calc(var(--u) * 16); }
+.mm-rest-camp .mm-row { line-height: calc(var(--u) * 15); flex: 0 0 auto; }
 
 /* Interruption, as a bar that fills from safe green into danger — the only
    place on the screen where colour carries a number. */
 .mm-rest-risk {
-  height: calc(var(--u) * 7);
-  margin: calc(var(--u) * 3) calc(var(--u) * 8) calc(var(--u) * 4);
+  height: calc(var(--u) * 6);
+  flex: 0 0 auto;
+  margin: calc(var(--u) * 3) calc(var(--u) * 8);
   background: rgba(40, 20, 14, 0.7);
   box-shadow: inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(20, 10, 8, 0.9);
 }

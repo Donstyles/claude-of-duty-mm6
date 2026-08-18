@@ -321,6 +321,15 @@ export function experienceOf(char) {
   return Number.isFinite(char?.xp) ? char.xp : 0;
 }
 
+/**
+ * Which painted head suits a keeper the venue table only gave a name.
+ * A guess, and a cheap one — the plate is a portrait, not a record.
+ */
+function guessSex(name) {
+  const given = String(name ?? '').split(' ').filter(Boolean).pop() ?? '';
+  return /(a|e|ia|wife|ess)$/i.test(given) ? 'f' : 'm';
+}
+
 const nameOf = (char) => char?.name ?? 'This one';
 const skillName = (id) => SKILLS[id]?.name ?? id;
 const classNameOf = (char) => getClass(char?.classId)?.name ?? 'adventurer';
@@ -448,8 +457,11 @@ export class GuildSystem extends System {
 
   /** Resolve a training hall from a venue id or record. */
   trainingHall(where) {
-    const venue = typeof where === 'string' ? VENUES[where] : (VENUES[where?.venue] ?? where);
-    if (!venue || venue.kind !== 'trainer') return this.trainingHall(this._firstTrainer());
+    const asked = typeof where === 'string' ? VENUES[where] : (VENUES[where?.venue] ?? where);
+    // A screen opened without a venue still has to show a yard, but a world
+    // with no trainer at all must not send this into a loop looking for one.
+    const venue = asked?.kind === 'trainer' ? asked : venuesOfKind('trainer')[0];
+    if (!venue) return null;
     const tier = tierOf(venue);
     return {
       kind: 'trainer',
@@ -461,12 +473,8 @@ export class GuildSystem extends System {
       tier,
       maxLevel: TIER_LEVEL_CAP[tier] ?? 10,
       priceMult: tierPrice(tier),
-      portrait: { key: venue.keeper ?? venue.id, classId: 'knight', gender: /a$|e$|Ilsa|Sister/.test(venue.keeper ?? '') ? 'f' : 'm' },
+      portrait: { key: venue.keeper ?? venue.id, classId: 'knight', gender: guessSex(venue.keeper) },
     };
-  }
-
-  _firstTrainer() {
-    return venuesOfKind('trainer')[0] ?? null;
   }
 
   trainingHalls() {

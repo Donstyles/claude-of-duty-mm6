@@ -145,6 +145,65 @@ def pack_figures(width=320, feather=0.012):
     return out
 
 
+def pack_items(width=256, feather=0.012):
+    """Matte the item sprites off their flat grey ground.
+
+    Same treatment as the standing figures — these are painted on the same flat
+    backdrop for the same reason. They are drawn at anything from a 32px
+    inventory cell to nearly full panel height on a shop wall, so they are kept
+    generous rather than sized to the smallest use.
+    """
+    out, names = 0, []
+    for src in sorted(glob.glob(os.path.join(ROOT, 'items', '*.png'))):
+        if src.endswith('.plate.png'):
+            continue
+        a = np.asarray(Image.open(src).convert('RGB'), dtype=np.float32)
+        h, w, _ = a.shape
+
+        bg = _flat_ground_mask(a)
+        soft = np.asarray(
+            Image.fromarray(((~bg) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.6)),
+            dtype=np.float32) / 255.0
+        alpha = soft * _side_falloff(h, w, feather)
+
+        rgba = np.dstack([a, alpha * 255.0]).astype(np.uint8)
+        im = Image.fromarray(rgba, 'RGBA')
+        im = im.resize((width, max(1, round(width * h / w))), Image.LANCZOS)
+        base = os.path.basename(src)[:-4]
+        im.save(os.path.join(ROOT, 'items', base + '.plate.png'), 'PNG', optimize=True)
+        names.append(base)
+        out += 1
+
+    _write_item_index(names)
+    return out
+
+
+def _write_item_index(names):
+    """Emit the list of plates that exist, for the interface to consult.
+
+    Written rather than probed at runtime: a sprite that discovers its own
+    absence by failing to load flickers through the fallback on every draw, and
+    an inventory redraws constantly.
+    """
+    dst = os.path.join(os.path.dirname(ROOT), 'src', 'ui', 'itemPlates.js')
+    body = ',\n'.join(f"  '{n}'," for n in sorted(names))
+    with open(dst, 'w') as f:
+        f.write(
+            '/**\n'
+            ' * Which item sprites have been generated.\n'
+            ' *\n'
+            ' * Written by tools/artpack.py, not by hand. The interface consults it\n'
+            ' * before drawing so a missing plate falls back to the procedural icon\n'
+            ' * silently, instead of flickering through a failed image load on every\n'
+            ' * redraw — and an inventory redraws constantly.\n'
+            ' */\n'
+            'export const ITEM_PLATES = new Set([\n'
+            + body.replace(',,', ',') +
+            '\n]);\n\n'
+            "export const ITEM_PLATE_BASE = 'art/items/';\n"
+        )
+
+
 def _flat_ground_mask(a):
     """The connected run of flat backdrop reachable from the frame edge."""
     ring = np.concatenate([
@@ -230,12 +289,13 @@ if __name__ == '__main__':
     p = pack_portraits()
     s, suspect = pack_spells()
     f = pack_figures()
+    t = pack_items()
     i = pack_flat('interiors', 960)
     # The school covers sit in the same folder as the spell plates but are
     # opaque framed paintings rather than matted cut-outs, so they take the
     # flat treatment; pack_spells skips them by prefix for the same reason.
     c = pack_flat('spells', 448, only='cover_')
     print(f'[artpack] {p} portraits, {s} spell plates, {c} school covers, '
-          f'{i} interiors, {f} figures')
+          f'{i} interiors, {f} figures, {t} item sprites')
     for name, cover in suspect:
         print(f'  ?  {name}: matte kept {cover:.0%} of the frame - check it')
