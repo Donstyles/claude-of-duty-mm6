@@ -16,6 +16,29 @@ function makeStartingItem(id) {
 }
 
 /**
+ * Put an item in the pack in the shape the backpack screen reads.
+ *
+ * The 14x9 grid stores `{ item, x, y }` wrappers, not bare items — pushing the
+ * item itself leaves an entry the screen cannot draw and cannot pick up. Only
+ * a first fit along the top row is needed here; a starting pack is two things.
+ */
+function stow(inventory, item, cols = 14) {
+  const w = Math.max(1, item.gridW ?? 1);
+  const h = Math.max(1, item.gridH ?? 1);
+  for (let y = 0; y < 9 - h + 1; y++) {
+    for (let x = 0; x < cols - w + 1; x++) {
+      const clash = inventory.some((e) => {
+        const ew = Math.max(1, e.item?.gridW ?? 1);
+        const eh = Math.max(1, e.item?.gridH ?? 1);
+        return x < e.x + ew && x + w > e.x && y < e.y + eh && y + h > e.y;
+      });
+      if (!clash) { inventory.push({ item, x, y }); return true; }
+    }
+  }
+  return false;
+}
+
+/**
  * The party of four, plus the shared resources the whole group draws on:
  * gold, food, and the two hireling slots MM6 shows in its side panel.
  *
@@ -104,7 +127,7 @@ export class PartySystem extends System {
     }
     for (const id of STARTING_PACK) {
       const item = makeStartingItem(id);
-      if (item) char.inventory.push(item);
+      if (item) stow(char.inventory, item);
     }
     return char.refresh();
   }

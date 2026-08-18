@@ -25,7 +25,7 @@ const SLOTS = [
   { id: 'helm', label: 'Helm', x: 74, y: 118, w: 34, h: 30 },
   { id: 'ranged', label: 'Bow', x: 114, y: 150, w: 26, h: 44 },
   { id: 'amulet', label: 'Amulet', x: 74, y: 152, w: 20, h: 18 },
-  { id: 'armour', label: 'Armor', x: 74, y: 190, w: 46, h: 52 },
+  { id: 'armour', label: 'Armor', x: 74, y: 186, w: 40, h: 46 },
   { id: 'mainhand', label: 'Weapon', x: 28, y: 190, w: 26, h: 68 },
   { id: 'offhand', label: 'Shield', x: 118, y: 200, w: 30, h: 40 },
   { id: 'belt', label: 'Belt', x: 74, y: 224, w: 44, h: 14 },

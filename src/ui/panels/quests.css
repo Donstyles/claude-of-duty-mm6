@@ -162,6 +162,10 @@
   color: #000;
   text-shadow: none;
   font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  /* A long entry runs off the foot of the page rather than stopping dead on a
+     half-cut line — the fade is what says "there is more, turn the page". */
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 12), transparent 100%);
+  mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 12), transparent 100%);
 }
 .mm-ui .mm-qb-title {
   margin: 0 0 calc(var(--u) * 4);

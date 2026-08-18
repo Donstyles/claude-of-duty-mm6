@@ -85,7 +85,8 @@
   left: calc(var(--u) * 19);
   width: calc(var(--u) * 13);
   top: calc(var(--u) * 9);
-  bottom: calc(var(--u) * 9);
+  /* Stops above the foot: the plait is tooling on the page, not through it. */
+  bottom: calc(var(--u) * 24);
 }
 .mm-sb-fold::before {
   content: '';
@@ -251,17 +252,23 @@
    original does not have, kept as quiet as ink can be. */
 .mm-sb-colophon {
   position: absolute;
-  left: calc(var(--u) * 30);
-  right: calc(var(--u) * 8);
+  left: calc(var(--u) * 26);
+  right: calc(var(--u) * 6);
   bottom: calc(var(--u) * 4);
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: calc(var(--u) * 12);
+  gap: calc(var(--u) * 10);
   padding-top: calc(var(--u) * 5);
   font-size: calc(var(--u) * 11);
   color: #4a3826;
   text-shadow: none;
+}
+/* Whatever the name and the rank come to, the line ends inside the page. */
+.mm-sb-colophon > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .mm-sb-colophon::before {

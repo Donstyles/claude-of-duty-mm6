@@ -154,9 +154,7 @@
   position: absolute;
   left: 0;
   top: 0;
-  filter:
-    drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.85))
-    brightness(1.08) contrast(1.06);
+  filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.85));
 }
 .mm-item.mm-inv-worn:hover {
   filter: drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 240, 180, 0.9)) brightness(1.14);

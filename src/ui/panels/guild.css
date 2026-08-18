@@ -221,6 +221,17 @@
 .mm-guild-rows::-webkit-scrollbar { width: calc(var(--u) * 5); }
 .mm-guild-rows::-webkit-scrollbar-thumb { background: rgba(180, 176, 172, 0.45); }
 
+/* The Sword Chapter teaches fifteen trades and the board holds thirteen, so
+   the last row has to read as "there is more below" rather than as a mistake. */
+.mm-panel[data-panel='guild'][data-view='instruction'] .mm-guild-board::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: calc(var(--u) * 16);
+  background: linear-gradient(180deg, rgba(10, 10, 8, 0) 0%, rgba(10, 10, 8, 0.92) 100%);
+  pointer-events: none;
+}
+
 .mm-guild-row {
   display: grid;
   grid-template-columns: 1fr calc(var(--u) * 40) calc(var(--u) * 88) calc(var(--u) * 88) calc(var(--u) * 54);

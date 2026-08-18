@@ -96,7 +96,7 @@ const THEMES = {
 };
 
 /** Simultaneous point lights. Torch anchors are unlimited; the pool is not. */
-const LIGHT_POOL = { low: 5, medium: 7, high: 10, ultra: 14 };
+const LIGHT_POOL = { low: 7, medium: 9, high: 12, ultra: 16 };
 
 export class DungeonSystem extends System {
   static id = 'dungeon';
@@ -898,15 +898,17 @@ export class DungeonSystem extends System {
     const { grid, size } = plan;
     for (let j = 1; j < size - 1; j++) {
       for (let i = 1; i < size - 1; i++) {
-        if (!grid[j][i] || plan.noCeil.has(key(i, j)) || (i + j) % 3) continue;
+        if (!grid[j][i] || plan.noCeil.has(key(i, j)) || (i + j) % 2) continue;
         const [wx, wz] = cellToWorld(i, j, size);
         const y = plan.y + plan.height - 0.05;
+        // The strip runs the length of the cell, so consecutive cells join into
+        // one unbroken line of ceiling rather than a row of separate lamps.
         batches.ember.quad(
-          [wx - 0.34, y, wz - CELL / 2], [wx + 0.34, y, wz - CELL / 2],
-          [wx + 0.34, y, wz + CELL / 2], [wx - 0.34, y, wz + CELL / 2],
+          [wx - 0.3, y, wz - CELL / 2], [wx + 0.3, y, wz - CELL / 2],
+          [wx + 0.3, y, wz + CELL / 2], [wx - 0.3, y, wz + CELL / 2],
           [0, 0], [1, 0], [1, 1], [0, 1],
         );
-        state.torches.push({ x: wx, y: y - 0.25, z: wz, steady: true, base: 11 });
+        state.torches.push({ x: wx, y: y - 0.25, z: wz, steady: true, base: 14 });
       }
     }
   }
@@ -925,29 +927,48 @@ export class DungeonSystem extends System {
     const flame = new THREE.ConeGeometry(0.14, 0.36, 6);
     const m = new THREE.Matrix4();
 
-    for (let j = 1; j < size - 1; j += 2) {
-      for (let i = 1; i < size - 1; i += 2) {
+    const mount = (i, j) => {
+      const dirs = SIDES.filter(([di, dj]) => !grid[j + dj]?.[i + di]);
+      if (!dirs.length) return false;
+      const [di, dj] = rng.pick(dirs);
+      const [wx, wz] = cellToWorld(i, j, size);
+      const tx = wx + di * (CELL / 2 - 0.3);
+      const tz = wz + dj * (CELL / 2 - 0.3);
+      const ty = plan.y + 2.5;
+      m.makeTranslation(tx - di * 0.12, ty, tz - dj * 0.12);
+      batches.iron.geom(bracket, m, 1);
+      m.makeTranslation(tx, ty + 0.33, tz);
+      batches.iron.geom(bowl, m, 1);
+      m.makeTranslation(tx, ty + 0.56, tz);
+      batches.ember.geom(flame, m, 1);
+      state.torches.push({
+        x: tx, y: ty + 0.6, z: tz, steady: false, base: 15,
+        phase: rng.range(0, Math.PI * 2), color: def.light.torch,
+      });
+      return true;
+    };
+
+    // Sample every wall-adjacent cell rather than every other one: sampling on
+    // a stride put whole corridors out of reach of any bracket at all, and a
+    // corridor that runs into pure black twelve metres out is not atmosphere,
+    // it is a corridor nobody can read.
+    for (let j = 1; j < size - 1; j++) {
+      for (let i = 1; i < size - 1; i++) {
         if (!grid[j][i] || plan.noFloor.has(key(i, j))) continue;
-        if (!rng.chance(plan.torchDensity)) continue;
-        const dirs = SIDES.filter(([di, dj]) => !grid[j + dj]?.[i + di]);
-        if (!dirs.length) continue;
-        const [di, dj] = rng.pick(dirs);
-        const [wx, wz] = cellToWorld(i, j, size);
-        const tx = wx + di * (CELL / 2 - 0.3);
-        const tz = wz + dj * (CELL / 2 - 0.3);
-        const ty = plan.y + 2.5;
-
-        m.makeTranslation(tx - di * 0.12, ty, tz - dj * 0.12);
-        batches.iron.geom(bracket, m, 1);
-        m.makeTranslation(tx, ty + 0.33, tz);
-        batches.iron.geom(bowl, m, 1);
-        m.makeTranslation(tx, ty + 0.56, tz);
-        batches.ember.geom(flame, m, 1);
-
-        state.torches.push({
-          x: tx, y: ty + 0.6, z: tz, steady: false, base: 15,
-          phase: rng.range(0, Math.PI * 2), color: def.light.torch,
-        });
+        if (rng.chance(plan.torchDensity * 0.3)) mount(i, j);
+      }
+    }
+    // And every room gets at least one, wherever the dice fell.
+    for (const room of plan.rooms) {
+      const lit = state.torches.some((t) => {
+        const [rx, rz] = cellToWorld(room.cx, room.cy, size);
+        return Math.abs(t.x - rx) < room.w * CELL / 2 && Math.abs(t.z - rz) < room.h * CELL / 2;
+      });
+      if (lit) continue;
+      for (let n = 0; n < 12; n++) {
+        const i = room.x + rng.int(0, room.w - 1);
+        const j = room.y + rng.int(0, room.h - 1);
+        if (grid[j]?.[i] && !plan.noFloor.has(key(i, j)) && mount(i, j)) break;
       }
     }
     bracket.dispose(); bowl.dispose(); flame.dispose();
@@ -1612,7 +1633,7 @@ export class DungeonSystem extends System {
       const a = pick.a;
       light.position.set(a.x, a.y, a.z);
       light.color.setHex(a.color ?? this.currentDef.light.torch);
-      light.distance = a.steady ? 15 : 24;
+      light.distance = a.steady ? 20 : 30;
       // Two incommensurate sines read as fire; one reads as a pulse. The
       // act-five strips get neither — steady light with no flame in it is the
       // whole tell, so it must not so much as breathe.
@@ -1742,7 +1763,7 @@ export class DungeonSystem extends System {
     let mat = this._embers.get(color);
     if (!mat) {
       mat = new THREE.MeshStandardMaterial({
-        color, emissive: color, emissiveIntensity: 2.6, roughness: 0.55, metalness: 0,
+        color, emissive: color, emissiveIntensity: 2.0, roughness: 0.55, metalness: 0,
       });
       mat.name = `mat:ember:${color.toString(16)}`;
       this._embers.set(color, mat);
@@ -1791,7 +1812,7 @@ export class DungeonSystem extends System {
         const plan = b.floors[0];
         const hall = plan.rooms.slice().sort((p, q) => q.w * q.h - p.w * p.h)[0];
         const [x, z] = cellToWorld(hall.cx, hall.cy, plan.size);
-        return { x, y: plan.y + 1.7, z: z + (hall.h * CELL) / 2 - 1.2, yaw: 0 };
+        return { x, y: plan.y + 1.7, z: z + Math.min((hall.h * CELL) / 2 - 1.2, 6), yaw: 0 };
       }),
     });
 
@@ -1809,7 +1830,15 @@ export class DungeonSystem extends System {
       description: 'Ossra Deep: a corridor on the grid, with its drain channel and ceiling light.',
       apply: (c) => look(c, 'dun_ossra_first_descent', (b) => {
         const plan = b.floors[0];
-        const [x, z] = cellToWorld(3, plan.spine ?? 6, plan.size);
+        // Stand in the spine where it is genuinely a corridor — a chamber sits
+        // astride some of the lattice intersections, and a shot taken inside
+        // one shows a hall rather than the thing act five is about.
+        const j = plan.spine ?? 6;
+        let i = 2;
+        for (let k = 1; k < plan.size - 2; k++) {
+          if (plan.grid[j][k] && !plan.grid[j - 1][k] && !plan.grid[j + 1][k]) { i = k; break; }
+        }
+        const [x, z] = cellToWorld(i, j, plan.size);
         return { x, y: plan.y + 1.7, z, yaw: -Math.PI / 2 };
       }),
     });

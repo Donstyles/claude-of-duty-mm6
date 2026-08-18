@@ -1390,9 +1390,12 @@
 /* An item drawn from a generated sprite rather than a procedural icon. The
    liquid wash sits behind the glass so one bottle plate serves the whole
    coloured potion ladder. */
-.mm-item.has-plate { position: relative; }
-.mm-item .mm-item-plate,
-.mm-item .mm-item-fill {
+/* Deliberately not scoped to .mm-item: the shop hangs the same sprites on its
+   wall under its own class, and scoping this to the backpack's class meant a
+   second copy of the rule block over there. */
+.has-plate { position: relative; }
+.mm-item-plate,
+.mm-item-fill {
   position: absolute;
   inset: 0;
   background-repeat: no-repeat;
@@ -1400,4 +1403,4 @@
   background-size: contain;
   pointer-events: none;
 }
-.mm-item .mm-item-fill { opacity: 0.85; }
+.mm-item-fill { opacity: 0.85; }

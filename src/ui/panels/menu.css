@@ -137,7 +137,7 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: calc(var(--u) * 4);
+  gap: calc(var(--u) * 3);
   padding-right: calc(var(--u) * 4);
 }
 .mm-ui .mm-sv-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
@@ -147,7 +147,8 @@
 .mm-ui .mm-sv {
   flex: 1;
   min-width: 0;
-  padding: calc(var(--u) * 4) calc(var(--u) * 10);
+  /* Seven slots have to stand on one page, so a row is two lines and no more. */
+  padding: calc(var(--u) * 2) calc(var(--u) * 10);
   text-align: left;
   background: rgba(26, 24, 18, 0.75);
   box-shadow:
@@ -160,7 +161,7 @@
 .mm-ui .mm-sv:disabled:hover { background: rgba(26, 24, 18, 0.75); }
 
 .mm-ui .mm-sv-head { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
-.mm-ui .mm-sv-name { font-size: calc(var(--u) * 13); color: #ffd773; }
+.mm-ui .mm-sv-name { font-size: calc(var(--u) * 12); line-height: 1.2; color: #ffd773; }
 .mm-ui .mm-sv.is-empty .mm-sv-name { color: #9a8c6a; }
 .mm-ui .mm-sv-when { font-size: calc(var(--u) * 9); color: #9a8c6a; white-space: nowrap; }
 .mm-ui .mm-sv-body { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }

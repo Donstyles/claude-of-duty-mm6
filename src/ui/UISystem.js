@@ -264,6 +264,23 @@ export class UISystem extends System {
    * and a doorstep conversation rents you a neighbour — and both were writing
    * `ui.hirelings` directly to keep the panes truthful.
    */
+  /**
+   * Put an item into a character's backpack, first fit.
+   *
+   * Public because three screens hand the party goods — a shop, a temple's
+   * alms, a doorstep errand — and each had written its own copy of the 14x9
+   * packer against private helpers. Returns false when the pack is full, which
+   * the caller must report rather than swallow.
+   */
+  stow(index, item) {
+    const vm = this._vm[index] ?? this._vm[this.activeIndex];
+    const pack = vm?.source?.inventory ?? vm?.inventory;
+    if (!pack || !item) return false;
+    if (!this._placeInGrid(pack, item)) return false;
+    this._syncParty(true);
+    return true;
+  }
+
   setHirelings(list) {
     this.hirelings = Array.isArray(list) ? list : [];
     this.hud?.setHirelings(this.hirelings);

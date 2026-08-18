@@ -529,8 +529,18 @@ export class MenuPanel extends Panel {
       + 'cavern backdrop, recessed plaques in warm gold serif with Quit in red, sidebar still live.');
     shot('ui-options', 'options', 'The options page: sound, music, sensitivity, invert, field of view, '
       + 'draw distance, turning and difficulty, each writing through to the system that owns it.');
-    shot('ui-saves', 'save', 'The save-slot list: party, level, place and timestamp for every slot, '
-      + 'including the quick save and the autosave.');
+    cap.registerShot('ui-saves', {
+      description: 'The save-slot list: party, level, place and timestamp for every slot, including '
+        + 'the quick save and the autosave.',
+      // Writing a slot first is the point: the row can only be photographed
+      // once something real has been through the save system.
+      apply: (ctx) => {
+        ctx.events.emit('ui:save', { slot: 'slot1' });
+        ctx.events.emit('ui:save', { slot: 'quick' });
+        this.page = 'save';
+        this.ui.openPanel('menu', { page: 'save' });
+      },
+    });
   }
 }
 

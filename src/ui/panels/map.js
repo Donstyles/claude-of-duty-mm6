@@ -1279,7 +1279,7 @@ export class MapPanel extends Panel {
         + 'buildings with salmon roofs, door glyphs, and the white party arrow.',
       apply: () => {
         this.view = 'local';
-        this.zoom.local = 1.6;
+        this.zoom.local = 1;
         this.centre.local = null;
         this.ui.openPanel('map');
       },

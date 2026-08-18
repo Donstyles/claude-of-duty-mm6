@@ -333,15 +333,15 @@ export class SpellbookPanel extends Panel {
     setChildren(this.grid, ...cells);
 
     // The page's foot carries what the original leaves to the party bar and the
-    // character sheet: whose book this is, how far they have got in this school
-    // and what they have left to spend.
-    this.colophonName.textContent = vm ? `${vm.name} the ${vm.className}` : '';
+    // character sheet: whose book this is, how far they have got in this school,
+    // and what they have left to spend. Three short readings rather than three
+    // sentences — the line has 360 native pixels and the longest name in the
+    // game has to fit beside the longest rank.
+    this.colophonName.textContent = vm?.name ?? '';
     this.colophonSchool.textContent = state.open
-      ? `${school.name} — ${MASTERY_LABEL[state.mastery] ?? titleCase(state.mastery)} (${state.level})`
-      : `${school.name} — never studied`;
-    this.colophonSP.textContent = vm
-      ? `Spell Points ${Math.round(vm.sp)} / ${Math.round(vm.spMax)}`
-      : '';
+      ? `${school.name} · ${MASTERY_LABEL[state.mastery] ?? titleCase(state.mastery)} (${state.level})`
+      : `${school.name} · never studied`;
+    this.colophonSP.textContent = vm ? `${Math.round(vm.sp)} / ${Math.round(vm.spMax)} SP` : '';
 
     const selected = spells.find((s) => s.id === this.spellId);
     this.castBtn.classList.toggle('is-off', !this._castable(selected, state, known).ok);

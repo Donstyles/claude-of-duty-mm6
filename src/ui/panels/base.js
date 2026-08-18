@@ -149,8 +149,12 @@ export class Panel {
   }
 
   _onKeyDown(e) {
-    if (e.key === 'Escape') { e.preventDefault(); this.ui.closePanel(); return; }
+    // `onKey` gets first refusal, Escape included. A screen with steps inside
+    // it — the shop's counter and its goods wall, a guild's stock behind its
+    // terms — needs Escape to back out one level before it closes the screen,
+    // and it cannot do that if the base class has already shut the panel.
     if (this.onKey(e)) { e.preventDefault(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); this.ui.closePanel(); return; }
     if (e.key !== 'Tab') return;
     const nodes = [...this.el.querySelectorAll(FOCUSABLE)].filter((n) => n.offsetParent !== null);
     if (!nodes.length) return;
