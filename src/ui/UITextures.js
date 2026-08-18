@@ -3072,6 +3072,7 @@ function paintPortrait(g, w, h, cfg, rng) {
   if (cfg.beard) paintBeard(g, cfg, rng, geo, face);
   if (cfg.helm) paintHelm(g, cfg, rng, geo);
   else paintHair(g, w, h, cfg, rng, geo);
+  paintAccents(g, cfg, rng, geo);
   paintFinish(g, w, h, cfg, rng, geo);
 }
 
@@ -3612,19 +3613,22 @@ function paintBeard(g, cfg, rng, geo, face) {
 function paintHair(g, w, h, cfg, rng, geo) {
   const { cx, cy, rx, ry } = geo;
   const style = cfg.hairStyle % 4;
-  const drop = style === 0 ? cy + ry * 0.06
-    : style === 1 ? cy + ry * 0.55
-      : style === 2 ? cy + ry * 1.75
-        : cy + ry * 1.05;
-  const flare = style >= 2 ? 1.30 : 1.16;
+  // Hair reaching only to the crown leaves a bare pate and a thin rim, which is
+  // half of why these read as dolls: in the reference the mass covers the
+  // temples, comes forward of the ears and carries real width in silhouette.
+  const drop = style === 0 ? cy + ry * 0.42
+    : style === 1 ? cy + ry * 0.86
+      : style === 2 ? cy + ry * 1.95
+        : cy + ry * 1.30;
+  const flare = style >= 2 ? 1.42 : 1.28;
 
   const mass = new Path2D();
   mass.moveTo(cx - rx * flare, drop);
   mass.bezierCurveTo(cx - rx * (flare + 0.12), cy - ry * 0.80, cx - rx * 0.92, cy - ry * 1.42, cx, cy - ry * 1.34);
   mass.bezierCurveTo(cx + rx * 0.92, cy - ry * 1.42, cx + rx * (flare + 0.12), cy - ry * 0.80, cx + rx * flare, drop);
   // Inner edge: the opening the face shows through.
-  mass.bezierCurveTo(cx + rx * 1.00, cy + ry * 0.12, cx + rx * 0.98, cy - ry * 0.46, cx + rx * 0.40, cy - ry * 0.64);
-  mass.bezierCurveTo(cx - rx * 0.40, cy - ry * 0.74, cx - rx * 0.98, cy - ry * 0.46, cx - rx * 1.00, cy + ry * 0.12);
+  mass.bezierCurveTo(cx + rx * 0.86, cy + ry * 0.18, cx + rx * 0.86, cy - ry * 0.40, cx + rx * 0.38, cy - ry * 0.62);
+  mass.bezierCurveTo(cx - rx * 0.38, cy - ry * 0.72, cx - rx * 0.86, cy - ry * 0.40, cx - rx * 0.86, cy + ry * 0.18);
   mass.closePath();
 
   // Feathered under-layer so the silhouette is not a cut-out.
@@ -3822,6 +3826,95 @@ function paintHelm(g, cfg, rng, geo) {
 }
 
 /** Rim light, glaze, vignette and canvas tooth. */
+/**
+ * The crisp pass.
+ *
+ * Everything before this is soft blurred dabs, and a face built only from soft
+ * edges reads as airbrushed however well its values are structured — that is
+ * precisely why the first portraits looked like smooth 3D renders rather than
+ * paintings. Real painted heads carry a MIX: soft transitions across the big
+ * forms, then hard accents where anatomy actually turns a corner — the lash
+ * line, the nostril wing, the mouth line, the crease of the upper lid. Those
+ * accents are also what survives being shown at 90 px in the HUD.
+ *
+ * Kept deliberately asymmetric: perfectly mirrored features are the other
+ * strong tell that a face was generated rather than painted.
+ */
+function paintAccents(g, cfg, rng, geo) {
+  const { cx, rx, ry, eyeY, noseY, mouthY } = geo;
+  const dark = mixHex(cfg.skin.deep, '#1a0e06', 0.45);
+  const dx = rx * 0.40;
+  const ew = rx * 0.185;
+
+  g.save();
+  g.lineCap = 'round';
+
+  // Lash lines. Hard, and heavier on the upper lid than the lower.
+  for (const side of [-1, 1]) {
+    const ex = cx + side * dx;
+    const skew = side < 0 ? 1.0 : 0.94;          // never quite symmetric
+    g.strokeStyle = dark;
+    g.globalAlpha = 0.78;
+    g.lineWidth = Math.max(1.4, ry * 0.020);
+    g.beginPath();
+    g.moveTo(ex - ew * 0.95 * skew, eyeY + ry * 0.008);
+    g.quadraticCurveTo(ex, eyeY - ry * 0.040 * skew, ex + ew * 0.95, eyeY + ry * 0.004);
+    g.stroke();
+
+    // Upper-lid crease, set back above the lash and much softer.
+    g.globalAlpha = 0.30;
+    g.lineWidth = Math.max(1, ry * 0.013);
+    g.beginPath();
+    g.moveTo(ex - ew * 0.78, eyeY - ry * 0.052 * skew);
+    g.quadraticCurveTo(ex, eyeY - ry * 0.086, ex + ew * 0.80, eyeY - ry * 0.044);
+    g.stroke();
+  }
+
+  // Nostril wings — small, dark and hard. Nothing else on the face reads as
+  // "nose" at portrait scale the way these two marks do.
+  g.globalAlpha = 0.72;
+  g.fillStyle = dark;
+  for (const side of [-1, 1]) {
+    g.beginPath();
+    g.ellipse(cx + side * rx * 0.115, noseY + ry * 0.030,
+      rx * 0.030, ry * 0.020, side * 0.5, 0, TAU);
+    g.fill();
+  }
+  // The shadowed underplane of the nose, one hard-edged wedge.
+  g.globalAlpha = 0.34;
+  g.beginPath();
+  g.moveTo(cx - rx * 0.10, noseY + ry * 0.030);
+  g.quadraticCurveTo(cx, noseY + ry * 0.072, cx + rx * 0.10, noseY + ry * 0.030);
+  g.quadraticCurveTo(cx, noseY + ry * 0.012, cx - rx * 0.10, noseY + ry * 0.030);
+  g.fill();
+
+  // The mouth line itself: the darkest, hardest mark on the lower face.
+  g.globalAlpha = 0.66;
+  g.strokeStyle = dark;
+  g.lineWidth = Math.max(1.3, ry * 0.017);
+  const mw = rx * (cfg.gender === 'f' ? 0.34 : 0.39);
+  g.beginPath();
+  g.moveTo(cx - mw * 0.92, mouthY + ry * 0.012);
+  g.quadraticCurveTo(cx - mw * 0.3, mouthY - ry * 0.020, cx, mouthY + ry * 0.004);
+  g.quadraticCurveTo(cx + mw * 0.3, mouthY - ry * 0.018, cx + mw * 0.90, mouthY + ry * 0.016);
+  g.stroke();
+
+  // A few visible brush strokes on the lit cheek. Paint, not airbrush.
+  g.globalAlpha = 0.10;
+  g.strokeStyle = cfg.skin.light;
+  g.lineWidth = Math.max(2, rx * 0.028);
+  for (let i = 0; i < 5; i++) {
+    const bx = cx - rx * rng.range(0.22, 0.60);
+    const by = eyeY + ry * rng.range(0.20, 0.72);
+    g.beginPath();
+    g.moveTo(bx, by);
+    g.lineTo(bx + rx * rng.range(0.06, 0.16), by - ry * rng.range(0.02, 0.10));
+    g.stroke();
+  }
+
+  g.restore();
+}
+
 function paintFinish(g, w, h, cfg, rng, geo) {
   const { cx, cy, rx, ry } = geo;
 
