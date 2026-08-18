@@ -31,9 +31,9 @@ Read it fully before writing a line.
    generator. Credentials for build-time generation live at
    `~/.config/meshy/env`, outside this repository, and must never enter it —
    `.githooks/pre-commit` blocks any commit that carries one.
-5. **Your module must not throw on init.** A missing dependency degrades
+6. **Your module must not throw on init.** A missing dependency degrades
    gracefully (`ctx.get('x')?.method?.()`), it never breaks the boot.
-6. **Verify with a real build** before you report done:
+7. **Verify with a real build** before you report done:
    `npx vite build` must succeed, and `node tools/shoot.mjs <your-shot>` must
    produce a PNG with no console errors.
 
@@ -108,8 +108,7 @@ worlds across runs. (Per-frame cosmetic jitter is fine.)
 | id | file | owns |
 |---|---|---|
 | `terrain` | `world/TerrainSystem.js` | heightfield, LOD, splat material, height/normal queries |
-| `lighting` | `world/LightingSystem.js` | sun/moon, CSM shadows, ambient/IBL, torch light pool |
-| `sky` | `world/SkySystem.js` | atmosphere, clouds, stars, sun disc, fog colour |
+| `sky` | `world/SkySystem.js` | atmosphere, clouds, stars, sun disc, **and all scene lighting and fog** — sun colour, ambient tint and fog must move together with the hour, so there is deliberately no separate lighting system |
 | `water` | `world/WaterSystem.js` | lakes/sea, reflection+refraction, shoreline |
 | `weather` | `world/WeatherSystem.js` | rain/snow/storm/fog state and particles |
 | `vegetation` | `world/VegetationSystem.js` | instanced grass, trees, bushes, wind |
