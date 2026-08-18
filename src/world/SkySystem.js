@@ -63,144 +63,144 @@ const KEYS = [
   {
     h: 0.0,                                   // deep night
     zen: C(0x080f2a), hor: C(0x0d1636), lift: 0.35, pow: 5.0, aniso: 0.0,
-    gNear: C(0x11151f), gFar: C(0x1c2233),
+    gNear: C(0x151a26), gFar: C(0x21283b),
     cmul: [0.34, 0.39, 0.58], cadd: [0.0, 0.0, 0.010], cbright: 0.66, silver: 0.15,
     sunTint: C(0xa8c0e8), sunDisc: 0.0, sunHalo: 0.0,
-    lightCol: C(0xaec0e0), lightI: 0.30,
-    ambSky: C(0x445886), ambGnd: C(0x30374a), ambI: 0.56,
-    fog: C(0x0c1430), fogD: 0.00042,
+    lightCol: C(0xaec0e0), lightI: 0.44,
+    ambSky: C(0x445886), ambGnd: C(0x30374a), ambI: 0.95,
+    fog: C(0x0c1430), fogD: 0.00030,
     stars: 1.0, night: 1.0, moonDisc: 1.0, moonTint: C(0xd2dcf0),
   },
   {
     h: 4.4,                                   // last of the night
     zen: C(0x0c1436), hor: C(0x241f4a), lift: 0.60, pow: 4.5, aniso: 0.50,
-    gNear: C(0x121620), gFar: C(0x1e2436),
+    gNear: C(0x141924), gFar: C(0x20273a),
     cmul: [0.40, 0.42, 0.60], cadd: [0.0, 0.0, 0.008], cbright: 0.70, silver: 0.20,
     sunTint: C(0xb08498), sunDisc: 0.0, sunHalo: 0.05,
-    lightCol: C(0x9aacd6), lightI: 0.29,
-    ambSky: C(0x475b8a), ambGnd: C(0x31384b), ambI: 0.57,
-    fog: C(0x10193a), fogD: 0.00050,
+    lightCol: C(0x9aacd6), lightI: 0.42,
+    ambSky: C(0x475b8a), ambGnd: C(0x31384b), ambI: 0.96,
+    fog: C(0x10193a), fogD: 0.00034,
     stars: 0.90, night: 0.92, moonDisc: 0.95, moonTint: C(0xd0dbef),
   },
   {
     h: 5.6,                                   // civil dawn
     zen: C(0x16234f), hor: C(0x78546c), lift: 1.0, pow: 3.6, aniso: 0.70,
-    gNear: C(0x14141c), gFar: C(0x262234),
+    gNear: C(0x191921), gFar: C(0x2b273a),
     cmul: [0.78, 0.64, 0.66], cadd: [0.030, 0.010, 0.020], cbright: 0.88, silver: 0.45,
     sunTint: C(0xdc9a76), sunDisc: 0.30, sunHalo: 0.35,
-    lightCol: C(0x9a7a90), lightI: 0.16,
-    ambSky: C(0x505a7e), ambGnd: C(0x423e4a), ambI: 0.40,
-    fog: C(0x453e5e), fogD: 0.00072,
+    lightCol: C(0x9a7a90), lightI: 0.26,
+    ambSky: C(0x505a7e), ambGnd: C(0x423e4a), ambI: 0.80,
+    fog: C(0x453e5e), fogD: 0.00042,
     stars: 0.45, night: 0.55, moonDisc: 0.60, moonTint: C(0xd6dcea),
   },
   {
     h: 6.4,                                   // sunrise
     zen: C(0x233a73), hor: C(0xc6864f), lift: 1.0, pow: 4.0, aniso: 0.88,
-    gNear: C(0x262218), gFar: C(0x40352a),
+    gNear: C(0x2e2a1e), gFar: C(0x4a3f33),
     cmul: [1.28, 0.90, 0.68], cadd: [0.090, 0.020, 0.0], cbright: 1.0, silver: 0.95,
     sunTint: C(0xffb572), sunDisc: 1.0, sunHalo: 0.90,
-    lightCol: C(0xffa95e), lightI: 0.44,
-    ambSky: C(0x7787b2), ambGnd: C(0x625542), ambI: 0.72,
-    fog: C(0x6d5f76), fogD: 0.00068,
+    lightCol: C(0xffa95e), lightI: 0.88,
+    ambSky: C(0x8091b8), ambGnd: C(0x6c5f4a), ambI: 1.45,
+    fog: C(0x6d5f76), fogD: 0.00040,
     stars: 0.10, night: 0.14, moonDisc: 0.20, moonTint: C(0xdde3ef),
   },
   {
     h: 7.6,                                   // early morning
     zen: C(0x2a4488), hor: C(0x5e6497), lift: 0.42, pow: 6.0, aniso: 0.55,
-    gNear: C(0x2e3620), gFar: C(0x3d492c),
+    gNear: C(0x384326), gFar: C(0x455438),
     cmul: [1.10, 1.00, 0.90], cadd: [0.020, 0.008, 0.0], cbright: 1.0, silver: 0.60,
     sunTint: C(0xffe0b0), sunDisc: 0.50, sunHalo: 0.40,
-    lightCol: C(0xffdcaa), lightI: 0.68,
-    ambSky: C(0x8fa4cc), ambGnd: C(0x6b6350), ambI: 0.90,
-    fog: C(0x45589a), fogD: 0.00046,
+    lightCol: C(0xffe3b6), lightI: 1.60,
+    ambSky: C(0x9db0d6), ambGnd: C(0x7d7350), ambI: 1.98,
+    fog: C(0x45589a), fogD: 0.00026,
     stars: 0.0, night: 0.02, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
   {
     h: 10.0,                                  // morning — the MM6 field
     zen: C(0x29458c), hor: C(0x2f4b8f), lift: 0.090, pow: 8.5, aniso: 0.15,
-    gNear: C(0x313d22), gFar: C(0x3e4c2e),
+    gNear: C(0x3c4a28), gFar: C(0x4a5a3a),
     cmul: [1.02, 1.00, 0.99], cadd: [0.0, 0.0, 0.0], cbright: 1.0, silver: 0.40,
     sunTint: C(0xfff0d2), sunDisc: 0.26, sunHalo: 0.14,
-    lightCol: C(0xfff0d2), lightI: 0.86,
-    ambSky: C(0x86a6dc), ambGnd: C(0x6e6a48), ambI: 1.00,
-    fog: C(0x2b4890), fogD: 0.00032,
+    lightCol: C(0xffeecb), lightI: 2.02,
+    ambSky: C(0x93aedd), ambGnd: C(0x8a7c56), ambI: 2.28,
+    fog: C(0x2b4890), fogD: 0.00016,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
   {
     h: 12.0,                                  // noon — the reference frame
     zen: C(0x29458c), hor: C(0x2c4890), lift: 0.055, pow: 9.0, aniso: 0.0,
-    gNear: C(0x313d22), gFar: C(0x3e4c2e),
+    gNear: C(0x3c4a28), gFar: C(0x4a5a3a),
     cmul: [1.0, 1.0, 1.0], cadd: [0.0, 0.0, 0.0], cbright: 1.0, silver: 0.35,
     sunTint: C(0xfff4dc), sunDisc: 0.20, sunHalo: 0.10,
-    lightCol: C(0xfff3dc), lightI: 0.88,
-    ambSky: C(0x86a6dc), ambGnd: C(0x6e6a48), ambI: 1.02,
-    fog: C(0x29458c), fogD: 0.00030,
+    lightCol: C(0xfff1d2), lightI: 2.08,
+    ambSky: C(0x93aedd), ambGnd: C(0x8a7c56), ambI: 2.34,
+    fog: C(0x29458c), fogD: 0.00015,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
   {
     h: 15.0,                                  // afternoon
     zen: C(0x29458c), hor: C(0x30498e), lift: 0.10, pow: 8.0, aniso: 0.20,
-    gNear: C(0x313d22), gFar: C(0x3e4c2e),
+    gNear: C(0x3c4a28), gFar: C(0x4a5a3a),
     cmul: [1.03, 1.00, 0.98], cadd: [0.0, 0.0, 0.0], cbright: 1.0, silver: 0.42,
     sunTint: C(0xffefcc), sunDisc: 0.30, sunHalo: 0.18,
-    lightCol: C(0xffedcc), lightI: 0.84,
-    ambSky: C(0x87a4d6), ambGnd: C(0x6d6846), ambI: 0.99,
-    fog: C(0x2d4a90), fogD: 0.00033,
+    lightCol: C(0xffedc6), lightI: 2.00,
+    ambSky: C(0x94add8), ambGnd: C(0x897a53), ambI: 2.28,
+    fog: C(0x2d4a90), fogD: 0.00017,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
   {
     h: 16.6,                                  // late afternoon
     zen: C(0x28437f), hor: C(0x4a5a94), lift: 0.30, pow: 6.5, aniso: 0.35,
-    gNear: C(0x2f3821), gFar: C(0x3d472c),
+    gNear: C(0x3a4526), gFar: C(0x485436),
     cmul: [1.06, 0.99, 0.92], cadd: [0.010, 0.004, 0.0], cbright: 1.0, silver: 0.50,
     sunTint: C(0xffe2b4), sunDisc: 0.45, sunHalo: 0.35,
-    lightCol: C(0xffe2b4), lightI: 0.74,
-    ambSky: C(0x8fa3ce), ambGnd: C(0x6c6244), ambI: 0.90,
-    fog: C(0x3d5090), fogD: 0.00040,
+    lightCol: C(0xffe4b2), lightI: 1.74,
+    ambSky: C(0x9aabd2), ambGnd: C(0x877450), ambI: 2.10,
+    fog: C(0x3d5090), fogD: 0.00021,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
   {
     h: 17.7,                                  // golden hour
     zen: C(0x27407d), hor: C(0xb8825c), lift: 0.85, pow: 5.0, aniso: 0.75,
-    gNear: C(0x272819), gFar: C(0x3c3427),
+    gNear: C(0x31311e), gFar: C(0x483f30),
     cmul: [1.20, 0.96, 0.78], cadd: [0.050, 0.015, 0.0], cbright: 1.02, silver: 0.85,
     sunTint: C(0xffc684), sunDisc: 0.90, sunHalo: 0.80,
-    lightCol: C(0xffc684), lightI: 0.56,
-    ambSky: C(0x8895bc), ambGnd: C(0x6b5a42), ambI: 0.74,
-    fog: C(0x6e6c8c), fogD: 0.00055,
+    lightCol: C(0xffc684), lightI: 1.22,
+    ambSky: C(0x93a0c4), ambGnd: C(0x7d6a4e), ambI: 1.66,
+    fog: C(0x6e6c8c), fogD: 0.00030,
     stars: 0.0, night: 0.0, moonDisc: 0.05, moonTint: C(0xdde3ef),
   },
   {
     h: 18.15,                                 // sunset
     zen: C(0x1e3068), hor: C(0xd07443), lift: 1.0, pow: 3.8, aniso: 0.90,
-    gNear: C(0x1d1913), gFar: C(0x30271f),
+    gNear: C(0x241f17), gFar: C(0x3a3026),
     cmul: [1.34, 0.86, 0.60], cadd: [0.100, 0.025, 0.0], cbright: 1.0, silver: 1.0,
     sunTint: C(0xff9a52), sunDisc: 1.0, sunHalo: 1.0,
-    lightCol: C(0xff9450), lightI: 0.34,
-    ambSky: C(0x76839f), ambGnd: C(0x5f4f3f), ambI: 0.62,
-    fog: C(0x7a6178), fogD: 0.00070,
+    lightCol: C(0xff9450), lightI: 0.74,
+    ambSky: C(0x8390ab), ambGnd: C(0x6f5d4a), ambI: 1.36,
+    fog: C(0x7a6178), fogD: 0.00042,
     stars: 0.08, night: 0.12, moonDisc: 0.25, moonTint: C(0xdde3ef),
   },
   {
     h: 18.9,                                  // dusk
     zen: C(0x142251), hor: C(0x8b5460), lift: 0.95, pow: 3.4, aniso: 0.75,
-    gNear: C(0x14141a), gFar: C(0x262232),
+    gNear: C(0x18181f), gFar: C(0x2b2739),
     cmul: [0.72, 0.62, 0.66], cadd: [0.020, 0.010, 0.020], cbright: 0.86, silver: 0.40,
     sunTint: C(0xa06a72), sunDisc: 0.30, sunHalo: 0.32,
-    lightCol: C(0x7a6a8e), lightI: 0.14,
-    ambSky: C(0x4d5880), ambGnd: C(0x3f3b4b), ambI: 0.38,
-    fog: C(0x3e3a5e), fogD: 0.00075,
+    lightCol: C(0x7a6a8e), lightI: 0.24,
+    ambSky: C(0x56628c), ambGnd: C(0x464253), ambI: 0.82,
+    fog: C(0x3e3a5e), fogD: 0.00048,
     stars: 0.50, night: 0.60, moonDisc: 0.70, moonTint: C(0xd6dcea),
   },
   {
     h: 19.8,                                  // night falls
     zen: C(0x0a1234), hor: C(0x1d2246), lift: 0.50, pow: 4.2, aniso: 0.40,
-    gNear: C(0x131722), gFar: C(0x1f2537),
+    gNear: C(0x151a26), gFar: C(0x21283b),
     cmul: [0.40, 0.44, 0.62], cadd: [0.0, 0.0, 0.010], cbright: 0.72, silver: 0.18,
     sunTint: C(0x8090b8), sunDisc: 0.0, sunHalo: 0.0,
-    lightCol: C(0x9db0d8), lightI: 0.29,
-    ambSky: C(0x455987), ambGnd: C(0x303749), ambI: 0.56,
-    fog: C(0x131b3c), fogD: 0.00050,
+    lightCol: C(0x9db0d8), lightI: 0.42,
+    ambSky: C(0x455987), ambGnd: C(0x303749), ambI: 0.95,
+    fog: C(0x131b3c), fogD: 0.00034,
     stars: 0.95, night: 0.95, moonDisc: 1.0, moonTint: C(0xd2dcf0),
   },
 ];
@@ -369,11 +369,16 @@ function blurWrap(src, N, radius) {
  * G = ∂shape/∂x, encoded — the surface gradient the shader lights
  * B = ∂shape/∂z, encoded
  * A = blurred shape = thickness, used for AO and for the darker cloud bellies
+ *
+ * Returns `{ data, thresholdFor(coverage) }`. The threshold is read out of the
+ * field's own CDF rather than guessed, so "35% of the sky is cloud" means the
+ * same thing at every seed, every sheet size and every weather state.
  */
 function bakeCloudSheet(N, rng) {
   const hWarp = makeHash(rng);
   const hBase = makeHash(rng);
   const hBill = makeHash(rng);
+  const hLobe = makeHash(rng);
 
   const shape = new Float32Array(N * N);
   const inv = 1 / N;
@@ -384,21 +389,39 @@ function bakeCloudSheet(N, rng) {
     for (let x = 0; x < N; x++) {
       const u = x * inv;
       // A low-frequency domain warp is what turns fBm blobs into cloud forms
-      // with bays and overhangs rather than round lumps on a grid.
-      const wx = u + 0.055 * fbmP(hWarp, u, v, 4, 2, 0.5);
-      const wy = v + 0.055 * fbmP(hWarp, u + 0.37, v - 0.19, 4, 2, 0.5);
-      // Base frequency sets the *angular* size of a cloud: at a 7 km repeat
-      // and a 1.25 km deck, 5 cells per repeat puts a cumulus mass at roughly
-      // 25–40° across — MM6's clouds are few and large, not a mackerel sky.
-      let s = fbmP(hBase, wx, wy, 5, 4, 0.48) * 0.5 + 0.5;
-      // Billow only inside the mass: cauliflower tops, flat-ish bottoms.
-      const bil = 1 - Math.abs(fbmP(hBill, wx, wy, 14, 3, 0.55));
-      s = s * 0.82 + bil * 0.18 * smoothstep(0.40, 0.78, s);
+      // with bays and overhangs rather than round lumps on a grid. Keep it
+      // gentle: a heavy warp shears a cumulus into a comma.
+      const wx = u + 0.038 * fbmP(hWarp, u, v, 3, 2, 0.5);
+      const wy = v + 0.038 * fbmP(hWarp, u + 0.37, v - 0.19, 3, 2, 0.5);
+
+      // Base mass. Only three octaves at a hard gain roll-off: the silhouette
+      // has to stay a smooth, convex island. Extra octaves here are exactly
+      // what turns cumulus into cirrus fluff.
+      const base = fbmP(hBase, wx, wy, 6, 3, 0.42) * 0.5 + 0.5;
+
+      // Two billow (|fBm| ridge) fields at different scales. Billow noise is
+      // the one primitive that produces genuinely *rounded* lobes rather than
+      // blobs, and stacking two gives the cauliflower reading of a real
+      // cumulus: big lobes with smaller lobes budding off them.
+      const lobeBig = 1 - Math.abs(fbmP(hLobe, wx, wy, 9, 2, 0.48));
+      const lobeSm = 1 - Math.abs(fbmP(hBill, wx, wy, 17, 2, 0.50));
+
+      // The lobes only bite where there is already mass, so clear sky stays
+      // clear and the puffs grow bumps instead of the sky growing veils.
+      const inside = smoothstep(0.34, 0.80, base);
+      let s = base + inside * (0.30 * (lobeBig - 0.45) + 0.13 * (lobeSm - 0.45));
+
+      // A convex bias: push the interior up harder than the rim so a mass
+      // reads as domed. This is what puts a bright crown on every puff once
+      // the gradient below is lit.
+      s += 0.16 * inside * inside;
       shape[row + x] = s;
     }
   }
 
-  // Normalise so a coverage threshold means the same thing every seed.
+  // Normalise. A tighter spread than a Gaussian's gives the field more
+  // contrast, which in turn gives each puff a crisper outline against the
+  // flat blue — MM6's clouds have edges, not falloffs.
   let mean = 0;
   for (let i = 0; i < shape.length; i++) mean += shape[i];
   mean /= shape.length;
@@ -409,16 +432,38 @@ function bakeCloudSheet(N, rng) {
   }
   const sd = Math.sqrt(varsum / shape.length) || 1e-4;
   for (let i = 0; i < shape.length; i++) {
-    shape[i] = clamp(0.5 + (shape[i] - mean) / (3.2 * sd), 0, 1);
+    shape[i] = clamp(0.5 + (shape[i] - mean) / (2.7 * sd), 0, 1);
   }
+
+  // CDF of the normalised field, so coverage can be asked for by name.
+  const BINS = 512;
+  const hist = new Float64Array(BINS);
+  for (let i = 0; i < shape.length; i++) {
+    hist[Math.min(BINS - 1, (shape[i] * BINS) | 0)]++;
+  }
+  const cdf = new Float64Array(BINS + 1);
+  for (let b = 0; b < BINS; b++) cdf[b + 1] = cdf[b] + hist[b];
+  const total = cdf[BINS] || 1;
+  for (let b = 0; b <= BINS; b++) cdf[b] /= total;
+
+  /** Threshold above which exactly `coverage` of the sheet survives. */
+  const thresholdFor = (coverage) => {
+    const want = 1 - clamp(coverage, 0, 1);
+    let lo = 0;
+    while (lo < BINS && cdf[lo + 1] < want) lo++;
+    const span = cdf[lo + 1] - cdf[lo];
+    const frac = span > 1e-9 ? (want - cdf[lo]) / span : 0;
+    return clamp((lo + frac) / BINS, 0.0, 0.985);
+  };
 
   const thick = blurWrap(shape, N, Math.max(2, Math.round(N / 26)));
 
   // The gradient is taken from a *smoothed* copy. Differencing the raw field
   // would put every billow crinkle into the surface normal and the cloud comes
   // out looking like crumpled foil; MM6's clouds are broadly shaded masses
-  // whose fine detail lives in the silhouette, not in the lighting.
-  const relief = blurWrap(shape, N, Math.max(3, Math.round(N / 70)));
+  // whose fine detail lives in the silhouette, not in the lighting. The radius
+  // is set so one lobe carries one broad light-to-dark sweep.
+  const relief = blurWrap(shape, N, Math.max(3, Math.round(N / 42)));
 
   // Gradient, with an adaptive encode scale so `uBump` behaves at any size.
   let gsum = 0;
@@ -449,7 +494,7 @@ function bakeCloudSheet(N, rng) {
     data[o + 2] = ((0.5 + clamp(gz[i] * gScale, -0.5, 0.4999)) * 255) | 0;
     data[o + 3] = (clamp(thick[i], 0, 1) * 255) | 0;
   }
-  return data;
+  return { data, thresholdFor };
 }
 
 /* ═════════════════════════════ the system ════════════════════════════════ */
@@ -461,9 +506,31 @@ const QUALITY = {
   ultra: { sheet: 1024, shader: 3, shadowMap: 4096, shadowExtent: 190, pcf: 4 },
 };
 
-/** Metres per repeat of each cloud layer, and their altitude above the eye. */
-const LAYER_A = { repeat: 7000, alt: 1250, thickness: 430 };
-const LAYER_B = { repeat: 16000, alt: 3400 };
+/**
+ * Metres per repeat of each cloud layer, and their altitude above the eye.
+ *
+ * These are not free parameters. With the softened projection (`PLANE_POW`)
+ * the cloud plane sits at `alt · sin(e)^-p` metres, so at 25° above the
+ * horizon layer A is ~2.2 km out and one degree of azimuth is ~35 m. A repeat
+ * of 4 km with the bake's 6-cell base frequency puts a cumulus mass at ~670 m,
+ * i.e. **≈19° wide by ≈13° tall** — big, rounded and individually readable,
+ * with four or five of them across a wide frame. Raise `repeat` and the sky
+ * turns into a mackerel stipple; lower it and one puff eats the viewport.
+ */
+const LAYER_A = { repeat: 4000, alt: 1500, thickness: 430 };
+const LAYER_B = { repeat: 9500, alt: 3900 };
+
+/**
+ * Cloud-plane exponent. 1.0 is a true horizontal plane (MM6's own trick, but
+ * it smears everything above 5° into ribbons); 0.0 is a dome (rounded, but no
+ * horizon compression at all, which reads as a different game). 0.45 keeps
+ * MM6's compression in the last few degrees and rounded puffs everywhere else.
+ */
+const PLANE_POW = 0.45;
+
+/** Fraction of the cloud sheet that survives thresholding, clear → storm. */
+const COVER_A = [0.32, 0.93];
+const COVER_B = [0.13, 0.74];
 
 export class SkySystem extends System {
   static id = 'sky';
@@ -576,8 +643,9 @@ export class SkySystem extends System {
     const rng = ctx.rng.fork('sky');
     const N = this._q.sheet;
 
-    const data = bakeCloudSheet(N, rng);
-    const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
+    const sheet = bakeCloudSheet(N, rng);
+    this._thresholdFor = sheet.thresholdFor;
+    const tex = new THREE.DataTexture(sheet.data, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     tex.magFilter = THREE.LinearFilter;
@@ -631,11 +699,12 @@ export class SkySystem extends System {
       uInvScaleB: { value: 1 / LAYER_B.repeat },
       uAltA: { value: LAYER_A.alt },
       uAltB: { value: LAYER_B.alt },
+      uPlanePow: { value: PLANE_POW },
       uThrA: { value: 0.60 },
       uThrB: { value: 0.72 },
-      uBump: { value: 2.4 },
+      uBump: { value: 3.1 },
       uOpacityA: { value: 1.0 },
-      uOpacityB: { value: 0.5 },
+      uOpacityB: { value: 0.28 },
       uSunUvDir: { value: new THREE.Vector2(1, 0) },
       uShadowSlope: { value: 0.06 },
       uShadowStrength: { value: 0.8 },

@@ -129,7 +129,10 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
  * dungeon mouths are reachable.
  */
 export const LANDMARKS = {
-  newSorpigal: { x: -260, z: 240, radius: 130, flatten: 0.94, height: 14 },
+  // flattenDisc only fully levels the inner 55% of its radius, so this must be
+  // comfortably wider than the town it carries (walls at 118 m) or the outer
+  // ring of buildings ends up half-buried in a slope.
+  newSorpigal: { x: -260, z: 240, radius: 250, flatten: 0.96, height: 14 },
   castleIronfist: { x: 470, z: -430, radius: 110, flatten: 0.9, height: 62 },
   templeRuin: { x: 120, z: -180, radius: 55, flatten: 0.75, height: 34 },
   goblinCamp: { x: -520, z: -300, radius: 60, flatten: 0.6, height: 26 },

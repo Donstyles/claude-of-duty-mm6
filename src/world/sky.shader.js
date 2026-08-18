@@ -12,12 +12,23 @@
  * the palette drives to ~0.05 at midday and only opens up at dawn and dusk,
  * where a warm horizon is both correct and beautiful.
  *
- * ── Why the clouds live on a plane ────────────────────────────────────────
+ * ── Why the clouds live on a (softened) plane ─────────────────────────────
  * MM6's cloud bands measure 40–180 px near the top of the frame and 3–7 px at
  * the skyline — a 10–25× vertical compression a sky dome physically cannot
  * produce. Intersecting the view ray with a horizontal plane at altitude `h`
  * gives `t = h / d.y`, which diverges as the ray approaches the horizon and
- * reproduces that compression exactly, for free.
+ * reproduces that compression for free.
+ *
+ * A *pure* plane, though, overdoes it everywhere else. Its vertical-to-
+ * horizontal stretch is `1 / (sin e · cos e)`: already 3.1× at 20° above the
+ * horizon and 5.9× at 10°. Since a level MM6 view only ever shows 0–30° of
+ * sky, a pure plane turns every cumulus mass into a cirrus ribbon — which is
+ * exactly the failure this shader used to have. Softening the exponent,
+ * `t = h · d.y^-p` with p ≈ 0.45, changes the stretch to
+ * `(sin²e + p·cos²e) / (sin e · cos e)`: 1.4 at 30°, 1.6 at 20°, 2.7 at 10°
+ * and still 13× at 2°. The compression survives where MM6 shows it — the last
+ * few degrees above the skyline — and the body of the sky keeps big, rounded,
+ * individually readable puffs with real blue between them.
  *
  * ── Colour space ──────────────────────────────────────────────────────────
  * three only injects `<tonemapping_fragment>` / `<colorspace_fragment>` into
@@ -78,6 +89,7 @@ uniform float uInvScaleA;      // 1 / metres-per-repeat
 uniform float uInvScaleB;
 uniform float uAltA;           // metres above the camera
 uniform float uAltB;
+uniform float uPlanePow;       // 1 = true plane, 0 = dome; ~0.45 is MM6 without the smear
 uniform float uThrA;           // coverage threshold, low = more cloud
 uniform float uThrB;
 uniform float uBump;
@@ -260,48 +272,50 @@ void main() {
   }
 
   // ── clouds ────────────────────────────────────────────────────────────
-  // Layer B first (high thin streaks), then A over it (the cumulus deck).
-  float dyB = max(up, 0.0045);
-  float tB = uAltB / dyB;
+  // Layer B first (the high, sparse upper deck), then A over it (the cumulus
+  // the eye actually reads). Both ride the softened plane described at the top
+  // of this file, so a puff stays a puff until the last few degrees of sky.
+  float dy = max(up, 0.0040);
+  float proj = pow(dy, -uPlanePow);
+
+  float tB = uAltB * proj;
   vec2 pB = uCamPos.xz + d.xz * tB;
+  // Rotated against layer A so the two decks never line up into one pattern.
   vec2 qB = vec2(pB.x * 0.94 - pB.y * 0.34, pB.x * 0.34 + pB.y * 0.94);
-  qB.y *= 2.4;                                  // stretch into long horizontal wisps
   vec2 uvB = (qB + uOffB) * uInvScaleB;
   vec4 cB = texture2D(uClouds, uvB);
   float hB = clamp((cB.r - uThrB) / max(1.0 - uThrB, 0.06), 0.0, 1.0);
-  float aB = smoothstep(0.0, 0.42, hB) * uOpacityB;
-  aB *= smoothstep(0.0, 0.035, up) / (1.0 + tB / 22000.0);
-  float lumB = 0.40 + 0.36 * hB + 0.14 * cB.a;
+  float aB = smoothstep(0.02, 0.34, hB) * uOpacityB;
+  aB *= smoothstep(0.004, 0.048, up) / (1.0 + tB / 26000.0);
 
-  float dyA = max(up, 0.0045);
-  float tA = uAltA / dyA;
+  float tA = uAltA * proj;
   vec2 pA = uCamPos.xz + d.xz * tA;
-  // A gentle anisotropy along the prevailing wind: MM6's masses are drawn out
-  // into streaks rather than round puffs.
-  pA.y *= 1.4;
   vec2 uvA = (pA + uOffA) * uInvScaleA;
   vec4 cA = texture2D(uClouds, uvA);
 
   float hA = clamp((cA.r - uThrA) / max(1.0 - uThrA, 0.06), 0.0, 1.0);
 
-  // Ragged edges. The crinkle is another tap of the same sheet at a higher
-  // frequency rather than a procedural hash: it inherits the mipmap chain, so
-  // it dissolves cleanly toward the horizon instead of aliasing into speckle.
-  // It only ever *erodes* — inventing cloud in clear sky is how a cumulus
-  // field turns into an overcast wash.
-  float detailFade = 1.0 / (1.0 + tA / 11000.0);
-  float edge = 1.0 - smoothstep(0.0, 0.50, hA);
-  float dn = texture2D(uClouds, uvA * 3.9 + vec2(0.37, 0.11)).r;
-  hA *= 1.0 - 0.62 * dn * edge * detailFade;
+  // Lumpy edges. The crinkle is another tap of the same sheet rather than a
+  // procedural hash, so it inherits the mipmap chain and dissolves cleanly
+  // toward the horizon instead of aliasing into speckle. It is kept low
+  // frequency and gentle on purpose: heavy high-frequency erosion is what
+  // shreds cumulus into wisps, and MM6's clouds have lumpy silhouettes, not
+  // frayed ones.
+  float detailFade = 1.0 / (1.0 + tA / 9000.0);
+  float edge = 1.0 - smoothstep(0.0, 0.55, hA);
+  float dn = texture2D(uClouds, uvA * 2.15 + vec2(0.37, 0.11)).r;
+  hA *= 1.0 - 0.30 * dn * edge * detailFade;
 
-  float aA = smoothstep(0.0, 0.22, hA);
-  aA *= smoothstep(0.0, 0.030, up) / (1.0 + tA / 22000.0);
+  // A fairly tight alpha ramp: MM6's puffs have readable, individual outlines
+  // against flat blue, not a soft airbrushed falloff.
+  float aA = smoothstep(0.015, 0.17, hA);
+  aA *= smoothstep(0.003, 0.040, up) / (1.0 + tA / 26000.0);
   aA *= uOpacityA;
 
   // Surface relief from the baked gradient.
   vec3 n = normalize(vec3(-(cA.g * 2.0 - 1.0) * uBump, 1.0, -(cA.b * 2.0 - 1.0) * uBump));
   float ndl = dot(n, uSunDir);
-  float wrapped = clamp((ndl + 0.25) / 1.25, 0.0, 1.0);   // wrapped diffuse: soft cumulus, not a hard terminator
+  float wrapped = clamp((ndl + 0.30) / 1.30, 0.0, 1.0);   // wrapped diffuse: soft cumulus, not a hard terminator
 
   // Cast shadow between puffs — a height-field horizon march toward the sun.
   float shade = 1.0;
@@ -314,22 +328,28 @@ void main() {
   shade = mix(1.0, shade, uShadowStrength);
   #endif
 
-  // Thick cores and undersides sit in their own shadow.
+  // Thick cores and the bellies under them sit in their own shadow — this is
+  // the term that gives a puff a bright crown and a soft grey-cream underside.
   float thick = cA.a;
-  float ao = 1.0 - 0.50 * smoothstep(0.28, 0.92, thick);
+  float ao = 1.0 - 0.48 * smoothstep(0.20, 0.86, thick);
 
   // Tuned so the shading spans the *whole* measured MM6 ramp: a shaded flank
   // lands on the mauves (#73758C–#8C8A8C), a lit face on the creams
   // (#A59A8C–#C6BA8C) and only a sunward crest reaches #E7D38C.
-  float amb = (0.14 + 0.22 * n.y) * ao;
-  float direct = wrapped * shade * 0.66;
+  float amb = (0.15 + 0.20 * n.y) * ao;
+  float direct = wrapped * shade * 0.68 * (0.72 + 0.28 * ao);
   float lumA = amb + direct;
   // Silver lining: thin edges facing the sun burn out.
   float rim = pow(max(0.0, dot(d, uSunDir)), 9.0) * (1.0 - smoothstep(0.10, 0.55, hA));
   lumA += rim * uSilver * 0.55;
   lumA *= uCloudBright;
 
-  lumB = lumB * uCloudBright * (0.86 + 0.30 * pow(max(0.0, dot(d, uSunDir)), 4.0));
+  // Layer B gets a cheaper version of the same model — flatter, because it is
+  // read at a much smaller angular size — but it must not be a flat wash.
+  vec3 nB = normalize(vec3(-(cB.g * 2.0 - 1.0) * uBump * 0.7, 1.0, -(cB.b * 2.0 - 1.0) * uBump * 0.7));
+  float lumB = (0.17 + 0.17 * nB.y) * (1.0 - 0.38 * smoothstep(0.24, 0.88, cB.a))
+             + clamp((dot(nB, uSunDir) + 0.34) / 1.34, 0.0, 1.0) * 0.60;
+  lumB = lumB * uCloudBright * (0.90 + 0.22 * pow(max(0.0, dot(d, uSunDir)), 4.0));
 
   vec3 colB = mm6Ramp(clamp(lumB, 0.0, 1.0)) * uCloudTintMul + uCloudTintAdd;
   vec3 colA = mm6Ramp(clamp(lumA, 0.0, 1.0)) * uCloudTintMul + uCloudTintAdd;
@@ -350,7 +370,11 @@ void main() {
   if (below > 0.0) {
     float depth = smoothstep(-0.004, -0.32, up);
     vec3 g = mix(uGroundFar, uGroundNear, depth);
-    g *= 0.94 + 0.12 * vnoise2(d.xz * 26.0 / max(0.06, -up));
+    // The breakup frequency has to be capped: 26/-up runs away as the ray
+    // approaches the skyline and aliases into vertical stripes exactly where
+    // the band is most visible.
+    float gf = min(26.0 / max(0.06, -up), 90.0);
+    g *= 0.95 + 0.10 * vnoise2(d.xz * gf) * smoothstep(0.0, -0.05, up);
     col = mix(col, g, below);
   }
 
