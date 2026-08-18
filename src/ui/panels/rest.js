@@ -1,3 +1,4 @@
+import './rest.css';
 import { Panel } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, engraved, raised, labelRow } from '../widgets.js';
 

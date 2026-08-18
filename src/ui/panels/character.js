@@ -1,3 +1,4 @@
+import './character.css';
 import { Panel } from './base.js';
 import { el, setChildren, tipMarkup, fmt, ellipsis, titleCase, engraved, labelRow } from '../widgets.js';
 import { ATTRIBUTES, ATTRIBUTE_LABEL, MASTERY_LABEL, masteryRank } from '../../game/data/Skills.js';

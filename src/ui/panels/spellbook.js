@@ -1,3 +1,4 @@
+import './spellbook.css';
 import { Panel } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, titleCase } from '../widgets.js';
 import { icon } from '../Icons.js';

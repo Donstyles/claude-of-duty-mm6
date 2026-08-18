@@ -1,3 +1,4 @@
+import './shop.css';
 import { Panel, itemFootprint, itemSprite } from './base.js';
 import { el, setChildren, tooltip, fmt, titleCase, nu, goldOval } from '../widgets.js';
 

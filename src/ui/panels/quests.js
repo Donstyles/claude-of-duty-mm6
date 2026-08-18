@@ -1,3 +1,4 @@
+import './quests.css';
 import { Panel } from './base.js';
 import { el, setChildren, nu } from '../widgets.js';
 import { icon } from '../Icons.js';

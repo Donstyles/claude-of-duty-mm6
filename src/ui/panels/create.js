@@ -1,3 +1,4 @@
+import './create.css';
 import { Panel } from './base.js';
 import { el, setChildren, titleCase, engraved, raised, labelRow } from '../widgets.js';
 import { ATTRIBUTES, ATTRIBUTE_LABEL } from '../../game/data/Skills.js';

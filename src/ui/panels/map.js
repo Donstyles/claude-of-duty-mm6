@@ -1,3 +1,4 @@
+import './map.css';
 import { Panel } from './base.js';
 import { el, engraved } from '../widgets.js';
 

@@ -1,3 +1,4 @@
+import './menu.css';
 import { Panel } from './base.js';
 import { el } from '../widgets.js';
 

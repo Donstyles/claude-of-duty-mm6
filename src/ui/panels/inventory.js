@@ -1,3 +1,4 @@
+import './inventory.css';
 import { Panel, itemFootprint, itemSprite } from './base.js';
 import { el, tooltip, nu } from '../widgets.js';
 
