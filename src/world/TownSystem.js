@@ -36,6 +36,12 @@ const PLOTS = [
   { type: 'trainingHall', street: 2, along: 38, side: 1, name: 'Millhaven Yard' },
   { type: 'guildHall', street: 0, along: 39, side: -1, name: 'Guild of the Ember' },
   { type: 'tower', street: 2, along: 48, side: -1, name: 'The Sea Watch' },
+  // The Ledger's two services. Millhaven is a harbour town, so the packet
+  // office sits out on the seaward spoke and the coach yard inland on the
+  // gate road — without a plot for either, both were in the venue catalogue
+  // and unreachable on foot, which made the whole travel network dead.
+  { type: 'dock', street: 3, along: 52, side: 1, name: 'Harbour Office' },
+  { type: 'coachStop', street: 2, along: 44, side: -1, name: 'The Post House' },
   { type: 'house', street: 0, along: 37, side: 1 },
   { type: 'house', street: 1, along: 29, side: -1 },
   { type: 'house', street: 1, along: 29, side: 1 },

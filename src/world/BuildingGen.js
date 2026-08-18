@@ -428,6 +428,11 @@ export const BUILDING_TYPES = {
   trainingHall: { width: 10.0, depth: 8.5, storeys: 2, roof: 'hip', style: 'stone', shop: true },
   guildHall: { width: 9.0, depth: 8.0, storeys: 2, roof: 'gable', style: 'stone', shop: true },
   tower: { width: 5.2, depth: 5.2, storeys: 3, roof: 'cone', style: 'stone' },
+  // The Ledger's two offices. Both are working sheds rather than shopfronts:
+  // long, low, and single-storeyed, so they read as trade buildings on the
+  // edge of town rather than as another timbered house on the square.
+  dock: { width: 11.0, depth: 6.0, storeys: 1, roof: 'gable', style: 'timbered', shop: true },
+  coachStop: { width: 12.0, depth: 7.5, storeys: 1, roof: 'hip', style: 'timbered', shop: true, jetty: true },
 };
 
 /** Which material each slot resolves to, by building style. */
