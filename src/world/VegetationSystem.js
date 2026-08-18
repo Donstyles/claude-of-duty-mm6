@@ -607,6 +607,11 @@ export class VegetationSystem extends System {
    */
   _rebin(ctx) {
     const cam = ctx.camera;
+    // The camera's world matrix is only refreshed by the renderer, i.e. *after*
+    // every system update. Culling against the stale one is invisible while the
+    // player walks — and catastrophic the frame the capture harness teleports
+    // the camera, because the bins it produces are never revisited.
+    cam.updateMatrixWorld();
     this._projScreen.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     this._frustum.setFromProjectionMatrix(this._projScreen);
 
@@ -754,7 +759,10 @@ export class VegetationSystem extends System {
         const bend = Math.pow(t, 1.75) * bendAmt * h;
         const y = h * t * (1 - 0.18 * t * t);
         const hw = (w * (1 - t * 0.88)) * 0.5;
-        const shade = 0.80 + 0.42 * t;
+        // Blades sample the *raw* grass albedo, while the terrain around them
+        // shows that albedo splat-blended and macro-tinted, which is brighter.
+        // Without this lift every tuft reads as a dark hair on a pale meadow.
+        const shade = 1.10 + 0.42 * t;
         const sway = Math.pow(t, 1.5);
         if (s < segs) {
           for (const sgn of [-1, 1]) {
@@ -925,7 +933,12 @@ export class VegetationSystem extends System {
     const moved = cam.position.distanceToSquared(this._lastBinPos) > 4;
     const dir = this._camDir.set(0, 0, -1).applyQuaternion(cam.quaternion);
     const turned = dir.dot(this._lastBinDir) < 0.995;
+    // Belt and braces: a periodic rebin means no single missed trigger can leave
+    // the world permanently short of trees.
+    this._sinceBin = (this._sinceBin ?? 99) + 1;
+    if (this._sinceBin > 30) this._binDirty = true;
     if (moved || turned || this._binDirty) {
+      this._sinceBin = 0;
       this._lastBinPos.copy(cam.position);
       this._lastBinDir.copy(dir);
       this._binDirty = false;
@@ -1094,16 +1107,27 @@ export class VegetationSystem extends System {
     return best;
   }
 
+  /** The tallest broadleaf near a point — the one worth standing under. */
   _biggestTreeNear(centre) {
-    let best = null, bestH = 0;
-    const r2 = (centre.radius + 40) ** 2;
-    for (const t of this.trees) {
-      const v = this.variants[t.variant];
-      if (v.species !== 'oak' && v.species !== 'birch') continue;
-      if ((t.x - centre.x) ** 2 + (t.z - centre.z) ** 2 > r2) continue;
-      if (t.height > bestH) { bestH = t.height; best = t; }
+    // Preference order, widening both the species filter and the search radius
+    // rather than returning nothing when a copse happens to be all conifer.
+    const passes = [
+      { species: ['oak', 'birch', 'fruit'], radius: centre.radius + 45 },
+      { species: ['oak', 'birch', 'fruit'], radius: centre.radius + 260 },
+      { species: null, radius: centre.radius + 260 },
+    ];
+    for (const pass of passes) {
+      let best = null, bestH = 0;
+      const r2 = pass.radius ** 2;
+      for (const t of this.trees) {
+        const v = this.variants[t.variant];
+        if (pass.species && !pass.species.includes(v.species)) continue;
+        if ((t.x - centre.x) ** 2 + (t.z - centre.z) ** 2 > r2) continue;
+        if (t.height > bestH) { bestH = t.height; best = t; }
+      }
+      if (best) return best;
     }
-    return best;
+    return null;
   }
 
   /* ──────────────────────────── teardown ──────────────────────────────── */

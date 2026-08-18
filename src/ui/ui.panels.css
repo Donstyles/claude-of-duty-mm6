@@ -161,6 +161,7 @@
   left: calc(var(--u) * 14);
   right: calc(var(--u) * 10);
   background: var(--tex-marble-side) center / 100% 100% no-repeat;
+  background-color: #ada29c;
 }
 
 .mm-side-upper {
@@ -409,6 +410,7 @@
   height: var(--bar-h);
   z-index: 3;
   background: var(--tex-marble) center / 100% 100% no-repeat;
+  background-color: #b5aead;
   box-shadow: inset 0 calc(var(--u) * 1) 0 rgba(255, 253, 250, 0.5);
 }
 
@@ -658,12 +660,16 @@
 }
 .mm-panel-side.is-open { display: block; }
 
-.mm-surface-granite { background: var(--tex-granite) center / 100% 100% no-repeat; }
-.mm-surface-serpentine { background: var(--tex-serpentine) center / 100% 100% no-repeat; }
-.mm-surface-rest { background: var(--tex-marble-rest) center / 100% 100% no-repeat; }
-.mm-surface-cloth { background: var(--tex-cloth) center / calc(var(--u) * 90) calc(var(--u) * 90) repeat; }
-.mm-surface-rock { background: var(--tex-rock) center / calc(var(--u) * 80) calc(var(--u) * 80) repeat; }
-.mm-surface-wood { background: var(--tex-wood-vert) center / 100% calc(var(--u) * 200) repeat-y; }
+/* Each surface keeps a flat sampled colour underneath its painting, so a
+   texture that fails to generate degrades to plain stone rather than letting
+   the 3-D view show through a panel. */
+.mm-surface-granite { background: var(--tex-granite) center / 100% 100% no-repeat; background-color: #434442; }
+.mm-surface-serpentine { background: var(--tex-serpentine) center / 100% 100% no-repeat; background-color: #22301f; }
+.mm-surface-rest { background: var(--tex-marble-rest) center / 100% 100% no-repeat; background-color: #ad7963; }
+.mm-surface-cloth { background: var(--tex-cloth) center / calc(var(--u) * 90) calc(var(--u) * 90) repeat; background-color: #152721; }
+.mm-surface-rock { background: var(--tex-rock) center / calc(var(--u) * 80) calc(var(--u) * 80) repeat; background-color: #3a4247; }
+.mm-surface-wood { background: var(--tex-wood-vert) center / 100% calc(var(--u) * 200) repeat-y; background-color: #3a1e0e; }
+.mm-surface-none { background-color: #0b0805; }
 
 /* Engraved sub-panel: the interior carries the identical stone as the
    surround; the frame is a 1px inset bevel, dark on top and left, pale on
@@ -772,6 +778,7 @@
   width: calc(var(--u) * 448);
   height: calc(var(--u) * 288);
   background: var(--tex-pack) center / calc(var(--u) * 130) calc(var(--u) * 130) repeat;
+  background-color: #210800;
   box-shadow:
     inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(10, 6, 2, 0.9),
     inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(150, 140, 130, 0.35);
@@ -824,6 +831,7 @@
   position: absolute;
   inset: calc(var(--u) * 6) calc(var(--u) * 34) calc(var(--u) * 22) calc(var(--u) * 14);
   background: var(--tex-spell-page) center / 100% 100% no-repeat;
+  background-color: #d2c8bc;
   box-shadow:
     inset calc(var(--u) * 26) 0 calc(var(--u) * 26) calc(var(--u) * -20) rgba(90, 78, 62, 0.55),
     inset calc(var(--u) * -26) 0 calc(var(--u) * 26) calc(var(--u) * -20) rgba(90, 78, 62, 0.55),
@@ -947,25 +955,47 @@
 
 /* ── quest book ───────────────────────────────────────────────────────────── */
 
-.mm-questbook { position: absolute; inset: 0; display: flex; }
+.mm-questbook { position: absolute; inset: 0; display: flex; padding: calc(var(--u) * 8) 0 calc(var(--u) * 12) calc(var(--u) * 10); }
 .mm-quest-page {
   flex: 1;
   position: relative;
-  padding: calc(var(--u) * 14) calc(var(--u) * 18);
+  padding: calc(var(--u) * 12) calc(var(--u) * 20);
+  box-shadow: 0 calc(var(--u) * 2) calc(var(--u) * 8) rgba(0, 0, 0, 0.55);
   background: var(--tex-quest-page) center / 100% 100% no-repeat;
+  background-color: #bdb29c;
   overflow: hidden;
 }
+/* A carved ivory cartouche with a braided knotwork border and a round boss at
+   each end, centred over the page rather than spanning it. */
 .mm-quest-head {
-  height: calc(var(--u) * 34);
+  position: relative;
+  width: 62%;
+  margin: 0 auto calc(var(--u) * 10);
+  height: calc(var(--u) * 28);
   display: grid;
   place-items: center;
-  margin-bottom: calc(var(--u) * 8);
-  background: linear-gradient(180deg, #e6ddc4, #cbbf9f 60%, #a99a76);
-  border-radius: calc(var(--u) * 6);
+  background:
+    repeating-linear-gradient(90deg, rgba(120, 106, 78, 0.35) 0 calc(var(--u) * 2),
+      transparent calc(var(--u) * 2) calc(var(--u) * 5)) border-box,
+    linear-gradient(180deg, #e6ddc4, #cbbf9f 60%, #a99a76);
   box-shadow:
+    inset 0 0 0 calc(var(--u) * 2) rgba(214, 202, 172, 0.9),
     inset 0 calc(var(--u) * 1) 0 rgba(255, 255, 255, 0.7),
     inset 0 calc(var(--u) * -1) 0 rgba(80, 68, 44, 0.7);
 }
+.mm-quest-head::before,
+.mm-quest-head::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: calc(var(--u) * 11);
+  height: calc(var(--u) * 11);
+  border-radius: 50%;
+  transform: translateY(-50%);
+  background: radial-gradient(circle at 34% 30%, #f2ecd8, #b9ad8c 70%, #7c7154);
+}
+.mm-quest-head::before { left: calc(var(--u) * 5); }
+.mm-quest-head::after { right: calc(var(--u) * 5); }
 .mm-quest-head span {
   font-size: calc(var(--u) * 21);
   font-style: italic;
@@ -976,7 +1006,7 @@
     0 calc(var(--u) * 1) 0 #000, 0 calc(var(--u) * -1) 0 #000,
     calc(var(--u) * 1) calc(var(--u) * 1) 0 #000, calc(var(--u) * -1) calc(var(--u) * -1) 0 #000;
 }
-.mm-quest-body { overflow-y: auto; height: calc(100% - var(--u) * 44); padding-right: calc(var(--u) * 6); }
+.mm-quest-body { overflow-y: auto; height: calc(100% - var(--u) * 46); padding-right: calc(var(--u) * 6); }
 .mm-quest-entry { margin-bottom: calc(var(--u) * 10); }
 .mm-quest-entry p {
   margin: 0;
@@ -984,8 +1014,8 @@
   color: #000;
   text-shadow: none;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: calc(var(--u) * 12);
-  line-height: 1.28;
+  font-size: calc(var(--u) * 14);
+  line-height: 1.24;
   max-width: 65%;
 }
 .mm-quest-rule {
@@ -1118,6 +1148,7 @@
   inset: calc(var(--u) * 16) calc(var(--u) * 18) calc(var(--u) * 30);
   border-radius: calc(var(--u) * 8);
   background: var(--tex-planks) center / 100% calc(var(--u) * 105) repeat-y;
+  background-color: #653516;
   box-shadow:
     inset 0 0 0 calc(var(--u) * 1) rgba(10, 4, 0, 0.7),
     0 calc(var(--u) * 3) calc(var(--u) * 10) rgba(0, 0, 0, 0.55);
@@ -1226,7 +1257,8 @@
 
 .mm-create { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .mm-create-title {
-  height: calc(var(--u) * 30);
+  height: calc(var(--u) * 28);
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
   font-size: calc(var(--u) * 19);
@@ -1236,27 +1268,36 @@
   border-bottom: calc(var(--u) * 2) solid #c9a44a;
 }
 .mm-create-cols { flex: 1; display: flex; min-height: 0; }
-.mm-create-col { flex: 1; display: flex; flex-direction: column; padding: 0 calc(var(--u) * 4); min-width: 0; }
-.mm-create-sky { height: calc(var(--u) * 16); background: var(--tex-sky-strip) center / cover no-repeat; }
-.mm-create-head { display: flex; align-items: center; gap: calc(var(--u) * 4); padding: calc(var(--u) * 4) 0; }
+.mm-create-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 calc(var(--u) * 4);
+  min-width: 0;
+  overflow: hidden;
+}
+/* Each column header carries a small painted strip of blue sky with cumulus. */
+.mm-create-sky { height: calc(var(--u) * 12); background: var(--tex-sky-strip) center / cover no-repeat; }
+.mm-create-head { display: flex; align-items: center; gap: calc(var(--u) * 4); padding: calc(var(--u) * 3) 0; }
 .mm-create-face {
-  width: calc(var(--u) * 44);
-  height: calc(var(--u) * 56);
+  width: calc(var(--u) * 38);
+  height: calc(var(--u) * 46);
   background: center / cover no-repeat;
   border-radius: 50%;
   box-shadow: 0 0 0 calc(var(--u) * 1.5) #d6ce94, 0 0 0 calc(var(--u) * 3) #8b7f42;
 }
-.mm-create-emblem { width: calc(var(--u) * 30); height: calc(var(--u) * 30); background: center / contain no-repeat; }
+.mm-create-emblem { width: calc(var(--u) * 26); height: calc(var(--u) * 26); background: center / contain no-repeat; }
 .mm-create-name {
-  margin: calc(var(--u) * 2) 0;
-  height: calc(var(--u) * 18);
+  height: calc(var(--u) * 15);
   display: grid;
   place-items: center;
-  font-size: calc(var(--u) * 13);
+  font-size: calc(var(--u) * 12);
 }
-.mm-create-stats { padding: calc(var(--u) * 3) 0; }
-.mm-create-skills { margin-top: calc(var(--u) * 4); padding: calc(var(--u) * 3) 0; }
-.mm-create-bottom { height: calc(var(--u) * 92); display: flex; gap: calc(var(--u) * 6); padding: calc(var(--u) * 4); }
+.mm-create-stats { margin-top: calc(var(--u) * 3); padding: calc(var(--u) * 2) 0; }
+.mm-create-skills { margin-top: calc(var(--u) * 3); padding: calc(var(--u) * 2) 0; }
+.mm-create-col .mm-row { line-height: calc(var(--u) * 13); font-size: calc(var(--u) * 11); padding: 0 calc(var(--u) * 5); }
+.mm-create-col .mm-block-head { line-height: calc(var(--u) * 15); font-size: calc(var(--u) * 11); padding: 0 calc(var(--u) * 5); }
+.mm-create-bottom { height: calc(var(--u) * 80); display: flex; gap: calc(var(--u) * 6); padding: calc(var(--u) * 4); }
 .mm-create-bottom > * { flex: 1; padding: calc(var(--u) * 3) 0; overflow: hidden; }
 .mm-list-cols { column-count: 2; column-gap: calc(var(--u) * 8); padding: 0 calc(var(--u) * 8); }
 .mm-list-cols.is-three { column-count: 3; }

@@ -13,11 +13,11 @@ import * as THREE from 'three';
  *     evaluated in *world* space so two neighbouring trees with different
  *     instance rotations still bend the same way.
  *
- *  2. **LOD cross-fade.** A per-instance `aFade` drives an ordered-dither
- *     discard. Alpha blending would need back-to-front sorting that instanced
- *     foliage cannot give us; a 4×4 Bayer threshold gets the same "one level
- *     dissolves into the next" read for free, works with `alphaTest`, and
- *     leaves depth writes intact.
+ *  2. **LOD cross-fade.** A per-instance `aFade` drives a noise-dither discard.
+ *     Alpha blending would need back-to-front sorting that instanced foliage
+ *     cannot give us; a per-pixel threshold gets the same "one level dissolves
+ *     into the next" read for free, works with `alphaTest`, and leaves depth
+ *     writes intact.
  *
  *  3. **Billboard imposters.** The furthest LOD is a camera-facing card sampling
  *     an atlas baked off the real mesh, so a tree at 300 m still has that tree's
@@ -104,14 +104,18 @@ const WIND_GLSL = /* glsl */`
   }
 `;
 
-/** Ordered 4×4 Bayer threshold, built arithmetically so it needs no lookup. */
+/**
+ * Interleaved gradient noise as the cross-fade threshold.
+ *
+ * A 4×4 Bayer matrix is the obvious choice and it is the wrong one: at the
+ * screen size a mid-distance tree occupies, an ordered grid reads as a hard
+ * checkerboard stencilled over the canopy, and a still frame makes it obvious.
+ * IGN is low-discrepancy like Bayer but its pattern is fine, aperiodic grain
+ * that hides inside foliage texture — which is exactly what a dissolve wants.
+ */
 const DITHER_GLSL = /* glsl */`
-  float vegB2(float x, float y) { return 2.0 * x + 3.0 * y - 4.0 * x * y; }
-  float vegBayer4(vec2 fc) {
-    vec2 p = mod(floor(fc), 4.0);
-    float lo = vegB2(mod(p.x, 2.0), mod(p.y, 2.0));
-    float hi = vegB2(floor(p.x * 0.5), floor(p.y * 0.5));
-    return (4.0 * lo + hi + 0.5) * 0.0625;
+  float vegDither(vec2 fc) {
+    return fract(52.9829189 * fract(dot(fc, vec2(0.06711056, 0.00583715))));
   }
 `;
 
@@ -202,7 +206,7 @@ ${worldUvBlock}
       `)
       .replace('#include <clipping_planes_fragment>', /* glsl */`
         #include <clipping_planes_fragment>
-        if (vVegFade < 0.999 && vVegFade < vegBayer4(gl_FragCoord.xy)) discard;
+        if (vVegFade < 0.999 && vVegFade < vegDither(gl_FragCoord.xy)) discard;
       `);
 
     if (monochrome) {
@@ -287,7 +291,7 @@ export function makeImposterMaterial(atlas) {
       `)
       .replace('#include <clipping_planes_fragment>', /* glsl */`
         #include <clipping_planes_fragment>
-        if (vVegFade < 0.999 && vVegFade < vegBayer4(gl_FragCoord.xy)) discard;
+        if (vVegFade < 0.999 && vVegFade < vegDither(gl_FragCoord.xy)) discard;
       `);
   };
 

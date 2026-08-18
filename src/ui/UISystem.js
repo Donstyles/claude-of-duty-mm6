@@ -942,8 +942,20 @@ export class UISystem extends System {
       roads.push(pts);
     }
 
+    // The automap's furniture: a cluster of town buildings around the party
+    // (which is what the sidebar window actually frames), plus outliers.
     const pins = [];
-    const pinKinds = ['foe', 'foe', 'npc', 'loot', 'door', 'town', 'dungeon', 'shrine', 'npc', 'foe', 'loot', 'foe', 'npc'];
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * Math.PI * 2;
+      const r = rng.range(2, 13);
+      pins.push({
+        x: Math.max(1, Math.min(sizeX - 2, px + Math.cos(a) * r * 1.6 + rng.range(-2, 2))),
+        y: Math.max(1, Math.min(sizeY - 2, py + Math.sin(a) * r + rng.range(-2, 2))),
+        kind: i % 5 === 0 ? 'dungeon' : i % 7 === 3 ? 'loot' : 'town',
+        label: PIN_LABELS.town,
+      });
+    }
+    const pinKinds = ['foe', 'npc', 'loot', 'door', 'town', 'dungeon', 'shrine', 'npc', 'foe'];
     for (let i = 0; i < pinKinds.length; i++) {
       const b = blobs[i % blobs.length];
       pins.push({

@@ -915,12 +915,13 @@ export class ShopPanel extends Panel {
       : shop.stock ?? [];
     const nodes = [];
     const cols = 5;
-    stock.slice(0, 15).forEach((item, i) => {
+    stock.slice(0, 12).forEach((item, i) => {
       const fp = itemFootprint(item);
-      const w = 26 + fp.w * 14;
-      const h = 26 + fp.h * 16;
+      // Natural size: a two-handed blade really is a third of the board tall.
+      const w = 22 + fp.w * 24;
+      const h = 22 + fp.h * 30;
       const cx = 8 + ((i % cols) + 0.5) * (84 / cols);
-      const cy = 12 + Math.floor(i / cols) * 27;
+      const cy = 4 + Math.floor(i / cols) * 31 + ((i % 2) ? 5 : 0);
       const node = itemSprite(item, nu(w), nu(h), 'mm-shop-item');
       node.style.left = `${cx}%`;
       node.style.top = `${cy}%`;

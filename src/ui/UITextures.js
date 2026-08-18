@@ -354,18 +354,20 @@ export class UITextures {
     g.fillStyle = pal[0];
     g.fillRect(0, 0, w, h);
 
-    // Large patchiness first, then finer mottle on top of it.
-    for (let i = 0; i < Math.round((w * h) / 26000); i++) {
+    // Large patchiness first, then finer mottle on top of it. Contrast comes
+    // from alpha rather than from stroke count: a headless software rasteriser
+    // will quietly give up on a few thousand large blurred fills.
+    for (let i = 0; i < 14; i++) {
       UITextures.dab(g, rng.range(0, w), rng.range(0, h),
-        rng.range(60, 260), rng.range(40, 180), rng.range(0, TAU),
-        pal[rng.int(0, pal.length - 1)], rng.range(0.35, 0.75), rng.range(20, 60));
+        rng.range(w * 0.10, w * 0.34), rng.range(h * 0.08, h * 0.30), rng.range(0, TAU),
+        pal[rng.int(0, pal.length - 1)], rng.range(0.40, 0.80), 14);
     }
-    const blobs = Math.round((w * h) / 1500);
+    const blobs = Math.round((w * h) / 2600);
     for (let i = 0; i < blobs; i++) {
       const c = pal[rng.int(0, pal.length - 1)];
       UITextures.dab(g, rng.range(0, w), rng.range(0, h),
-        rng.range(6, 70), rng.range(5, 40), rng.range(0, TAU),
-        c, rng.range(0.22, 0.60), rng.range(2, 11));
+        rng.range(6, 80), rng.range(5, 46), rng.range(0, TAU),
+        c, rng.range(0.24, 0.62), rng.range(2, 10));
     }
 
     // Pale mineral streaks, running one way like a bedding plane.
@@ -389,20 +391,24 @@ export class UITextures {
       UITextures.crack(g, rng, rng.range(0, w), rng.range(0, h), rng.range(0, TAU),
         rng.range(h * 0.2, h * 0.8), rng.range(0.8, 2), opts.crack ?? '#17181A', 2);
     }
-    for (let i = 0; i < Math.round((w * h) / 700); i++) {
-      UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(0.6, 3.2), rng.range(0.6, 2.6),
-        0, rng.chance(0.5) ? '#151614' : '#8A8B86', rng.range(0.16, 0.48), 0.6);
+    for (let i = 0; i < Math.round((w * h) / 1600); i++) {
+      g.globalAlpha = rng.range(0.16, 0.48);
+      g.fillStyle = rng.chance(0.5) ? '#151614' : '#8A8B86';
+      g.beginPath();
+      g.ellipse(rng.range(0, w), rng.range(0, h), rng.range(0.8, 3.4), rng.range(0.8, 2.8), 0, 0, TAU);
+      g.fill();
     }
+    g.globalAlpha = 1;
     UITextures.grain(g, w, h, rng, opts.grain ?? 24);
   }
 
   granite() {
-    return this._make('granite', 1100, 760, (g, w, h, rng) => UITextures.paintGranite(g, w, h, rng));
+    return this._make('granite', 860, 600, (g, w, h, rng) => UITextures.paintGranite(g, w, h, rng));
   }
 
   /** Dark green serpentine / verd-antique — the party creation screen. */
   serpentine() {
-    return this._make('serpentine', 1100, 760, (g, w, h, rng) => {
+    return this._make('serpentine', 860, 600, (g, w, h, rng) => {
       UITextures.paintGranite(g, w, h, rng, {
         palette: ['#22301F', '#1B2719', '#2C3D2E', '#16211A', '#33452F', '#12190F', '#3C5138'],
         streak: '#6E8A63',
@@ -570,9 +576,9 @@ export class UITextures {
       bell.bezierCurveTo(w * 0.76, h * 0.92, w * 0.86, h * 0.7, w * 0.94, h * 0.2);
       bell.closePath();
       const bg = g.createLinearGradient(0, h * 0.2, 0, h);
-      bg.addColorStop(0, '#8A837D');
-      bg.addColorStop(0.5, '#6E6863');
-      bg.addColorStop(1, '#403B39');
+      bg.addColorStop(0, '#B4ADA6');
+      bg.addColorStop(0.5, '#918A85');
+      bg.addColorStop(1, '#5E5854');
       g.fillStyle = bg;
       g.fill(bell);
 
@@ -591,7 +597,7 @@ export class UITextures {
           leaf.bezierCurveTo(x - lw, y + lh * 0.2, x - lw * 0.8, y - lh * 0.6, x, y - lh * 0.5);
           leaf.bezierCurveTo(x + lw * 0.8, y - lh * 0.6, x + lw, y + lh * 0.2, x, y + lh * 0.5);
           leaf.closePath();
-          g.fillStyle = mixHex('#B0ACA6', '#6A645F', rng.range(0.1, 0.6));
+          g.fillStyle = mixHex('#D0CCC6', '#7A746F', rng.range(0.05, 0.55));
           g.fill(leaf);
           g.strokeStyle = '#101010';
           g.lineWidth = 1.6;
@@ -673,10 +679,13 @@ export class UITextures {
     const yt = m;
     const cx = w / 2;
     const ys = h * 0.44;
+    const rise = ys - yt;
     p.moveTo(x0, yb);
     p.lineTo(x0, ys);
-    p.bezierCurveTo(x0, ys - (ys - yt) * 0.66, cx - (cx - x0) * 0.56, yt + (ys - yt) * 0.02, cx, yt);
-    p.bezierCurveTo(cx + (cx - x0) * 0.56, yt + (ys - yt) * 0.02, x1, ys - (ys - yt) * 0.66, x1, ys);
+    // Control points keep the tangent steep where the two curves meet, so the
+    // head comes to a point instead of closing over as a dome.
+    p.bezierCurveTo(x0, ys - rise * 0.52, cx - (cx - x0) * 0.66, yt + rise * 0.58, cx, yt);
+    p.bezierCurveTo(cx + (cx - x0) * 0.66, yt + rise * 0.58, x1, ys - rise * 0.52, x1, ys);
     p.lineTo(x1, yb);
     p.closePath();
     return p;
@@ -1329,15 +1338,16 @@ export class UITextures {
         g.fillRect(-w, -h * 0.5 + i * h * 0.22, w * 2, h * 0.1);
         g.restore();
       }
-      // Ghost engraving: charging horsemen, at 8-12% contrast.
+      // Ghost engraving: charging horsemen filling the lower two-thirds. That
+      // sepia illustration is instantly identifying, so it is drawn large.
       g.save();
-      g.globalAlpha = 0.11;
+      g.globalAlpha = 0.15;
       g.strokeStyle = '#4A3A26';
-      g.lineWidth = 1.6;
-      const baseY = h * 0.74;
-      for (let k = 0; k < 5; k++) {
-        const x = w * (0.10 + k * 0.20) + rng.range(-14, 14);
-        const s = h * (0.16 + rng.range(0, 0.05));
+      g.lineWidth = 2.4;
+      const baseY = h * 0.68;
+      for (let k = 0; k < 3; k++) {
+        const x = w * (0.22 + k * 0.28) + rng.range(-18, 18);
+        const s = h * (0.30 + rng.range(0, 0.06));
         // Horse body.
         g.beginPath();
         g.ellipse(x, baseY, s * 0.62, s * 0.30, -0.08, 0, TAU);
