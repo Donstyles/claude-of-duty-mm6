@@ -13,7 +13,9 @@
 export const SYSTEM_MANIFEST = [
   // ── World construction ───────────────────────────────────────────────────
   { path: './world/TerrainSystem.js', export: 'TerrainSystem' },
-  { path: './world/LightingSystem.js', export: 'LightingSystem' },
+  // No LightingSystem: the sky owns the only DirectionalLight, HemisphereLight
+  // and scene fog, because sun colour, ambient tint and fog all have to move
+  // together with the hour. It stands aside automatically if one ever appears.
   { path: './world/SkySystem.js', export: 'SkySystem' },
   { path: './world/WaterSystem.js', export: 'WaterSystem' },
   { path: './world/WeatherSystem.js', export: 'WeatherSystem' },

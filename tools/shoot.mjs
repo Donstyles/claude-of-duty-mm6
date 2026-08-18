@@ -157,10 +157,19 @@ async function main() {
       console.log(JSON.stringify(available, null, 2));
       report.ok = true;
     } else {
-      if (!opts.keep) await rm(outDir, { recursive: true, force: true });
       await mkdir(outDir, { recursive: true });
 
       const wanted = opts.shots.length ? opts.shots : available.map((s) => s.name);
+
+      // Clear only the files this run will replace. Wiping the whole directory
+      // is destructive when two runs overlap: a concurrent capture into the
+      // default `shots` root deletes every previous round's subdirectory.
+      if (!opts.keep) {
+        for (const name of wanted) {
+          await rm(path.join(outDir, `${name}.png`), { force: true });
+        }
+        await rm(path.join(outDir, 'report.json'), { force: true });
+      }
       for (const name of wanted) {
         const t0 = Date.now();
         process.stdout.write(`[shoot] ${name} … `);
