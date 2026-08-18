@@ -186,10 +186,56 @@ export const VENUE_INTERIORS = Object.entries(INTERIORS).map(([kind, subject]) =
   aspect: '4:3',
 }));
 
+/**
+ * Standing figures for the equipment niche.
+ *
+ * The character sheet and the backpack both show the character full length in
+ * a stone niche. The procedural painter gets the proportions right and then
+ * reads as a flat cartoon — the same wall the portraits hit, for the same
+ * reason: a canvas fill can build a shape but not a painted surface.
+ *
+ * Painted on a flat mid-grey ground on purpose. The niche behind them is drawn
+ * procedurally and has to keep matching the panel's stone, so these are matted
+ * off their background and composited, exactly like the spellbook miniatures.
+ */
+const FIGURE_STYLE =
+  'Full-length standing figure, head to feet, facing the viewer, arms slightly ' +
+  'away from the body, feet apart, filling the frame top to bottom. Painted in ' +
+  'the style of a 1998 CRPG paper-doll: oil-painted photoreal realism, soft ' +
+  'directional key light from the upper left, plain flat mid-grey background ' +
+  'with no scenery and no shadow on the ground, no text, no border, no frame.';
+
+const FIGURE_CLASSES = {
+  knight: ['a knight in a mail hauberk over a padded gambeson, sword at the hip, steel gauntlets',
+    'a woman knight in a mail hauberk and steel gorget, hair braided back, sword at the hip'],
+  paladin: ['a paladin in a polished steel breastplate with gold trim and a deep red cloak',
+    'a woman paladin in a burnished breastplate with a gold sunburst, auburn hair pinned up'],
+  archer: ['a woodsman archer in a green hooded cloak over brown leather, longbow in hand, quiver at the back',
+    'a woman ranger in a green leather jerkin, chestnut hair loose, longbow in hand'],
+  cleric: ['an older cleric in cream and gold priestly vestments, holding a plain brass lamp',
+    'a priestess in white and gold vestments beneath a pale linen veil, holding a brass lamp'],
+  sorcerer: ['a gaunt sorcerer in a deep blue robe with an embroidered collar, holding a plain wooden staff',
+    'a sorceress in a deep purple robe with silver embroidery and a jewelled circlet, holding a staff'],
+  druid: ['a druid in a green wool mantle with oak leaves at the shoulder, long grey-brown beard, carved staff',
+    'a woman druid in an undyed wool mantle with a leaf clasp, wild copper-red hair, carved staff'],
+  ranger: ['a ranger in weathered brown leather and a travelling cloak, a hand axe at the belt',
+    'a woman ranger in weathered leather and a travelling cloak, a hand axe at the belt'],
+  monk: ['a monk in a plain undyed robe belted with rope, barefoot, hands empty and open',
+    'a woman monk in a plain undyed robe belted with rope, barefoot, hands empty and open'],
+  thief: ['a scarred mercenary thief in dark leather with a hood pulled back, dagger at the belt',
+    'a woman thief in black leather with a hood pulled back, short dark hair, dagger at the belt'],
+};
+
+export const FIGURES = Object.entries(FIGURE_CLASSES).flatMap(([cls, [male, female]]) => [
+  { id: `figures/m-${cls}`, prompt: `${male}. ${FIGURE_STYLE}`, aspect: '9:16' },
+  { id: `figures/f-${cls}`, prompt: `${female}. ${FIGURE_STYLE}`, aspect: '9:16' },
+]);
+
 import { SPELLS } from '../src/game/data/Spells.js';
 
 export const SPELL_ART = spellPlates(SPELLS);
 
 export const ALL = [
   ...PORTRAITS, ...MISC, ...SPELL_ART, ...SPELL_COVERS, ...VENUE_INTERIORS,
+  ...FIGURES,
 ];

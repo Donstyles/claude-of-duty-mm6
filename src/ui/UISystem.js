@@ -349,7 +349,12 @@ export class UISystem extends System {
     }
     if (force) {
       const panel = this._activePanel ? this.panels.get(this._activePanel) : null;
-      panel?.refresh?.();
+      // Guarded because a screen that throws while refreshing would otherwise
+      // take the frame down with it — and with a dozen screens under active
+      // development that is a certainty, not a risk.
+      try { panel?.refresh?.(); } catch (err) {
+        console.error(`[ui] panel "${this._activePanel}" refresh failed:`, err);
+      }
     }
   }
 
@@ -1361,43 +1366,30 @@ export class UISystem extends System {
     };
 
     panelShot('ui-character', 'character', 'Character sheet on carved grey granite: engraved sub-panels, gold title, '
-      + 'white right-aligned values, five wide gold ovals and the full-body figure in its stone niche.', () => {
-      this.selectMember(0);
-      this.panels.get('character')?.tabs?.setActive('stats');
-    });
+      + 'white right-aligned values, five wide gold ovals and the full-body figure in its stone niche.',
+    () => this.selectMember(0));
     panelShot('ui-inventory', 'inventory', 'The 14×9 backpack: rust-red rules on dark brown leather, free-floating '
       + 'item sprites, and the painted character render standing in the niche instead of a paper doll.',
     () => this.selectMember(0));
     panelShot('ui-spellbook', 'spellbook', 'The open spellbook: pale grey-beige pages on dark green cloth, the '
-      + 'illuminated school plate, unlearned spells as bare grey smudges, nine bookmark ribbons.', () => {
-      this.selectMember(1);
-      const p = this.panels.get('spellbook');
-      if (p) { p.school = 'fire'; p.spellId = 'fire_fire_bolt'; }
-    });
+      + 'illuminated school plate, unlearned spells as bare grey smudges, nine bookmark ribbons.',
+    () => this.selectMember(1));
     panelShot('ui-map', 'map', 'The Maps book: the surveyed region drawn in MM6 automap colours with the white party arrow.',
       () => { this._map = null; });
     panelShot('ui-quests', 'quests', 'The quest book: warm parchment with the sepia horsemen watermark, black upright body '
-      + 'text, green cloth binding and gilt clasps.', () => {
-      const p = this.panels.get('quests');
-      if (p) { p.filter = 'active'; p.selected = 0; p.tabs?.setActive('active'); }
-    });
+      + 'text, green cloth binding and gilt clasps.');
     panelShot('ui-rest', 'rest', 'Rest and Wait on warm terracotta marble: the mountain plate, raised buttons and the '
       + 'serpentine clock panel with its hourglass.');
     panelShot('ui-dialogue', 'dialogue', 'NPC conversation: the pre-rendered candle-lit interior in the viewport, the '
       + 'keeper on wood grain with their name in azure and the options in white italic.');
+    // Deliberately no reaching into the panel to preselect an item. These
+    // hooks used to set private fields on screens other people own, and the
+    // first time one of those fields changed shape it threw inside refresh and
+    // took every subsequent shot in the run down with it. A screen that wants
+    // a particular state for its photograph should open in it.
     panelShot('ui-shop', 'shop', 'The stock board: item art hand-placed on figured walnut planks inside a chiselled rock '
-      + 'margin, with "Select the Item to Buy" in the message strip.', () => {
-      this.selectMember(0);
-      const p = this.panels.get('shop');
-      const shop = this.shopData();
-      const item = shop.stock[Math.min(7, shop.stock.length - 1)];
-      if (p && item) {
-        p.mode = 'buy';
-        p.tabs?.setActive('buy');
-        p.shop = shop;
-        p.selected = { item, side: 'stock', price: this.priceOf(item, 'buy', shop) };
-      }
-    });
+      + 'margin, with "Select the Item to Buy" in the message strip.',
+    () => this.selectMember(0));
     panelShot('ui-create', 'create', 'Party creation on dark green serpentine: four columns under sky vignettes, gold '
       + 'class emblems, colour-coded stats and the corner braziers.');
 

@@ -22,6 +22,7 @@ Two treatments:
   python3 tools/artpack.py
 """
 import glob
+import math
 import os
 
 import numpy as np
@@ -74,12 +75,40 @@ def pack_spells(size=176, feather=0.05):
         if cover > 0.72 or cover < 0.02:
             suspect.append((os.path.basename(src), round(cover, 3)))
 
+        a = _normalise(a, alpha)
+
         rgba = np.dstack([a, alpha * 255.0]).astype(np.uint8)
         im = Image.fromarray(rgba, 'RGBA').resize((size, size), Image.LANCZOS)
         im.save(os.path.join(ROOT, 'spells', os.path.basename(src)[:-4] + '.plate.png'),
                 'PNG', optimize=True)
         out += 1
     return out, suspect
+
+
+# Mean luminance of the ink on a real spellbook page, measured off the
+# reference still: 160 of 255, standard deviation 37. Our plates average 144
+# across the whole set, which is fine — but the two schools prompted for pale
+# palettes ("soft gold and ivory", "brilliant white and gold") come out at 181
+# and vanish into the cream. Rather than re-prompt those two, every plate is
+# pulled toward the measured figure if and only if it is too pale to read.
+INK_TARGET = 162.0
+INK_CEILING = 170.0
+
+
+def _normalise(a, alpha):
+    """Darken a washed-out plate toward the reference, preserving hue."""
+    m = alpha > 0.5
+    if m.sum() < 200:
+        return a
+    lum = a[..., :3] @ np.float32([0.2126, 0.7152, 0.0722])
+    mean = float(lum[m].mean())
+    if mean <= INK_CEILING:
+        return a
+    # Gamma rather than a linear scale: a linear multiply crushes the darks of
+    # an already-light painting, where gamma leaves them and moves the midtones,
+    # which is where a watercolour's weight actually lives.
+    g = math.log(INK_TARGET / 255.0) / math.log(max(mean, 1.0) / 255.0)
+    return np.clip(255.0 * np.power(np.clip(a, 0, 255) / 255.0, g), 0, 255)
 
 
 def _paper_mask(a):
