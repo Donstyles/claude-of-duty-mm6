@@ -1,0 +1,50 @@
+#!/bin/sh
+# Block any commit that carries a credential.
+#
+# The API key for asset generation lives at ~/.config/meshy/env, outside this
+# repository, and nothing here should ever contain it. This hook is the
+# backstop for the case that actually bites people: a key pasted into a scratch
+# file, or an agent writing one into source without realising.
+#
+# Scans the STAGED content, not the working tree, so it cannot be sidestepped by
+# leaving the file dirty.
+
+fail=0
+
+# Meshy keys, plus the common shapes of other providers' tokens.
+patterns='msy_[A-Za-z0-9]\{16,\}
+sk-[A-Za-z0-9]\{20,\}
+ghp_[A-Za-z0-9]\{20,\}
+AKIA[0-9A-Z]\{16\}
+-----BEGIN [A-Z ]*PRIVATE KEY-----'
+
+for file in $(git diff --cached --name-only --diff-filter=ACM); do
+  case "$file" in
+    *.png|*.jpg|*.jpeg|*.gif|*.webp|*.glb|*.gltf|*.mp3|*.ogg|*.wav) continue ;;
+  esac
+  [ -f "$file" ] || continue
+
+  echo "$patterns" | while IFS= read -r pat; do
+    [ -n "$pat" ] || continue
+    if git show ":$file" 2>/dev/null | grep -q "$pat"; then
+      echo "BLOCKED: '$file' looks like it contains a credential (/$pat/)." >&2
+      exit 1
+    fi
+  done || fail=1
+
+  # Also refuse the obvious filenames outright, in case .gitignore is bypassed.
+  case "$file" in
+    .env|.env.*|*.key|secrets.json|.secrets)
+      echo "BLOCKED: '$file' is a secret-bearing filename and must not be committed." >&2
+      fail=1
+      ;;
+  esac
+done
+
+if [ "$fail" -ne 0 ]; then
+  echo "" >&2
+  echo "Commit aborted. Keep credentials in ~/.config/meshy/env, never in the repo." >&2
+  exit 1
+fi
+
+exit 0

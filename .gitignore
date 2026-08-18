@@ -7,3 +7,9 @@ shots/
 dist-check-*/
 .agent-tmp/
 reference/mm6/
+.env
+.env.*
+*.key
+secrets.json
+.secrets
+tools/.env
