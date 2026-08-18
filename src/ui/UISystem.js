@@ -257,6 +257,18 @@ export class UISystem extends System {
    */
   refreshParty() { this._syncParty(true); }
 
+  /**
+   * Set the retinue the sidebar's two panes draw.
+   *
+   * Public because two screens hire — the tavern rents guild-certified people
+   * and a doorstep conversation rents you a neighbour — and both were writing
+   * `ui.hirelings` directly to keep the panes truthful.
+   */
+  setHirelings(list) {
+    this.hirelings = Array.isArray(list) ? list : [];
+    this.hud?.setHirelings(this.hirelings);
+  }
+
   openPanel(id, opts = {}) {
     const panel = this.panels.get(id);
     if (!panel) {
@@ -387,7 +399,7 @@ export class UISystem extends System {
     // level-1 knight in borrowed plate armour is a lie the moment anyone plays.
     const fill = stand && stand === c;
     const skillsOf = fill && !Object.keys(c?.skills ?? {}).length ? stand.skills : (c?.skills ?? {});
-    const packOf = fill && !c?.inventory?.length ? stand.inventory : (c?.inventory ?? []);
+    const packOf = this._normalisePack(fill && !c?.inventory?.length ? stand.inventory : (c?.inventory ?? []));
     // A live character keeps all twelve slots on the object and leaves them
     // null, so the key count is never zero: ask whether anything is actually
     // worn, or the equipment figure stands there empty-handed.
@@ -650,6 +662,54 @@ export class UISystem extends System {
     return false;
   }
 
+  /**
+   * The character a screen's action should write to.
+   *
+   * View models are built from the party system where there is one and from the
+   * demo party where there is not, so an action has to reach the same object the
+   * panel is looking at rather than assuming either.
+   */
+  _target(index) {
+    return this._vm[index]?.source ?? this._chars[index] ?? null;
+  }
+
+  /**
+   * The backpack in the shape the 14x9 grid needs.
+   *
+   * A character's `inventory` is a plain list of items — the party system
+   * pushes an opening kit straight into it and loot appends to it — but the
+   * grid has to know where each one lies. Loose items are wrapped and placed
+   * first-fit **in the character's own array**, so the position is remembered
+   * rather than reshuffled every time the screen is drawn.
+   */
+  _normalisePack(list, cols = GRID_COLS, rows = GRID_ROWS) {
+    if (!Array.isArray(list)) return [];
+    const loose = [];
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e && typeof e === 'object' && e.item) continue;
+      list[i] = { item: e, x: -1, y: -1 };
+      loose.push(list[i]);
+    }
+    for (const entry of loose) {
+      const fp = itemFootprint(entry.item);
+      const placed = list.filter((e) => e !== entry && e.x >= 0);
+      let done = false;
+      for (let y = 0; y <= rows - fp.h && !done; y++) {
+        for (let x = 0; x <= cols - fp.w && !done; x++) {
+          if (this._gridFree(placed, x, y, fp.w, fp.h)) {
+            entry.x = x;
+            entry.y = y;
+            done = true;
+          }
+        }
+      }
+      // A full pack is better overlapped than emptied: nothing is ever dropped.
+      if (!done) { entry.x = 0; entry.y = 0; }
+    }
+    return list;
+  }
+
   _gridFree(inventory, x, y, w, h, ignore = null) {
     for (const e of inventory) {
       if (e === ignore) continue;
@@ -763,14 +823,14 @@ export class UISystem extends System {
   }
 
   useItem(index, entry) {
-    const c = this._chars[index];
+    const c = this._target(index);
     if (!c || !entry) return false;
     const item = entry.item;
     if (item.category === 'potion') {
       const heal = item.effect === 'heal' ? item.power || 10 : 0;
       const sp = item.effect === 'restore-sp' ? item.power || 10 : 0;
-      c.hp = Math.min(c.hpMax, (c.hp ?? 0) + heal);
-      c.sp = Math.min(c.spMax, (c.sp ?? 0) + sp);
+      c.hp = Math.min(c.hpMax ?? c.maxHP ?? Infinity, (c.hp ?? 0) + heal);
+      c.sp = Math.min(c.spMax ?? c.maxSP ?? Infinity, (c.sp ?? 0) + sp);
       const i = c.inventory.indexOf(entry);
       if (i >= 0) c.inventory.splice(i, 1);
       this.log(`${c.name} drinks the ${item.name}.`, 'good');
@@ -784,7 +844,7 @@ export class UISystem extends System {
 
   /** Move an item into an equipment slot, swapping whatever was there. */
   equipItem(index, drag, slotId) {
-    const c = this._chars[index];
+    const c = this._target(index);
     if (!c || !drag) return false;
     const item = drag.item;
     const wanted = item.slot ?? item.category;
@@ -804,13 +864,14 @@ export class UISystem extends System {
     }
     c.equipment[slotId] = item;
     if (previous && previous !== item) this._placeInGrid(c.inventory, previous);
+    c.refresh?.();
     this.log(`${c.name} equips the ${item.name}.`, 'info');
     this._syncParty(true);
     return true;
   }
 
   moveItemToGrid(index, drag, x, y, cols = GRID_COLS, rows = GRID_ROWS) {
-    const c = this._chars[index];
+    const c = this._target(index);
     if (!c || !drag) return false;
     const item = drag.item;
     const fp = itemFootprint(item);
@@ -827,6 +888,7 @@ export class UISystem extends System {
     } else {
       delete c.equipment[drag.slot];
       c.inventory.push({ item, x: gx, y: gy });
+      c.refresh?.();
       this.log(`${c.name} stows the ${item.name}.`, 'info');
     }
     this._syncParty(true);
@@ -840,7 +902,7 @@ export class UISystem extends System {
    * that cannot hold everything is thrown away rather than losing an item.
    */
   sortInventory(index, cols = GRID_COLS, rows = GRID_ROWS) {
-    const c = this._chars[index];
+    const c = this._target(index);
     if (!c?.inventory?.length) return false;
     const rank = (item) => {
       const i = SORT_ORDER.indexOf(item?.category ?? 'misc');
@@ -881,7 +943,7 @@ export class UISystem extends System {
    * the only honest appraiser in Caerwen. Both fail out loud.
    */
   appraiseItem(index, item) {
-    const c = this._chars[index];
+    const c = this._target(index);
     if (!c || !item) return false;
     const power = safe(() => itemPower(item.baseId ?? item.id, item.prefixId, item.suffixId), 4);
     if (item.identified === false) {

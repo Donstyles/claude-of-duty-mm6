@@ -199,8 +199,14 @@ export class GuildPanel extends Panel {
         return;
       }
       const m = guilds.membership(hall.orderId);
+      const trial = hall.order.trial;
+      // A member's next real obstacle is the house trial, so say what it is
+      // here rather than only when a rank is refused because of it.
+      const standing = trial && !guilds.questDone(trial.id)
+        ? ` The house has not yet had ${trial.name} of you: ${trial.summary}`
+        : trial ? ` ${trial.name} is done; the house owes you its highest rank.` : '';
       this._say(`The roll carries ${m.sponsor}'s name, entered at ${m.town} on day ${m.day}. `
-        + 'The whole party trades on it.', true);
+        + `The whole party trades on it.${standing}`, true);
     });
     if (this.view !== 'hall') {
       add('hall', 'Look Around', () => { this.view = 'hall'; this.refresh(); });

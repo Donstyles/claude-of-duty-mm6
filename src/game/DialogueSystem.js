@@ -1,3 +1,4 @@
+import { System } from '../core/Engine.js';
 import { RNG, hashSeed } from '../core/RNG.js';
 import { getVenue, venuesInTown, VENUE_KINDS } from './data/Venues.js';
 
@@ -693,7 +694,10 @@ const EXHAUSTED = Object.freeze([
 
 // ── the model ───────────────────────────────────────────────────────────────
 
-export class DialogueSystem {
+// Extends System so the roster can instantiate it: the engine calls
+// fixedUpdate/update/lateUpdate/resize/dispose on everything it holds, and the
+// base class is where the no-op versions of those live.
+export class DialogueSystem extends System {
   static id = 'dialogue';
   static order = 156;
 
@@ -703,6 +707,7 @@ export class DialogueSystem {
    *   sample state exercises it).
    */
   constructor(ctx = null) {
+    super();
     this.ctx = ctx ?? null;
     /** Errand ledger, keyed `${speakerKey}:${errandId}`. */
     this.ledger = new Map();

@@ -130,7 +130,7 @@
 
 /* ── save slots ───────────────────────────────────────────────────────────── */
 
-.mm-ui .mm-slot-list {
+.mm-ui .mm-sv-list {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -140,11 +140,11 @@
   gap: calc(var(--u) * 4);
   padding-right: calc(var(--u) * 4);
 }
-.mm-ui .mm-slot-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
-.mm-ui .mm-slot-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+.mm-ui .mm-sv-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-ui .mm-sv-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
 
-.mm-ui .mm-slot-wrap { position: relative; display: flex; }
-.mm-ui .mm-slot {
+.mm-ui .mm-sv-wrap { position: relative; display: flex; }
+.mm-ui .mm-sv {
   flex: 1;
   min-width: 0;
   padding: calc(var(--u) * 4) calc(var(--u) * 10);
@@ -154,32 +154,32 @@
     inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(8, 6, 2, 0.95),
     inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(120, 104, 62, 0.55);
 }
-.mm-ui .mm-slot:hover { background: rgba(46, 40, 24, 0.85); }
-.mm-ui .mm-slot.is-empty { color: #8a7f66; }
-.mm-ui .mm-slot:disabled { cursor: default; }
-.mm-ui .mm-slot:disabled:hover { background: rgba(26, 24, 18, 0.75); }
+.mm-ui .mm-sv:hover { background: rgba(46, 40, 24, 0.85); }
+.mm-ui .mm-sv.is-empty { color: #8a7f66; }
+.mm-ui .mm-sv:disabled { cursor: default; }
+.mm-ui .mm-sv:disabled:hover { background: rgba(26, 24, 18, 0.75); }
 
-.mm-ui .mm-slot-head { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
-.mm-ui .mm-slot-name { font-size: calc(var(--u) * 13); color: #ffd773; }
-.mm-ui .mm-slot.is-empty .mm-slot-name { color: #9a8c6a; }
-.mm-ui .mm-slot-when { font-size: calc(var(--u) * 9); color: #9a8c6a; white-space: nowrap; }
-.mm-ui .mm-slot-body { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
-.mm-ui .mm-slot-party {
+.mm-ui .mm-sv-head { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
+.mm-ui .mm-sv-name { font-size: calc(var(--u) * 13); color: #ffd773; }
+.mm-ui .mm-sv.is-empty .mm-sv-name { color: #9a8c6a; }
+.mm-ui .mm-sv-when { font-size: calc(var(--u) * 9); color: #9a8c6a; white-space: nowrap; }
+.mm-ui .mm-sv-body { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
+.mm-ui .mm-sv-party {
   font-size: calc(var(--u) * 10);
   color: #d8ccb0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mm-ui .mm-slot-place { font-size: calc(var(--u) * 10); font-style: italic; color: #a5966f; white-space: nowrap; }
+.mm-ui .mm-sv-place { font-size: calc(var(--u) * 10); font-style: italic; color: #a5966f; white-space: nowrap; }
 
-.mm-ui .mm-slot-del {
+.mm-ui .mm-sv-del {
   width: calc(var(--u) * 20);
   display: grid;
   place-items: center;
   color: #b06050;
 }
-.mm-ui .mm-slot-del:hover { color: #ff8a70; }
+.mm-ui .mm-sv-del:hover { color: #ff8a70; }
 
 /* ── options ──────────────────────────────────────────────────────────────── */
 

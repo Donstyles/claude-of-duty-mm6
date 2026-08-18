@@ -408,9 +408,9 @@ export class MapPanel extends Panel {
     const centre = this.centre.local ?? { x: f.party.x, z: f.party.z };
 
     // How much ground a fresh screen shows, chosen by what the party is
-    // standing in: a dungeon is small, a town is a few streets, open country
-    // is a quarter-mile in every direction.
-    const span = f.dungeon ? 120 : this.ctx?.get('venue')?.town ? 170 : 420;
+    // standing in: a dungeon is small, a town is its streets and a little of
+    // the road out, and open country is a quarter-mile in every direction.
+    const span = f.dungeon ? 120 : this._nearTown(f.party) ? 280 : 420;
     const base = Math.min(W, H) / span;
     const s = base * this.zoom.local;
     const toX = (wx) => W / 2 + (wx - centre.x) * s;
@@ -436,6 +436,25 @@ export class MapPanel extends Panel {
       ['folk', 'Townsfolk'], ['note', 'Your note'],
     ]);
     this.coordEl.textContent = `${Math.round(f.party.x)} E · ${Math.round(-f.party.z)} N`;
+  }
+
+  /**
+   * Is the party close enough to a town for the map to be a town map?
+   *
+   * The town system names no centre, but a town is exactly where its doors
+   * are, so the doors give one — and they move with whichever town is built.
+   */
+  _nearTown(party) {
+    const doors = this.ctx?.get('town')?.doors ?? [];
+    if (!doors.length) return false;
+    if (this._doorSourceCentre !== doors) {
+      let x = 0;
+      let z = 0;
+      for (const d of doors) { x += d.position.x; z += d.position.z; }
+      this._townCentre = { x: x / doors.length, z: z / doors.length };
+      this._doorSourceCentre = doors;
+    }
+    return Math.hypot(party.x - this._townCentre.x, party.z - this._townCentre.z) < 240;
   }
 
   /** Explored ground, in MM6's flat colour key with hard black beyond it. */
@@ -1282,8 +1301,8 @@ const PLOT_VENUE = {
   alchemist: 'alchemist', alchemy: 'alchemist', shop: 'generalstore',
   store: 'generalstore', generalStore: 'generalstore', generalstore: 'generalstore',
   inn: 'tavern', tavern: 'tavern', temple: 'temple', bank: 'bank',
-  stable: 'coachstop', coachstop: 'coachstop', dock: 'dock', harbour: 'dock',
-  house: 'house', cottage: 'house',
+  stable: 'coachstop', coachstop: 'coachstop', coachStop: 'coachstop',
+  dock: 'dock', harbour: 'dock', house: 'house', cottage: 'house',
 };
 
 /** Plots that are civic rather than commercial, and so have no venue entry. */

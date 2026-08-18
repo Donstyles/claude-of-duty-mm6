@@ -45,8 +45,13 @@ const STAIR_RUN = 4;
  */
 const BASE_Y = 900;
 
-/** World metres per texture repeat. REFERENCE §"Terrain and ground" rule 11. */
-const UV_FLOOR = 3.2;
+/**
+ * World metres per texture repeat. REFERENCE rule 11 measures MM6's own
+ * flagstones at 0.65–0.70 m across, and `dungeon-floor` lays about four flags
+ * to a tile, so the tile has to be a little over two metres for the stones to
+ * come out the right size underfoot.
+ */
+const UV_FLOOR = 2.4;
 const UV_WALL = 2.6;
 
 /* ═════════════════════════════ themes ════════════════════════════════════ */
@@ -333,8 +338,11 @@ export class DungeonSystem extends System {
 
       this._savedExposure = ctx.renderer.toneMappingExposure;
       // Sky reads exposure but never writes it — `Engine` sets it once at boot —
-      // so raising it indoors and putting it back on the way out is safe.
-      ctx.renderer.toneMappingExposure = 1.3;
+      // so raising it indoors and putting it back on the way out is safe. The
+      // number is small on purpose: REFERENCE rule 8 puts the bulk of every MM6
+      // frame between value 30 and 100, and a lit brick wall is the easiest
+      // thing in an interior to push past that.
+      ctx.renderer.toneMappingExposure = 1.16;
       this._savedFog = ctx.scene.fog;
       ctx.scene.fog = new THREE.FogExp2(light.ambient, 0.021);
 
@@ -937,7 +945,7 @@ export class DungeonSystem extends System {
         batches.ember.geom(flame, m, 1);
 
         state.torches.push({
-          x: tx, y: ty + 0.6, z: tz, steady: false, base: 19,
+          x: tx, y: ty + 0.6, z: tz, steady: false, base: 15,
           phase: rng.range(0, Math.PI * 2), color: def.light.torch,
         });
       }
@@ -1015,22 +1023,30 @@ export class DungeonSystem extends System {
       }
     }
 
-    // Rubble and webs against the walls, on every floor. This is the cheap half
-    // of the fix and most of the difference.
+    // Corridors get the same treatment as rooms, because a corridor with
+    // nothing in it is where the eye spends most of its time. Rubble at the
+    // wall foot, webs in the top corners, and every so often something the
+    // last occupants left standing against the wall.
     const { grid, size } = plan;
+    const leftovers = kit.filter((k) => k === 'barrel' || k === 'crate' || k === 'bones');
     for (let j = 1; j < size - 1; j++) {
       for (let i = 1; i < size - 1; i++) {
         if (!grid[j][i] || plan.noFloor.has(key(i, j))) continue;
         const walls = SIDES.filter(([di, dj]) => !grid[j + dj]?.[i + di]);
         if (!walls.length) continue;
         const [wx, wz] = cellToWorld(i, j, size);
-        if (rng.chance(0.42)) {
+        if (rng.chance(0.5)) {
           const [di, dj] = rng.pick(walls);
           this._propRubble(state, wx + di * 1.5, plan.y, wz + dj * 1.5, rng);
         }
-        if (walls.length >= 2 && rng.chance(0.34)) {
-          const [di, dj] = walls[0];
+        if (rng.chance(0.42)) {
+          const [di, dj] = rng.pick(walls);
           this._propWeb(state, wx + di * 1.5, plan.y + plan.height, wz + dj * 1.5, di, dj, rng);
+        }
+        if (leftovers.length && plan.tag[j][i] === 2 && rng.chance(0.16)) {
+          const [di, dj] = rng.pick(walls);
+          this._prop(state, plan, rng.pick(leftovers),
+            wx + di * 1.15, plan.y, wz + dj * 1.15, rng);
         }
       }
     }
@@ -1248,7 +1264,7 @@ export class DungeonSystem extends System {
       new THREE.Vector3(scale, scale * 0.5, scale));
     state.batches.ember.geom(coals, m, 1);
     state.torches.push({
-      x, y: y + 1.25 * scale, z, steady: false, base: 17 * scale,
+      x, y: y + 1.25 * scale, z, steady: false, base: 14 * scale,
       phase: rng.range(0, Math.PI * 2), color: state.def.light.torch,
     });
     bowl.dispose(); leg.dispose(); coals.dispose();
@@ -1741,6 +1757,10 @@ export class DungeonSystem extends System {
     const capture = ctx.get('capture');
     if (!capture) return;
 
+    // Yaw follows the camera's own convention: forward is (−sin y, 0, −cos y),
+    // so yaw 0 looks toward −Z. Standing at a room's far edge and looking back
+    // across it therefore means yaw 0, not π — which is the difference between
+    // a hall and a close-up of its wall.
     const look = (c, id, pick) => {
       this.enter(c, id);
       const built = this.built.get(id);
@@ -1771,7 +1791,7 @@ export class DungeonSystem extends System {
         const plan = b.floors[0];
         const hall = plan.rooms.slice().sort((p, q) => q.w * q.h - p.w * p.h)[0];
         const [x, z] = cellToWorld(hall.cx, hall.cy, plan.size);
-        return { x, y: plan.y + 1.7, z: z + (hall.h * CELL) / 2 - 0.5, yaw: Math.PI };
+        return { x, y: plan.y + 1.7, z: z + (hall.h * CELL) / 2 - 1.2, yaw: 0 };
       }),
     });
 
@@ -1781,7 +1801,7 @@ export class DungeonSystem extends System {
         const plan = b.floors[b.floors.length - 1];
         const room = plan.bossRoom ?? plan.rooms[0];
         const [x, z] = cellToWorld(room.cx, room.cy, plan.size);
-        return { x, y: plan.y + 1.7, z: z + (room.h * CELL) / 2 + 1.0, yaw: Math.PI };
+        return { x, y: plan.y + 1.7, z: z + (room.h * CELL) / 2 - 0.6, yaw: 0 };
       }),
     });
 
@@ -1800,7 +1820,7 @@ export class DungeonSystem extends System {
         const plan = b.floors[0];
         const room = plan.rooms.slice().sort((p, q) => q.w * q.h - p.w * p.h)[0];
         const [x, z] = cellToWorld(room.cx, room.cy, plan.size);
-        return { x, y: plan.y + 1.7, z: z + 5.5, yaw: Math.PI };
+        return { x, y: plan.y + 1.7, z: z + 5.5, yaw: 0 };
       }),
     });
   }

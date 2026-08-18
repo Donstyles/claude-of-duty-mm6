@@ -173,22 +173,22 @@ export class MenuPanel extends Panel {
     const rows = save?.list?.() ?? [];
     const byId = new Map(rows.map((r) => [r.slot, r]));
 
-    const list = el('div', { className: 'mm-slot-list' });
+    const list = el('div', { className: 'mm-sv-list' });
     for (const spec of SLOTS) {
       const row = byId.get(spec.id) ?? null;
       const meta = this._meta[spec.id] ?? null;
       const empty = !row;
       const b = el('button', {
-        className: `mm-slot${empty ? ' is-empty' : ''}`, type: 'button',
+        className: `mm-sv${empty ? ' is-empty' : ''}`, type: 'button',
         // `false` is still an attribute value, so a live button must omit it.
         disabled: empty && mode === 'load' ? '' : undefined,
       },
-      el('div', { className: 'mm-slot-head' },
-        el('span', { className: 'mm-slot-name', text: spec.label }),
-        el('span', { className: 'mm-slot-when', text: empty ? '' : whenText(row.savedAt) })),
-      el('div', { className: 'mm-slot-body' },
-        el('span', { className: 'mm-slot-party', text: empty ? 'Empty' : partyText(row) }),
-        el('span', { className: 'mm-slot-place', text: empty ? (spec.note ?? '') : placeText(row, meta) })));
+      el('div', { className: 'mm-sv-head' },
+        el('span', { className: 'mm-sv-name', text: spec.label }),
+        el('span', { className: 'mm-sv-when', text: empty ? '' : whenText(row.savedAt) })),
+      el('div', { className: 'mm-sv-body' },
+        el('span', { className: 'mm-sv-party', text: empty ? 'Empty' : partyText(row) }),
+        el('span', { className: 'mm-sv-place', text: empty ? (spec.note ?? '') : placeText(row, meta) })));
 
       if (!(empty && mode === 'load')) {
         b.addEventListener('click', () => (mode === 'save' ? this._doSave(spec, row) : this._doLoad(spec)));
@@ -208,10 +208,10 @@ export class MenuPanel extends Panel {
           : 'Load this game.',
       }));
 
-      const wrap = el('div', { className: 'mm-slot-wrap' }, b);
+      const wrap = el('div', { className: 'mm-sv-wrap' }, b);
       if (row && mode === 'save') {
         const del = el('button', {
-          className: 'mm-slot-del', type: 'button', 'aria-label': `Erase ${spec.label}`,
+          className: 'mm-sv-del', type: 'button', 'aria-label': `Erase ${spec.label}`,
           html: icon('close', { size: 12 }),
         });
         del.addEventListener('click', () => this._doDelete(spec));
@@ -288,7 +288,7 @@ export class MenuPanel extends Panel {
       this._choice('Turning', 'turnMode', [
         { id: 'smooth', label: 'Smooth' },
         { id: 'step', label: 'By steps' },
-      ], 'By steps turns the party a quarter-eighth at a time, as the old blobbers did.'),
+      ], 'By steps turns the arrow keys into eighths of a circle, one press at a time.'),
       this._choice('Difficulty', 'difficulty', DIFFICULTIES,
         DIFFICULTIES.find((d) => d.id === this.settings.difficulty)?.note ?? ''),
     ];

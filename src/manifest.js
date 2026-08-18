@@ -36,6 +36,8 @@ export const SYSTEM_MANIFEST = [
   { path: './game/GuildSystem.js', export: 'GuildSystem' },
   { path: './game/NPCSystem.js', export: 'NPCSystem' },
   { path: './game/VenueSystem.js', export: 'VenueSystem' },
+  { path: './game/DialogueSystem.js', export: 'DialogueSystem' },
+  { path: './game/ServicesSystem.js', export: 'ServicesSystem' },
   { path: './game/TravelSystem.js', export: 'TravelSystem' },
   { path: './game/CampaignSystem.js', export: 'CampaignSystem' },
   { path: './game/QuestSystem.js', export: 'QuestSystem' },
