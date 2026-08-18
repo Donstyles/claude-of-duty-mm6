@@ -242,7 +242,7 @@ export class QuestPanel extends Panel {
 
     const exit = el('button', {
       className: 'mm-stone-plaque', type: 'button',
-      html: icon('quests', { size: 14 }), 'aria-label': 'Close the journal',
+      html: icon('close', { size: 12 }), 'aria-label': 'Close the journal',
     });
     exit.addEventListener('click', () => this.ui.closePanel());
 

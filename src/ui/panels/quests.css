@@ -24,7 +24,8 @@
   min-width: 0;
 }
 .mm-quest-page.is-left { flex: 196; }
-.mm-quest-page.is-right { flex: 214; }
+/* The right page starts below the tabs that overhang the top of the book. */
+.mm-quest-page.is-right { flex: 214; padding-top: calc(var(--u) * 26); }
 
 /* The gutter: two pages of one sheet, folded — the shadow belongs to the paper
    on both sides of the fold, not to a gap between two cards. */
@@ -40,14 +41,22 @@
 }
 
 /* The cartouche is smaller here than on a single-page book, because it shares
-   its line with the count of what is on the page. */
+   the page with an index. The script never wraps: a two-line title breaks out
+   of the carved ivory and stops reading as a plate. */
 .mm-quest-head {
-  width: 96%;
-  height: calc(var(--u) * 26);
+  width: 100%;
+  height: calc(var(--u) * 24);
   margin: 0 auto calc(var(--u) * 2);
   flex: 0 0 auto;
+  overflow: hidden;
 }
-.mm-quest-head span { font-size: calc(var(--u) * 17); }
+.mm-quest-head span {
+  font-size: calc(var(--u) * 14);
+  white-space: nowrap;
+  padding: 0 calc(var(--u) * 16);
+}
+.mm-quest-head::before,
+.mm-quest-head::after { width: calc(var(--u) * 9); height: calc(var(--u) * 9); }
 
 .mm-qb-count {
   flex: 0 0 auto;

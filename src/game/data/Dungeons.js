@@ -1,13 +1,13 @@
 /**
  * Dungeons — every hole in the ground the campaign or the side content sends
- * you into, and what is at the bottom of it.
+ * you into, what is at the bottom of it, and where its door is.
  *
  * This is a catalogue, not a floor plan. `DungeonSystem` generates the geometry
  * from a seed; what it needs from an author is the things a generator cannot
  * invent: which region the entrance is in, how deep it goes, what it looks
  * like, who is waiting, and — the only field with any writing in it — what the
  * place is *for*. `holds` exists because a dungeon nobody can describe in one
- * sentence is a corridor with monsters in it, and forty of those is not a game.
+ * sentence is a corridor with monsters in it, and fifty of those is not a game.
  *
  * Names follow CANON.md §1. Imperial cuttings take Old Cindric (Ossra, Malveth,
  * Verhal, Duskorn); anything dug or drowned by the people who came after takes
@@ -20,6 +20,8 @@
  * here throws if a family has gone: the monster system falls back to the band.
  */
 
+import { REGIONS, WORLD_SIZE } from './Regions.js';
+
 function deepFreeze(o) {
   if (o && typeof o === 'object' && !Object.isFrozen(o)) {
     Object.freeze(o);
@@ -29,17 +31,55 @@ function deepFreeze(o) {
 }
 
 /**
- * Themes drive the generator's room grammar and material set. Keep the list
- * short: a theme is a build recipe, and every new one costs a material pass.
+ * Themes drive the generator's room grammar, material set and lighting. Keep
+ * the list short: a theme is a build recipe, and every new one costs a material
+ * pass. The generator collapses these onto three layout grammars — masonry,
+ * cave and grid — so a theme is a *look* on top of a shape it shares with its
+ * neighbours, which is how twenty-two of them fit inside one build.
  */
 export const DUNGEON_THEMES = Object.freeze([
-  'sea-cave', 'cave', 'mine', 'barrow', 'crypt', 'ruin', 'cistern',
-  'stockade', 'keep', 'quarry', 'wreck', 'chapel', 'grove', 'ice',
+  'sea-cave', 'cave', 'mine', 'barrow', 'crypt', 'ruin', 'cistern', 'sewer',
+  'stockade', 'keep', 'quarry', 'wreck', 'chapel', 'temple', 'grove', 'ice',
   'undercity', 'forge', 'eyrie', 'buried-city', 'glass', 'vessel',
 ]);
 
 /** What a dungeon is in the game for. Campaign dungeons are load-bearing. */
 export const DUNGEON_ROLES = Object.freeze(['campaign', 'side', 'both']);
+
+/**
+ * The mood of each theme, in the two forms the world layer wants: what colour
+ * the dark is and how much fire is in it (`light`), and what the stone is
+ * (`palette`). A dungeon may override either — `The Blue Throat` is not lit
+ * like a cave and the forge floors are not the colour of a crypt — but nothing
+ * has to say anything to get a sensible answer.
+ *
+ * `density` is torches per available bracket, 0–1. It is the single knob that
+ * separates "a garrison keeps this lit" from "nobody has been down here".
+ */
+const THEME_LOOK = {
+  'sea-cave':    { ambient: 0x101a1e, torch: 0xffb070, density: 0.45, wall: 0x5c6260, floor: 0x4a4e50, trim: 0x76807c },
+  'cave':        { ambient: 0x11100c, torch: 0xffa040, density: 0.45, wall: 0x6a6258, floor: 0x4a443c, trim: 0x8c8578 },
+  'mine':        { ambient: 0x140f0a, torch: 0xffa848, density: 0.70, wall: 0x6b5a46, floor: 0x51422f, trim: 0x8a6f4a },
+  'barrow':      { ambient: 0x0f1210, torch: 0xffc070, density: 0.35, wall: 0x6c6a5c, floor: 0x4a4840, trim: 0x8e8a76 },
+  'crypt':       { ambient: 0x0e0e10, torch: 0xffb060, density: 0.45, wall: 0x6a6660, floor: 0x41403c, trim: 0x9a9488 },
+  'ruin':        { ambient: 0x121110, torch: 0xffb058, density: 0.50, wall: 0x77726a, floor: 0x4e4a44, trim: 0x968f80 },
+  'cistern':     { ambient: 0x0c1216, torch: 0xffb878, density: 0.40, wall: 0x5e6668, floor: 0x3c4244, trim: 0x80888a },
+  'sewer':       { ambient: 0x0d1210, torch: 0xffa850, density: 0.40, wall: 0x5a5a4e, floor: 0x36382e, trim: 0x6e6e5e },
+  'stockade':    { ambient: 0x141008, torch: 0xffa840, density: 0.80, wall: 0x6a5236, floor: 0x574530, trim: 0x8a6c46 },
+  'keep':        { ambient: 0x101012, torch: 0xffb257, density: 0.70, wall: 0x7c7870, floor: 0x504c46, trim: 0xa09884 },
+  'quarry':      { ambient: 0x101010, torch: 0xffa848, density: 0.45, wall: 0x807a70, floor: 0x565048, trim: 0x9a9284 },
+  'wreck':       { ambient: 0x0b1216, torch: 0xffb468, density: 0.40, wall: 0x5a4a36, floor: 0x3e3428, trim: 0x7a6444 },
+  'chapel':      { ambient: 0x101216, torch: 0xffc888, density: 0.55, wall: 0x827c6e, floor: 0x54504a, trim: 0xc8ab72 },
+  'temple':      { ambient: 0x121014, torch: 0xffd090, density: 0.60, wall: 0x8a8578, floor: 0x5a5448, trim: 0xd8b25c },
+  'grove':       { ambient: 0x0e1410, torch: 0xa8ffb0, density: 0.35, wall: 0x54604a, floor: 0x3e4636, trim: 0x76825e },
+  'ice':         { ambient: 0x18242e, torch: 0xbfe4ff, density: 0.40, wall: 0x9fd0e8, floor: 0x6a9ab8, trim: 0xd8f0ff },
+  'undercity':   { ambient: 0x101014, torch: 0xffc070, density: 0.75, wall: 0x807c74, floor: 0x4a4842, trim: 0xb0a894 },
+  'forge':       { ambient: 0x1a0d08, torch: 0xff6a20, density: 0.85, wall: 0x4a3a34, floor: 0x2c221e, trim: 0xff5020 },
+  'eyrie':       { ambient: 0x141618, torch: 0xffb870, density: 0.30, wall: 0x4e4a4c, floor: 0x3a3736, trim: 0x6e6a68 },
+  'buried-city': { ambient: 0x14110c, torch: 0xffc078, density: 0.50, wall: 0x9a8a70, floor: 0x6a5c48, trim: 0xc0a878 },
+  'glass':       { ambient: 0x101418, torch: 0xfff0b0, density: 0.45, wall: 0x3c4a4e, floor: 0x22282c, trim: 0x9fd8c8 },
+  'vessel':      { ambient: 0x0a1014, torch: 0x9fe8ff, density: 1.00, wall: 0xb8c0c4, floor: 0x1e2428, trim: 0x80ffe0 },
+};
 
 const dungeons = {};
 
@@ -54,9 +94,12 @@ const dungeons = {};
  *   boss    { id, name, base } — `base` is a Monsters.js family hint
  *   champions  named encounters that are not the floor boss, if any
  *   holds   one sentence: what is down there and why anyone would go
+ *   light   optional override of the theme's mood
+ *   palette optional override of the theme's stone
  */
 function dungeon(def) {
   const [min, max] = def.band;
+  const look = THEME_LOOK[def.theme] ?? THEME_LOOK.cave;
   dungeons[def.id] = {
     id: def.id,
     name: def.name,
@@ -77,6 +120,18 @@ function dungeon(def) {
     treasureTier: Math.max(1, Math.min(6, Math.ceil(max / 8))),
     trapLevel: def.trapLevel ?? max,
     holds: def.holds,
+    /** Lighting mood the dungeon builder aims for. */
+    light: Object.freeze({
+      ambient: look.ambient, torch: look.torch, density: look.density, ...def.light,
+    }),
+    palette: Object.freeze({
+      wall: look.wall, floor: look.floor, trim: look.trim, ...def.palette,
+    }),
+    ambience: def.ambience ?? 'amb-dungeon',
+    music: def.music ?? 'dungeon',
+    /** Filled in by `placeEntrances()` below, once every dungeon is declared. */
+    entrance: null,
+    entranceNormalized: null,
   };
   return dungeons[def.id];
 }
@@ -93,6 +148,15 @@ dungeon({
 });
 
 dungeon({
+  id: 'dun_old_watch', name: 'The Old Watch', region: 'millhaven_downs',
+  band: [2, 5], floors: 2, theme: 'cave',
+  boss: { id: 'boss_the_watch_king', name: 'The Watch-King', base: 'goblin_king' },
+  monsters: ['goblin', 'goblin_shaman', 'rat', 'bat', 'skeleton'],
+  role: 'side',
+  holds: 'A warren dug under a Cindric signal tower, floored with the tack and harness of every cart the downs has lost in ten years.',
+});
+
+dungeon({
   id: 'dun_the_weeping_stair', name: 'The Weeping Stair', region: 'millhaven_downs',
   band: [3, 7], floors: 2, theme: 'sea-cave',
   boss: { id: 'boss_precentor_halm', name: 'Precentor Halm', base: 'initiate_mage' },
@@ -102,6 +166,15 @@ dungeon({
 });
 
 // ── Thornwick Vale — danger 2, the capital's orchards ───────────────────────
+
+dungeon({
+  id: 'dun_wolf_den', name: 'The Wolf Den', region: 'thornwick_vale',
+  band: [4, 8], floors: 1, theme: 'cave',
+  boss: { id: 'boss_the_grey_bitch', name: 'The Grey Bitch', base: 'dire_wolf' },
+  monsters: ['wolf', 'dire_wolf', 'spider', 'giant_spider', 'bat'],
+  role: 'side',
+  holds: 'A limestone swallet the packs have denned in for generations, and the bone floor to prove the generations.',
+});
 
 dungeon({
   id: 'dun_the_orchard_vault', name: 'The Orchard Vault', region: 'thornwick_vale',
@@ -133,6 +206,15 @@ dungeon({
 });
 
 dungeon({
+  id: 'dun_wenlow_manor', name: 'Wenlow Manor', region: 'ashford_hollow',
+  band: [11, 15], floors: 2, theme: 'ruin',
+  boss: { id: 'boss_the_last_wenlow', name: 'The Last Wenlow', base: 'skeleton_lord' },
+  monsters: ['skeleton_knight', 'ghost', 'zombie', 'ghoul', 'apprentice_mage'],
+  role: 'side',
+  holds: 'A burned-out manor with an intact cellar, a family that never left it, and a dinner service laid for nine.',
+});
+
+dungeon({
   id: 'dun_the_undercut', name: 'The Undercut', region: 'ashford_hollow',
   band: [13, 17], floors: 3, theme: 'quarry',
   boss: { id: 'boss_the_quarry_wight', name: 'The Quarry Wight', base: 'wraith' },
@@ -153,6 +235,15 @@ dungeon({
 });
 
 dungeon({
+  id: 'dun_sea_cloister', name: 'The Sea Cloister', region: 'saltmarch',
+  band: [8, 12], floors: 2, theme: 'chapel',
+  boss: { id: 'boss_the_choirmistress', name: 'The Choirmistress of the Cloister', base: 'harpy_hag' },
+  monsters: ['harpy', 'bandit', 'brigand', 'ghost', 'bat'],
+  role: 'side',
+  holds: 'Cut into the sea cliff by brothers who wanted the quiet. The brothers are still in their stalls; so is the thing that has been keeping them there.',
+});
+
+dungeon({
   id: 'dun_the_bell_wreck', name: 'The Bell Wreck', region: 'saltmarch',
   band: [14, 18], floors: 2, theme: 'wreck',
   boss: { id: 'boss_the_bell_drowned', name: 'The Bell-Drowned', base: 'sea_serpent' },
@@ -164,21 +255,30 @@ dungeon({
 // ── The Cindermoor — danger 4, burnt heath and standing stones ──────────────
 
 dungeon({
-  id: 'dun_the_standing_nine', name: 'The Standing Nine', region: 'the_cindermoor',
-  band: [19, 23], floors: 2, theme: 'barrow',
-  boss: { id: 'boss_the_ninth_stone', name: 'The Ninth Stone', base: 'stone_gargoyle' },
-  monsters: ['skeleton', 'ghost', 'gargoyle', 'earth_elemental', 'wolf'],
-  role: 'campaign',
-  holds: 'Nine stones in a ring, a shaft under the ninth, and a forge-cult that has been paying for what it takes out of the shaft with things that scream.',
-});
-
-dungeon({
   id: 'dun_ashpit_workings', name: 'The Ashpit Workings', region: 'the_cindermoor',
   band: [9, 13], floors: 1, theme: 'mine',
   boss: { id: 'boss_the_ashpit_sow', name: 'The Ashpit Sow', base: 'minotaur' },
   monsters: ['wolf', 'dire_wolf', 'spider', 'giant_spider', 'zombie'],
   role: 'side',
   holds: 'Peat cuttings that keep turning up whole Cindric dead, tanned brown, with their hands tied. The cutters have stopped digging that face.',
+});
+
+dungeon({
+  id: 'dun_imperial_conduit', name: 'The Imperial Conduit', region: 'the_cindermoor',
+  band: [10, 14], floors: 2, theme: 'sewer',
+  boss: { id: 'boss_the_conduit_swallower', name: 'The Conduit Swallower', base: 'gelatinous_cube' },
+  monsters: ['giant_rat', 'plague_rat', 'green_ooze', 'acid_ooze', 'thief_monster', 'bandit'],
+  role: 'side',
+  holds: 'Eight centuries of imperial drain under the heath, still running, still draining something, and the Ledger pays by the yard to have it walked.',
+});
+
+dungeon({
+  id: 'dun_the_standing_nine', name: 'The Standing Nine', region: 'the_cindermoor',
+  band: [19, 23], floors: 2, theme: 'barrow',
+  boss: { id: 'boss_the_ninth_stone', name: 'The Ninth Stone', base: 'stone_gargoyle' },
+  monsters: ['skeleton', 'ghost', 'gargoyle', 'earth_elemental', 'wolf'],
+  role: 'campaign',
+  holds: 'Nine stones in a ring, a shaft under the ninth, and a forge-cult that has been paying for what it takes out of the shaft with things that scream.',
 });
 
 // ── Brackwater Isle — danger 4, eel fishers and secrets ─────────────────────
@@ -221,6 +321,15 @@ dungeon({
   holds: 'The Weald holds its own assizes down here. The sentences are carried out on the spot and the accused are usually foresters.',
 });
 
+dungeon({
+  id: 'dun_greenheart', name: 'The Greenheart', region: 'verdant_weald',
+  band: [21, 25], floors: 2, theme: 'cave',
+  boss: { id: 'boss_the_root_lord', name: 'The Lord Under the Root Plate', base: 'mountain_lord' },
+  monsters: ['earth_sprite', 'earth_elemental', 'phase_spider', 'gargoyle', 'cave_troll'],
+  role: 'side',
+  holds: 'A crystal cave under the root plate of the oldest oak in Caerwen. It hums at dawn and the wardmother will not say what to.',
+});
+
 // ── Greywater Fen — danger 5, slow water and fever ──────────────────────────
 
 dungeon({
@@ -230,6 +339,15 @@ dungeon({
   monsters: ['zombie', 'ghoul', 'ghost', 'giant_rat', 'plague_rat'],
   role: 'campaign',
   holds: 'A causeway lamp-shrine the fen has taken to its sills. The lamp is still there, still full of oil, and something has been putting it out for eleven years.',
+});
+
+dungeon({
+  id: 'dun_the_wreck', name: 'The Wreck', region: 'greywater_fen',
+  band: [13, 17], floors: 2, theme: 'wreck',
+  boss: { id: 'boss_the_thing_in_the_hold', name: 'The Thing in the Hold', base: 'sea_serpent' },
+  monsters: ['giant_eel', 'eel', 'water_sprite', 'ghost', 'green_ooze'],
+  role: 'side',
+  holds: 'A packet ship on a mud bank with her holds still sealed, her manifest still legible, and neither of them agreeing with the other.',
 });
 
 dungeon({
@@ -262,6 +380,15 @@ dungeon({
 });
 
 // ── Fallowmere — danger 6, abandoned farms and one old church ───────────────
+
+dungeon({
+  id: 'dun_the_old_grange', name: 'The Old Grange', region: 'fallowmere',
+  band: [20, 24], floors: 2, theme: 'ruin',
+  boss: { id: 'boss_the_bricked_widow', name: 'The Bricked Widow', base: 'wraith' },
+  monsters: ['ghost', 'ghast', 'skeleton_knight', 'spectre', 'plague_rat'],
+  role: 'side',
+  holds: 'The last family to farm here bricked themselves into the cellar from the inside. Something else got out.',
+});
 
 dungeon({
   id: 'dun_ansel_farmstead', name: 'The Ansel Farmstead', region: 'fallowmere',
@@ -330,6 +457,15 @@ dungeon({
   holds: 'Canyon-bottom sinks the wind sings across. The Choir sent recruiters here and the harpies ate two of them and learned the tune.',
 });
 
+dungeon({
+  id: 'dun_hall_beneath', name: 'The Hall Beneath', region: 'the_riven_steppe',
+  band: [38, 42], floors: 3, theme: 'keep',
+  boss: { id: 'boss_the_hall_thane', name: 'The Thane of the Hall Beneath', base: 'titan_lord' },
+  monsters: ['titan', 'greater_titan', 'cyclops_king', 'mountain_lord', 'djinn_lord'],
+  role: 'side',
+  holds: 'The doors are forty feet high, they were built to be closed, and the party will find them closed.',
+});
+
 // ── The Whitemantle — danger 7, a glacier grinding downhill ─────────────────
 
 dungeon({
@@ -353,6 +489,15 @@ dungeon({
 // ── The Gallowfen — danger 8, where the Imperium hanged its dissidents ──────
 
 dungeon({
+  id: 'dun_the_blighted_holt', name: 'The Blighted Holt', region: 'gallowfen',
+  band: [24, 28], floors: 2, theme: 'grove',
+  boss: { id: 'boss_the_holt_king', name: 'The King of the Blighted Holt', base: 'troll_king' },
+  monsters: ['devourer', 'bloodsucker', 'plague_rat', 'cave_troll', 'green_ooze'],
+  role: 'side',
+  holds: 'It was the healthiest wood in Caerwen ten years ago, and the root cellars under it are the only part still growing.',
+});
+
+dungeon({
   id: 'dun_the_hanging_yard', name: 'The Hanging Yard', region: 'gallowfen',
   band: [28, 32], floors: 2, theme: 'ruin',
   boss: { id: 'boss_the_assize', name: 'The Assize', base: 'skeleton_lord' },
@@ -365,7 +510,7 @@ dungeon({
   id: 'dun_the_confessors_pit', name: "The Confessor's Pit", region: 'gallowfen',
   band: [30, 34], floors: 2, theme: 'crypt',
   boss: { id: 'boss_confessor_malveth', name: 'Confessor Malveth', base: 'power_lich' },
-  monsters: ['wraith', 'lich_monster', 'ghast', 'spectre', 'master_mage' ],
+  monsters: ['wraith', 'lich_monster', 'ghast', 'spectre', 'master_mage'],
   role: 'side',
   holds: 'Cells cut for asking questions in, arranged so that every one of them could hear the answer given in the next.',
 });
@@ -373,12 +518,21 @@ dungeon({
 // ── Duskorn Waste — danger 8, a Cindric city killed in a night ──────────────
 
 dungeon({
+  id: 'dun_choir_hall', name: 'The Choir Hall', region: 'duskorn_waste',
+  band: [22, 26], floors: 2, theme: 'temple',
+  boss: { id: 'boss_precentor_of_the_hall', name: 'The Precentor of the Hall', base: 'choir_precentor' },
+  monsters: ['choir_penitent', 'choir_cantor', 'greater_imp', 'ghast', 'imp_warlock'],
+  role: 'side',
+  holds: 'An imperial basilica with the pews taken out and the floor chalked in ranks. The acoustics are the reason the Choir chose it.',
+});
+
+dungeon({
   id: 'dun_the_broken_post', name: 'The Broken Post', region: 'duskorn_waste',
   band: [26, 30], floors: 1, theme: 'ruin',
   boss: { id: 'boss_serjeant_ottery', name: 'Choir-Serjeant Ottery', base: 'brigand' },
   monsters: ['bandit', 'brigand', 'initiate_mage', 'ghoul'],
   role: 'campaign',
-  holds: "The coach house at the end of the road, loopholed and held. Whoever holds it decides whether Duskorn has a road at all.",
+  holds: 'The coach house at the end of the road, loopholed and held. Whoever holds it decides whether Duskorn has a road at all.',
 });
 
 dungeon({
@@ -400,6 +554,15 @@ dungeon({
 });
 
 // ── Emberhold — danger 9, forge-cults in a caldera ──────────────────────────
+
+dungeon({
+  id: 'dun_undercaldera', name: 'The Undercaldera', region: 'emberhold',
+  band: [27, 31], floors: 3, theme: 'forge',
+  boss: { id: 'boss_the_bricked_galleries', name: 'What Is Behind the Brick', base: 'inferno_lord' },
+  monsters: ['flame_sprite', 'fire_elemental', 'imp_warlock', 'steel_gargoyle', 'hell_hound'],
+  role: 'side',
+  holds: 'The forge-cults cut down into the vent. Three of the lower galleries are bricked up and nobody in Emberhold will say why.',
+});
 
 dungeon({
   id: 'dun_the_caldera_stair', name: 'The Caldera Stair', region: 'emberhold',
@@ -509,6 +672,146 @@ dungeon({
   holds: 'One room at the bottom of everything, built round a single seat, with the charts still lit and the coast on them belonging to no sea in Caerwen.',
 });
 
+// ── Entrances ───────────────────────────────────────────────────────────────
+
+/**
+ * Where each door is.
+ *
+ * Fifty-five hand-authored coordinate pairs would be fifty-five things to get
+ * wrong and fifty-five things to re-check every time a region moves, so all but
+ * the act-five descent are derived. The rule:
+ *
+ *   1. hash the dungeon id into two numbers in [0,1);
+ *   2. drop the door at that point inside its region's `bounds`, inset far
+ *      enough that no entrance sits on a region seam;
+ *   3. relax the region's doors apart until no two are closer than `sep`,
+ *      leaving the authored ones pinned;
+ *   4. clamp back inside the inset box.
+ *
+ * The hash is FNV-1a — the same mixer `core/RNG.js` seeds from, written out
+ * here rather than imported so the data layer keeps depending on nothing but
+ * data. An entrance is therefore a pure function of the id and of the region
+ * box: rename nothing and the world is identical; add a dungeon and only its
+ * own region shifts.
+ *
+ * Two things are deliberately *not* here. Height is not, because this file has
+ * no terrain to ask — `DungeonSystem` snaps Y to the heightfield and walks the
+ * door off water and off cliffs on arrival. And the metre figures below are in
+ * the authored 4096 m frame `Regions.js` uses for `bounds`, with a normalised
+ * copy beside them, because the terrain is currently built at 2048: anything
+ * placing a door in the world should take `entranceNormalized` and multiply by
+ * half the terrain's own size.
+ */
+
+/** FNV-1a over a string, as an unsigned 32-bit integer. */
+function hash32(str) {
+  let h = 2166136261 >>> 0;
+  const s = String(str);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** The same hash, folded to [0,1). */
+function unit(str) {
+  return hash32(str) / 4294967296;
+}
+
+/**
+ * The five doors of the act-five descent, in the authored metre frame.
+ *
+ * These are authored because the act reads as one continuous fall: the camp is
+ * on the crater lip, the wound is at the low point the dish drains to, and the
+ * three Ossra levels step further under the glass in the order the party meets
+ * them. A hash would scatter them and the descent would stop being a descent.
+ */
+const AUTHORED_ENTRANCES = {
+  dun_the_rim_camp: [1180, -880],
+  dun_the_wound: [1560, -520],
+  dun_ossra_first_descent: [1545, -565],
+  dun_the_long_gallery: [1615, -495],
+  dun_the_pilots_chamber: [1672, -437],
+};
+
+function placeEntrances() {
+  const byRegion = new Map();
+  for (const d of Object.values(dungeons)) {
+    if (!byRegion.has(d.region)) byRegion.set(d.region, []);
+    byRegion.get(d.region).push(d);
+  }
+
+  for (const [regionId, list] of byRegion) {
+    const bounds = REGIONS[regionId]?.bounds;
+    // A dungeon whose region has been renamed out from under it still needs a
+    // door; put it at the origin rather than throwing during module evaluation.
+    const b = bounds ?? { minX: -64, maxX: 64, minZ: -64, maxZ: 64 };
+
+    const inset = Math.min(b.maxX - b.minX, b.maxZ - b.minZ) * 0.14;
+    const x0 = b.minX + inset, x1 = b.maxX - inset;
+    const z0 = b.minZ + inset, z1 = b.maxZ - inset;
+
+    // Far enough apart that two doors are never on the same hillside, and never
+    // so far that the smallest region — the Ossra shaft, 220 m across — cannot
+    // hold the three it has to.
+    const sep = Math.max(70, Math.min(150, 0.40 * Math.min(x1 - x0, z1 - z0)));
+
+    const pts = list.map((d) => {
+      const authored = AUTHORED_ENTRANCES[d.id];
+      return authored
+        ? { d, x: authored[0], z: authored[1], fixed: true }
+        : {
+          d, fixed: false,
+          x: x0 + (x1 - x0) * unit(`${d.id}:x`),
+          z: z0 + (z1 - z0) * unit(`${d.id}:z`),
+        };
+    });
+
+    // Relaxation. Twenty passes settles four points comfortably; it terminates
+    // early the moment nothing overlaps, so the common case costs one pass.
+    for (let pass = 0; pass < 20; pass++) {
+      let moved = false;
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const a = pts[i], c = pts[j];
+          let dx = c.x - a.x, dz = c.z - a.z;
+          let dist = Math.hypot(dx, dz);
+          // Two ids that hashed to the same cell: break the tie along +x rather
+          // than dividing by zero.
+          if (dist < 1e-3) { dx = 1; dz = 0; dist = 1; }
+          if (dist >= sep) continue;
+          const push = (sep - dist) / dist;
+          // An authored door does not move, so its partner takes the whole push.
+          const wa = a.fixed ? 0 : (c.fixed ? 1 : 0.5);
+          const wc = c.fixed ? 0 : (a.fixed ? 1 : 0.5);
+          a.x -= dx * push * wa; a.z -= dz * push * wa;
+          c.x += dx * push * wc; c.z += dz * push * wc;
+          moved = true;
+        }
+      }
+      for (const p of pts) {
+        if (p.fixed) continue;
+        p.x = Math.min(x1, Math.max(x0, p.x));
+        p.z = Math.min(z1, Math.max(z0, p.z));
+      }
+      if (!moved) break;
+    }
+
+    const half = WORLD_SIZE / 2;
+    for (const p of pts) {
+      // Rounded to the centimetre: a coordinate that reads cleanly in the
+      // journal and in a diff is worth more than the last twelve bits.
+      const x = Math.round(p.x * 100) / 100;
+      const z = Math.round(p.z * 100) / 100;
+      p.d.entrance = Object.freeze({ x, z, authored: !!p.fixed });
+      p.d.entranceNormalized = Object.freeze({ x: x / half, z: z / half });
+    }
+  }
+}
+
+placeEntrances();
+
 export const DUNGEONS = deepFreeze(dungeons);
 export const DUNGEON_IDS = Object.freeze(Object.keys(dungeons));
 export const DUNGEON_LIST = Object.freeze(DUNGEON_IDS.map((id) => DUNGEONS[id]));
@@ -519,6 +822,18 @@ export function getDungeon(id) { return DUNGEONS[id] ?? null; }
 
 export function dungeonsInRegion(regionId) {
   return DUNGEON_LIST.filter((d) => d.region === regionId);
+}
+
+/**
+ * A dungeon's door in world metres, for a terrain of `worldSize` metres a side.
+ * The default is the frame the catalogue is authored in; pass
+ * `terrain.worldSize` to get the position on the terrain that actually exists.
+ */
+export function entranceOf(idOrDungeon, worldSize = WORLD_SIZE) {
+  const d = typeof idOrDungeon === 'string' ? DUNGEONS[idOrDungeon] : idOrDungeon;
+  if (!d?.entranceNormalized) return null;
+  const half = worldSize / 2;
+  return { x: d.entranceNormalized.x * half, z: d.entranceNormalized.z * half };
 }
 
 /** Everything a party of this level can walk into without being slaughtered. */
@@ -532,4 +847,15 @@ export function campaignDungeons() {
     .filter((d) => d.role === 'campaign' || d.role === 'both')
     .slice()
     .sort((a, b) => a.band[0] - b.band[0]);
+}
+
+/** Every monster id the catalogue names, for integrity checks. */
+export function referencedMonsterIds() {
+  const ids = new Set();
+  for (const d of DUNGEON_LIST) {
+    for (const m of d.monsters) ids.add(m);
+    if (d.boss?.base) ids.add(d.boss.base);
+    for (const c of d.champions) if (c.base) ids.add(c.base);
+  }
+  return [...ids];
 }

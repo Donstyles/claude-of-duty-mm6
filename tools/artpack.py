@@ -125,6 +125,9 @@ def pack_figures(width=320, feather=0.012):
     """
     out = 0
     for src in sorted(glob.glob(os.path.join(ROOT, 'figures', '*.png'))):
+        # Skip our own output, or a second run packs the plates into plates.
+        if src.endswith('.plate.png'):
+            continue
         a = np.asarray(Image.open(src).convert('RGB'), dtype=np.float32)
         h, w, _ = a.shape
 

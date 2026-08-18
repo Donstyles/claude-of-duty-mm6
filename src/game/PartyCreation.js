@@ -15,9 +15,10 @@
  * Sorcerer funds Intellect by selling Might, and the per-class minimums are what
  * stop that from producing a Knight who cannot lift a sword.
  *
- * Everything user-visible that this file authors — class prose, the name
- * language, the skill notes that replace a handful of foreign ones — is
- * original to Caerwen (CANON.md §1, §2).
+ * The one body of prose this file authors is the name language: given names by
+ * portrait and surnames in the kingdom's three registers, coined in the style
+ * CANON.md §1 sets out. Class and skill prose belong to the data tables and are
+ * quoted from them.
  */
 
 import { getClass, BASE_CLASS_IDS, promotionsFor } from './data/Classes.js';

@@ -31,9 +31,9 @@ import { ATTRIBUTES, ATTRIBUTE_LABEL, SKILLS, MASTERY_LABEL, masteryRank } from 
 import { getClass } from '../../game/data/Classes.js';
 import { statBonus } from '../../game/rules.js';
 import {
-  PartyCreation, CREATE_CLASSES, CLASS_LORE, FACES, BONUS_POOL, FREE_SKILL_PICKS,
+  PartyCreation, CREATE_CLASSES, FACES, BONUS_POOL, FREE_SKILL_PICKS,
   STAT_CEILING, statBase, statFloor, stepCost, promotionChain, skillsAtMastery,
-  learnableSkills, skillNote,
+  learnableSkills, skillNote, classNote,
 } from '../../game/PartyCreation.js';
 
 /** What a point of each statistic actually buys a first-level adventurer. */
@@ -437,7 +437,7 @@ export class CreatePanel extends Panel {
     // mechanical summary and the full mastery lists live in the hover text.
     setChildren(this.classDetailEl,
       el('div', { className: 'mm-create-detail-head mm-t-gold', text: cls.name }),
-      el('div', { className: 'mm-create-detail-lore', text: CLASS_LORE[id] ?? '' }),
+      el('div', { className: 'mm-create-detail-lore', text: classNote(id) }),
       el('div', { className: 'mm-create-detail-line' },
         el('i', { className: 'mm-t-gold', text: 'Becomes ' }),
         el('span', { text: promotionChain(id).join(' → ') })),
@@ -618,7 +618,6 @@ export class CreatePanel extends Panel {
         gm.length ? `<b class="mm-t-gold">Grandmaster</b> — ${gm.join(', ')}` : null,
         master.length ? `<b class="mm-t-gold">Master</b> — ${master.join(', ')}` : null,
       ],
-      flavour: CLASS_LORE[classId] ?? '',
       footer: 'Click to give this profession to the column being edited.',
     });
   }

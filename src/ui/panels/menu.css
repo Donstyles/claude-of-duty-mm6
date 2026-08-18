@@ -10,9 +10,13 @@
   padding: calc(var(--u) * 14) calc(var(--u) * 18) calc(var(--u) * 12);
   gap: calc(var(--u) * 10);
   justify-content: flex-start;
+  /* A cavern, not a dark rectangle: the chiselled rock the shop board sits in,
+     dropped almost to black and lit by one pool of light behind the logo. */
   background:
-    radial-gradient(ellipse at 50% 38%, rgba(80, 74, 58, 0.55), rgba(0, 0, 0, 0) 62%),
+    radial-gradient(ellipse at 50% 30%, rgba(120, 108, 80, 0.30), rgba(0, 0, 0, 0.85) 68%),
+    var(--tex-rock) center / calc(var(--u) * 150) calc(var(--u) * 150) repeat,
     radial-gradient(ellipse at 50% 40%, #313029, #212018 45%, #181810 100%);
+  background-blend-mode: normal, luminosity, normal;
 }
 
 .mm-menu-logo {

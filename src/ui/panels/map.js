@@ -407,9 +407,11 @@ export class MapPanel extends Panel {
     const f = this._localFrame();
     const centre = this.centre.local ?? { x: f.party.x, z: f.party.z };
 
-    // A metre is worth this many pixels before the zoom multiplier: the fit is
-    // chosen so a fresh screen shows roughly a quarter-mile of ground.
-    const base = Math.min(W, H) / (f.dungeon ? 120 : 420);
+    // How much ground a fresh screen shows, chosen by what the party is
+    // standing in: a dungeon is small, a town is a few streets, open country
+    // is a quarter-mile in every direction.
+    const span = f.dungeon ? 120 : this.ctx?.get('venue')?.town ? 170 : 420;
+    const base = Math.min(W, H) / span;
     const s = base * this.zoom.local;
     const toX = (wx) => W / 2 + (wx - centre.x) * s;
     const toZ = (wz) => H / 2 + (wz - centre.z) * s;
@@ -540,14 +542,18 @@ export class MapPanel extends Panel {
     for (const b of town.buildings ?? []) {
       const p = b.mesh?.position;
       if (!p || (walked && !this._walkedNear(walked, p.x, p.z, 2))) continue;
-      const w = Math.max(3, (b.plot?.width ?? 7) * s * 0.5);
-      const h = Math.max(3, (b.plot?.depth ?? 7) * s * 0.5);
+      const w = Math.max(2.5, (b.plot?.width ?? 8) * s * 0.5);
+      const h = Math.max(2.5, (b.plot?.depth ?? 8) * s * 0.5);
       const x = toX(p.x) - w;
       const z = toZ(p.z) - h;
       g.fillStyle = C.building;
       g.fillRect(x, z, w * 2, h * 2);
+      // The salmon band along the top is how MM6 says "roof" in eight pixels.
       g.fillStyle = C.roof;
-      g.fillRect(x, z, w * 2, h * 0.7);
+      g.fillRect(x, z, w * 2, Math.max(1, h * 0.7));
+      g.strokeStyle = 'rgba(20,10,4,0.9)';
+      g.lineWidth = 1;
+      g.strokeRect(x - 0.5, z - 0.5, w * 2 + 1, h * 2 + 1);
     }
 
     const near = this.ctx?.get('venue')?.nearby ?? null;
@@ -568,13 +574,15 @@ export class MapPanel extends Panel {
       g.closePath();
       g.fillStyle = C.pale;
       g.fill();
+      // Names only once the drawing is big enough to hold them; below that the
+      // glyphs have to speak for themselves, as they do in the sidebar arch.
       const venue = named.get(d) ?? null;
-      if (s > 1.1) {
+      if (s > 2.2) {
         const kind = PLOT_VENUE[d.type] ?? d.type;
         const label = venue ? ellipsis(venue.name, 22)
           : (kind === 'house' ? '' : VENUE_KINDS[kind]?.label ?? PLOT_LABEL[d.type] ?? '');
         if (!label) continue;
-        g.font = `${Math.round(clamp(s * 4, 10, 15))}px 'Palatino Linotype', Georgia, serif`;
+        g.font = `${Math.round(clamp(s * 2.6, 10, 15))}px 'Palatino Linotype', Georgia, serif`;
         g.textAlign = 'center';
         g.fillStyle = venue && venue.id === near?.id ? C.note : '#D8D2C6';
         g.strokeStyle = 'rgba(0,0,0,0.85)';

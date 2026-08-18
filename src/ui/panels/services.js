@@ -678,7 +678,7 @@ export class ServicesPanel extends Panel {
         purse(3600);
         this._woundParty();
         // The campaign opens on the Long Kindling, so the party need only be
-        // in bad odour — which two drunks and an unlicensed Dark caster manage.
+        // in bad odour, and two of them still drunk at the door manages that.
         const members = this.ui.members().map((vm) => vm.source ?? vm);
         for (const m of members.slice(0, 2)) {
           if (typeof m.addCondition === 'function') m.addCondition('drunk');
