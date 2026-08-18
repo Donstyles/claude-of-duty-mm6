@@ -45,7 +45,11 @@ export class TravelSystem extends System {
    * this game is deliberately built so any one system can be missing.
    */
   get act() {
-    const q = this.ctx?.get('quest');
+    // 'quests', not 'quest' — QuestSystem.id is plural, and asking for the
+    // singular silently returned undefined, which the fallback below then read
+    // as "no quest system, open everything". A gate that fails open without
+    // saying so is worse than no gate.
+    const q = this.ctx?.get('quests');
     return q?.act ?? Number.POSITIVE_INFINITY;
   }
 
@@ -206,6 +210,21 @@ export class TravelSystem extends System {
   /** Every leg in the world, for the map screen's network overlay. */
   network(mode = null) {
     return mode ? ROUTES.filter((r) => r.mode === mode) : ROUTES;
+  }
+
+  /**
+   * Only the history is worth persisting: fares, routes and gating are all
+   * derived, and `journey` is transient by construction.
+   */
+  toJSON() {
+    return { history: this.history.map((j) => ({ route: j.route.id, from: j.from, to: j.to, at: j.at })) };
+  }
+
+  fromJSON(state) {
+    this.history = (state?.history ?? [])
+      .map((j) => ({ ...j, route: getRoute(j.route) }))
+      .filter((j) => j.route);
+    this.journey = null;
   }
 
   dispose() {

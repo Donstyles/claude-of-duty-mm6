@@ -10,7 +10,8 @@ import { System } from '../core/Engine.js';
  */
 
 const SAVE_KEY = 'claude-of-duty:saves';
-const SAVE_VERSION = 1;
+// 2: per-system state moved under `systems`, discovered rather than named.
+const SAVE_VERSION = 2;
 const AUTOSAVE_INTERVAL = 300;   // seconds of real time
 
 export class SaveSystem extends System {
@@ -29,7 +30,18 @@ export class SaveSystem extends System {
     ctx.events.on('ui:load', ({ slot }) => this.load(ctx, slot ?? 'quick'));
   }
 
-  /** Collect the whole mutable game state. */
+  /**
+   * Collect the whole mutable game state.
+   *
+   * Player position and the dungeon are named explicitly because they are not
+   * shaped like anything else. Everything else is discovered: **any registered
+   * system that has a `toJSON()` is saved under its own id, and restored
+   * through its `fromJSON()`.** That indirection is deliberate — a dozen
+   * systems were added to this game by people who never opened this file, and
+   * a save that only persists the four subsystems its author happened to know
+   * about is the kind of bug that is invisible until someone loses a night's
+   * play.
+   */
   serialise(ctx) {
     const player = ctx.get('player');
     return {
@@ -37,8 +49,7 @@ export class SaveSystem extends System {
       savedAt: new Date().toISOString(),
       seed: ctx.state.seed,
       worldTime: ctx.state.worldTime,
-      party: ctx.get('party')?.toJSON?.() ?? null,
-      quests: ctx.get('quests')?.toJSON?.() ?? null,
+      systems: this._collect(ctx),
       player: player ? {
         position: player.position.toArray(),
         yaw: player.yaw, pitch: player.pitch,
@@ -51,12 +62,34 @@ export class SaveSystem extends System {
     };
   }
 
+  _collect(ctx) {
+    const out = {};
+    for (const [id, system] of ctx.engine.systems) {
+      if (typeof system.toJSON !== 'function') continue;
+      try {
+        const state = system.toJSON();
+        if (state !== undefined) out[id] = state;
+      } catch (err) {
+        // One system's broken serialiser must not cost the player the save.
+        console.error(`[save] system "${id}" failed to serialise:`, err);
+      }
+    }
+    return out;
+  }
+
   restore(ctx, data) {
     if (!data || data.version !== SAVE_VERSION) return false;
 
     ctx.state.worldTime = data.worldTime ?? ctx.state.worldTime;
-    ctx.get('party')?.fromJSON?.(data.party);
-    ctx.get('quests')?.fromJSON?.(data.quests);
+    for (const [id, state] of Object.entries(data.systems ?? {})) {
+      const system = ctx.get(id);
+      if (typeof system?.fromJSON !== 'function') continue;
+      try {
+        system.fromJSON(state);
+      } catch (err) {
+        console.error(`[save] system "${id}" failed to restore:`, err);
+      }
+    }
 
     const dungeon = ctx.get('dungeon');
     if (data.dungeon) dungeon?.enter?.(ctx, data.dungeon);
@@ -91,8 +124,9 @@ export class SaveSystem extends System {
         slot,
         savedAt: d.savedAt,
         day: Math.floor((d.worldTime ?? 0) / 86400) + 1,
-        level: d.party?.members?.[0]?.level ?? 1,
-        names: (d.party?.members ?? []).map((m) => m.name),
+        level: d.systems?.party?.members?.[0]?.level ?? 1,
+        names: (d.systems?.party?.members ?? []).map((m) => m.name),
+        town: d.systems?.venue?.town ?? null,
       }))
       .sort((a, b) => String(b.savedAt).localeCompare(String(a.savedAt)));
   }

@@ -41,6 +41,17 @@ export class VenueSystem extends System {
     ctx.events.on('ui:panelClosed', ({ id } = {}) => {
       if (this.current && this.current.panel === id) this.leave({ silent: true });
     });
+
+    // Travel puts the party down somewhere else entirely. Without this the
+    // town stayed whatever the door-binding last inferred, so the coach stop
+    // in Netherby would keep offering Millhaven's departures.
+    ctx.events.on('player:enteredTown', ({ town } = {}) => {
+      if (!town || town === this.town) return;
+      this.town = town;
+      this._bound = false;
+      this._doorSource = null;
+      this.nearby = null;
+    });
   }
 
   /**
@@ -56,7 +67,10 @@ export class VenueSystem extends System {
     if (!Array.isArray(doors) || !doors.length) return false;
     if (this._bound && this._doorSource === doors) return true;
 
-    const townId = town.townId ?? this.town ?? 'town_millhaven';
+    // The town we were told we are in wins over the generator's own idea of
+    // which town it built, because travel is authoritative about where the
+    // party is and the generator may not have rebuilt yet.
+    const townId = this.town ?? town.townId ?? 'town_millhaven';
     const catalogue = venuesInTown(townId);
     const byKind = new Map();
     for (const v of catalogue) {
@@ -149,6 +163,25 @@ export class VenueSystem extends System {
   /** Open whatever door the party is standing at. Bound to the interact key. */
   enterNearby() {
     return this.nearby ? this.enter(this.nearby) : false;
+  }
+
+  /**
+   * Which town the party is in is real state — travel sets it, and a save that
+   * forgot it would drop the party into the wrong coach stop. Whether they are
+   * standing inside a shop is not: a load should put you back on the street.
+   */
+  toJSON() {
+    return { town: this.town };
+  }
+
+  fromJSON(state) {
+    this.town = state?.town ?? this.town;
+    this.current = null;
+    this.nearby = null;
+    // The bound doors belong to whatever town was built; force a rebind so the
+    // restored town's catalogue is the one the doors resolve against.
+    this._bound = false;
+    this._doorSource = null;
   }
 
   dispose() {
