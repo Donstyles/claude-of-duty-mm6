@@ -24,12 +24,14 @@ import { tooltip } from './widgets.js';
 import { getClass } from '../game/data/Classes.js';
 import { SKILLS, ATTRIBUTES, MASTERY, MASTERY_ORDER, MAGIC_SCHOOL_IDS, masteryRank } from '../game/data/Skills.js';
 import { spellsForSchool } from '../game/data/Spells.js';
-import { ITEMS, getItem } from '../game/data/Items.js';
+import { ITEMS, getItem, itemPower } from '../game/data/Items.js';
 import { QUESTS } from '../game/data/Quests.js';
 import { NPCS, SHOPS } from '../game/data/NPCs.js';
+import { VENUES } from '../game/data/Venues.js';
 import {
   getCondition, hpForLevel, spForLevel, armourClassFor, attackBonusFor,
   damageBonusFor, effectiveStat, experienceForLevel, merchantPrice,
+  canIdentify, canRepair,
 } from '../game/rules.js';
 
 const PANEL_KEYS = [
@@ -364,7 +366,11 @@ export class UISystem extends System {
     const fill = stand && stand !== c;
     const skillsOf = fill && !Object.keys(c?.skills ?? {}).length ? stand.skills : (c?.skills ?? {});
     const packOf = fill && !c?.inventory?.length ? stand.inventory : (c?.inventory ?? []);
-    const gearOf = fill && !Object.keys(c?.equipment ?? {}).length ? stand.equipment : (c?.equipment ?? {});
+    // A live character keeps all twelve slots on the object and leaves them
+    // null, so the key count is never zero: ask whether anything is actually
+    // worn, or the equipment figure stands there empty-handed.
+    const gearOf = fill && !Object.values(c?.equipment ?? {}).some(Boolean)
+      ? stand.equipment : (c?.equipment ?? {});
     const awardsOf = fill && !c?.awards?.length ? stand.awards : (c?.awards ?? []);
     const classId = c?.classId ?? 'knight';
     const cls = getClass(classId) ?? getClass('knight');
@@ -463,8 +469,9 @@ export class UISystem extends System {
           gauntlets: 'gauntlets_plate', boots: 'boots_plate', belt: 'belt_plate', cloak: 'cloak_fur',
           amulet: 'amulet_pendant', ring1: 'ring_signet',
         },
-        pack: ['potion_red', 'potion_red', 'potion_yellow', 'gem_topaz', 'axe_battle', 'qi_kilburns_letter',
-          'potion_white', 'torch', 'shield_buckler', 'helm_helm', 'gem_quartz', 'potion_grey', 'boots_leather'],
+        pack: ['potion_red', 'potion_red', 'potion_yellow', 'gem_topaz', ['axe_battle', { identified: false }],
+          'qi_kilburns_letter', 'potion_white', 'torch', ['shield_buckler', { broken: true }], 'helm_helm',
+          'gem_quartz', 'potion_grey', 'boots_leather'],
       },
       {
         name: 'Cassandra', classId: 'sorcerer', gender: 'f', level: 12, skin: 0, hair: 3, helm: 0, ground: 2,
@@ -473,8 +480,9 @@ export class UISystem extends System {
           mainhand: 'staff_rune', armour: 'leather_elven', cloak: 'cloak_cape',
           boots: 'boots_leather', belt: 'belt_studded', amulet: 'amulet_talisman', ring1: 'ring_band',
         },
-        pack: ['potion_blue', 'potion_blue', 'scroll_fire_fireball', 'scroll_water_town_portal', 'wand_fire',
-          'gem_amethyst', 'blue_lotus', 'poppysnaps', 'potion_bottle', 'dagger_dirk', 'torch', 'gem_opal'],
+        pack: ['potion_blue', 'potion_blue', 'scroll_fire_fireball', 'scroll_water_town_portal',
+          ['wand_fire', { identified: false }], 'gem_amethyst', 'blue_lotus', 'poppysnaps', 'potion_bottle',
+          ['dagger_dirk', { broken: true }], 'torch', 'gem_opal'],
       },
       {
         name: 'Serena', classId: 'cleric', gender: 'f', level: 11, skin: 2, hair: 0, helm: 0, ground: 1,
@@ -534,6 +542,10 @@ export class UISystem extends System {
       };
     }
     if (!skills.merchant) skills.merchant = { level: 4, mastery: MASTERY.NORMAL };
+    // Somebody in a party of four can read a maker's mark and straighten a bent
+    // blade, or the inventory's appraisal glass is a prop.
+    if (!skills.identify_item) skills.identify_item = { level: 5, mastery: MASTERY.NORMAL };
+    if (!skills.repair_item) skills.repair_item = { level: 5, mastery: MASTERY.NORMAL };
     // A caster must have their schools, or the spellbook opens on empty pages.
     const schools = Object.keys(cls.skills ?? {}).filter((id) => MAGIC_IDS.has(id));
     for (const id of schools.slice(0, 3)) {
@@ -549,8 +561,13 @@ export class UISystem extends System {
     }
 
     const inventory = [];
-    for (const id of d.pack ?? []) {
-      const item = this._makeItem(id);
+    for (const entry of d.pack ?? []) {
+      // A pack line is an item id, or `[id, state]` where the sample needs the
+      // item in a particular condition: the backpack has to carry a broken
+      // buckler and an unappraised blade somewhere, or those two states are
+      // never drawn and the appraisal glass has nothing to work on.
+      const [id, state] = Array.isArray(entry) ? entry : [entry, null];
+      const item = this._makeItem(id, state ?? {});
       if (item) this._placeInGrid(inventory, item);
     }
 
@@ -786,6 +803,83 @@ export class UISystem extends System {
       delete c.equipment[drag.slot];
       c.inventory.push({ item, x: gx, y: gy });
       this.log(`${c.name} stows the ${item.name}.`, 'info');
+    }
+    this._syncParty(true);
+    return true;
+  }
+
+  /**
+   * Auto-arrange. MM6 leaves the pack exactly where you dropped things, which is
+   * fine until a dungeon run leaves a 14x9 grid full of holes: repack it tallest
+   * first, by kind, so the gaps close. The pass is all-or-nothing — a layout
+   * that cannot hold everything is thrown away rather than losing an item.
+   */
+  sortInventory(index, cols = GRID_COLS, rows = GRID_ROWS) {
+    const c = this._chars[index];
+    if (!c?.inventory?.length) return false;
+    const rank = (item) => {
+      const i = SORT_ORDER.indexOf(item?.category ?? 'misc');
+      return i < 0 ? SORT_ORDER.length : i;
+    };
+    const sorted = [...c.inventory].sort((a, b) => {
+      const d = rank(a.item) - rank(b.item);
+      if (d) return d;
+      const fa = itemFootprint(a.item);
+      const fb = itemFootprint(b.item);
+      if (fb.h !== fa.h) return fb.h - fa.h;
+      if (fb.w !== fa.w) return fb.w - fa.w;
+      return String(a.item?.name ?? '').localeCompare(String(b.item?.name ?? ''));
+    });
+    const packed = [];
+    for (const e of sorted) {
+      if (!this._placeInGrid(packed, e.item, cols, rows)) {
+        this.toast('The pack will not tidy any further.', 'warn');
+        return false;
+      }
+    }
+    // `_placeInGrid` appends in step with `sorted`, so the two run in parallel;
+    // move the originals rather than swapping the array, because equip and use
+    // both hold references to these entries.
+    for (let i = 0; i < packed.length; i++) {
+      sorted[i].x = packed[i].x;
+      sorted[i].y = packed[i].y;
+    }
+    c.inventory = sorted;
+    this.log(`${c.name} repacks the load.`, 'info');
+    this._syncParty(true);
+    return true;
+  }
+
+  /**
+   * The magnifying glass on the equipment niche's floor: the party's own
+   * Identify Item and Repair Item skills, applied to one item, so a shop is not
+   * the only honest appraiser in Enroth. Both fail out loud.
+   */
+  appraiseItem(index, item) {
+    const c = this._chars[index];
+    if (!c || !item) return false;
+    const power = safe(() => itemPower(item.baseId ?? item.id, item.prefixId, item.suffixId), 4);
+    if (item.identified === false) {
+      if (!safe(() => canIdentify(c, power).ok, false)) {
+        this.log(`${c.name} cannot make anything of the marks. A shop could.`, 'warn');
+        return false;
+      }
+      item.identified = true;
+      this.log(`${c.name} identifies the ${item.name}.`, 'good');
+    } else if (item.broken) {
+      const roll = safe(() => canRepair(c, power, this.rng.next()), { ok: false, reason: 'beyond your skill' });
+      if (!roll.ok) {
+        this.log(`${c.name} tries the ${item.name} and gives up — ${roll.reason}.`, 'warn');
+        return false;
+      }
+      item.broken = false;
+      // A field repair costs the item some of its worth unless the hand is a
+      // Grandmaster's.
+      if (!roll.lossless) item.value = Math.max(1, Math.round((item.value ?? 1) * 0.8));
+      this.log(`${c.name} straightens the ${item.name}.`, 'good');
+    } else {
+      this.log(`There is nothing wrong with the ${item.name}.`, 'info');
+      return false;
     }
     this._syncParty(true);
     return true;
@@ -1230,7 +1324,7 @@ export class UISystem extends System {
       this.hud?.setReticleHint('');
       this._syncParty(true);
       this.hud?.setGold(this.gold, this.food);
-      this.hud?.setRegion('New Sorpigal');
+      this.hud?.setRegion('Millhaven Downs');
       // Every screen starts with an empty message strip, as the game does.
       this.hud?.setMessage('');
     };
@@ -1242,20 +1336,24 @@ export class UISystem extends System {
       apply: async () => {
         this.closePanel();
         populate();
-        this.hud?.setRegion('New Sorpigal');
+        this.hud?.setRegion('Millhaven Downs');
         this.selectMember(0);
         // Everything the game has to say goes through the one message strip.
         this.hud?.log('tree', 'info');
       },
     });
 
-    const panelShot = (shotId, panelId, description, before) => {
+    // `opts` is forwarded to openPanel so a venue screen can be photographed
+    // as the venue would open it — with its painted room behind it and its
+    // keeper's name on the sign. Shooting the shop with no venue would
+    // photograph a screen the player never actually sees.
+    const panelShot = (shotId, panelId, description, before, opts) => {
       cap.registerShot(shotId, {
         description,
         apply: async () => {
           populate();
           before?.();
-          this.openPanel(panelId);
+          this.openPanel(panelId, opts ?? {});
         },
       });
     };
@@ -1300,10 +1398,38 @@ export class UISystem extends System {
     });
     panelShot('ui-create', 'create', 'Party creation on dark green serpentine: four columns under sky vignettes, gold '
       + 'class emblems, colour-coded stats and the corner braziers.');
+
+    // The town-service screens. Each is opened through a real venue so the
+    // painted room, the sign and the proprietor are the ones the game shows.
+    const venueShot = (shotId, description, venueId) => {
+      const venue = VENUES[venueId];
+      if (!venue) return;
+      panelShot(shotId, venue.panel, description, () => this.selectMember(0), { ...venue.context });
+    };
+
+    venueShot('ui-shop-counter', 'The weapon smith\'s counter: the painted forge filling the viewport, the shop '
+      + 'sign in white serif caps and the keeper\'s name in azure on the wood-grain sidebar.',
+    'town_millhaven_weaponsmith');
+    venueShot('ui-services', 'The tavern: the common room in the viewport, the services and their prices in the '
+      + 'sidebar.', 'town_millhaven_tavern');
+    venueShot('ui-temple', 'The temple: the chapel interior behind the healing and cure prices.',
+      'town_millhaven_temple');
+    venueShot('ui-guild', 'A guild hall: the reading room behind the membership terms and the school\'s spell list.',
+      'town_millhaven_guild_ember');
+    venueShot('ui-train', 'The training yard: practice dummies behind the level, experience and fee.',
+      'town_millhaven_trainer');
+    venueShot('ui-travel', 'The coach stop: the departures board, fares and hours against the coaching office.',
+      'town_millhaven_coachstop');
   }
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+
+/** What "tidy" means to a backpack: gear first, then supplies, then oddments. */
+const SORT_ORDER = [
+  'weapon', 'armour', 'shield', 'helm', 'gauntlets', 'boots', 'belt', 'cloak',
+  'amulet', 'ring', 'wand', 'scroll', 'potion', 'reagent', 'gem', 'quest', 'misc',
+];
 
 const PIN_LABELS = {
   foe: '', npc: '', loot: '', door: '', town: 'Town', dungeon: 'Ruin', shrine: 'Shrine',
