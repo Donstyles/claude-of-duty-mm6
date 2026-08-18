@@ -1,6 +1,19 @@
 import { System } from '../core/Engine.js';
 import { Character } from './Character.js';
 import { CONDITIONS } from './rules.js';
+import { getItem } from './data/Items.js';
+
+/**
+ * A plain instance of a catalogue item, identified and unbroken.
+ *
+ * Starting kit deliberately does not go through LootSystem: nothing here
+ * should be enchanted, rolled or randomised, and a fresh party's sword must be
+ * the same sword every time.
+ */
+function makeStartingItem(id) {
+  const base = getItem(id);
+  return base ? { ...base, baseId: id, identified: true, broken: false } : null;
+}
 
 /**
  * The party of four, plus the shared resources the whole group draws on:
@@ -30,6 +43,30 @@ const DEFAULT_PARTY = [
   },
 ];
 
+/**
+ * What each class walks out of the guild hall carrying.
+ *
+ * A party that starts naked is not a design choice, it is an omission: the
+ * first fight is unwinnable bare-handed, the equipment niche stands empty, and
+ * the backpack — one of the game's best screens — has nothing in it. Kit is
+ * deliberately poor. A knight begins in leather with a long sword, not in
+ * plate, so that the first shop visit is worth making.
+ */
+const STARTING_KIT = {
+  knight: { mainhand: 'sword_long', offhand: 'shield_buckler', armour: 'leather_armour' },
+  paladin: { mainhand: 'mace_mace', offhand: 'shield_buckler', armour: 'leather_armour' },
+  archer: { mainhand: 'dagger_dagger', ranged: 'bow_short', armour: 'leather_armour' },
+  ranger: { mainhand: 'axe_hand', armour: 'leather_armour' },
+  cleric: { mainhand: 'mace_club', armour: 'leather_armour' },
+  druid: { mainhand: 'staff_staff', armour: 'leather_armour' },
+  sorcerer: { mainhand: 'staff_staff' },
+  monk: {},
+  thief: { mainhand: 'dagger_dagger', armour: 'leather_armour' },
+};
+
+/** Consumables every character carries, whatever they are. */
+const STARTING_PACK = ['potion_red', 'torch'];
+
 /** Real seconds of walking before the party consumes one unit of food. */
 const SECONDS_PER_FOOD = 60 * 30;
 
@@ -50,6 +87,29 @@ export class PartySystem extends System {
   }
 
   /**
+   * Give a character its class's opening kit, if it has nothing.
+   *
+   * Called for the default party and available to party creation. Silently
+   * does nothing to a character that already owns something, so loading a save
+   * can never re-issue a starting sword.
+   */
+  equipStartingKit(char) {
+    if (!char) return char;
+    const armed = Object.values(char.equipment ?? {}).some(Boolean) || char.inventory?.length;
+    if (armed) return char.refresh();
+
+    for (const [slot, id] of Object.entries(STARTING_KIT[char.classId] ?? {})) {
+      const item = makeStartingItem(id);
+      if (item) char.equipment[slot] = item;
+    }
+    for (const id of STARTING_PACK) {
+      const item = makeStartingItem(id);
+      if (item) char.inventory.push(item);
+    }
+    return char.refresh();
+  }
+
+  /**
    * Replace the party wholesale — what party creation hands over.
    *
    * Public so the creation screen does not have to assign `members` directly
@@ -58,13 +118,14 @@ export class PartySystem extends System {
   setParty(members) {
     this.members = members.slice(0, 4);
     this.activeIndex = 0;
-    for (const m of this.members) m.refresh();
+    for (const m of this.members) this.equipStartingKit(m);
     this._events?.emit('party:created', { members: this.members });
     return this.members;
   }
 
   async init(ctx) {
-    this.members = DEFAULT_PARTY.map((spec) => new Character(spec).refresh());
+    this.members = DEFAULT_PARTY.map((spec) => new Character(spec));
+    for (const m of this.members) this.equipStartingKit(m);
     for (const m of this.members) { m.hp = m.maxHP; m.sp = m.maxSP; }
 
     ctx.events.on('monster:died', ({ level, xp }) => {
