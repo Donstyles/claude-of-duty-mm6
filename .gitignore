@@ -13,3 +13,7 @@ reference/mm6/
 secrets.json
 .secrets
 tools/.env
+
+# Generated-art raws: large, regenerable, and derived plates are committed instead.
+public/art/**/*.png
+!public/art/**/*.plate.png

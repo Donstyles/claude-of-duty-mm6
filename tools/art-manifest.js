@@ -67,4 +67,50 @@ export const MISC = [
   },
 ];
 
-export const ALL = [...PORTRAITS, ...MISC];
+/**
+ * Spellbook miniatures.
+ *
+ * MM6's spellbook is its most distinctive panel: a 3x4 grid of little
+ * hand-painted watercolour scenes on cream pages, no frames, each illustrating
+ * what the spell *does* rather than being an icon of it — a mermaid in a wave
+ * for Awaken, a rooster at sunrise, a stone gateway for Town Portal. Prompts
+ * are built from the spell table itself so the set stays in step with the data
+ * instead of drifting from it.
+ */
+const SPELL_STYLE =
+  'A small hand-painted watercolour and gouache illustration in the style of a ' +
+  '1998 fantasy RPG spellbook page: loose painterly brushwork, muted period ' +
+  'palette, soft edges fading out into a plain cream parchment background, ' +
+  'no frame, no border, no text, no lettering, centred, single clear subject.';
+
+/** School flavour, so a fire spell and a water spell never read alike. */
+const SCHOOL_TONE = {
+  fire: 'warm orange and red tones, flame and ember',
+  air: 'pale blue and white tones, wind, lightning and cloud',
+  water: 'cool blue and sea-green tones, ice and water',
+  earth: 'brown and moss-green tones, stone and root',
+  spirit: 'soft gold and ivory tones, blessing and the ancestral dead',
+  mind: 'violet and rose tones, thought, sleep and illusion',
+  body: 'warm flesh and green tones, healing and vigour',
+  light: 'brilliant white and gold tones, radiance and the sun',
+  dark: 'deep purple and black tones, shadow, bone and decay',
+};
+
+export function spellPlates(SPELLS) {
+  return Object.values(SPELLS).map((sp) => ({
+    id: `spells/${sp.id}`,
+    // The description carries what the spell actually does, which is a far
+    // better prompt than the name alone: "Fate" means nothing, its description
+    // does.
+    prompt:
+      `${sp.name} — ${sp.desc ?? ''} ` +
+      `${SCHOOL_TONE[sp.school] ?? ''}. ${SPELL_STYLE}`,
+    aspect: '1:1',
+  }));
+}
+
+import { SPELLS } from '../src/game/data/Spells.js';
+
+export const SPELL_ART = spellPlates(SPELLS);
+
+export const ALL = [...PORTRAITS, ...MISC, ...SPELL_ART];

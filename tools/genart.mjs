@@ -24,7 +24,13 @@ import path from 'node:path';
 import { ALL } from './art-manifest.js';
 
 const API = 'https://api.meshy.ai/openapi/v1/text-to-image';
-const MODEL = 'gpt-image-2';
+// Measured in a four-way bake-off on the same portrait prompt:
+//   nano-banana 3cr · nano-banana-2-lite 3cr · nano-banana-2 6cr
+//   nano-banana-pro 9cr · gpt-image-2 9cr
+// At the size these are actually shown, -2-lite is indistinguishable from the
+// 9-credit models and three times cheaper, which is what makes the 99-image
+// spellbook affordable at all. Entries can still override per-item.
+const MODEL = 'nano-banana-2-lite';
 const OUT_ROOT = path.resolve(import.meta.dirname, '..', 'public', 'art');
 const CONCURRENCY = 3;
 const POLL_MS = 6000;
@@ -109,7 +115,7 @@ async function run() {
   }
 
   console.log(`[genart] ${work.length} to generate` +
-    (work.length ? ` (~${work.length * 9} credits)` : ' — everything present'));
+    (work.length ? ` (~${work.length * 3} credits at 3/image)` : ' — everything present'));
   if (listOnly || !work.length) {
     for (const e of work) console.log(`   ${e.id}`);
     return;
