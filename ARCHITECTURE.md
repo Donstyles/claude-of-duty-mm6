@@ -256,7 +256,8 @@ Emit these; anyone may listen. Payload shapes are part of the contract.
 | `time:forced` | `{ hours }` — capture harness set the clock |
 | `weather:force` | `{ kind }` — `clear\|overcast\|rain\|storm\|snow\|fog` |
 | `weather:changed` | `{ kind, intensity }` |
-| `ui:forcePanel` | `{ id }` — open a panel, `null` closes |
+| `ui:forcePanel` | `{ id, opts }` — open a panel with its options, `null` closes |
+| `ui:panelOpened` / `ui:panelClosed` | `{ id }` |
 | `ui:log` | `{ text, kind }` |
 | `player:moved` | `{ position, region }` |
 | `player:enteredRegion` | `{ region, kind }` — `outdoor\|town\|dungeon` |
@@ -267,6 +268,17 @@ Emit these; anyone may listen. Payload shapes are part of the contract.
 | `party:levelUp` | `{ index, level }` |
 | `loot:picked` | `{ item, charIndex }` |
 | `quest:updated` | `{ questId, state }` |
+| `party:created` | `{ members }` — party creation handed over a new party |
+| `venue:enter` | `{ id }` — ask to walk into a building |
+| `venue:entered` / `venue:left` | `{ venue }` |
+| `travel:depart` | `{ routeId }` — ask to take a coach or packet leg |
+| `travel:arrived` | `{ route, from, to, hours, fare, ambush }` |
+| `travel:ambushed` | `{ route, at, level }` |
+| `player:teleport` | `{ x, z, town, reason }` |
+| `player:enteredTown` | `{ town, via }` |
+| `campaign:stage` | `{ stage, state }` — a main-quest stage opened or closed |
+| `campaign:act` | `{ act }` — the act advanced; travel and regions open with it |
+| `campaign:flag` / `campaign:tick` | `{ flag }` / `{ target }` — script hooks for stages a system cannot detect on its own |
 
 ---
 
