@@ -228,6 +228,7 @@ export class QuestPanel extends Panel {
     this.headEl = el('span', { text: 'Current Quests' });
     this.indexEl = el('div', { className: 'mm-qb-index' });
     this.entryEl = el('div', { className: 'mm-qb-entry' });
+    this.footEl = el('div', { className: 'mm-qb-foot' });
     this.countEl = el('div', { className: 'mm-qb-count' });
 
     this.tabEls = TABS.map((t) => {
@@ -250,7 +251,7 @@ export class QuestPanel extends Panel {
       el('div', { className: 'mm-quest-head' }, this.headEl),
       this.countEl,
       this.indexEl);
-    const right = el('div', { className: 'mm-quest-page is-right' }, this.entryEl);
+    const right = el('div', { className: 'mm-quest-page is-right' }, this.entryEl, this.footEl);
 
     const binding = el('div', { className: 'mm-quest-binding' },
       ...[40, 140, 240].map((top) => el('div', { className: 'mm-quest-clasp', style: { top: nu(top) } })));
@@ -300,6 +301,7 @@ export class QuestPanel extends Panel {
         : 'No work in hand. Ask in a tavern, a guild hall, or wherever people are standing about looking wronged.' }));
       setChildren(this.entryEl, el('div', { className: 'mm-qb-blank' },
         el('p', { text: 'The right-hand page waits for an entry.' })));
+      setChildren(this.footEl);
       return;
     }
 
@@ -378,7 +380,11 @@ export class QuestPanel extends Panel {
       rule('The journal'),
       ...journal,
       objectives.length ? rule('What is left') : null,
-      ...objectives,
+      ...objectives);
+
+    // What the job pays is pinned to the foot of the page rather than left at
+    // the end of the prose: it is the one line a player scrolls back for.
+    setChildren(this.footEl,
       rule('On completion'),
       el('div', { className: 'mm-qb-rewards' }, ...rewards));
   }
@@ -386,6 +392,7 @@ export class QuestPanel extends Panel {
   _renderNotes(notes) {
     this._rows = [];
     this.countEl.textContent = notes.length ? `${notes.length} noted` : '';
+    setChildren(this.footEl);
     if (!notes.length) {
       setChildren(this.indexEl, el('p', { className: 'mm-qb-empty', text: 'The party has learned nothing worth writing down. Give it a week.' }));
       setChildren(this.entryEl, el('div', { className: 'mm-qb-blank' }, el('p', { text: 'Autonotes fill themselves as people talk.' })));

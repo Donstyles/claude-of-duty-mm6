@@ -57,6 +57,22 @@
     drop-shadow(0 0 calc(var(--u) * 6) rgba(255, 240, 180, 0.95));
 }
 
+/* A painted item plate inside a hung sprite. The shared rule is scoped to
+   `.mm-item`, which is the backpack's class; the wall's sprites carry
+   `.mm-shop-item`, so they need their own copy. `contain` is the whole point —
+   a plate is a photograph of an object and stretching one is worse than
+   drawing no object at all. */
+.mm-panel[data-panel='shop'] .mm-shop-item .mm-item-plate,
+.mm-panel[data-panel='shop'] .mm-shop-item .mm-item-fill {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  pointer-events: none;
+}
+.mm-panel[data-panel='shop'] .mm-shop-item .mm-item-fill { opacity: 0.85; }
+
 /* The piece kept off the board until you ask after it. */
 .mm-panel[data-panel='shop'] .mm-shop-item.is-special {
   filter:

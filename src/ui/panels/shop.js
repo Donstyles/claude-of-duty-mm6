@@ -1,5 +1,5 @@
 import './shop.css';
-import { Panel, itemFootprint, itemSprite, itemQuality } from './base.js';
+import { Panel, itemFootprint, itemSprite, itemQuality, itemPlateUrl } from './base.js';
 import { itemMaterial } from '../Icons.js';
 import {
   el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, goldOval,
@@ -54,11 +54,21 @@ const CELL = 32;
  */
 const WALL = Object.freeze({
   x: 14, y: 22, w: 432, h: 274,
-  pad: 4, gap: 8, unit: 44, minCell: 22, minTall: 38,
+  pad: 4, gap: 8, unit: 44, minTall: 38,
 });
 
 /**
- * Stroke colour per material.
+ * The proportions the item plates were painted at (`tools/art-manifest.js`):
+ * weapons and wands stand on a 9:16 canvas, everything else is square. A plate
+ * is a photograph of an object and must never be stretched, so the sprite's box
+ * is cut to the plate rather than to the pack's cell grid.
+ */
+function plateAspect(item) {
+  return item?.category === 'weapon' || item?.category === 'wand' ? 9 / 16 : 1;
+}
+
+/**
+ * Stroke colour per material, for the items that have no painted plate yet.
  *
  * `paintedIcon` fills its paths from a material gradient, but a few glyphs —
  * the bow's limb, the spear's shaft — are drawn as strokes, and a stroke takes
@@ -524,22 +534,27 @@ export class ShopPanel extends Panel {
 function layoutWall(stock, seed = '') {
   const items = stock.slice(0, 9);
   if (!items.length) return [];
-  const sizes = items.map((item) => itemFootprint(item));
-  const cells = sizes.reduce((s, fp) => s + fp.w, 0);
   const usable = WALL.w - WALL.pad * 2;
 
-  // One unit is one pack cell blown up to counter scale, shrunk only as far as
-  // it takes to fit the run — a long sword still stands half the wall high.
-  const unit = Math.max(WALL.minCell,
-    Math.min(WALL.unit, (usable - WALL.gap * (items.length - 1)) / Math.max(1, cells)));
-
-  const drawn = items.map((item, i) => {
-    const fp = sizes[i];
-    const h = Math.max(WALL.minTall, fp.h * unit);
-    return { item, w: h * (fp.w / fp.h), h };
+  // How tall a thing stands comes from its pack footprint — a staff is five
+  // cells and a ring is one — but how wide it is comes from its own painted
+  // proportions, so a sword is a sword and not a stretched icon.
+  const drawn = items.map((item) => {
+    const fp = itemFootprint(item);
+    const h = Math.max(WALL.minTall, fp.h * WALL.unit);
+    const ratio = itemPlateUrl(item) ? plateAspect(item) : fp.w / fp.h;
+    return { item, w: h * ratio, h };
   });
 
-  const run = drawn.reduce((s, d) => s + d.w, 0);
+  // Then shrink the whole wall, in proportion, until the run fits the board.
+  const air = WALL.gap * (drawn.length - 1);
+  let run = drawn.reduce((s, d) => s + d.w, 0);
+  if (run + air > usable) {
+    const k = (usable - air) / run;
+    for (const d of drawn) { d.w *= k; d.h *= k; }
+    run = usable - air;
+  }
+
   const gap = drawn.length > 1
     ? Math.max(WALL.gap, (usable - run) / (drawn.length - 1))
     : 0;

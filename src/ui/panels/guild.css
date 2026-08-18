@@ -39,8 +39,8 @@
   position: absolute;
   left: calc(var(--u) * 16);
   right: calc(var(--u) * 16);
-  top: calc(var(--u) * 48);
-  bottom: calc(var(--u) * 58);
+  top: calc(var(--u) * 46);
+  bottom: calc(var(--u) * 56);
   border-radius: calc(var(--u) * 6);
   overflow: hidden;
   display: none;
@@ -84,7 +84,14 @@
   bottom: auto;
   left: calc(var(--u) * 40);
   right: calc(var(--u) * 40);
-  background: rgba(14, 16, 14, 0.9);
+  /* A granite notice screwed to the door: the interface's own material, so the
+     terms read exactly as the character sheet's rows do. */
+  background: var(--tex-granite) center / 100% 100% no-repeat;
+  background-color: #434442;
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 var(--bevel-dark),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--bevel-light),
+    0 calc(var(--u) * 3) calc(var(--u) * 12) rgba(0, 0, 0, 0.8);
 }
 
 /* ── the door ─────────────────────────────────────────────────────────────── */
@@ -117,9 +124,9 @@
   font-style: italic;
   font-size: calc(var(--u) * 12);
   line-height: calc(var(--u) * 15);
-  color: #e0a79c;
+  color: #ffb0a2;
 }
-.mm-guild-term.is-met { color: #cfe6c0; }
+.mm-guild-term.is-met { color: #d8f0c4; }
 .mm-guild-tick { color: var(--down); position: relative; top: calc(var(--u) * 1); }
 .mm-guild-term.is-met .mm-guild-tick { color: var(--up); }
 
@@ -130,7 +137,8 @@
   font-size: calc(var(--u) * 15);
   text-align: center;
   color: var(--gold);
-  background: #46402f;
+  /* Raised, the polarity MM6 gives anything you press. */
+  background: rgba(122, 118, 110, 0.55);
   box-shadow:
     inset calc(var(--u) * 1.5) calc(var(--u) * 1.5) 0 var(--bevel-light),
     inset calc(var(--u) * -1.5) calc(var(--u) * -1.5) 0 var(--bevel-dark);
@@ -165,8 +173,8 @@
 }
 
 .mm-guild-art {
-  width: calc(var(--u) * 58);
-  height: calc(var(--u) * 58);
+  width: calc(var(--u) * 52);
+  height: calc(var(--u) * 52);
   background: center / contain no-repeat;
   filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 3) rgba(0, 0, 0, 0.75));
 }

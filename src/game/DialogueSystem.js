@@ -1233,6 +1233,18 @@ class Conversation {
     this.branch = null;
     this.asked = new Set();
     this.rng = rngFor(`${speaker.key}:talk`);
+
+    // A packet is carried to a person, and that person is whoever answers the
+    // door at the address. When a delivery is pending in this town, the
+    // resident the party finds *is* the recipient the sender named — otherwise
+    // the sender says "take it to Ferrin Tharnec" and a stranger opens the door
+    // expecting it, which reads as a bug rather than as an errand.
+    const pending = model.deliveryFor(speaker);
+    if (pending?.entry?.target) {
+      speaker.name = pending.entry.target.name;
+      speaker.place = `House on ${pending.entry.target.street}`;
+    }
+
     this.text = this._greeting();
     this._rumourIndex = 0;
   }

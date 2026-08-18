@@ -908,8 +908,9 @@ export class MapPanel extends Panel {
   _drawRegionLabels(g, regions, toX, toZ, s) {
     for (const r of regions) {
       if (!this._seenRegions.has(r.id)) continue;
+      // Above the province, clear of the town name that sits under its glyph.
       const x = toX(r.x);
-      const z = toZ(r.z) - (r.kind === 'under' ? -r.rz * s - 14 : r.rz * s * 0.62);
+      const z = toZ(r.z) - (r.kind === 'under' ? -r.rz * s - 14 : r.rz * s * 0.78);
       g.font = `italic ${Math.round(clamp(s / 30, 10, 17))}px 'Palatino Linotype', Georgia, serif`;
       g.textAlign = 'center';
       g.lineWidth = 3;
@@ -936,9 +937,14 @@ export class MapPanel extends Panel {
     if (!p) return;
     const x = toX(p.x / (WORLD_SIZE / 2));
     const z = toZ(p.z / (WORLD_SIZE / 2));
-    const r = clamp(s / 60, 5, 12);
+    const r = clamp(s / 40, 7, 14);
     g.save();
     g.translate(x, z);
+    // A halo, because the star sits on top of a town glyph as often as not.
+    g.beginPath();
+    g.arc(0, 0, r * 1.5, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(20,16,10,0.45)';
+    g.fill();
     g.beginPath();
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2 - Math.PI / 2;

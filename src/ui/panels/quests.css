@@ -244,6 +244,16 @@
 
 .mm-ui .mm-qb-rewards { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); }
 
+/* Pinned to the foot of the page, clear of the exit plaque in the corner. */
+.mm-ui .mm-qb-foot {
+  flex: 0 0 auto;
+  padding-right: calc(var(--u) * 44);
+  color: #000;
+  text-shadow: none;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+}
+.mm-ui .mm-qb-foot .mm-qb-rule { margin: calc(var(--u) * 5) 0 calc(var(--u) * 3); }
+
 .mm-ui .mm-qb-blank {
   height: 100%;
   display: grid;

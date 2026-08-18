@@ -361,8 +361,10 @@ export class RestPanel extends Panel {
         : camp.safe ? 'Safe' : camp.inDungeon ? 'Underground' : 'Exposed';
     const tone = camp.refuse ? 'mm-t-down' : camp.safe ? 'mm-t-up' : 'mm-t-gold';
 
+    // An empty channel is the honest picture of a safe camp; a stub of green
+    // would read as "a little risk", which is a different statement.
     const bar = el('div', { className: 'mm-rest-risk' },
-      el('i', { style: { width: `${Math.round(clamp(camp.risk, 0, 1) * 100)}%` } }));
+      camp.risk > 0 ? el('i', { style: { width: `${Math.round(clamp(camp.risk, 0, 1) * 100)}%` } }) : null);
 
     return engraved('mm-rest-camp',
       labelRow('Where', camp.where),

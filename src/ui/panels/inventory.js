@@ -13,26 +13,27 @@ const DRAG_SLOP = 6;
 /**
  * Where each piece of gear sits on the painted figure.
  *
- * Numbers are native pixels inside the sidebar's 148 x 352 upper block, measured
- * off the body the texture forge paints there: head x 50-98 / y 33-83, mail
- * x 33-97 / y 87-173, belt y 168-183, boots x 30-100 / y 317-330, and the
- * figure's own weapon down the left at x 10-30 with the shield hand out to the
- * right at x 98-138. Boxes are given by their centre so they stay readable
- * against that list, and they sit on the painted gear rather than beside it.
+ * Numbers are native pixels inside the sidebar's 148 x 352 upper block. The
+ * body plates are all 320 x 573 and the niche shows them `contain`, pinned to
+ * the bottom, so a plate pixel lands at `x * 0.4625` and `87 + y * 0.4625` —
+ * which puts every one of the eighteen figures in the same place: crown at
+ * y 101, head between x 61 and 88, shoulders at y 148, waist at y 220, the
+ * floor at y 340. Boxes are given by their centre so they stay readable against
+ * that list, and they sit on the painted gear rather than beside it.
  */
 const SLOTS = [
-  { id: 'helm', label: 'Helm', x: 74, y: 44, w: 42, h: 30 },
-  { id: 'ranged', label: 'Bow', x: 117, y: 92, w: 26, h: 48 },
-  { id: 'mainhand', label: 'Weapon', x: 20, y: 92, w: 26, h: 72 },
-  { id: 'amulet', label: 'Amulet', x: 74, y: 96, w: 22, h: 20 },
-  { id: 'armour', label: 'Armor', x: 74, y: 138, w: 50, h: 56 },
-  { id: 'gauntlets', label: 'Gloves', x: 26, y: 152, w: 28, h: 26 },
-  { id: 'belt', label: 'Belt', x: 74, y: 178, w: 48, h: 16 },
-  { id: 'offhand', label: 'Shield', x: 116, y: 178, w: 34, h: 44 },
-  { id: 'cloak', label: 'Cloak', x: 26, y: 202, w: 36, h: 40 },
-  { id: 'ring1', label: 'Ring', x: 120, y: 232, w: 18, h: 18 },
-  { id: 'ring2', label: 'Ring', x: 120, y: 258, w: 18, h: 18 },
-  { id: 'boots', label: 'Boots', x: 60, y: 324, w: 70, h: 26 },
+  { id: 'helm', label: 'Helm', x: 74, y: 118, w: 34, h: 30 },
+  { id: 'ranged', label: 'Bow', x: 114, y: 150, w: 26, h: 44 },
+  { id: 'amulet', label: 'Amulet', x: 74, y: 152, w: 20, h: 18 },
+  { id: 'armour', label: 'Armor', x: 74, y: 190, w: 46, h: 52 },
+  { id: 'mainhand', label: 'Weapon', x: 28, y: 190, w: 26, h: 68 },
+  { id: 'offhand', label: 'Shield', x: 118, y: 200, w: 30, h: 40 },
+  { id: 'belt', label: 'Belt', x: 74, y: 224, w: 44, h: 14 },
+  { id: 'gauntlets', label: 'Gloves', x: 30, y: 244, w: 26, h: 24 },
+  { id: 'ring1', label: 'Ring', x: 118, y: 246, w: 18, h: 18 },
+  { id: 'ring2', label: 'Ring', x: 118, y: 272, w: 18, h: 18 },
+  { id: 'cloak', label: 'Cloak', x: 30, y: 282, w: 32, h: 38 },
+  { id: 'boots', label: 'Boots', x: 74, y: 326, w: 60, h: 24 },
 ];
 
 /** What an unappraised find is called before anyone has read its marks. */

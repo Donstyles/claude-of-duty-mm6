@@ -77,13 +77,24 @@
   filter: brightness(1.22) saturate(1.12) drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 236, 160, 0.85));
 }
 
+/* ── item sprites ─────────────────────────────────────────────────────────── */
+
+/* A sprite drawn from a generated plate turns `relative`, which would let the
+   pack's hand-placed left/top offsets stack the whole backpack into a
+   diagonal. Every sprite on this screen is positioned by hand, so pin them. */
+[data-panel="inventory"] .mm-pack-items .mm-item { position: absolute; }
+
 /* ── item condition ───────────────────────────────────────────────────────── */
 
 /* MM6 draws the same sprite whatever state an item is in and says the rest in
    the description, but a 126-cell grid needs the difference to survive a glance,
    so the metal goes dull rather than the outline changing. */
-.mm-item.is-broken svg { filter: saturate(0.22) brightness(0.6); }
-.mm-item.is-unknown svg { filter: saturate(0.5) brightness(0.84); }
+.mm-item.is-broken > svg,
+.mm-item.is-broken > .mm-item-plate,
+.mm-item.is-broken > .mm-item-fill { filter: saturate(0.22) brightness(0.6); }
+.mm-item.is-unknown > svg,
+.mm-item.is-unknown > .mm-item-plate,
+.mm-item.is-unknown > .mm-item-fill { filter: saturate(0.5) brightness(0.84); }
 .mm-item.is-lifted { visibility: hidden; }
 
 .mm-tip.is-broken .mm-tip-head { color: var(--down); }
@@ -140,6 +151,7 @@
 /* Worn gear carries its own baked highlights and reads markedly brighter than
    the masonry behind it. */
 .mm-item.mm-inv-worn {
+  position: absolute;
   left: 0;
   top: 0;
   filter:

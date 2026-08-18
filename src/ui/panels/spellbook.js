@@ -9,8 +9,8 @@
  * page stops reading as the original at a glance.
  *
  * The eleven miniatures are the painted plates in `public/art/spells/`, one per
- * spell id, alpha-matted so they sit straight on the paper. Nothing around them
- * is framed except the school's illumination: a spell is a ragged watercolour
+ * spell id, cut out so they sit straight on the paper. Nothing around them is
+ * framed except the school's illumination: a spell is a ragged watercolour
  * floating over a soft grey elliptical smudge, and that smudge belongs to the
  * *page*, not to the spell, so it stays visible for spells the caster has not
  * learned — an empty smudge is how you know there is something still to buy.
@@ -297,11 +297,19 @@ export class SpellbookPanel extends Panel {
     const vm = this.ui.active();
     const known = new Set(this.ui.knownSpells(vm) ?? []);
 
-    // Open on a school this caster has actually studied: nine dead ribbons over
-    // twelve empty smudges tells them nothing about their own book.
+    // Open on a school this caster has actually studied — nine dead ribbons
+    // over twelve empty smudges tells them nothing about their own book — and
+    // of those, on the one they have got furthest in, which is the page with
+    // something on it.
     if (!this._state(vm, this.school).open) {
-      const first = MAGIC_SCHOOLS.find((s) => this._state(vm, s.id).open);
-      if (first) this.school = first.id;
+      const best = MAGIC_SCHOOLS
+        .filter((s) => this._state(vm, s.id).open)
+        .sort((a, b) => {
+          const x = this._state(vm, a.id);
+          const y = this._state(vm, b.id);
+          return masteryRank(y.mastery) - masteryRank(x.mastery) || y.level - x.level;
+        })[0];
+      if (best) this.school = best.id;
     }
     const school = MAGIC_SCHOOLS.find((s) => s.id === this.school) ?? MAGIC_SCHOOLS[0];
     const state = this._state(vm, school.id);
@@ -529,7 +537,7 @@ export class SpellbookPanel extends Panel {
     const vm = this.ui.active();
     if (!vm) return;
     if (!learned) {
-      this.ui.log(`${vm?.name ?? 'This character'} has not learned ${spell.name}.`, 'warn');
+      this.ui.log(`${vm.name} has not learned ${spell.name}.`, 'warn');
       return;
     }
     this.spellId = spell.id;
@@ -537,7 +545,7 @@ export class SpellbookPanel extends Panel {
       // setQuickSpell syncs the party, which refreshes this page for us.
       this.ui.setQuickSpell(vm.index, spell.id);
     } else {
-      this.ui.log(`${vm?.name ?? 'This character'}: ${check.reason}.`, 'warn');
+      this.ui.log(`${vm.name}: ${check.reason}.`, 'warn');
       this.refresh();
     }
   }
@@ -557,7 +565,7 @@ export class SpellbookPanel extends Panel {
     const known = new Set(this.ui.knownSpells(vm) ?? []);
     const check = this._castable(spell, this._state(vm, this.school), known);
     if (!check.ok) {
-      this.ui.log(`${vm?.name ?? 'This character'}: ${check.reason}.`, 'warn');
+      this.ui.log(`${vm.name}: ${check.reason}.`, 'warn');
       return;
     }
     this.ui.castSpell(vm.index, spell.id);

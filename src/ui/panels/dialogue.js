@@ -74,6 +74,23 @@ export class DialoguePanel extends Panel {
       el('div', { className: 'mm-npc-board' },
         this.portraitEl, this.nameEl, this.tradeEl, this.optionsEl, exit)));
 
+    // Bound once, reading the live conversation: the tooltip manager keeps its
+    // listeners forever, so attaching per refresh would stack a new pair on
+    // every click.
+    tooltip.attach(this.portraitEl, () => {
+      const s = this.conv?.speaker;
+      if (!s) return '';
+      return tipMarkup({
+        title: s.name,
+        subtitle: s.profession,
+        lines: [
+          { k: 'Found at', v: s.place },
+          { k: 'Standing', v: this.model().standing().label },
+        ],
+        flavour: s.desc || undefined,
+      });
+    });
+
     // The world starts conversations by opening this panel and *then* saying
     // who is talking, so the second half of that has to be listened for.
     this._onNpcDialogue = ({ npc } = {}) => {
@@ -144,16 +161,6 @@ export class DialoguePanel extends Panel {
     // so point them at whichever array the model is actually filling — the
     // party's when the simulation is up, its own before that.
     this.ui.hirelings = this.model().retinue();
-
-    tooltip.attach(this.portraitEl, () => tipMarkup({
-      title: s.name,
-      subtitle: s.profession,
-      lines: [
-        { k: 'Found at', v: s.place },
-        { k: 'Standing', v: this.model().standing().label },
-      ],
-      flavour: s.desc || undefined,
-    }));
   }
 
   _choose(id) {

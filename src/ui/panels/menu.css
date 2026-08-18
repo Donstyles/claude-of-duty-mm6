@@ -11,8 +11,8 @@
  */
 
 .mm-ui .mm-menu {
-  padding: calc(var(--u) * 14) calc(var(--u) * 18) calc(var(--u) * 12);
-  gap: calc(var(--u) * 10);
+  padding: calc(var(--u) * 10) calc(var(--u) * 18) calc(var(--u) * 10);
+  gap: calc(var(--u) * 8);
   justify-content: flex-start;
   /* A cavern, not a dark rectangle: the chiselled rock the shop board sits in,
      dropped almost to black and lit by one pool of light behind the logo. */
@@ -54,7 +54,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(var(--u) * 8);
+  gap: calc(var(--u) * 6);
 }
 .mm-ui .mm-panel[data-panel='menu'][data-page='root'] .mm-menu-page { justify-content: center; }
 
@@ -200,16 +200,16 @@
   grid-template-columns: 1fr calc(var(--u) * 140) calc(var(--u) * 40);
   align-items: center;
   gap: calc(var(--u) * 8);
-  padding: calc(var(--u) * 2) calc(var(--u) * 6);
+  padding: calc(var(--u) * 1) calc(var(--u) * 6);
   border-bottom: 1px solid rgba(120, 104, 62, 0.22);
 }
 .mm-ui .mm-opt-label { min-width: 0; }
-.mm-ui .mm-opt-label span { font-size: calc(var(--u) * 12); color: #ffd773; }
+.mm-ui .mm-opt-label span { font-size: calc(var(--u) * 11); line-height: 1.2; color: #ffd773; }
 .mm-ui .mm-opt-label small {
   display: block;
-  font-size: calc(var(--u) * 9);
+  font-size: calc(var(--u) * 8);
   font-style: italic;
-  line-height: 1.25;
+  line-height: 1.2;
   color: #a5966f;
   white-space: nowrap;
   overflow: hidden;
@@ -224,7 +224,7 @@
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: calc(var(--u) * 10);
+  height: calc(var(--u) * 9);
   background: linear-gradient(180deg, #191712, #2c2820);
   box-shadow:
     inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.95),
@@ -235,14 +235,14 @@
 .mm-ui .mm-opt-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: calc(var(--u) * 11);
-  height: calc(var(--u) * 18);
+  width: calc(var(--u) * 10);
+  height: calc(var(--u) * 16);
   background: linear-gradient(180deg, #ebe2a7 0 18%, #c3b37a 45%, #a98e57 70%, #7a6031);
   box-shadow: 0 0 0 1px #302410;
 }
 .mm-ui .mm-opt-slider::-moz-range-thumb {
-  width: calc(var(--u) * 11);
-  height: calc(var(--u) * 18);
+  width: calc(var(--u) * 10);
+  height: calc(var(--u) * 16);
   border: 1px solid #302410;
   border-radius: 0;
   background: linear-gradient(180deg, #ebe2a7 0 18%, #c3b37a 45%, #a98e57 70%, #7a6031);
@@ -251,7 +251,7 @@
 .mm-ui .mm-opt-toggle,
 .mm-ui .mm-opt-choice {
   min-width: calc(var(--u) * 40);
-  height: calc(var(--u) * 20);
+  height: calc(var(--u) * 18);
   padding: 0 calc(var(--u) * 8);
   display: grid;
   place-items: center;

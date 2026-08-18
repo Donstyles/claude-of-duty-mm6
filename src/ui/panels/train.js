@@ -307,6 +307,11 @@ export class TrainPanel extends Panel {
       const next = experienceForLevel(want.level + 1);
       c.experience = Math.max(0, next + (want.over ?? -(want.short ?? 0)));
       c.skillPoints = 0;
+      // Levelling a character in place leaves the pools behind their new
+      // maxima, and a party bar full of empty tubes is a lie about the state
+      // being photographed.
+      if (Number.isFinite(c.maxHP)) c.hp = c.maxHP;
+      if (Number.isFinite(c.maxSP)) c.sp = c.maxSP;
     });
   }
 }
