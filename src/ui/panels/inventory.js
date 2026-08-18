@@ -141,10 +141,28 @@ export class InventoryPanel extends Panel {
     }
   }
 
+  /**
+   * The painted body in the niche is a file, not a canvas, and a screen that is
+   * opened and photographed in the same breath shows bare stone while it
+   * decodes. Warm the party's four plates as the interface is built instead —
+   * which also spares the character sheet the same flash, since it asks for the
+   * same four.
+   */
+  mount(parent) {
+    const root = super.mount(parent);
+    for (const vm of this.ui.creationParty?.() ?? []) {
+      const url = this.ui.textures?.figurePlate?.(vm.portraitSpec);
+      if (url) new Image().src = url;
+    }
+    return root;
+  }
+
   onOpen() {
-    // The engine reads Escape straight off the window, so intercepting the key
-    // there is the only way a held item can go back without the screen closing
-    // out from under it.
+    // Keys are taken off the window rather than through `onKey`, because that
+    // route needs the focus to still be inside the screen — and after a few
+    // pick-ups it very often is not. The engine also reads Escape straight off
+    // the window, so this is the only place a held item can be put back without
+    // the screen closing out from under it.
     window.addEventListener('keydown', this._onKeyCapture, true);
   }
 
@@ -380,12 +398,8 @@ export class InventoryPanel extends Panel {
     this.refresh();
   }
 
-  /**
-   * Escape has to mean two things in order: put down what the cursor is
-   * holding, and only then leave. Both are taken here rather than left to the
-   * panel's own handler, which needs the focus to still be inside the screen —
-   * and after a few pick-ups it very often is not.
-   */
+  /** Escape means two things in order: put down what the cursor is holding,
+   *  and only then leave. */
   _key(e) {
     if (!this.opened) return;
     if (e.key === 'Escape') {

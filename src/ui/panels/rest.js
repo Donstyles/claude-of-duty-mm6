@@ -93,7 +93,7 @@ export class RestPanel extends Panel {
   update() {
     // The clock runs while the screen is up, so the calendar has to follow it.
     this._tick = (this._tick ?? 0) + 1;
-    if (this._tick % 20 === 0) this._update();
+    if (this._tick % 12 === 0) this._update();
   }
 
   // ── the state of the camp ─────────────────────────────────────────────────
@@ -234,12 +234,17 @@ export class RestPanel extends Panel {
     const dayOfYear = ((dayIndex % 336) + 336) % 336;
     const month = MONTHS[Math.floor(dayOfYear / 28)];
 
-    // The sky's own lunar geometry, evaluated here so the readout agrees with
-    // what is actually hanging over the party.
+    // The sky's own lunar geometry. Its value is taken directly when its clock
+    // has caught up with ours, and recomputed from the same period when it has
+    // not — the screen can be opened on a forced hour a frame before the sky
+    // has evaluated it, and a stale moon over a fresh date is a lie.
     const sky = this.ctx?.get('sky');
     const lunar = ((dayIndex + hour / 24) / LUNAR_PERIOD) * Math.PI * 2;
     const theta = ((lunar - LUNAR_OFFSET) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-    const lit = typeof sky?.moonPhase === 'number' ? sky.moonPhase : (1 + Math.cos(theta)) / 2;
+    const skyIsCurrent = sky?.dayNumber === dayIndex && Math.abs((sky?.hour ?? 0) - hour) < 0.02;
+    const lit = skyIsCurrent && typeof sky.moonPhase === 'number'
+      ? sky.moonPhase
+      : (1 + Math.cos(theta)) / 2;
     const slice = Math.round((theta / (Math.PI * 2)) * 8) % 8;
 
     return {

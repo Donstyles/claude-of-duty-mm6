@@ -22,3 +22,7 @@ public/art/**/*.png
 # review loop; never distributed, because they are somebody else's copyright.
 reference/
 !reference/NOTES-extra.md
+
+# Byte-cache from importing tools/artpack.py as a module.
+__pycache__/
+*.pyc

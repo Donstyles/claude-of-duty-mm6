@@ -337,14 +337,16 @@ export class DungeonSystem extends System {
       // colour like `#0e0e10`, and `setHex` decodes it from sRGB, which lands
       // it at 0.005 linear — black however hard it is then multiplied. So take
       // the hue at full value and let `intensity` alone say how dark it is.
-      // 0.4 puts an unlit wall around value 90, inside REFERENCE rule 8's
-      // 30–100 band, with the torches free to build pools on top of it.
+      // 0.65 lands an unlit wall in REFERENCE rule 8's 30–100 band — about
+      // where outdoor ground in shadow sits, which is the right reference for
+      // an interior with no key light in it at all — and leaves the torches
+      // free to build their pools on top.
       const tone = new THREE.Color(light.ambient);
       const peak = Math.max(tone.r, tone.g, tone.b) || 1;
       tone.multiplyScalar(1 / peak);
       this._ambient.color.copy(tone);
       this._ambient.groundColor.copy(tone).multiplyScalar(0.34);
-      this._ambient.intensity = 0.4;
+      this._ambient.intensity = 0.65;
       this._ambient.visible = true;
 
       this._savedExposure = ctx.renderer.toneMappingExposure;
@@ -433,6 +435,7 @@ export class DungeonSystem extends System {
     for (const plan of state.floors) this._shell(state, plan);
     for (const plan of state.floors) this._dress(state, plan);
 
+    this._containment(state);
     for (const key of Object.keys(batches)) {
       const mesh = batches[key].build(key !== 'floor');
       if (mesh) { mesh.name = `dungeon-${key}`; group.add(mesh); }
@@ -723,6 +726,41 @@ export class DungeonSystem extends System {
 
   /* ── shell ─────────────────────────────────────────────────────────── */
 
+  /**
+   * A black box round the whole interior.
+   *
+   * The dungeon stands in open air above the terrain, so any hole in the shell
+   * — a cave face that did not quite meet its neighbour, a stair that overshot
+   * — frames a rectangle of blue sky in the middle of a crypt. Six inward-
+   * facing quads of matte black cost nothing and turn every such mistake into
+   * what the player already expects to see through a gap in the rock.
+   */
+  _containment(state) {
+    const span = Math.max(...state.floors.map((p) => p.size)) * CELL / 2 + 8;
+    const top = BASE_Y + 8;
+    const bottom = Math.min(...state.floors.map((p) => p.y)) - 12;
+    const b = new Batch(this._voidMaterial());
+    const c = [
+      [-span, bottom, -span], [span, bottom, -span], [span, bottom, span], [-span, bottom, span],
+      [-span, top, -span], [span, top, -span], [span, top, span], [-span, top, span],
+    ];
+    const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    // Wound to face inward, so the box is invisible from outside and solid black
+    // from within.
+    b.quad(c[0], c[3], c[2], c[1], ...uv);
+    b.quad(c[4], c[5], c[6], c[7], ...uv);
+    b.quad(c[0], c[1], c[5], c[4], ...uv);
+    b.quad(c[2], c[3], c[7], c[6], ...uv);
+    b.quad(c[1], c[2], c[6], c[5], ...uv);
+    b.quad(c[3], c[0], c[4], c[7], ...uv);
+    const mesh = b.build(false);
+    if (mesh) {
+      mesh.name = 'dungeon-void';
+      mesh.receiveShadow = false;
+      state.group.add(mesh);
+    }
+  }
+
   /** Floor, ceiling, walls, plinth and string course for one plan. */
   _shell(state, plan) {
     const { batches, look } = state;
@@ -733,10 +771,6 @@ export class DungeonSystem extends System {
     const y1 = plan.y + plan.height;
     const drop = look.height + FLOOR_GAP;
 
-    // Corner-keyed jitter: two cells sharing an edge agree about where it is,
-    // so a ragged cave wall has no cracks in it.
-    const jy = (i, j, s) => (cave ? (hash01(i * 47603 ^ j * 3389 ^ s) - 0.5) * 0.5 : 0);
-
     for (let j = 0; j < size; j++) {
       for (let i = 0; i < size; i++) {
         if (!grid[j][i]) continue;
@@ -746,21 +780,28 @@ export class DungeonSystem extends System {
         const z0 = j * CELL - (size * CELL) / 2;
         const x1 = x0 + CELL, z1 = z0 + CELL;
 
+        // A cave wall wanders off the cell line, so the slab under it has to
+        // reach past that line or the party looks straight through the join.
+        // Overhang only on the sides that border rock: two open cells whose
+        // slabs overlapped would be coplanar, which is the other way to lose
+        // this argument.
+        const over = (di, dj) => (cave && !grid[j + dj]?.[i + di] ? 0.55 : 0);
+        const ex0 = x0 - over(-1, 0), ex1 = x1 + over(1, 0);
+        const ez0 = z0 - over(0, -1), ez1 = z1 + over(0, 1);
+
         if (!shaft) {
           if (lattice && plan.tag[j][i] === 2) this._channelFloor(batches, x0, z0, y0);
           else {
             batches.floor.quad(
-              [x0, y0 + jy(i, j, 1), z0], [x0, y0 + jy(i, j + 1, 1), z1],
-              [x1, y0 + jy(i + 1, j + 1, 1), z1], [x1, y0 + jy(i + 1, j, 1), z0],
-              uvXZ(x0, z0), uvXZ(x0, z1), uvXZ(x1, z1), uvXZ(x1, z0),
+              [ex0, y0, ez0], [ex0, y0, ez1], [ex1, y0, ez1], [ex1, y0, ez0],
+              uvXZ(ex0, ez0), uvXZ(ex0, ez1), uvXZ(ex1, ez1), uvXZ(ex1, ez0),
             );
           }
         }
         if (!plan.noCeil.has(k)) {
           batches.wall.quad(
-            [x0, y1 - jy(i, j, 2), z0], [x1, y1 - jy(i + 1, j, 2), z0],
-            [x1, y1 - jy(i + 1, j + 1, 2), z1], [x0, y1 - jy(i, j + 1, 2), z1],
-            uvXZ(x0, z0), uvXZ(x1, z0), uvXZ(x1, z1), uvXZ(x0, z1),
+            [ex0, y1, ez0], [ex1, y1, ez0], [ex1, y1, ez1], [ex0, y1, ez1],
+            uvXZ(ex0, ez0), uvXZ(ex1, ez0), uvXZ(ex1, ez1), uvXZ(ex0, ez1),
           );
         }
         // The floor above already walls this cell all the way down, so a second
@@ -803,13 +844,25 @@ export class DungeonSystem extends System {
     else { p0 = [x0, z0]; p1 = [x1, z0]; }
 
     if (cave) {
-      // Push the face into the rock, keyed on the shared grid corners so the
-      // neighbouring face lands on the same point.
-      const gi = i + (di > 0 ? 1 : 0), gj = j + (dj > 0 ? 1 : 0);
-      const jx = (a, b) => (hash01(a * 92837111 ^ b * 689287499) - 0.5) * 1.0;
-      const jz = (a, b) => (hash01(a * 283923481 ^ b * 195301919) - 0.5) * 1.0;
-      p0 = [p0[0] - di * 0.45 + jx(gi, gj), p0[1] - dj * 0.45 + jz(gi, gj)];
-      p1 = [p1[0] - di * 0.45 + jx(gi + 1, gj + 1), p1[1] - dj * 0.45 + jz(gi + 1, gj + 1)];
+      // Ragged rock, and it has to be watertight: a corner's displacement is a
+      // pure function of *which grid corner it is*, so the two faces that meet
+      // there always agree about where it went. Any per-face component — an
+      // inward push along the normal, say — puts a crack at every corner, and
+      // an interior in open air shows sky through it.
+      const half = (plan.size * CELL) / 2;
+      const shove = (px, pz) => {
+        const gi = Math.round((px + half) / CELL);
+        const gj = Math.round((pz + half) / CELL);
+        return [
+          px + (hash01(gi * 92837111 ^ gj * 689287499) - 0.5) * 0.8,
+          pz + (hash01(gi * 283923481 ^ gj * 195301919) - 0.5) * 0.8,
+        ];
+      };
+      p0 = shove(p0[0], p0[1]);
+      p1 = shove(p1[0], p1[1]);
+      // Skirt past the slabs above and below, since the face no longer stands
+      // on the cell line they were cut to.
+      y0 -= 0.7; y1 += 0.7;
     }
 
     const span = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
@@ -841,7 +894,7 @@ export class DungeonSystem extends System {
   _channelFloor(batches, x0, z0, y) {
     const x1 = x0 + CELL, z1 = z0 + CELL;
     const a = x0 + CELL * 0.42, b = x0 + CELL * 0.58;
-    const d = y - 0.09;
+    const d = y - 0.14;
     const flat = (ax, bx, py) => batches.floor.quad(
       [ax, py, z0], [ax, py, z1], [bx, py, z1], [bx, py, z0],
       uvXZ(ax, z0), uvXZ(ax, z1), uvXZ(bx, z1), uvXZ(bx, z0),
@@ -915,8 +968,8 @@ export class DungeonSystem extends System {
         // The strip runs the length of the cell, so consecutive cells join into
         // one unbroken line of ceiling rather than a row of separate lamps.
         batches.ember.quad(
-          [wx - 0.3, y, wz - CELL / 2], [wx + 0.3, y, wz - CELL / 2],
-          [wx + 0.3, y, wz + CELL / 2], [wx - 0.3, y, wz + CELL / 2],
+          [wx - 0.22, y, wz - CELL / 2], [wx + 0.22, y, wz - CELL / 2],
+          [wx + 0.22, y, wz + CELL / 2], [wx - 0.22, y, wz + CELL / 2],
           [0, 0], [1, 0], [1, 1], [0, 1],
         );
         state.torches.push({ x: wx, y: y - 0.25, z: wz, steady: true, base: 18 });
@@ -1059,6 +1112,12 @@ export class DungeonSystem extends System {
     // nothing in it is where the eye spends most of its time. Rubble at the
     // wall foot, webs in the top corners, and every so often something the
     // last occupants left standing against the wall.
+    //
+    // Except in the act-five interior, where the corridors are swept. "There is
+    // not even dust on the glass" is a line the party says about the Sunder,
+    // and the levels below it are cleaner still — the *absence* of eight
+    // centuries of debris is one of the things that is wrong down there.
+    if (plan.grammar === 'grid') { this._thresholds(state, plan); return; }
     const { grid, size } = plan;
     const leftovers = kit.filter((k) => k === 'barrel' || k === 'crate' || k === 'bones');
     for (let j = 1; j < size - 1; j++) {
@@ -1090,6 +1149,9 @@ export class DungeonSystem extends System {
   _thresholds(state, plan) {
     const { rng, def } = state;
     for (const room of plan.rooms) {
+      // Nobody hangs an oak door in a sea cave — except on the one chamber
+      // somebody wanted shut, which is exactly why that door reads as a warning.
+      if (plan.grammar === 'cave' && !room.boss) continue;
       let placed = 0;
       for (const [di, dj] of SIDES) {
         if (placed >= 2) break;
@@ -1757,15 +1819,25 @@ export class DungeonSystem extends System {
    */
   _webMaterial() {
     if (this._web) return this._web;
-    const mat = this.lib.get('cloth', { repeat: 2.5, tint: 0xd9d4c6 }).clone();
+    const mat = this.lib.get('cloth', { repeat: 2.5, tint: 0xece8dc }).clone();
     mat.transparent = true;
-    mat.opacity = 0.32;
+    mat.opacity = 0.5;
     mat.depthWrite = false;
     mat.side = THREE.DoubleSide;
     mat.name = 'mat:cobweb';
     this._web = mat;
     this._owned.push(mat);
     return mat;
+  }
+
+  /** Matte black, for the box that keeps the sky out of the crypt. */
+  _voidMaterial() {
+    if (!this._void) {
+      this._void = new THREE.MeshBasicMaterial({ color: 0x000000, fog: false });
+      this._void.name = 'mat:dungeon-void';
+      this._owned.push(this._void);
+    }
+    return this._void;
   }
 
   /** Flames, coals and ceiling strips: emissive, and deliberately unlit. */
@@ -1975,16 +2047,21 @@ function longestRun(plan, torches = []) {
     for (let i = 1; i < plan.size - 1; i++) {
       if (!plan.grid[j][i]) continue;
       for (const [di, dj] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-        let len = 0, brackets = 0, x = i, y = j;
+        let len = 0, brackets = 0, first = -1, x = i, y = j;
         while (x > 0 && y > 0 && x < plan.size && y < plan.size && plan.grid[y][x]) {
-          len++;
-          if (lit.has(key(x, y))) brackets++;
-          x += di; y += dj;
+          if (lit.has(key(x, y))) { brackets++; if (first < 0) first = len; }
+          len++; x += di; y += dj;
         }
         const score = len + brackets * len * 0.5;
-        if (score > best.score) best = { i, j, di, dj, len, score };
+        if (score > best.score) best = { i, j, di, dj, len, first, score };
       }
     }
+  }
+  // Stand a few paces short of the first bracket, so there is a lit wall in the
+  // near half of the frame and dark corridor running away beyond it.
+  if (best.first > 3) {
+    best.i += best.di * (best.first - 3);
+    best.j += best.dj * (best.first - 3);
   }
   return best;
 }

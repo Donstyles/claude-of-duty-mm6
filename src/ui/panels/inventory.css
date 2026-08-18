@@ -117,6 +117,13 @@
 
 /* ── equipment on the figure ──────────────────────────────────────────────── */
 
+/* `.has-plate { position: relative }` is meant for item sprites, but it is
+   unscoped and the niche's figure carries the same class, which collapses the
+   inset overlay to nothing and takes the painted body with it. Put it back.
+   The same line breaks the character sheet's niche, which is not this file's
+   to fix. */
+[data-panel="inventory"] .mm-niche-figure.has-plate { position: absolute; inset: 0; }
+
 .mm-inv-slots { position: absolute; inset: 0; }
 .mm-inv-slot { position: absolute; }
 

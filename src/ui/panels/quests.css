@@ -79,6 +79,10 @@
   min-height: 0;
   overflow-y: auto;
   padding-right: calc(var(--u) * 4);
+  /* Long autonotes run off the foot of the page rather than stopping on a
+     half-cut line, exactly as the facing page does. */
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 10), transparent 100%);
+  mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 10), transparent 100%);
 }
 .mm-ui .mm-qb-index::-webkit-scrollbar,
 .mm-ui .mm-qb-entry::-webkit-scrollbar { width: calc(var(--u) * 4); }

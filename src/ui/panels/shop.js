@@ -53,8 +53,13 @@ const CELL = 32;
  * panel high, which is where the reference wall puts it.
  */
 const WALL = Object.freeze({
-  x: 14, y: 22, w: 432, h: 274,
-  pad: 4, gap: 8, unit: 44, minTall: 38,
+  // The band is the part of the painted room where the *back wall* is actually
+  // visible. Every interior plate puts a counter, a bench or a hearth across
+  // its foreground, and the first version hung goods over the full 274px — so
+  // anything the shuffle placed low went behind the counter and simply
+  // disappeared, which read as the shop stocking three things instead of nine.
+  x: 14, y: 26, w: 432, h: 172,
+  pad: 4, gap: 8, unit: 40, minTall: 34,
 });
 
 /**
