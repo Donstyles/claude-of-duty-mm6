@@ -10,6 +10,27 @@ axis**, never on the average.
 
 ---
 
+## Blind-test finding — METHODOLOGY FIX REQUIRED
+
+The first unlabelled side-by-side (`/tmp/blind-a.jpg`, ours vs
+`reference/mm6-web/screenshot-33-.jpg`) exposed that the comparison itself was
+unfair, in ways that matter more than any single material:
+
+1. **Ours had no interface.** MM6 is *never* seen without its chrome — the
+   right panel and portrait bar occupy about 28% of every frame. Captures for
+   the blind test must run with the HUD **on**, not `--hud 0`.
+2. **Aspect mismatch.** MM6 is 4:3 with the 3D view inset inside stone columns;
+   ours is full-bleed 16:9. Blind captures should be taken at 4:3.
+3. **Field of view.** MM6's view is much tighter — objects fill the frame.
+   Our vistas are wide and distant, which reads as a landscape renderer.
+4. **Texture contrast.** MM6's close surfaces are markedly more saturated and
+   higher-contrast than ours at the same distance.
+
+Trees ARE present and working — a copse renders near the town — but they are
+far too sparse and too small in frame compared with the reference.
+
+---
+
 ## Round 3 — `shots/pfx4/`, `shots/dun5/`, `shots/mon/`
 
 ### Fixed since round 2
