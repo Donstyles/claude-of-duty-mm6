@@ -6,7 +6,10 @@ import { SYSTEM_MANIFEST } from './manifest.js';
  * resolved against a glob map rather than a bare dynamic `import(path)`.
  * `{ eager: false }` keeps every module lazily loaded.
  */
-const MODULES = import.meta.glob('./**/*.js');
+const MODULES = import.meta.glob([
+  './{world,game,physics,render,audio,ui}/**/*.js',
+  './core/CaptureSystem.js',
+]);
 
 const boot = document.getElementById('boot');
 const bootFill = document.getElementById('boot-fill');

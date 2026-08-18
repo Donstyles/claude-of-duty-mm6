@@ -1,0 +1,713 @@
+/**
+ * Items — weapons, armour, accessories, consumables, enchantments, artifacts
+ * and the treasure tables that generate them.
+ *
+ * MM6 conventions kept:
+ *   - Damage is a die per weapon *type* plus a flat bonus per weapon *item*:
+ *     sword 1d8, axe 1d10, spear 1d9, mace 1d6, dagger 1d3, staff 1d5, bow 1d5.
+ *   - Enchanted items are `prefix + base + suffix`, e.g. "Vampiric Bastard
+ *     Sword of the Gods". Value multiplies, it does not add.
+ *   - Artifacts and relics are unique, always identified as special, and most
+ *     carry a real cost alongside their power.
+ *
+ * Everything here is data. Rolling is done by `LootSystem` with its own seeded
+ * RNG; this module only exposes tables and pure helpers.
+ */
+
+import { ATTRIBUTES, DAMAGE_TYPES, MAGIC_SCHOOL_IDS } from './Skills.js';
+import { SPELL_LIST } from './Spells.js';
+
+function deepFreeze(o) {
+  if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+    Object.freeze(o);
+    for (const k of Object.keys(o)) deepFreeze(o[k]);
+  }
+  return o;
+}
+
+// ── Slots and categories ────────────────────────────────────────────────────
+
+export const EQUIP_SLOTS = Object.freeze([
+  'mainhand', 'offhand', 'ranged', 'armour', 'helm',
+  'gauntlets', 'boots', 'belt', 'cloak', 'amulet', 'ring1', 'ring2',
+]);
+
+export const ITEM_CATEGORIES = Object.freeze([
+  'weapon', 'armour', 'shield', 'helm', 'gauntlets', 'boots', 'belt', 'cloak',
+  'amulet', 'ring', 'potion', 'reagent', 'scroll', 'wand', 'gem', 'misc', 'quest',
+]);
+
+/**
+ * Weapon archetypes. `recovery` is in MM6 frames — lower is faster; the
+ * armour and Speed penalties are applied on top by `rules.recoveryTime`.
+ */
+export const WEAPON_TYPES = deepFreeze({
+  sword: { id: 'sword', skill: 'sword', dice: [1, 8], hands: 1, slot: 'mainhand', recovery: 70, damageType: 'physical' },
+  axe: { id: 'axe', skill: 'axe', dice: [1, 10], hands: 1, slot: 'mainhand', recovery: 90, damageType: 'physical' },
+  spear: { id: 'spear', skill: 'spear', dice: [1, 9], hands: 1, slot: 'mainhand', recovery: 80, damageType: 'physical' },
+  mace: { id: 'mace', skill: 'mace', dice: [1, 6], hands: 1, slot: 'mainhand', recovery: 60, damageType: 'physical' },
+  dagger: { id: 'dagger', skill: 'dagger', dice: [1, 3], hands: 1, slot: 'mainhand', recovery: 50, damageType: 'physical' },
+  staff: { id: 'staff', skill: 'staff', dice: [1, 5], hands: 2, slot: 'mainhand', recovery: 60, damageType: 'physical' },
+  bow: { id: 'bow', skill: 'bow', dice: [1, 5], hands: 2, slot: 'ranged', recovery: 60, damageType: 'physical' },
+  blaster: { id: 'blaster', skill: 'blaster', dice: [3, 5], hands: 1, slot: 'mainhand', recovery: 30, damageType: 'physical' },
+});
+
+// ── Builders ────────────────────────────────────────────────────────────────
+
+const weapons = {};
+function wpn(id, name, type, tier, bonus, value, opts = {}) {
+  const t = WEAPON_TYPES[type];
+  weapons[id] = {
+    id, name, category: 'weapon', weaponType: type, skill: t.skill,
+    slot: opts.slot ?? t.slot,
+    hands: opts.hands ?? t.hands,
+    dice: t.dice, damageBonus: bonus,
+    damageType: opts.damageType ?? t.damageType,
+    recovery: opts.recovery ?? t.recovery,
+    tier, value, weight: opts.weight ?? 4 + tier * 2,
+    levelBand: [Math.max(1, tier * 6 - 5), tier * 12],
+    enchantable: opts.enchantable !== false,
+    desc: opts.desc ?? '',
+  };
+  return weapons[id];
+}
+
+const armours = {};
+function arm(id, name, category, skill, ac, tier, value, opts = {}) {
+  armours[id] = {
+    id, name, category, skill, slot: opts.slot ?? category,
+    ac, tier, value, weight: opts.weight ?? 2 + tier * 3,
+    levelBand: [Math.max(1, tier * 6 - 5), tier * 12],
+    recoveryPenalty: opts.recoveryPenalty ?? 0,
+    enchantable: opts.enchantable !== false,
+    desc: opts.desc ?? '',
+  };
+  return armours[id];
+}
+
+// ── Weapons ─────────────────────────────────────────────────────────────────
+
+wpn('sword_long', 'Long Sword', 'sword', 1, 0, 60, { desc: 'The kingdom\'s standard blade. Every guardhouse in Enroth has a rack of them.' });
+wpn('sword_broad', 'Broad Sword', 'sword', 2, 2, 180);
+wpn('sword_cutlass', 'Cutlass', 'sword', 2, 3, 240, { recovery: 65, desc: 'Free Haven dockside steel — short, heavy and quick.' });
+wpn('sword_sabre', 'Sabre', 'sword', 3, 4, 420);
+wpn('sword_bastard', 'Bastard Sword', 'sword', 4, 6, 900, { hands: 2, weight: 12 });
+wpn('sword_great', 'Great Sword', 'sword', 5, 9, 1800, { hands: 2, weight: 16, recovery: 90 });
+
+wpn('axe_hand', 'Hand Axe', 'axe', 1, 0, 70);
+wpn('axe_battle', 'Battle Axe', 'axe', 2, 2, 210);
+wpn('axe_war', 'War Axe', 'axe', 3, 4, 480);
+wpn('axe_great', 'Great Axe', 'axe', 4, 6, 1000, { hands: 2, weight: 14 });
+wpn('axe_executioner', 'Executioner\'s Axe', 'axe', 5, 9, 2100, { hands: 2, weight: 18, recovery: 110 });
+
+wpn('spear_spear', 'Spear', 'spear', 1, 0, 65);
+wpn('spear_trident', 'Trident', 'spear', 2, 2, 200);
+wpn('spear_pike', 'Pike', 'spear', 3, 4, 460, { weight: 12 });
+wpn('spear_halberd', 'Halberd', 'spear', 4, 6, 950, { hands: 2, weight: 15 });
+wpn('spear_lance', 'Lance', 'spear', 5, 8, 1900, { hands: 2, weight: 18 });
+
+wpn('mace_club', 'Club', 'mace', 1, 0, 15, { desc: 'A stick with ambitions.' });
+wpn('mace_mace', 'Mace', 'mace', 2, 3, 150);
+wpn('mace_morning_star', 'Morning Star', 'mace', 3, 5, 380);
+wpn('mace_flail', 'Flail', 'mace', 4, 7, 800);
+wpn('mace_war_hammer', 'War Hammer', 'mace', 5, 9, 1700, { hands: 2, weight: 16, recovery: 85 });
+
+wpn('dagger_dagger', 'Dagger', 'dagger', 1, 0, 25);
+wpn('dagger_dirk', 'Dirk', 'dagger', 2, 2, 110);
+wpn('dagger_stiletto', 'Stiletto', 'dagger', 3, 3, 260);
+wpn('dagger_kris', 'Kris', 'dagger', 4, 5, 620);
+wpn('dagger_main_gauche', 'Main Gauche', 'dagger', 5, 6, 1300, { recovery: 45 });
+
+wpn('staff_staff', 'Staff', 'staff', 1, 0, 20);
+wpn('staff_quarterstaff', 'Quarterstaff', 'staff', 2, 2, 120);
+wpn('staff_long', 'Long Staff', 'staff', 3, 4, 300);
+wpn('staff_rune', 'Rune Staff', 'staff', 4, 6, 750, { desc: 'Guild-cut ash, carved with the four elemental sigils.' });
+wpn('staff_elder', 'Elder Staff', 'staff', 5, 8, 1600);
+
+wpn('bow_short', 'Short Bow', 'bow', 1, 0, 80);
+wpn('bow_long', 'Long Bow', 'bow', 2, 2, 240);
+wpn('bow_composite', 'Composite Bow', 'bow', 3, 4, 560);
+wpn('bow_elven', 'Elven Bow', 'bow', 4, 6, 1200, { recovery: 50 });
+wpn('bow_great', 'Great Bow', 'bow', 5, 9, 2400, { weight: 12 });
+
+wpn('blaster_blaster', 'Blaster', 'blaster', 6, 0, 6000, { enchantable: false, desc: 'Ancestor technology from a fallen sky-ship. Nothing in Enroth resists it.' });
+wpn('blaster_rifle', 'Blaster Rifle', 'blaster', 6, 10, 15000, { hands: 2, enchantable: false, desc: 'The long-barrelled version. The Control Center made thousands; six are still working.' });
+
+export const WEAPONS = deepFreeze(weapons);
+
+// ── Armour, shields and worn gear ───────────────────────────────────────────
+
+arm('leather_armour', 'Leather Armour', 'armour', 'leather', 3, 1, 60, { recoveryPenalty: 5 });
+arm('leather_studded', 'Studded Leather', 'armour', 'leather', 5, 2, 190, { recoveryPenalty: 6 });
+arm('leather_hardened', 'Hardened Leather', 'armour', 'leather', 7, 3, 440, { recoveryPenalty: 7 });
+arm('leather_elven', 'Elven Leather', 'armour', 'leather', 10, 4, 1100, { recoveryPenalty: 4 });
+arm('leather_dragon', 'Dragon Hide', 'armour', 'leather', 14, 5, 2600, { recoveryPenalty: 5, desc: 'Scaled and supple. Kriegspire hunters swear the seams still smoke in the cold.' });
+
+arm('chain_ring', 'Ring Mail', 'armour', 'chain', 6, 1, 120, { recoveryPenalty: 15 });
+arm('chain_chain', 'Chain Mail', 'armour', 'chain', 8, 2, 320, { recoveryPenalty: 18 });
+arm('chain_splint', 'Splint Mail', 'armour', 'chain', 11, 3, 700, { recoveryPenalty: 20 });
+arm('chain_scale', 'Scale Mail', 'armour', 'chain', 13, 4, 1500, { recoveryPenalty: 22 });
+arm('chain_elven', 'Elven Chain', 'armour', 'chain', 17, 5, 3400, { recoveryPenalty: 12 });
+
+arm('plate_plate', 'Plate Mail', 'armour', 'plate', 10, 2, 500, { recoveryPenalty: 35 });
+arm('plate_field', 'Field Plate', 'armour', 'plate', 13, 3, 1100, { recoveryPenalty: 38 });
+arm('plate_gothic', 'Gothic Plate', 'armour', 'plate', 16, 4, 2400, { recoveryPenalty: 40 });
+arm('plate_full', 'Full Plate', 'armour', 'plate', 19, 5, 5000, { recoveryPenalty: 42 });
+arm('plate_noble', 'Noble Plate', 'armour', 'plate', 22, 6, 9500, { recoveryPenalty: 40 });
+
+arm('shield_buckler', 'Buckler', 'shield', 'shield', 2, 1, 40, { slot: 'offhand', recoveryPenalty: 5 });
+arm('shield_small', 'Small Shield', 'shield', 'shield', 4, 2, 130, { slot: 'offhand', recoveryPenalty: 8 });
+arm('shield_kite', 'Kite Shield', 'shield', 'shield', 6, 3, 350, { slot: 'offhand', recoveryPenalty: 12 });
+arm('shield_tower', 'Tower Shield', 'shield', 'shield', 9, 4, 800, { slot: 'offhand', recoveryPenalty: 18 });
+arm('shield_aegis', 'Aegis', 'shield', 'shield', 12, 5, 2000, { slot: 'offhand', recoveryPenalty: 14 });
+
+arm('helm_leather_cap', 'Leather Cap', 'helm', 'leather', 1, 1, 25);
+arm('helm_coif', 'Chain Coif', 'helm', 'chain', 2, 2, 90);
+arm('helm_helm', 'Helm', 'helm', 'plate', 4, 3, 260);
+arm('helm_great', 'Great Helm', 'helm', 'plate', 6, 4, 620);
+arm('helm_crown', 'Crown', 'helm', null, 8, 5, 1800, { desc: 'Ceremonial, but the goldsmiths of Free Haven build them to stop a mace.' });
+
+arm('gauntlets_leather', 'Leather Gloves', 'gauntlets', 'leather', 1, 1, 20);
+arm('gauntlets_gauntlets', 'Gauntlets', 'gauntlets', 'chain', 3, 3, 180);
+arm('gauntlets_plate', 'Plate Gauntlets', 'gauntlets', 'plate', 5, 4, 480);
+
+arm('boots_sandals', 'Sandals', 'boots', null, 1, 1, 10);
+arm('boots_leather', 'Leather Boots', 'boots', 'leather', 2, 2, 70);
+arm('boots_boots', 'Boots', 'boots', 'chain', 4, 3, 220);
+arm('boots_plate', 'Plate Boots', 'boots', 'plate', 6, 4, 540);
+
+arm('belt_leather', 'Leather Belt', 'belt', null, 1, 1, 15);
+arm('belt_studded', 'Studded Belt', 'belt', null, 2, 2, 80);
+arm('belt_plate', 'Plate Belt', 'belt', null, 4, 3, 260);
+arm('belt_girdle', 'Girdle', 'belt', null, 5, 4, 640);
+
+arm('cloak_cloak', 'Cloak', 'cloak', null, 1, 1, 20);
+arm('cloak_cape', 'Cape', 'cloak', null, 2, 2, 85);
+arm('cloak_fur', 'Fur Cloak', 'cloak', null, 3, 3, 270);
+arm('cloak_ermine', 'Ermine Cloak', 'cloak', null, 5, 4, 700);
+
+arm('amulet_amulet', 'Amulet', 'amulet', null, 0, 1, 50);
+arm('amulet_pendant', 'Pendant', 'amulet', null, 0, 2, 180);
+arm('amulet_talisman', 'Talisman', 'amulet', null, 0, 3, 500);
+arm('amulet_necklace', 'Necklace', 'amulet', null, 0, 4, 1400);
+
+arm('ring_ring', 'Ring', 'ring', null, 0, 1, 40);
+arm('ring_signet', 'Signet Ring', 'ring', null, 0, 2, 160);
+arm('ring_band', 'Band', 'ring', null, 0, 3, 450);
+arm('ring_loop', 'Loop', 'ring', null, 0, 4, 1250);
+
+export const ARMOURS = deepFreeze(armours);
+
+// ── Potions: the MM6 colour ladder ──────────────────────────────────────────
+// Layer 1 potions come straight from a reagent. Layers 2–4 are mixed from two
+// potions of the layer below; a power booster reagent raises the potency.
+
+const potions = {};
+function potion(id, name, colour, layer, effect, power, value, opts = {}) {
+  potions[id] = {
+    id, name, category: 'potion', colour, layer,
+    effect, power, value, weight: 1,
+    recipe: opts.recipe ?? null,
+    duration: opts.duration ?? 0,
+    cures: opts.cures ?? null,
+    permanent: !!opts.permanent,
+    levelBand: opts.levelBand ?? [1, 60],
+    desc: opts.desc ?? '',
+  };
+  return potions[id];
+}
+
+potion('potion_bottle', 'Bottle of Water', 'clear', 0, 'none', 0, 2, { desc: 'The base of every mixture. Free from any well; the alchemists still charge for it.' });
+
+potion('potion_red', 'Red Potion', 'red', 1, 'heal', 10, 20, { desc: 'Cure Wounds. Widowsweep berries and a little patience.' });
+potion('potion_blue', 'Blue Potion', 'blue', 1, 'restore-sp', 10, 25, { desc: 'Magic. Restores spell points and tastes of pond.' });
+potion('potion_yellow', 'Yellow Potion', 'yellow', 1, 'cure-weak', 0, 20, { cures: ['weak'], desc: 'Energy. Chases off exhaustion and the shakes.' });
+
+potion('potion_green', 'Green Potion', 'green', 2, 'cure-poison', 0, 80, { recipe: ['potion_red', 'potion_yellow'], cures: ['poisoned_weak', 'poisoned_severe', 'poisoned_deadly'] });
+potion('potion_purple', 'Purple Potion', 'purple', 2, 'cure-insanity', 0, 90, { recipe: ['potion_red', 'potion_blue'], cures: ['insane'] });
+potion('potion_cyan', 'Cyan Potion', 'cyan', 2, 'cure-disease', 0, 90, { recipe: ['potion_blue', 'potion_yellow'], cures: ['diseased_weak', 'diseased_severe', 'diseased_deadly'] });
+
+potion('potion_grey', 'Grey Potion', 'grey', 3, 'stone-skin', 15, 300, { recipe: ['potion_green', 'potion_purple'], duration: 3600 * 4 });
+potion('potion_white', 'White Potion', 'white', 3, 'bless', 15, 320, { recipe: ['potion_green', 'potion_cyan'], duration: 3600 * 4 });
+potion('potion_pink', 'Pink Potion', 'pink', 3, 'heroism', 15, 340, { recipe: ['potion_purple', 'potion_cyan'], duration: 3600 * 4 });
+
+potion('potion_black', 'Black Potion', 'black', 4, 'divine-power', 50, 1500, { recipe: ['potion_grey', 'potion_white'], desc: 'Divine Power. Restores every spell point in the body and then some.' });
+potion('potion_golden', 'Golden Potion', 'golden', 4, 'divine-cure', 100, 1600, { recipe: ['potion_white', 'potion_pink'], desc: 'Divine Cure. Closes every wound at once.' });
+potion('potion_silver', 'Silver Potion', 'silver', 4, 'divine-restoration', 0, 1800, { recipe: ['potion_grey', 'potion_pink'], cures: ['all'], desc: 'Divine Restoration. Strips every condition short of death.' });
+
+// Utility potions sold in every alchemist's shop.
+potion('potion_awakening', 'Potion of Awakening', 'pale-blue', 2, 'cure-sleep', 0, 60, { cures: ['asleep'] });
+potion('potion_courage', 'Potion of Courage', 'amber', 2, 'cure-fear', 0, 60, { cures: ['afraid'] });
+potion('potion_freedom', 'Potion of Freedom', 'ivory', 3, 'cure-paralysis', 0, 250, { cures: ['paralyzed'] });
+potion('potion_water_breathing', 'Potion of Water Breathing', 'sea-green', 3, 'water-breathing', 0, 220, { duration: 3600 * 2 });
+potion('potion_haste', 'Potion of Haste', 'orange', 3, 'haste', 0, 400, { duration: 3600 * 2 });
+potion('potion_shield', 'Potion of Shielding', 'slate', 3, 'shield', 0, 380, { duration: 3600 * 2 });
+potion('potion_preservation', 'Potion of Preservation', 'bone', 3, 'preservation', 0, 360, { duration: 3600 * 4 });
+potion('potion_rejuvenation', 'Potion of Rejuvenation', 'rose', 4, 'rejuvenate', 5, 5000, { permanent: true, desc: 'Takes five years off. Liches find it does nothing whatsoever.' });
+potion('potion_harden_item', 'Potion of Item Hardening', 'tar', 4, 'harden-item', 0, 2500, {
+  desc: 'Makes an item unbreakable. One bottle, one item, no second chances.',
+});
+
+for (const attr of ATTRIBUTES) {
+  const label = attr[0].toUpperCase() + attr.slice(1);
+  potion(`potion_boost_${attr}`, `Potion of ${label}`, 'amber', 3, 'boost-stat', 15, 450, {
+    duration: 3600 * 6, desc: `Raises ${label} for the day.`,
+  });
+  potion(`potion_pure_${attr}`, `Pure ${label}`, 'black', 4, 'permanent-stat', 5, 4000, {
+    permanent: true, desc: `Adds permanently to ${label}. There are not many of these in the world.`,
+  });
+}
+
+export const POTIONS = deepFreeze(potions);
+
+// ── Reagents ────────────────────────────────────────────────────────────────
+
+export const REAGENTS = deepFreeze({
+  widowsweep_berries: { id: 'widowsweep_berries', name: 'Widowsweep Berries', category: 'reagent', makes: 'potion_red', boost: 0, value: 20, weight: 1, biome: 'forest' },
+  crimson_toadstool: { id: 'crimson_toadstool', name: 'Crimson Toadstool', category: 'reagent', makes: 'potion_red', boost: 0, value: 25, weight: 1, biome: 'swamp' },
+  poppysnaps: { id: 'poppysnaps', name: 'Poppysnaps', category: 'reagent', makes: 'potion_blue', boost: 0, value: 20, weight: 1, biome: 'grass' },
+  blue_lotus: { id: 'blue_lotus', name: 'Blue Lotus', category: 'reagent', makes: 'potion_blue', boost: 0, value: 30, weight: 1, biome: 'swamp' },
+  phirna_root: { id: 'phirna_root', name: 'Phirna Root', category: 'reagent', makes: 'potion_yellow', boost: 0, value: 20, weight: 1, biome: 'dirt' },
+  sulfur_clump: { id: 'sulfur_clump', name: 'Clump of Sulfur', category: 'reagent', makes: 'potion_yellow', boost: 0, value: 28, weight: 1, biome: 'rock' },
+  vial_of_troll_blood: { id: 'vial_of_troll_blood', name: 'Vial of Troll Blood', category: 'reagent', makes: null, boost: 5, value: 200, weight: 1, biome: 'swamp' },
+  vial_of_ooze_endoctrin: { id: 'vial_of_ooze_endoctrin', name: 'Vial of Ooze Endoctrin', category: 'reagent', makes: null, boost: 10, value: 500, weight: 1, biome: 'dungeon' },
+  vial_of_devil_ichor: { id: 'vial_of_devil_ichor', name: 'Vial of Devil Ichor', category: 'reagent', makes: null, boost: 15, value: 1200, weight: 1, biome: 'dungeon' },
+  philosophers_stone: { id: 'philosophers_stone', name: "Philosopher's Stone", category: 'reagent', makes: null, boost: 25, value: 5000, weight: 1, biome: 'dungeon' },
+});
+
+// ── Gems and valuables ──────────────────────────────────────────────────────
+
+export const GEMS = deepFreeze({
+  gem_quartz: { id: 'gem_quartz', name: 'Quartz', category: 'gem', value: 50, weight: 1, tier: 1 },
+  gem_amethyst: { id: 'gem_amethyst', name: 'Amethyst', category: 'gem', value: 150, weight: 1, tier: 2 },
+  gem_opal: { id: 'gem_opal', name: 'Opal', category: 'gem', value: 250, weight: 1, tier: 2 },
+  gem_pearl: { id: 'gem_pearl', name: 'Black Pearl', category: 'gem', value: 400, weight: 1, tier: 3 },
+  gem_topaz: { id: 'gem_topaz', name: 'Topaz', category: 'gem', value: 600, weight: 1, tier: 3 },
+  gem_emerald: { id: 'gem_emerald', name: 'Emerald', category: 'gem', value: 1000, weight: 1, tier: 4 },
+  gem_sapphire: { id: 'gem_sapphire', name: 'Sapphire', category: 'gem', value: 1500, weight: 1, tier: 4 },
+  gem_ruby: { id: 'gem_ruby', name: 'Ruby', category: 'gem', value: 2200, weight: 1, tier: 5 },
+  gem_diamond: { id: 'gem_diamond', name: 'Diamond', category: 'gem', value: 4000, weight: 1, tier: 5 },
+});
+
+// ── Wands ───────────────────────────────────────────────────────────────────
+
+const wands = {};
+function wand(id, name, spellId, charges, power, value, tier) {
+  wands[id] = {
+    id, name, category: 'wand', slot: 'mainhand', spellId,
+    charges, maxCharges: charges, power, value, weight: 1, tier,
+    levelBand: [Math.max(1, tier * 6 - 5), tier * 12],
+    enchantable: false,
+    desc: '',
+  };
+  return wands[id];
+}
+
+wand('wand_fire', 'Wand of Fire', 'fire_fire_bolt', 30, 6, 400, 1);
+wand('wand_sparks', 'Wand of Sparks', 'air_sparks', 30, 6, 450, 1);
+wand('wand_poison', 'Wand of Poison', 'water_poison_spray', 30, 6, 420, 1);
+wand('wand_ice', 'Wand of Ice', 'water_ice_bolt', 25, 8, 700, 2);
+wand('wand_harm', 'Wand of Harm', 'body_harm', 25, 8, 720, 2);
+wand('wand_blades', 'Wand of Blades', 'earth_blades', 20, 10, 1200, 3);
+wand('wand_fireball', 'Wand of Fireballs', 'fire_fireball', 20, 12, 1600, 3);
+wand('wand_lightning', 'Wand of Lightning', 'air_lightning_bolt', 20, 12, 1700, 3);
+wand('wand_charm', 'Wand of Charms', 'mind_charm', 15, 10, 1400, 3);
+wand('wand_paralyzing', 'Wand of Paralyzing', 'light_paralyze', 15, 12, 2200, 4);
+wand('wand_rock', 'Wand of Rock Blast', 'earth_rock_blast', 15, 14, 2400, 4);
+wand('wand_shrapmetal', 'Wand of Shrapmetal', 'dark_shrapmetal', 15, 14, 2600, 4);
+wand('wand_ice_blast', 'Wand of Ice Blast', 'water_ice_blast', 10, 18, 4500, 5);
+wand('wand_incineration', 'Wand of Incineration', 'fire_incinerate', 10, 20, 6000, 5);
+wand('wand_doom', 'Wand of Doom', 'dark_dragon_breath', 10, 20, 6500, 5);
+wand('wand_death', 'Wand of Death', 'dark_souldrinker', 8, 24, 9000, 6);
+
+export const WANDS = deepFreeze(wands);
+
+// ── Scrolls: one per spell, generated so the catalogue can never drift ──────
+
+const scrolls = {};
+for (const s of SPELL_LIST) {
+  const id = `scroll_${s.id}`;
+  scrolls[id] = {
+    id,
+    name: `Scroll of ${s.name}`,
+    category: 'scroll',
+    spellId: s.id,
+    school: s.school,
+    spellLevel: s.level,
+    /** Scroll casts happen at a fixed power, whatever the reader's skill. */
+    power: 5 + s.level * 3,
+    value: 25 + s.level * s.level * 12,
+    weight: 1,
+    tier: Math.max(1, Math.ceil(s.level / 2)),
+    levelBand: [Math.max(1, s.level * 3 - 2), 60],
+    enchantable: false,
+    desc: s.desc,
+  };
+}
+export const SCROLLS = deepFreeze(scrolls);
+
+// ── Quest items ─────────────────────────────────────────────────────────────
+
+const questItem = (id, name, desc) =>
+  ({ id, name, category: 'quest', value: 0, weight: 1, droppable: false, desc });
+
+export const QUEST_ITEMS = deepFreeze({
+  qi_kilburns_letter: questItem('qi_kilburns_letter', "Lord Kilburn's Letter", 'A sealed request for help, written in a hurry.'),
+  qi_shipping_manifest: questItem('qi_shipping_manifest', 'Shipping Manifest', 'Free Haven harbour records with three cargoes that never existed.'),
+  qi_smugglers_ledger: questItem('qi_smugglers_ledger', "Smuggler's Ledger", 'Names, dates and a payment schedule in the Cult of Baa\'s cipher.'),
+  qi_temple_key_baa: questItem('qi_temple_key_baa', 'Baa Temple Key', 'Cold iron, cast in the shape of a ram\'s skull.'),
+  qi_baa_roster: questItem('qi_baa_roster', 'Cult Roster', 'Every sworn member of the Cult of Baa in the kingdom, copied by hand.'),
+  qi_soul_jar_of_baa: questItem('qi_soul_jar_of_baa', 'Soul Jar of Baa', 'It hums when carried, and is warm on the coldest days.'),
+  qi_prince_nicolai_signet: questItem('qi_prince_nicolai_signet', "Prince Nicolai's Signet", 'The heir\'s ring, taken from him on the night he vanished.'),
+  qi_ironfist_crown: questItem('qi_ironfist_crown', 'Crown of Ironfist', 'Plain iron banded with gold. Heavier than it looks.'),
+  qi_mandate_of_heaven: questItem('qi_mandate_of_heaven', 'Mandate of Heaven', 'The writ that makes a king. Signed, sealed, and thought lost for a generation.'),
+  qi_oracle_part_alpha: questItem('qi_oracle_part_alpha', 'Oracle Component: Memory Core', 'A slab of ancestor crystal, still faintly warm.'),
+  qi_oracle_part_beta: questItem('qi_oracle_part_beta', 'Oracle Component: Power Cell', 'Sealed, humming, and older than the kingdom.'),
+  qi_oracle_part_gamma: questItem('qi_oracle_part_gamma', 'Oracle Component: Control Rod', 'Machined to a tolerance no smith in Enroth can match.'),
+  qi_control_center_pass: questItem('qi_control_center_pass', 'Control Center Pass', 'A card of white metal that opens doors nobody else can.'),
+  qi_hive_key: questItem('qi_hive_key', 'Hive Access Key', 'Taken from a Kreegan overseer. It is still sticky.'),
+  qi_dragon_tooth: questItem('qi_dragon_tooth', 'Dragon Tooth', 'As long as a forearm and sharper than any blade in Free Haven.'),
+  qi_sun_font_ember: questItem('qi_sun_font_ember', 'Ember of the Sun Font', 'The last live coal from the Temple of the Sun.'),
+  qi_marchwardens_bow: questItem('qi_marchwardens_bow', "Marchwarden's Bow", 'Lost in the Bootleg Bay marshes with its owner.'),
+  qi_white_stag_hide: questItem('qi_white_stag_hide', 'White Stag Hide', 'Taken cleanly, with a single arrow, as tradition demands.'),
+  qi_harbourmasters_seal: questItem('qi_harbourmasters_seal', "Harbourmaster's Seal", 'Bronze, heavy, and worth a fortune to the right forger.'),
+  qi_phylactery_shell: questItem('qi_phylactery_shell', 'Empty Phylactery', 'A jar of black glass with room inside for exactly one heart.'),
+  qi_heartstone_shard: questItem('qi_heartstone_shard', 'Heartstone Shard', 'A splinter of the stone at the centre of Paradise Valley.'),
+  qi_antidote_of_the_grove: questItem('qi_antidote_of_the_grove', 'Antidote of the Grove', 'Four reagents, one grove, and a very long night of brewing.'),
+  qi_black_harness: questItem('qi_black_harness', 'Black Harness', 'It fits whoever puts it on. That is the first warning sign.'),
+  qi_abbots_answer: questItem('qi_abbots_answer', "The Abbot's Answer", 'One word, sealed in wax. Nobody who has read it will repeat it.'),
+  qi_zokarrs_bones: questItem('qi_zokarrs_bones', "Zokarr's Bones", 'The remains of the last Archmage of VARN, still faintly charged.'),
+  qi_lens_of_the_oracle: questItem('qi_lens_of_the_oracle', 'Lens of the Oracle', 'Ground from a single crystal. Looking through it hurts.'),
+});
+
+// ── Misc goods ──────────────────────────────────────────────────────────────
+
+export const MISC_ITEMS = deepFreeze({
+  torch: { id: 'torch', name: 'Torch', category: 'misc', value: 5, weight: 1, desc: 'Burns for an hour. Every dungeon in Enroth is darker than the last.' },
+  lockpicks: { id: 'lockpicks', name: 'Lockpicks', category: 'misc', value: 60, weight: 1, desc: 'Adds five to Disarm Trap attempts on locks.' },
+  rope: { id: 'rope', name: 'Coil of Rope', category: 'misc', value: 30, weight: 3 },
+  spellbook_blank: { id: 'spellbook_blank', name: 'Blank Spellbook', category: 'misc', value: 200, weight: 2 },
+  arrows: { id: 'arrows', name: 'Quiver of Arrows', category: 'misc', value: 20, weight: 2 },
+  ancestor_scrap: { id: 'ancestor_scrap', name: 'Ancestor Scrap', category: 'misc', value: 350, weight: 2, desc: 'Bright metal from a sky-ship hull. The guilds pay well and ask nothing.' },
+});
+
+// ── Enchantments ────────────────────────────────────────────────────────────
+// `effects` is a flat bag the loot system merges onto the item:
+//   stats:{...} resists:{...} skills:{...} plus named flags.
+
+const prefix = (id, name, effects, valueMult, minLevel, categories, desc) =>
+  ({ id, name, kind: 'prefix', effects, valueMult, minLevel, categories: Object.freeze(categories), desc });
+
+export const PREFIXES = deepFreeze({
+  sharp: prefix('sharp', 'Sharp', { damage: 3 }, 1.5, 1, ['weapon'], 'Kept to an edge that will not forgive a careless grip.'),
+  swift: prefix('swift', 'Swift', { recovery: -15 }, 2.0, 4, ['weapon'], 'Balanced so far forward it seems to want to move.'),
+  blessed: prefix('blessed', 'Blessed', { attack: 5 }, 1.8, 4, ['weapon'], 'Consecrated at the Temple of the Sun.'),
+  flaming: prefix('flaming', 'Flaming', { bonusDamage: { type: 'fire', amount: 6 } }, 2.4, 8, ['weapon'], 'The blade runs with fire when drawn.'),
+  freezing: prefix('freezing', 'Freezing', { bonusDamage: { type: 'water', amount: 6 } }, 2.4, 8, ['weapon'], 'Frost crawls up the haft in the warmest room.'),
+  sparking: prefix('sparking', 'Sparking', { bonusDamage: { type: 'air', amount: 6 } }, 2.4, 8, ['weapon'], 'It cracks and spits between strikes.'),
+  acidic: prefix('acidic', 'Acidic', { bonusDamage: { type: 'earth', amount: 6 } }, 2.4, 8, ['weapon'], 'The edge pits everything it touches, including its own scabbard.'),
+  vampiric: prefix('vampiric', 'Vampiric', { lifesteal: 0.2 }, 3.5, 14, ['weapon'], 'Every wound it opens feeds the hand that holds it.'),
+  elven: prefix('elven', 'Elven', { stats: { speed: 10, accuracy: 10 } }, 2.6, 10, ['weapon', 'armour', 'helm', 'boots', 'cloak'], 'Worked to a lightness that looks like carelessness and is not.'),
+  dwarven: prefix('dwarven', 'Dwarven', { stats: { endurance: 10 }, ac: 3 }, 2.6, 10, ['weapon', 'armour', 'helm', 'shield', 'gauntlets'], 'Twice the weight, three times the life.'),
+  undead_slaying: prefix('undead_slaying', 'Undead Slaying', { slaying: { family: 'undead', multiplier: 2 } }, 2.8, 8, ['weapon'], 'Runes down the fuller that glow near a grave.'),
+  dragon_slaying: prefix('dragon_slaying', 'Dragon Slaying', { slaying: { family: 'dragon', multiplier: 2 } }, 3.0, 16, ['weapon'], 'Forged for one purpose by people who mostly failed at it.'),
+  demon_slaying: prefix('demon_slaying', 'Demon Slaying', { slaying: { family: 'devil', multiplier: 2 } }, 3.0, 16, ['weapon'], 'The Cult of Baa pays to have these destroyed.'),
+  titan_slaying: prefix('titan_slaying', 'Titan Slaying', { slaying: { family: 'titan', multiplier: 2 } }, 3.2, 24, ['weapon'], 'Sized for a mortal, meant for something much larger.'),
+});
+
+const suffix = (id, name, effects, valueMult, minLevel, categories, desc) =>
+  ({ id, name, kind: 'suffix', effects, valueMult, minLevel, categories: Object.freeze(categories), desc });
+
+const ALL_WEARABLE = ['armour', 'helm', 'shield', 'gauntlets', 'boots', 'belt', 'cloak', 'amulet', 'ring'];
+const ALL_ENCHANTABLE = ['weapon', ...ALL_WEARABLE];
+
+const suffixes = {
+  of_might: suffix('of_might', 'of Might', { stats: { might: 10 } }, 2.0, 4, ALL_ENCHANTABLE, 'Strength that is not yours, lent for as long as you wear it.'),
+  of_thievery: suffix('of_thievery', 'of Thievery', { skills: { stealing: 5 }, stats: { luck: 5 } }, 2.0, 4, ALL_WEARABLE, ''),
+  of_vigor: suffix('of_vigor', 'of Vigor', { stats: { endurance: 10 } }, 2.0, 4, ALL_ENCHANTABLE, ''),
+  of_precision: suffix('of_precision', 'of Precision', { stats: { accuracy: 10 } }, 2.0, 4, ALL_ENCHANTABLE, ''),
+  of_speed: suffix('of_speed', 'of Speed', { stats: { speed: 10 } }, 2.2, 4, ALL_ENCHANTABLE, ''),
+  of_luck: suffix('of_luck', 'of Luck', { stats: { luck: 10 } }, 2.0, 4, ALL_ENCHANTABLE, ''),
+  of_the_mind: suffix('of_the_mind', 'of the Mind', { stats: { intellect: 10 } }, 2.0, 4, ALL_ENCHANTABLE, ''),
+  of_charm: suffix('of_charm', 'of Charm', { stats: { personality: 10 } }, 2.0, 4, ALL_ENCHANTABLE, ''),
+  of_health: suffix('of_health', 'of Health', { hp: 20 }, 2.2, 6, ALL_ENCHANTABLE, ''),
+  of_power: suffix('of_power', 'of Power', { sp: 20 }, 2.4, 6, ALL_ENCHANTABLE, ''),
+  of_protection: suffix('of_protection', 'of Protection', { ac: 10 }, 2.4, 6, ALL_WEARABLE, ''),
+  of_the_troll: suffix('of_the_troll', 'of the Troll', { regenHP: 2 }, 3.0, 12, ALL_WEARABLE, 'The wearer knits like a troll, which is to say alarmingly.'),
+  of_life: suffix('of_life', 'of Life', { hp: 40, regenHP: 1 }, 3.2, 16, ALL_WEARABLE, ''),
+  of_the_moon: suffix('of_the_moon', 'of the Moon', { sp: 40, regenSP: 1 }, 3.2, 16, ALL_WEARABLE, ''),
+  of_the_phoenix: suffix('of_the_phoenix', 'of the Phoenix', { resists: { fire: 50 } }, 3.0, 14, ALL_ENCHANTABLE, ''),
+  of_the_storm: suffix('of_the_storm', 'of the Storm', { resists: { air: 50 } }, 3.0, 14, ALL_ENCHANTABLE, ''),
+  of_winter: suffix('of_winter', 'of Winter', { resists: { water: 50 } }, 3.0, 14, ALL_ENCHANTABLE, ''),
+  of_the_golem: suffix('of_the_golem', 'of the Golem', { resists: { earth: 50 }, ac: 5 }, 3.0, 14, ALL_ENCHANTABLE, ''),
+  of_the_dragon: suffix('of_the_dragon', 'of the Dragon', { resists: { fire: 30 }, stats: { might: 10 } }, 3.2, 18, ALL_ENCHANTABLE, ''),
+  of_the_stars: suffix('of_the_stars', 'of the Stars', { resists: { fire: 15, air: 15, water: 15, earth: 15 } }, 3.6, 20, ALL_ENCHANTABLE, ''),
+  of_antimagic: suffix('of_antimagic', 'of Antimagic', { resists: { magic: 40, mind: 20, body: 20 } }, 3.4, 20, ALL_WEARABLE, ''),
+  of_the_sun: suffix('of_the_sun', 'of the Sun', { resists: { dark: 40 }, skills: { light: 4 } }, 3.4, 22, ALL_ENCHANTABLE, ''),
+  of_the_eclipse: suffix('of_the_eclipse', 'of the Eclipse', { resists: { light: 40 }, skills: { dark: 4 } }, 3.4, 22, ALL_ENCHANTABLE, ''),
+  of_the_unicorn: suffix('of_the_unicorn', 'of the Unicorn', { stats: { luck: 15 }, resists: { dark: 25 } }, 3.4, 22, ALL_WEARABLE, ''),
+  of_freedom: suffix('of_freedom', 'of Freedom', { immune: ['paralyzed', 'asleep'] }, 3.0, 16, ALL_WEARABLE, ''),
+  of_sanity: suffix('of_sanity', 'of Sanity', { immune: ['insane', 'afraid'] }, 3.0, 16, ALL_WEARABLE, ''),
+  of_recovery: suffix('of_recovery', 'of Recovery', { recovery: -20 }, 3.0, 16, ['weapon', 'armour', 'boots'], ''),
+  of_carnage: suffix('of_carnage', 'of Carnage', { onHit: 'explode', splashRadius: 4, splashDamage: 12 }, 3.6, 20, ['weapon'], 'Whatever it kills, it kills loudly and takes the neighbours.'),
+  of_darkness: suffix('of_darkness', 'of Darkness', { bonusDamage: { type: 'dark', amount: 12 } }, 3.4, 20, ['weapon'], ''),
+  of_light: suffix('of_light', 'of Light', { bonusDamage: { type: 'light', amount: 12 } }, 3.4, 20, ['weapon'], ''),
+  of_doom: suffix('of_doom', 'of Doom', { stats: { might: 15, endurance: 15 }, ac: 10, curse: 'luck-drain' }, 4.0, 26, ALL_ENCHANTABLE, 'Powerful, and it does not like you.'),
+  of_plenty: suffix('of_plenty', 'of Plenty', { food: 3 }, 2.0, 8, ALL_WEARABLE, ''),
+  of_identifying: suffix('of_identifying', 'of Identifying', { skills: { identify_item: 5 } }, 2.0, 6, ALL_WEARABLE, ''),
+  of_alchemy: suffix('of_alchemy', 'of Alchemy', { skills: { alchemy: 5 } }, 2.0, 6, ALL_WEARABLE, ''),
+  of_meditation: suffix('of_meditation', 'of Meditation', { skills: { meditation: 5 } }, 2.2, 6, ALL_WEARABLE, ''),
+  of_perception: suffix('of_perception', 'of Perception', { skills: { perception: 5 } }, 2.2, 6, ALL_WEARABLE, ''),
+  of_armsmaster: suffix('of_armsmaster', 'of Armsmaster', { skills: { armsmaster: 5 } }, 2.6, 10, ['weapon', 'gauntlets', 'belt'], ''),
+  of_the_gods: suffix('of_the_gods', 'of the Gods', {
+    stats: { might: 10, intellect: 10, personality: 10, endurance: 10, accuracy: 10, speed: 10, luck: 10 },
+  }, 8.0, 30, ALL_ENCHANTABLE, 'Ten points to every attribute. There are perhaps forty of these in the world.'),
+};
+
+// One "of <School> Magic" suffix per school, MM6-style.
+for (const school of MAGIC_SCHOOL_IDS) {
+  const label = school[0].toUpperCase() + school.slice(1);
+  suffixes[`of_${school}_magic`] = suffix(
+    `of_${school}_magic`, `of ${label} Magic`,
+    { skills: { [school]: 5 } }, 2.8, 10, ALL_ENCHANTABLE,
+    `Adds five levels of ${label} Magic while worn.`,
+  );
+}
+
+export const SUFFIXES = deepFreeze(suffixes);
+
+// ── Artifacts and relics ────────────────────────────────────────────────────
+// Unique, never generated twice, and most carry a real cost.
+
+const artifact = (id, name, base, effects, downside, value, desc) =>
+  ({ id, name, category: 'artifact', baseItem: base, unique: true, effects, downside, value, weight: 6, desc });
+
+export const ARTIFACTS = deepFreeze({
+  art_justice: artifact('art_justice', 'Justice', 'sword_bastard',
+    { damage: 25, attack: 20, stats: { personality: 20 }, resists: { dark: 30 } },
+    { stats: { luck: -15 } }, 60000,
+    'The old crown sword of Ironfist. It will not be drawn in an unjust cause, and it judges what that means.'),
+  art_mordred: artifact('art_mordred', 'Mordred', 'sword_great',
+    { damage: 35, attack: 15, lifesteal: 0.25, bonusDamage: { type: 'dark', amount: 20 } },
+    { stats: { personality: -20 }, curse: 'shopkeepers-refuse' }, 65000,
+    'The blade that made a Black Knight of its first owner and eleven since.'),
+  art_ghoulsbane: artifact('art_ghoulsbane', 'Ghoulsbane', 'axe_great',
+    { damage: 20, slaying: { family: 'undead', multiplier: 3 }, resists: { dark: 40 } },
+    { stats: { speed: -10 } }, 42000,
+    'Undead within twenty paces of it come apart at the seams.'),
+  art_splitter: artifact('art_splitter', 'Splitter', 'axe_executioner',
+    { damage: 30, onHit: 'sunder', armourShred: 20 },
+    { recovery: 20 }, 48000,
+    'It takes the armour off a target before it takes anything else.'),
+  art_ullyses: artifact('art_ullyses', 'Ullyses', 'bow_great',
+    { damage: 22, attack: 25, arrows: 1, bonusDamage: { type: 'air', amount: 15 } },
+    { stats: { might: -10 } }, 52000,
+    'A bow that adds an arrow to every volley, and takes the strength to draw it out of you.'),
+  art_the_perfect_bow: artifact('art_the_perfect_bow', 'The Perfect Bow', 'bow_elven',
+    { damage: 18, attack: 30, recovery: -25 },
+    { durability: 'fragile' }, 55000,
+    'Nothing about it can be improved. Nothing about it can be repaired either.'),
+  art_old_nick: artifact('art_old_nick', 'Old Nick', 'dagger_main_gauche',
+    { damage: 15, attack: 20, tripleChance: 0.25, stats: { speed: 20 } },
+    { stats: { endurance: -15 } }, 38000,
+    'Small, plain, and it has ended three kings.'),
+  art_puck: artifact('art_puck', 'Puck', 'dagger_kris',
+    { damage: 12, stats: { luck: 30, speed: 15 }, skills: { stealing: 10, disarm_trap: 10 } },
+    { curse: 'random-teleport' }, 36000,
+    'It finds its way into pockets, including yours, including at inconvenient moments.'),
+  art_perion: artifact('art_perion', 'Perion', 'spear_lance',
+    { damage: 28, attack: 18, ac: 15, resists: { fire: 30, air: 30, water: 30, earth: 30 } },
+    { stats: { intellect: -20 } }, 58000,
+    'The lance of the first Marchwarden. It has never been broken and has never had a subtle owner.'),
+  art_mash: artifact('art_mash', 'Mash', 'mace_war_hammer',
+    { damage: 32, stunChance: 0.4, stats: { might: 25 } },
+    { recovery: 25, stats: { accuracy: -10 } }, 45000,
+    'It does exactly what its name says, slowly and thoroughly.'),
+  art_ethrics_staff: artifact('art_ethrics_staff', "Ethric's Staff", 'staff_elder',
+    { damage: 20, sp: 60, skills: { dark: 8, fire: 5, air: 5, water: 5, earth: 5 } },
+    { resists: { light: -30 } }, 70000,
+    'Ethric the Mad left behind one thing worth keeping. This is it, and it still argues.'),
+  art_charele: artifact('art_charele', 'Charele', 'staff_rune',
+    { damage: 14, sp: 40, regenSP: 3, skills: { water: 6, earth: 6 } },
+    { stats: { might: -15 } }, 44000,
+    'Cut from a living tree that was asked politely and agreed.'),
+  art_iron_feather: artifact('art_iron_feather', 'Iron Feather', 'chain_elven',
+    { ac: 35, stats: { speed: 25 }, recovery: -20, resists: { air: 40 } },
+    { resists: { earth: -25 } }, 62000,
+    'Chain that weighs nothing at all, which is exactly as unsettling as it sounds.'),
+  art_supreme_plate: artifact('art_supreme_plate', 'Supreme Plate', 'plate_noble',
+    { ac: 50, resists: { fire: 25, air: 25, water: 25, earth: 25 }, hp: 60 },
+    { stats: { speed: -25 }, recovery: 20 }, 80000,
+    'The finest harness ever built in Free Haven. You will not be running anywhere in it.'),
+  art_harecks_leather: artifact('art_harecks_leather', "Hareck's Leather", 'leather_dragon',
+    { ac: 28, stats: { speed: 20, luck: 15 }, skills: { dodging: 8 } },
+    { resists: { fire: -20 } }, 47000,
+    'Cured by a man who was eaten shortly after finishing it.'),
+  art_gibbet: artifact('art_gibbet', 'Gibbet', 'helm_great',
+    { ac: 20, resists: { mind: 60 }, immune: ['afraid', 'insane'] },
+    { stats: { personality: -20 } }, 40000,
+    'A closed helm with no visor slit worth the name. You see fine. Nobody knows how.'),
+  art_lady_carmine: artifact('art_lady_carmine', 'Lady Carmine', 'cloak_ermine',
+    { ac: 18, stats: { personality: 30 }, skills: { merchant: 10, diplomacy: 10 } },
+    { curse: 'attracts-thieves' }, 39000,
+    'Every door in Free Haven opens for it. So do a great many purses that should not.'),
+  art_titans_belt: artifact('art_titans_belt', "Titan's Belt", 'belt_girdle',
+    { ac: 12, stats: { might: 40 }, hp: 50 },
+    { stats: { intellect: -20, personality: -20 } }, 54000,
+    'Sized down from something enormous. It remembers being larger.'),
+  art_guinevere: artifact('art_guinevere', 'Guinevere', 'amulet_necklace',
+    { sp: 80, regenSP: 4, skills: { spirit: 8, body: 8, mind: 8 } },
+    { hp: -40 }, 66000,
+    'A queen\'s pendant that trades vitality for power, and does not ask first.'),
+  art_amuck: artifact('art_amuck', 'Amuck', 'ring_loop',
+    { damage: 20, attack: 20, stats: { might: 20, speed: 20 } },
+    { ac: -20, curse: 'no-flee' }, 43000,
+    'The wearer cannot retreat. This is presented as a feature.'),
+  art_elfbane: artifact('art_elfbane', 'Elfbane', 'ring_band',
+    { resists: { magic: 50, mind: 40 }, ac: 15 },
+    { sp: -50 }, 41000,
+    'Turns hostile magic aside beautifully. Turns yours aside too.'),
+  art_the_wetsuit: artifact('art_the_wetsuit', 'The Wetsuit', 'leather_elven',
+    { ac: 22, resists: { water: 70 }, waterBreathing: true, waterWalk: true },
+    { resists: { fire: -30 } }, 37000,
+    'Ancestor-made, sealed at every seam. Eel-Infested Waters holds no terror in it.'),
+});
+
+// ── The merged catalogue ────────────────────────────────────────────────────
+
+export const ITEMS = deepFreeze({
+  ...WEAPONS, ...ARMOURS, ...POTIONS, ...REAGENTS,
+  ...SCROLLS, ...WANDS, ...GEMS, ...QUEST_ITEMS, ...MISC_ITEMS, ...ARTIFACTS,
+});
+
+export const ITEM_IDS = Object.freeze(Object.keys(ITEMS));
+
+/** Item record by id, or undefined. */
+export function getItem(id) {
+  return ITEMS[id];
+}
+
+/** All items in a category. */
+export function itemsInCategory(category) {
+  return ITEM_IDS.filter((id) => ITEMS[id].category === category).map((id) => ITEMS[id]);
+}
+
+/** Items whose level band contains `level` — the pool treasure rolls from. */
+export function itemsForLevel(level, categories = null) {
+  return ITEM_IDS
+    .map((id) => ITEMS[id])
+    .filter((it) => {
+      if (!it.levelBand) return false;
+      if (categories && !categories.includes(it.category)) return false;
+      return level >= it.levelBand[0] && level <= it.levelBand[1];
+    });
+}
+
+// ── Treasure tables ─────────────────────────────────────────────────────────
+// One band per stretch of the campaign. `weights` are relative and are consumed
+// by LootSystem's weighted pick; `enchantChance` and `artifactChance` are
+// probabilities per generated item.
+
+export const TREASURE_TABLES = deepFreeze([
+  {
+    id: 'treasure_1', tier: 1, levels: [1, 6], gold: [10, 80],
+    weights: { weapon: 22, armour: 18, shield: 6, helm: 6, boots: 5, belt: 4, cloak: 4, gauntlets: 4, amulet: 3, ring: 4, potion: 14, scroll: 8, reagent: 8, gem: 2, wand: 2, misc: 4 },
+    itemTiers: [1, 2], enchantChance: 0.10, doubleEnchantChance: 0, artifactChance: 0,
+    potionLayers: [1, 2], scrollMaxLevel: 4, gemTiers: [1, 2],
+  },
+  {
+    id: 'treasure_2', tier: 2, levels: [7, 13], gold: [60, 300],
+    weights: { weapon: 22, armour: 18, shield: 6, helm: 6, boots: 5, belt: 4, cloak: 4, gauntlets: 4, amulet: 4, ring: 5, potion: 13, scroll: 8, reagent: 6, gem: 4, wand: 3, misc: 3 },
+    itemTiers: [1, 3], enchantChance: 0.22, doubleEnchantChance: 0.03, artifactChance: 0,
+    potionLayers: [1, 3], scrollMaxLevel: 6, gemTiers: [1, 3],
+  },
+  {
+    id: 'treasure_3', tier: 3, levels: [14, 21], gold: [200, 900],
+    weights: { weapon: 21, armour: 17, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 4, amulet: 5, ring: 6, potion: 11, scroll: 7, reagent: 4, gem: 5, wand: 4, misc: 2 },
+    itemTiers: [2, 4], enchantChance: 0.35, doubleEnchantChance: 0.08, artifactChance: 0.004,
+    potionLayers: [2, 3], scrollMaxLevel: 8, gemTiers: [2, 4],
+  },
+  {
+    id: 'treasure_4', tier: 4, levels: [22, 32], gold: [700, 2500],
+    weights: { weapon: 20, armour: 16, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 5, amulet: 6, ring: 7, potion: 10, scroll: 6, reagent: 3, gem: 6, wand: 4, misc: 2 },
+    itemTiers: [3, 5], enchantChance: 0.50, doubleEnchantChance: 0.15, artifactChance: 0.012,
+    potionLayers: [2, 4], scrollMaxLevel: 10, gemTiers: [3, 5],
+  },
+  {
+    id: 'treasure_5', tier: 5, levels: [33, 45], gold: [2000, 7000],
+    weights: { weapon: 19, armour: 15, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 5, amulet: 7, ring: 8, potion: 9, scroll: 5, reagent: 2, gem: 8, wand: 4, misc: 1 },
+    itemTiers: [4, 6], enchantChance: 0.65, doubleEnchantChance: 0.28, artifactChance: 0.025,
+    potionLayers: [3, 4], scrollMaxLevel: 11, gemTiers: [3, 5],
+  },
+  {
+    id: 'treasure_6', tier: 6, levels: [46, 200], gold: [6000, 20000],
+    weights: { weapon: 18, armour: 14, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 5, amulet: 8, ring: 9, potion: 8, scroll: 4, reagent: 1, gem: 10, wand: 5, misc: 1 },
+    itemTiers: [5, 6], enchantChance: 0.80, doubleEnchantChance: 0.40, artifactChance: 0.05,
+    potionLayers: [3, 4], scrollMaxLevel: 11, gemTiers: [4, 5],
+  },
+]);
+
+/** The treasure band covering a level. Always returns a table. */
+export function treasureTableFor(level) {
+  const n = Math.max(1, Math.floor(level || 1));
+  for (const t of TREASURE_TABLES) {
+    if (n >= t.levels[0] && n <= t.levels[1]) return t;
+  }
+  return TREASURE_TABLES[TREASURE_TABLES.length - 1];
+}
+
+/** Enchantments legal for an item at a given level. */
+export function enchantmentsFor(category, level, kind = 'suffix') {
+  const table = kind === 'prefix' ? PREFIXES : SUFFIXES;
+  return Object.values(table).filter(
+    (e) => e.categories.includes(category) && level >= e.minLevel,
+  );
+}
+
+/** Gold value of an item once its enchantments are applied. */
+export function enchantedValue(baseValue, prefixId = null, suffixId = null) {
+  let v = Math.max(1, baseValue || 1);
+  if (prefixId && PREFIXES[prefixId]) v *= PREFIXES[prefixId].valueMult;
+  if (suffixId && SUFFIXES[suffixId]) v *= SUFFIXES[suffixId].valueMult;
+  return Math.round(v);
+}
+
+/** Display name for a generated item: "Vampiric Bastard Sword of the Gods". */
+export function itemDisplayName(baseId, prefixId = null, suffixId = null) {
+  const base = ITEMS[baseId];
+  if (!base) return 'Unknown Item';
+  const p = prefixId && PREFIXES[prefixId] ? `${PREFIXES[prefixId].name} ` : '';
+  const s = suffixId && SUFFIXES[suffixId] ? ` ${SUFFIXES[suffixId].name}` : '';
+  return `${p}${base.name}${s}`;
+}
+
+/**
+ * "Power" of an item, used by Identify Item and Repair Item checks.
+ * Artifacts sit far above anything a Normal-mastery character can handle.
+ */
+export function itemPower(baseId, prefixId = null, suffixId = null) {
+  const base = ITEMS[baseId];
+  if (!base) return 0;
+  if (base.category === 'artifact') return 500;
+  let p = (base.tier ?? 1) * 4;
+  if (prefixId && PREFIXES[prefixId]) p += PREFIXES[prefixId].minLevel;
+  if (suffixId && SUFFIXES[suffixId]) p += SUFFIXES[suffixId].minLevel;
+  return p;
+}
+
+/** Every potion mixable from two others, keyed by the sorted pair. */
+export const ALCHEMY_RECIPES = deepFreeze(
+  Object.values(POTIONS)
+    .filter((p) => p.recipe)
+    .map((p) => ({ result: p.id, from: [...p.recipe].sort(), layer: p.layer })),
+);
+
+/** Look up the potion produced by mixing two potions, or null. */
+export function mixPotions(aId, bId) {
+  const pair = [aId, bId].sort();
+  const hit = ALCHEMY_RECIPES.find((r) => r.from[0] === pair[0] && r.from[1] === pair[1]);
+  return hit ? POTIONS[hit.result] : null;
+}
+
+/** Damage types re-exported so weapon code needs one import. */
+export { DAMAGE_TYPES };

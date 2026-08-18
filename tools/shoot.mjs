@@ -28,7 +28,7 @@ function parseArgs(argv) {
   const opts = {
     width: 1600, height: 900, out: 'shots', shots: [], list: false,
     time: null, weather: null, hud: null, settleMs: 4000, timeoutMs: 240000,
-    quality: 'ultra', keep: false,
+    quality: 'ultra', keep: false, params: '',
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -137,7 +137,8 @@ async function main() {
   const report = { ok: false, shots: [], errors: consoleErrors, warnings: consoleWarnings, stats: null };
 
   try {
-    const target = `${url}?quality=${opts.quality}&seed=enroth-1998&capture=1`;
+    const extra = opts.params ? `&${String(opts.params).replace(/^[?&]/, '')}` : '';
+    const target = `${url}?quality=${opts.quality}&seed=enroth-1998&capture=1${extra}`;
     await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Wait for boot. Report the in-page error rather than a bare timeout.

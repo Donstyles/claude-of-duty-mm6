@@ -286,7 +286,7 @@ export const GLSL_WORLEY = /* glsl */ `
 #define FORGE_WORLEY
 /**
  * Periodic Worley. Returns (F1, F2, cellId) with distances in cell units.
- * `jitter` 0 → a perfect grid, 1 → fully scattered points.
+ * 'jitter' 0 → a perfect grid, 1 → fully scattered points.
  */
 vec3 pWorley2(vec2 p, vec2 period, float jitter) {
   vec2 i = floor(p), f = fract(p);
@@ -526,6 +526,7 @@ vec3 linearToSrgb(vec3 c) {
 }
 /** Author colours the way a painter reads them: 0–255 sRGB in, linear out. */
 vec3 col8(float r, float g, float b) { return srgbToLinear(vec3(r, g, b) / 255.0); }
+vec3 col8(int r, int g, int b) { return col8(float(r), float(g), float(b)); }
 
 float lum(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
@@ -587,7 +588,7 @@ export const GLSL_PATTERN = /* glsl */ `
 #define FORGE_PATTERN
 /**
  * Running-bond masonry lattice.
- * `count` must be integral and count.y even so the half-brick row offset wraps.
+ * 'count' must be integral and count.y even so the half-brick row offset wraps.
  * Returns (localUV.xy in the brick, brick id, row random).
  */
 vec4 tBrick(vec2 uv, vec2 count, float rowShift) {
@@ -628,7 +629,7 @@ float cellDome(vec2 local, float joint, float round_) {
 
 /**
  * Anisotropic fibre noise — grass blades, wood grain, straw, cloth threads.
- * `freq.x` is across the fibres, `freq.y` along them.
+ * 'freq.x' is across the fibres, 'freq.y' along them.
  */
 float tFibres(vec2 uv, vec2 freq, int octaves) {
   return tFbm01(uv, freq, octaves);
@@ -636,16 +637,16 @@ float tFibres(vec2 uv, vec2 freq, int octaves) {
 
 /**
  * Wood: concentric growth rings around an off-canvas pith, with the ring
- * spacing modulated so early/late wood alternate. `p` should already be in
+ * spacing modulated so early/late wood alternate. 'p' should already be in
  * plank-local space.
  */
 float woodRings(vec2 p, float rings, float wobble, float seedv) {
-  vec2 q = p;
-  q.x += (tFbm(p * vec2(1.0, 0.15) + seedv, vec2(4.0), 3, 2.0, 0.5)) * wobble;
-  float r = length(vec2(q.x, q.y * 0.08));
-  float g = fract(r * rings);
-  float ring = smoothstep(0.0, 0.35, g) * smoothstep(1.0, 0.65, g);
-  return ring;
+  // p.x runs across the grain (the ring index axis), p.y along the board.
+  float x = p.x + tFbm(vec2(p.y, seedv * 0.137), vec2(5.0, 1.0), 3, 2.0, 0.5) * wobble;
+  x += tFbm(vec2(p.y, seedv * 0.311 + 0.5), vec2(17.0, 1.0), 2, 2.0, 0.5) * wobble * 0.35;
+  float g = fract(abs(x) * rings);
+  // Early wood is wide and pale, late wood a hard narrow line.
+  return smoothstep(0.0, 0.42, g) * smoothstep(1.0, 0.62, g);
 }
 
 /** A single knot: returns 0..1 knot mask given local distance to its centre. */
@@ -655,7 +656,7 @@ float knot(vec2 p, vec2 c, float r) {
 }
 
 /**
- * Directional scratch field. Cells are stretched along `dir`, so each cell
+ * Directional scratch field. Cells are stretched along 'dir', so each cell
  * contributes a thin scratch of random length and depth.
  */
 float tScratches(vec2 uv, float freq, float aniso, float density, float angle) {
@@ -667,10 +668,13 @@ float tScratches(vec2 uv, float freq, float aniso, float density, float angle) {
   return line * keep;
 }
 
-/** Crack network derived from cell borders; `width` in cell units. */
-float tCracks(vec2 uv, float freq, float width, float jitter) {
+/** Crack network derived from cell borders; 'width' in cell units. */
+float tCracks(vec2 uv, vec2 freq, float width, float jitter) {
   vec4 c = tCells(uv, freq, jitter);
   return 1.0 - smoothstep(width * 0.35, width, c.x);
+}
+float tCracks(vec2 uv, float freq, float width, float jitter) {
+  return tCracks(uv, vec2(freq), width, jitter);
 }
 
 /** Woven cloth: over/under interlace of warp and weft threads. */

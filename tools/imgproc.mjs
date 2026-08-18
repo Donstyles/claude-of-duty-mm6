@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Image utilities backed by headless Chromium's canvas — there is no image
- * library in this environment and the bundled ffmpeg cannot decode these PNGs.
+ * Image utilities backed by headless Chromium's canvas. (Pillow and numpy are
+ * also available for pixel measurement — see the analysis behind REFERENCE.md;
+ * canvas is used here because compositing and JPEG re-encoding are easier in
+ * it. The bundled ffmpeg cannot decode these PNGs at all.)
  *
  *   node tools/imgproc.mjs shrink <glob-dir> <outDir> [--width 1600] [--quality 0.86] [--autocrop]
  *   node tools/imgproc.mjs compare <a.png> <b.png> <out.jpg> [--labels "A,B"] [--width 1800]
