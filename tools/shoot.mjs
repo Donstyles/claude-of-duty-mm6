@@ -135,6 +135,14 @@ async function main() {
     else if (m.type() === 'warning') consoleWarnings.push(text);
   });
   page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}\n${(e.stack ?? '').split('\n').slice(1, 5).join('\n')}`));
+  // The browser's own console says only "failed to load resource" with no URL,
+  // which is useless for finding a missing asset. Record what actually 404ed.
+  page.on('response', (r) => {
+    if (r.status() >= 400) consoleErrors.push(`HTTP ${r.status()} ${r.url()}`);
+  });
+  page.on('requestfailed', (r) => {
+    consoleErrors.push(`request failed ${r.url()} — ${r.failure()?.errorText ?? 'unknown'}`);
+  });
 
   const report = { ok: false, shots: [], errors: consoleErrors, warnings: consoleWarnings, stats: null };
 
