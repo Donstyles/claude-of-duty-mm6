@@ -285,9 +285,11 @@ void main() {
   vec2 uvB = (qB + uOffB) * uInvScaleB;
   vec4 cB = texture2D(uClouds, uvB);
   float hB = clamp((cB.r - uThrB) / max(1.0 - uThrB, 0.06), 0.0, 1.0);
-  // Same reasoning as layer A, one notch softer: the upper deck is read at a
-  // smaller angular size and a razor edge up there reads as confetti.
-  float aB = smoothstep(0.010, 0.16, hB) * uOpacityB;
+  // Same screen-space edge as layer A (see below), one notch softer: the upper
+  // deck is read at a smaller angular size and a razor edge up there reads as
+  // confetti rather than cloud.
+  float wB = clamp(fwidth(hB) * 1.05, 0.004, 0.36);
+  float aB = smoothstep(0.030 - wB, 0.030 + wB, hB) * uOpacityB;
   aB *= smoothstep(0.008, 0.062, up) / (1.0 + tB / 26000.0);
 
   float tA = uAltA * proj;
@@ -310,16 +312,22 @@ void main() {
 
   // The alpha ramp is what decides whether a cloud has an *outline*.
   //
-  // MM6's puffs are opaque bodies cut against flat blue: the transition from
-  // sky to full cloud happens over a couple of pixels, not over a third of the
-  // puff's radius. A wide ramp here is what produced the airbrushed-smoke
-  // reading — every cloud spent most of its area part-transparent, so the blue
-  // showed through the body and the silhouette dissolved. Ramping over the
-  // bottom 6% of the thresholded field instead of the bottom 17% makes the
-  // body solid and leaves the feathering to the field's own gradient, which at
-  // 250 m puffs is already only a pixel or two wide on screen. The floor stays
-  // non-zero so the very thinnest wisps still fade in rather than pop.
-  float aA = smoothstep(0.006, 0.062, hA);
+  // MM6's clouds are keyed bitmaps: sky one pixel, full cloud the next. A ramp
+  // written in *field* units cannot reproduce that, because the same field
+  // interval covers a hand's width of screen on an overhead puff and a hair on
+  // a distant one — which is precisely how this shader used to turn cumulus
+  // into airbrushed smoke, every cloud spending most of its area part
+  // transparent with blue showing through the body.
+  //
+  // Measuring the ramp in *screen* units instead fixes both ends at once.
+  // fwidth(hA) is how much the thresholded field changes across one pixel, so
+  // a ramp ±0.75 of it wide is always about a pixel and a half: a hard, clean,
+  // antialiased silhouette overhead, and an automatically softer one near the
+  // skyline where the plane is compressed 20× and a hard edge would crawl. The
+  // clamps stop it degenerating where the field is locally flat (lower bound)
+  // or where the compression runs away in the last degree of sky (upper).
+  float wA = clamp(fwidth(hA) * 0.75, 0.0022, 0.30);
+  float aA = smoothstep(0.018 - wA, 0.018 + wA, hA);
   aA *= smoothstep(0.006, 0.055, up) / (1.0 + tA / 26000.0);
   aA *= uOpacityA;
 
@@ -342,13 +350,24 @@ void main() {
   // Thick cores and the bellies under them sit in their own shadow — this is
   // the term that gives a puff a bright crown and a soft grey-cream underside.
   float thick = cA.a;
-  float ao = 1.0 - 0.30 * smoothstep(0.18, 0.88, thick);
+  // Kept light. MM6 paints its cumulus with the *core* as the bright part and
+  // the thin skirts as the dim ones, so a heavy thickness-AO term inverts the
+  // reading and hollows every puff out into a ring.
+  float ao = 1.0 - 0.22 * smoothstep(0.18, 0.88, thick);
 
   // Tuned so the shading spans the *whole* measured MM6 ramp: a shaded flank
   // lands on the mauves (#73758C–#8C8A8C), a lit face on the creams
   // (#A59A8C–#C6BA8C) and only a sunward crest reaches #E7D38C.
-  float amb = (0.24 + 0.22 * n.y) * ao;
-  float direct = wrapped * shade * 0.72 * (0.85 + 0.15 * ao);
+  //
+  // The gains matter more than they look. §4.1 calls #E7D38C "the brightest
+  // cloud in the set" — it is a crest value, a few percent of cloud pixels.
+  // With the old 0.24/0.22/0.72 gains a *flat* interior facing straight up
+  // under a 62° sun already summed past 1.0, so every puff clipped at the top
+  // of the ramp and the sky filled with solid amber lozenges. Here a flat lit
+  // face lands near 0.72 — squarely on #C6BA8C — the belly falls to the
+  // mauves, and only relief actually tilted into the sun climbs the last step.
+  float amb = (0.185 + 0.163 * n.y) * ao;
+  float direct = wrapped * shade * 0.585 * (0.85 + 0.15 * ao);
   float lumA = amb + direct;
 
   // Crown and belly. Every puff is seen from underneath, so the part of it we
@@ -358,7 +377,7 @@ void main() {
   // bright crown / soft grey-cream belly on every mass at once, whatever the
   // sun is doing, which a pure N·L never does with a near-overhead sun.
   vec2 rad2 = normalize(d.xz + vec2(1e-5, 1e-5));
-  lumA -= dot(n.xz, rad2) * 0.15 * smoothstep(0.02, 0.30, hA);
+  lumA -= dot(n.xz, rad2) * 0.17 * smoothstep(0.02, 0.30, hA);
 
   // Silver lining: thin edges facing the sun burn out.
   float rim = pow(max(0.0, dot(d, uSunDir)), 9.0) * (1.0 - smoothstep(0.10, 0.55, hA));
@@ -368,8 +387,8 @@ void main() {
   // Layer B gets a cheaper version of the same model — flatter, because it is
   // read at a much smaller angular size — but it must not be a flat wash.
   vec3 nB = normalize(vec3(-(cB.g * 2.0 - 1.0) * uBump * 0.7, 1.0, -(cB.b * 2.0 - 1.0) * uBump * 0.7));
-  float lumB = (0.25 + 0.18 * nB.y) * (1.0 - 0.24 * smoothstep(0.24, 0.88, cB.a))
-             + clamp((dot(nB, uSunDir) + 0.34) / 1.34, 0.0, 1.0) * 0.62;
+  float lumB = (0.175 + 0.130 * nB.y) * (1.0 - 0.24 * smoothstep(0.24, 0.88, cB.a))
+             + clamp((dot(nB, uSunDir) + 0.34) / 1.34, 0.0, 1.0) * 0.46;
   lumB = lumB * uCloudBright * (0.90 + 0.22 * pow(max(0.0, dot(d, uSunDir)), 4.0));
 
   vec3 colB = mm6Ramp(clamp(lumB, 0.0, 1.0)) * uCloudTintMul + uCloudTintAdd;

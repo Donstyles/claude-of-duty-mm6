@@ -175,18 +175,22 @@ const KEYS = [
   },
   {
     h: 18.15,                                 // sunset
-    zen: C(0x1e3068), hor: C(0xd07443), lift: 1.0, pow: 3.8, aniso: 0.90,
+    // lift was 1.0, which pushed the warm horizon band right across the dome;
+    // where it met the blue zenith the two crossed through magenta, and bloom
+    // plus the grade's warmth turned that into a synthwave sky. 0.62 keeps the
+    // band low so the ramp stays orange-into-blue with no purple in between.
+    zen: C(0x1e3068), hor: C(0xd07443), lift: 0.62, pow: 3.8, aniso: 0.90,
     gNear: C(0x241f17), gFar: C(0x3a3026),
-    cmul: [1.34, 0.86, 0.60], cadd: [0.100, 0.025, 0.0], cbright: 1.0, silver: 1.0,
+    cmul: [1.22, 0.90, 0.68], cadd: [0.040, 0.018, 0.0], cbright: 1.0, silver: 1.0,
     sunTint: C(0xff9a52), sunDisc: 1.0, sunHalo: 1.0,
     lightCol: C(0xff9450), lightI: 0.62,
     ambSky: C(0x8390ab), ambGnd: C(0x6f5d4a), ambI: 1.16,
-    fog: C(0x7a6178), fogD: 0.00042,
+    fog: C(0x6b5747), fogD: 0.00042,
     stars: 0.08, night: 0.12, moonDisc: 0.25, moonTint: C(0xdde3ef),
   },
   {
     h: 18.9,                                  // dusk
-    zen: C(0x142251), hor: C(0x8b5460), lift: 0.95, pow: 3.4, aniso: 0.75,
+    zen: C(0x142251), hor: C(0x8a5f45), lift: 0.95, pow: 3.4, aniso: 0.75,
     gNear: C(0x18181f), gFar: C(0x2b2739),
     cmul: [0.72, 0.62, 0.66], cadd: [0.020, 0.010, 0.020], cbright: 0.86, silver: 0.40,
     sunTint: C(0xa06a72), sunDisc: 0.30, sunHalo: 0.32,
@@ -480,6 +484,16 @@ function bakeCloudSheet(N, rng) {
       // cauliflower, and three or four make a small bank. That distribution —
       // many discrete forms, occasional clusters — is what the reference sky
       // actually shows.
+      // One blob scale on one lattice gives every puff the same size and the
+      // same spacing, and the sky reads as regular polka dots however well the
+      // individual puff is shaded. A sparse coarser layer fixes that: it only
+      // fires where its own mask is high, so most of the sky keeps the 250 m
+      // puffs while a few places grow a genuinely large mass among them. Size
+      // *range* is what the reference has, not one size done well.
+      const hugeMask = fbmP(hMask, wx + 3.1, wy - 1.7, 2, 2, 0.5) * 0.5 + 0.5;
+      const huge = blobsP(hBig, wx * 0.42 + 0.13, wy * 0.42 - 0.29, 7, 0.36, 0.72)
+        * smoothstep(0.56, 0.84, hugeMask);
+
       const big = blobsP(hBig, wx, wy, G_BIG, 0.40, 0.80);
       const mid = blobsP(hMid, wx, wy, G_MID, 0.34, 0.68);
       const fine = blobsP(hFine, wx, wy, G_FINE, 0.28, 0.58);
@@ -493,7 +507,7 @@ function bakeCloudSheet(N, rng) {
       const mask = fbmP(hMask, wx, wy, 5, 3, 0.5) * 0.5 + 0.5;
       const gate = 0.30 + 0.98 * smoothstep(0.26, 0.76, mask);
 
-      let s = (big * 1.0 + mid * 0.42 + fine * 0.12) * gate;
+      let s = (huge * 0.85 + big * 1.0 + mid * 0.42 + fine * 0.12) * gate;
       // A whisper of grain so the interiors are not glassy under the relief
       // lighting; too little to touch the silhouette.
       s += 0.030 * fbmP(hGrain, wx, wy, G_GRAIN, 2, 0.5);
@@ -649,8 +663,8 @@ const PLANE_POW = 0.45;
  * points above these numbers. §2.4 wants 35–40% of the sky covered on a clear
  * day with plenty of blue holes, which lands here at a sheet coverage of 0.28.
  */
-const COVER_A = [0.28, 0.90];
-const COVER_B = [0.11, 0.70];
+const COVER_A = [0.33, 0.90];
+const COVER_B = [0.13, 0.70];
 
 export class SkySystem extends System {
   static id = 'sky';
