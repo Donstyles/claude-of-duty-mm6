@@ -89,6 +89,42 @@ What measurement does not settle is the *arrangement* — ours compress into
 bands toward the horizon. That is what a cloud plane does in projection and is
 probably right; if a reviewer raises it, get a number before acting.
 
+### The exposure control — read this before measuring anything
+
+The reference stills are **globally 1.42x darker than our captures**. Measured
+on the message strip, which is the same interface asset in both and should
+therefore match exactly: ours reads luminance 132, two different reference
+stills both read 93.
+
+Every colour comparison against `reference/mm6-web/` has to divide by that
+first. Skipping it is how a previous round concluded our grass should be
+*brightened* toward 111,122,58 — a figure that does not survive the control.
+
+### Ground colour — measured, partly confounded
+
+True-green pixels only (G > R+6 and G > B+12), grass crop of a vista:
+
+| | grass RGB | share of crop |
+|---|---|---|
+| ours | 99, 125, 69 | 61% |
+| reference 33 | 52, 79, 43 | 14% |
+| reference 35 | 56, 79, 41 | 22% |
+| reference 32 | 41, 64, 33 | 14% |
+| reference 34 | 51, 69, 35 | 4% |
+
+**Brightness: do not act on this yet.** Ours looks nearly twice as bright, but
+after dividing by the 1.42 exposure control it lands at roughly 70,88,49
+against a reference of ~50,73,38 — perhaps 25% high, which is inside the range
+a different capture gamma could explain. Get a same-scene comparison before
+retuning.
+
+**Composition: this one is real.** Our ground is 61% true green where the
+reference runs 4–22%. MM6's landscape is mostly brown earth and rock with
+grass in patches; ours is a green carpet with roads cut through it. Exposure
+cannot explain a difference in *coverage*. The caveat is that the crops are
+not guaranteed to be the same kind of terrain, so treat it as strong rather
+than settled — but four stills all falling below 22% is hard to dismiss.
+
 ### Not defects — do not "fix" these
 - The flat sky with no horizon gradient is **correct** and deliberate.
 - 10–15 fps in the capture harness is software rendering, **not** a bug.
