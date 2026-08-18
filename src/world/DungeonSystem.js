@@ -331,9 +331,20 @@ export class DungeonSystem extends System {
       // resolves as stone. REFERENCE §2.7 is explicit that nothing in a lit MM6
       // frame sits at black, and a corridor twenty metres from a torch is the
       // easiest place in the game to break that rule.
-      this._ambient.color.setHex(light.ambient).multiplyScalar(3.4);
-      this._ambient.groundColor.setHex(light.ambient).multiplyScalar(1.8);
-      this._ambient.intensity = 2.6;
+      //
+      // The colour has to be split from the brightness, and this is the trap
+      // the first attempt fell into: `light.ambient` is an authored *mood*
+      // colour like `#0e0e10`, and `setHex` decodes it from sRGB, which lands
+      // it at 0.005 linear — black however hard it is then multiplied. So take
+      // the hue at full value and let `intensity` alone say how dark it is.
+      // 0.4 puts an unlit wall around value 90, inside REFERENCE rule 8's
+      // 30–100 band, with the torches free to build pools on top of it.
+      const tone = new THREE.Color(light.ambient);
+      const peak = Math.max(tone.r, tone.g, tone.b) || 1;
+      tone.multiplyScalar(1 / peak);
+      this._ambient.color.copy(tone);
+      this._ambient.groundColor.copy(tone).multiplyScalar(0.34);
+      this._ambient.intensity = 0.4;
       this._ambient.visible = true;
 
       this._savedExposure = ctx.renderer.toneMappingExposure;
@@ -908,7 +919,7 @@ export class DungeonSystem extends System {
           [wx + 0.3, y, wz + CELL / 2], [wx - 0.3, y, wz + CELL / 2],
           [0, 0], [1, 0], [1, 1], [0, 1],
         );
-        state.torches.push({ x: wx, y: y - 0.25, z: wz, steady: true, base: 14 });
+        state.torches.push({ x: wx, y: y - 0.25, z: wz, steady: true, base: 18 });
       }
     }
   }
@@ -942,7 +953,7 @@ export class DungeonSystem extends System {
       m.makeTranslation(tx, ty + 0.56, tz);
       batches.ember.geom(flame, m, 1);
       state.torches.push({
-        x: tx, y: ty + 0.6, z: tz, steady: false, base: 15,
+        x: tx, y: ty + 0.6, z: tz, steady: false, base: 24,
         phase: rng.range(0, Math.PI * 2), color: def.light.torch,
       });
       return true;
@@ -1285,7 +1296,7 @@ export class DungeonSystem extends System {
       new THREE.Vector3(scale, scale * 0.5, scale));
     state.batches.ember.geom(coals, m, 1);
     state.torches.push({
-      x, y: y + 1.25 * scale, z, steady: false, base: 14 * scale,
+      x, y: y + 1.25 * scale, z, steady: false, base: 22 * scale,
       phase: rng.range(0, Math.PI * 2), color: state.def.light.torch,
     });
     bowl.dispose(); leg.dispose(); coals.dispose();
@@ -1311,7 +1322,7 @@ export class DungeonSystem extends System {
       state.batches.ember.geom(flame, m, 1);
     }
     state.torches.push({
-      x, y: y + 1.45, z, steady: false, base: 9,
+      x, y: y + 1.45, z, steady: false, base: 12,
       phase: rng.range(0, Math.PI * 2), color: state.def.light.torch,
     });
     block.dispose(); slab.dispose(); candle.dispose(); flame.dispose();
@@ -1797,7 +1808,7 @@ export class DungeonSystem extends System {
       description: 'A torch-lit corridor in the Ossran Vaults, looking down its length.',
       apply: (c) => look(c, 'dun_ossran_vaults', (b) => {
         const plan = b.floors[0];
-        const run = longestRun(plan);
+        const run = longestRun(plan, b.torches);
         const [x, z] = cellToWorld(run.i, run.j, plan.size);
         return {
           x: x - run.di * CELL * 0.3, y: plan.y + 1.7, z: z - run.dj * CELL * 0.3,
@@ -1947,16 +1958,31 @@ function bestViewYaw(plan, cx, cy) {
   return best.yaw;
 }
 
-/** The longest straight open run on a plan — where a corridor shot belongs. */
-function longestRun(plan) {
-  let best = { i: plan.rooms[0]?.cx ?? 2, j: plan.rooms[0]?.cy ?? 2, di: 1, dj: 0, len: 0 };
+/**
+ * The longest straight open run on a plan — where a corridor shot belongs.
+ * Runs with a torch bracket on them score double, because a corridor photograph
+ * with no light source in it is a photograph of the dark.
+ */
+function longestRun(plan, torches = []) {
+  const half = (plan.size * CELL) / 2;
+  const lit = new Set();
+  for (const t of torches) {
+    if (Math.abs(t.y - plan.y) > plan.height + 1) continue;
+    lit.add(key(Math.round((t.x + half - CELL / 2) / CELL), Math.round((t.z + half - CELL / 2) / CELL)));
+  }
+  let best = { i: plan.rooms[0]?.cx ?? 2, j: plan.rooms[0]?.cy ?? 2, di: 1, dj: 0, score: -1 };
   for (let j = 1; j < plan.size - 1; j++) {
     for (let i = 1; i < plan.size - 1; i++) {
       if (!plan.grid[j][i]) continue;
-      for (const [di, dj] of [[1, 0], [0, 1]]) {
-        let len = 0, x = i, y = j;
-        while (x < plan.size && y < plan.size && plan.grid[y][x]) { len++; x += di; y += dj; }
-        if (len > best.len) best = { i, j, di, dj, len };
+      for (const [di, dj] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+        let len = 0, brackets = 0, x = i, y = j;
+        while (x > 0 && y > 0 && x < plan.size && y < plan.size && plan.grid[y][x]) {
+          len++;
+          if (lit.has(key(x, y))) brackets++;
+          x += di; y += dj;
+        }
+        const score = len + brackets * len * 0.5;
+        if (score > best.score) best = { i, j, di, dj, len, score };
       }
     }
   }

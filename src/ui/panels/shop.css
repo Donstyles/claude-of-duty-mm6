@@ -43,8 +43,22 @@
 
 /* Goods are hung, not slotted: free sprites at object size, upright, each one
    throwing a shadow back onto the wall behind it. */
+/* The goods are lit, not just outlined.
+ *
+ * Measured on the first pass: the merchandise separated from the room by 59
+ * points of luminance against the reference's 93 — and worse than that sounds,
+ * because the reference stills are 1.42x darker overall (see CRITIQUE.md), so
+ * corrected into their exposure ours was 42 against 93. The swords genuinely
+ * vanished into the forge.
+ *
+ * The dark rim and cast shadow below were already here and were the wrong
+ * half of the problem: the background measured 8, so there was nothing left
+ * to darken. What was missing is that a shop hangs its stock where the light
+ * falls. The brightness lift is what the reference gets for free by hanging
+ * goods on a pale walnut board instead of in a dim forge. */
 .mm-panel[data-panel='shop'] .mm-shop-item {
   filter:
+    brightness(1.62) saturate(1.06)
     drop-shadow(calc(var(--u) * -0.6) calc(var(--u) * -0.6) 0 rgba(18, 10, 4, 0.85))
     drop-shadow(calc(var(--u) * 0.6) calc(var(--u) * 0.6) 0 rgba(18, 10, 4, 0.85))
     drop-shadow(calc(var(--u) * 3) calc(var(--u) * 5) calc(var(--u) * 3) rgba(0, 0, 0, 0.75))
@@ -53,6 +67,7 @@
 }
 .mm-panel[data-panel='shop'] .mm-shop-item:hover {
   filter:
+    brightness(1.78) saturate(1.08)
     drop-shadow(calc(var(--u) * 3) calc(var(--u) * 5) calc(var(--u) * 3) rgba(0, 0, 0, 0.75))
     drop-shadow(0 0 calc(var(--u) * 6) rgba(255, 240, 180, 0.95));
 }
