@@ -2356,6 +2356,12 @@ export class UITextures {
     });
   }
 
+  /** Every portrait plate available for a sex, in a stable order. */
+  portraitPlates(sex = 'm') {
+    const want = sex === 'f' ? 'f-' : 'm-';
+    return [...PORTRAIT_PLATES.available].filter((n) => n.startsWith(want)).sort();
+  }
+
   /** The painted gravestone that replaces a dead character's portrait. */
   tombstonePlate() {
     return PORTRAIT_PLATES.has('tombstone')
@@ -3021,6 +3027,11 @@ const PORTRAIT_PLATES = {
       sorcerer: 'sorcerer', wizard: 'sorcerer', archmage: 'sorcerer', lich: 'sorcerer',
       druid: 'druid', great_druid: 'druid', arch_druid: 'druid',
     };
+    // An explicit plate wins outright. Without this the elder faces were
+    // unreachable: `pick` maps class to role, no class maps to `elder`, and
+    // two committed plates could never be chosen by anything.
+    if (spec.plate && this.has(spec.plate)) return `${this.base}${spec.plate}.jpg`;
+
     const role = BASE[spec.classId] ?? 'rogue';
     const want = sex === 'f' && role === 'sorcerer' ? 'f-sorceress' : `${sex}-${role}`;
 

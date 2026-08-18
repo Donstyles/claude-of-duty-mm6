@@ -130,8 +130,12 @@ export class CombatSystem extends System {
     const target = this._targetUnderCrosshair(ctx, player, monsters);
     if (!target) return false;
 
-    const weapon = char.equipment?.weapon ?? null;
-    const bow = char.equipment?.bow ?? null;
+    // `mainhand`/`ranged`, the names in Items.EQUIP_SLOTS that rules.js reads.
+    // This asked for `weapon`/`bow`, which nothing ever writes, so every party
+    // attack resolved as unarmed and the party could not shoot at all — and
+    // because both sides of the miss were silent, it looked like balance.
+    const weapon = char.equipment?.mainhand ?? null;
+    const bow = char.equipment?.ranged ?? null;
     const dist = target.pos.distanceTo(player.position);
     const useBow = !!bow && dist > MELEE_REACH;
 

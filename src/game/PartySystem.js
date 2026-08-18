@@ -49,6 +49,20 @@ export class PartySystem extends System {
     this._foodTimer = 0;
   }
 
+  /**
+   * Replace the party wholesale — what party creation hands over.
+   *
+   * Public so the creation screen does not have to assign `members` directly
+   * and then poke the interface into noticing; the event is the contract.
+   */
+  setParty(members) {
+    this.members = members.slice(0, 4);
+    this.activeIndex = 0;
+    for (const m of this.members) m.refresh();
+    this._events?.emit('party:created', { members: this.members });
+    return this.members;
+  }
+
   async init(ctx) {
     this.members = DEFAULT_PARTY.map((spec) => new Character(spec).refresh());
     for (const m of this.members) { m.hp = m.maxHP; m.sp = m.maxSP; }

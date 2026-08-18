@@ -247,6 +247,16 @@ export class UISystem extends System {
 
   get activePanel() { return this._activePanel; }
 
+  /**
+   * Re-read the party and repaint everything that shows it.
+   *
+   * Public because a transaction — buying armour, raising the dead, hiring a
+   * guard — has to be visible immediately, and every screen was otherwise
+   * waiting up to a tenth of a second for the next sync tick or reaching into
+   * `_syncParty` behind the interface's back.
+   */
+  refreshParty() { this._syncParty(true); }
+
   openPanel(id, opts = {}) {
     const panel = this.panels.get(id);
     if (!panel) {
@@ -339,7 +349,9 @@ export class UISystem extends System {
     }
     this.hud?.setParty(this._vm, this.activeIndex);
     this.hud?.setGold(this.gold, this.food);
-    this.hud?.setHirelings(this.ctx?.get('npc')?.hirelings ?? this.hirelings);
+    // The party owns its retinue; `npc` never had a `hirelings` list at all,
+    // so the sidebar's two panes were always drawing the empty fallback.
+    this.hud?.setHirelings(party?.hirelings ?? this.ctx?.get('npc')?.hirelings ?? this.hirelings);
 
     const combat = this.ctx?.get('combat');
     if (combat?.mode === 'turnbased') {
@@ -368,7 +380,12 @@ export class UISystem extends System {
    */
   _toViewModel(c, index) {
     const stand = this._chars[index] ?? null;
-    const fill = stand && stand !== c;
+    // Lending only happens when the character IS the stand-in, i.e. no party
+    // system is present and the interface is drawing its own demo party for a
+    // photograph. A real party that has not been to a shop yet must look like
+    // a real party that has not been to a shop yet — showing a freshly rolled
+    // level-1 knight in borrowed plate armour is a lie the moment anyone plays.
+    const fill = stand && stand === c;
     const skillsOf = fill && !Object.keys(c?.skills ?? {}).length ? stand.skills : (c?.skills ?? {});
     const packOf = fill && !c?.inventory?.length ? stand.inventory : (c?.inventory ?? []);
     // A live character keeps all twelve slots on the object and leaves them
@@ -454,8 +471,11 @@ export class UISystem extends System {
       equipment: gearOf,
       inventory: packOf,
       merchant: skillsOf?.merchant ?? { level: 0, mastery: MASTERY.NORMAL },
+      // `sex` is what Character stores; `gender` is what the sample party uses.
+      // Asking only for `gender` meant every real character resolved to male
+      // and drew a male plate whatever the player chose at creation.
       portraitSpec: c?.portraitSpec ?? stand?.portraitSpec
-        ?? { key: c?.name ?? `slot${index}`, classId, gender: c?.gender ?? 'm' },
+        ?? { key: c?.name ?? `slot${index}`, classId, gender: c?.gender ?? c?.sex ?? 'm' },
       portraitKey: (c?.portraitSpec ?? stand?.portraitSpec)?.key ?? c?.name ?? `slot${index}`,
       source: c,
     };
