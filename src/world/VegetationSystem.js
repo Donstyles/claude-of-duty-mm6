@@ -29,7 +29,7 @@ import {
  *
  * **Grass streams and is deliberately faint.** MM6 has literally no ground
  * clutter — grass is terrain texture and nothing else — so ours is short, takes
- * its colour from the ground texture directly beneath it, and is gone by 34 m.
+ * its colour from the ground texture directly beneath it, and is gone by 21 m.
  * It exists to give the ground plane relief where the player can actually see
  * it, not to carpet the world with a modern grass field.
  */
@@ -74,8 +74,8 @@ const LOD_BANDS = [
  * ground the player is actually standing on, and is simply gone beyond it.
  */
 const GRASS_TILE = 4;              // metres per streaming tile
-const GRASS_PER_TILE = 42;         // clusters attempted per tile at ultra
-const GRASS_BLADES = 6;            // blades per cluster
+const GRASS_PER_TILE = 34;         // clusters attempted per tile at ultra
+const GRASS_BLADES = 7;            // blades per cluster
 const GRASS_FADE = 7;              // metres of soft edge at the streaming rim
 
 /** Keep-out radii around named places so nothing grows through a building. */
@@ -760,14 +760,15 @@ export class VegetationSystem extends System {
 
     for (let b = 0; b < GRASS_BLADES; b++) {
       const a = rng.range(0, Math.PI * 2);
-      const rad = Math.sqrt(rng.next()) * 0.20;
+      const rad = Math.sqrt(rng.next()) * 0.17;
       const ox = Math.cos(a) * rad, oz = Math.sin(a) * rad;
       const lean = rng.range(0, Math.PI * 2);
       const dir = new THREE.Vector3(Math.cos(lean), 0, Math.sin(lean));
-      // Short and broad. A tall thin blade is a modern-engine grass carpet and
-      // reads as a black hair at 1600 px; this reads as relief on the ground.
-      const h = rng.range(0.11, 0.21);
-      const w = rng.range(0.030, 0.050);
+      // Short and thin. Tall blades are a modern-engine grass carpet; broad
+      // ones read as paper wedges stuck in the ground. What MM6 can tolerate is
+      // a fine fuzz that gives the ground plane relief and nothing more.
+      const h = rng.range(0.09, 0.17);
+      const w = rng.range(0.013, 0.023);
       const bendAmt = rng.range(0.30, 0.72);
       const phase = rng.range(0, Math.PI * 2);
       const side = new THREE.Vector3().crossVectors(dir, up).normalize();
@@ -783,9 +784,10 @@ export class VegetationSystem extends System {
         const y = h * t * (1 - 0.18 * t * t);
         const hw = (w * (1 - t * 0.88)) * 0.5;
         // Blades sample the *raw* grass albedo, while the terrain around them
-        // shows that albedo splat-blended and macro-tinted, which is brighter.
-        // Without this lift every tuft reads as a dark hair on a pale meadow.
-        const shade = 1.10 + 0.42 * t;
+        // shows it splat-blended and macro-tinted, which is a little brighter.
+        // Lift them to sit just under the ground they stand in: darker and they
+        // read as hairs, brighter and they read as pale shards.
+        const shade = 0.94 + 0.34 * t;
         const sway = Math.pow(t, 1.5);
         if (s < segs) {
           for (const sgn of [-1, 1]) {
@@ -1083,7 +1085,7 @@ export class VegetationSystem extends System {
     let canopyYaw = groveYaw;
     const big = this._loneTree(terrain);
     if (big) {
-      const off = big.radius * 0.62 + 1.4;
+      const off = big.radius * 0.95 + 2.0;
       const cx = big.x + off * 0.74;
       const cz = big.z + off * 0.67;
       canopyCam = eye(cx, cz, 1.7);
@@ -1091,7 +1093,7 @@ export class VegetationSystem extends System {
     }
     capture.registerShot('veg-canopy', {
       description: 'Standing under a broad oak, looking up through the branches.',
-      camera: { position: canopyCam, yaw: canopyYaw, pitch: 36, fov: 75 },
+      camera: { position: canopyCam, yaw: canopyYaw, pitch: 27, fov: 75 },
       apply(c) { c.state.worldTime = 12.0 * 3600; },
     });
   }
@@ -1112,7 +1114,7 @@ export class VegetationSystem extends System {
     for (const target of candidates) {
       for (let i = 0; i < 12; i++) {
         const a = (i / 12) * Math.PI * 2;
-        for (const dist of [68, 88, 112]) {
+        for (const dist of [56, 72, 94]) {
           const x = target.x + Math.cos(a) * dist;
           const z = target.z + Math.sin(a) * dist;
           if (terrain.isWater(x, z)) continue;
@@ -1122,7 +1124,7 @@ export class VegetationSystem extends System {
           if (!this._hasSightline(terrain, x, z, target.x, target.z, 1.75, 5)) continue;
           const rise = terrain.heightAt(target.x, target.z) - terrain.heightAt(x, z);
           const seen = this._treesInView(x, z, target.x, target.z, dist + 90);
-          const score = seen * 1.5 + rise * 1.4 - Math.abs(dist - 88) * 0.05;
+          const score = seen * 1.5 + rise * 1.4 - Math.abs(dist - 72) * 0.05;
           if (score > bestScore) {
             bestScore = score;
             best = { x, z, tx: target.x, tz: target.z };

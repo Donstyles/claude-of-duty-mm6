@@ -566,7 +566,7 @@ export class SpellbookPanel extends Panel {
     // Cell (0,0) is not a spell: it is the school's illuminated plate.
     cells.push(el('div', {
       className: 'mm-plate',
-      style: { backgroundImage: `url("${T.illuminatedPlate(this.school)}")` },
+      style: { backgroundImage: `url("${T.illuminatedPlate(this.school) || ''}")` },
     }));
     for (let i = 0; i < 11; i++) {
       const spell = spells[i];

@@ -168,9 +168,10 @@ export class HUD {
     }));
 
     const oval = (glyph, name, key, onClick) => {
+      const src = this.textures?.tallOval(glyph);
       const b = el('button', {
         className: 'mm-oval is-tall', type: 'button', 'aria-label': name,
-        style: { backgroundImage: `url("${this.textures.tallOval(glyph)}")` },
+        style: { backgroundImage: src ? `url("${src}")` : undefined },
       });
       b.addEventListener('click', onClick);
       tooltip.attach(b, () => tipMarkup({ title: name, subtitle: key }));

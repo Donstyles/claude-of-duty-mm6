@@ -1076,7 +1076,7 @@ export class UISystem extends System {
       || Object.values(NPCS ?? {})[0];
     if (!src) {
       return {
-        name: 'A Traveller', profession: 'Wanderer', place: 'The road',
+        name: 'A Traveller', profession: 'Wanderer', place: 'The road', venueKind: 'forge',
         greeting: '"Well met. Mind the goblins on the south road."',
         topics: [{ id: 'road', label: 'The road', text: 'They come down from the temple after dark.' }],
         services: [], portraitSpec: { key: 'traveller', classId: 'ranger', gender: 'm' },
@@ -1099,6 +1099,8 @@ export class UISystem extends System {
       name: src.name,
       profession: src.profession,
       place: prettyId(src.location ?? src.town ?? ''),
+      // Which pre-rendered interior stands behind them.
+      venueKind: /priest|temple|shrine|cleric/i.test(prof) ? 'temple' : 'forge',
       greeting: src.dialogue?.greeting ?? '"Yes?"',
       topics,
       services,
@@ -1321,13 +1323,6 @@ function prettyId(id) {
     .replace(/^(npc_|qi_|main_\d+_|promo_|side_|dun_|town_)/, '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-function tintHex(hex, mult) {
-  const r = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(1, 3), 16) * mult)));
-  const g = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(3, 5), 16) * mult)));
-  const b = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(5, 7), 16) * mult)));
-  return `rgb(${r},${g},${b})`;
 }
 
 /** Tiny wrapped value-noise, used only when no terrain system is present. */

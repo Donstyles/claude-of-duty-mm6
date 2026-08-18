@@ -1746,7 +1746,6 @@ export class UITextures {
 
       // Ceiling beams running back to the vanishing point.
       for (let i = -6; i <= 6; i++) {
-        g.strokeStyle = i % 2 ? '#3A2410' : '#553venue'.slice(0, 7);
         g.strokeStyle = i % 2 ? '#3A2410' : '#553415';
         g.lineWidth = 7;
         g.beginPath();

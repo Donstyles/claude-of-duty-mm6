@@ -10,74 +10,68 @@ axis**, never on the average.
 
 ---
 
-## Blind-test finding — METHODOLOGY FIX REQUIRED
+## Blind-test methodology — settled, keep doing this
 
-The first unlabelled side-by-side (`/tmp/blind-a.jpg`, ours vs
-`reference/mm6-web/screenshot-33-.jpg`) exposed that the comparison itself was
-unfair, in ways that matter more than any single material:
+Captures for the blind test must be taken **with the HUD on, at 4:3**
+(`--width 1440 --height 1080`, no `--hud 0`). MM6 is never seen without its
+chrome, which fills roughly 28% of every frame, and comparing a full-bleed 16:9
+vista against a framed 4:3 screenshot tells you nothing.
 
-1. **Ours had no interface.** MM6 is *never* seen without its chrome — the
-   right panel and portrait bar occupy about 28% of every frame. Captures for
-   the blind test must run with the HUD **on**, not `--hud 0`.
-2. **Aspect mismatch.** MM6 is 4:3 with the 3D view inset inside stone columns;
-   ours is full-bleed 16:9. Blind captures should be taken at 4:3.
-3. **Field of view.** MM6's view is much tighter — objects fill the frame.
-   Our vistas are wide and distant, which reads as a landscape renderer.
-4. **Texture contrast.** MM6's close surfaces are markedly more saturated and
-   higher-contrast than ours at the same distance.
+Build a sheet with:
+`node tools/imgproc.mjs compare <ours>.png reference/mm6-web/<theirs>.jpg out.jpg`
+It is unlabelled on purpose.
 
-Trees ARE present and working — a copse renders near the town — but they are
-far too sparse and too small in frame compared with the reference.
+**Standing result:** the interface now reproduces very closely — right panel,
+arched automap, stained-glass hireling slots, the four book emblems, marble
+portrait bar, green HP over blue SP. The 3D view is where we still lose.
 
 ---
 
-## Round 3 — `shots/pfx4/`, `shots/dun5/`, `shots/mon/`
+## Round 4 — `shots/dense2/`, `shots/wx2/`, `shots/wx3/`, `shots/npc/`
 
-### Fixed since round 2
-- **Grass tiling is gone.** The repeating diagonal hatch across the hillsides
-  no longer appears. This was the worst defect in round 2.
-- **Daylight is calibrated.** Sunlit grass measures `(102,125,69)` against
-  MM6's `(111,122,58)`; the sky holds at `(56,77,134)` against `(41,69,140)`.
-- **The town's circular hem is broken up** and feathers into the grass.
-- **Dungeons exist** and read correctly: warm torch pools against dark stone,
-  columns, a corridor receding into black.
-- **Monsters exist**, animate, and carry weapons and clothing.
-- **Post-processing is in** — bloom thresholded high, light grade, SMAA.
+### Fixed since round 3
+- **Town density.** Plots pulled to ~half their setback; buildings now crowd
+  the frame instead of ringing a parade ground.
+- **Plaster crazing gone.** The cracked reptile-skin pattern that kept
+  appearing on walls *and* was misread as a ground defect was plaster's crack
+  network running at 85% strength evenly. Now hairline and patchy.
+- **Townsfolk are people.** They were purple cones because the system read
+  `def.palette/greeting/topics`, which do not exist — the catalogue nests them
+  under `look` and `dialogue`.
+- **Paving warmed** and dropped from 2.4 m flagstones to 1.5 m.
+- **Water captures find a real shoreline** and the sea fills the frame.
+- **Trees exist** and render in copses.
 
 ### Open defects, most damaging first
 
-1. **NO VEGETATION. Still the single biggest gap.**
-   The world is bare ground. Trees are most of what makes an MM6 outdoor frame
-   read as MM6, and their absence is why the vista still looks like a landscape
-   renderer rather than a game. Big round full canopies on short trunks, in
-   clumps with open meadows between — never a uniform carpet.
+1. **DUSK IS NEON MAGENTA.** `shots/wx2/water-shore.png` at 18.2h renders a hot
+   pink/magenta sky with glowing white hotspots in the clouds. It looks like a
+   synthwave album cover, not MM6's warm golden evening. Noon is unaffected
+   (`shots/wx3/water-noon.png` is correct), so this is specific to the low-sun
+   keyframes and their cloud tinting.
 
-2. **CLOUDS HAVE PARTLY REGRESSED.** Some read as proper rounded cumulus, but
-   many are stretched into thin horizontal wisps and streaks, especially near
-   the horizon. They need to be individually readable puffs with soft shaded
-   undersides across the whole sky, not just overhead.
+2. **CLOUDS HAVE OVERSHOT.** They were too few and too large; they are now too
+   many and too small, reading as evenly-scattered popcorn blobs rather than
+   MM6's varied cumulus. Needs a middle setting with a *range* of sizes — a few
+   large forms plus smaller ones — rather than one uniform scale. They are also
+   tinted slightly too yellow at midday.
 
-3. **GRASS IS NOW TOO SMOOTH.** Fixing the tiling overcorrected into flat felt.
-   It needs close-range blade detail that does NOT reintroduce a repeating
-   pattern — high-frequency, non-directional, with the macro tint carrying the
-   large-scale variation.
+3. **HARD SEAM AT THE HORIZON** where sky meets sea — a visible straight line
+   rather than a soft meeting.
 
-4. **THE PALE CRACKED FOREGROUND MATERIAL IS STILL WRONG.** Bottom-left of the
-   vista still shows a crazed, mud-cracked, scaly pattern. Warmer than before,
-   but still reads as no real ground material.
+4. **NO PLANTING IN TOWN.** The reference has trees flanking the gate, flowering
+   shrubs, and a planted bed in the square. Ours is all paving and walls.
 
-5. **TERRAIN SILHOUETTE IS SOFT.** The hills are rounded and samey. MM6 has
-   more variety — the odd bluff, outcrop and steep face breaking the skyline.
+5. **PORTRAITS ARE FLAT CARTOON FACES** next to MM6's painted photo-real ones.
+   Now the most obvious difference between our chrome and the real chrome.
 
-6. **Dungeon floors tile visibly** at the flagstone scale, and interiors need
-   props: rubble, bones, cobwebs, chests, doors.
+6. **Windows read as black holes** — they need interior tone or glazing.
 
-7. **Monsters are simple.** Recognisable by silhouette and correctly kitted,
-   but the surfacing is flat colour; they need real material treatment.
+7. Dungeon floors tile visibly; interiors need rubble, bones, cobwebs, chests.
 
 ### Not defects — do not "fix" these
 - The flat sky with no horizon gradient is **correct** and deliberate.
 - 10–15 fps in the capture harness is software rendering, **not** a bug.
 - Bounded directional shadowing is intentional; see the caps in `REFERENCE.md`.
-- `shots/pfxoff/` looks wrong on purpose — with post disabled the sky stays in
-  pre-tonemap mode and renders dark. It is a debug view, not a target.
+- `shots/pfxoff/` looks wrong on purpose: with post disabled the sky stays in
+  pre-tonemap mode and renders dark. Debug view, not a target.

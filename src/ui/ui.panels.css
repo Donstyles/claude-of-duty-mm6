@@ -1309,8 +1309,13 @@
 .mm-create-col > * { flex: 0 0 auto; }
 .mm-create-col .mm-row { line-height: calc(var(--u) * 13); font-size: calc(var(--u) * 11); padding: 0 calc(var(--u) * 5); }
 .mm-create-col .mm-block-head { line-height: calc(var(--u) * 15); font-size: calc(var(--u) * 11); padding: 0 calc(var(--u) * 5); }
-.mm-create-bottom { height: calc(var(--u) * 86); display: flex; gap: calc(var(--u) * 6); padding: calc(var(--u) * 4); }
-.mm-create-bottom > * { flex: 1; padding: calc(var(--u) * 3) 0; overflow: hidden; }
+.mm-create-bottom {
+  height: calc(var(--u) * 88);
+  display: flex;
+  gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 3) calc(var(--u) * 4);
+}
+.mm-create-bottom > * { flex: 1; padding: calc(var(--u) * 2) 0; overflow: hidden; }
 .mm-list-cols { column-count: 2; column-gap: calc(var(--u) * 8); padding: 0 calc(var(--u) * 8); }
 .mm-list-cols.is-three { column-count: 3; }
 .mm-list-cols div { font-size: calc(var(--u) * 11); line-height: calc(var(--u) * 12); }

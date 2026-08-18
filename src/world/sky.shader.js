@@ -285,7 +285,9 @@ void main() {
   vec2 uvB = (qB + uOffB) * uInvScaleB;
   vec4 cB = texture2D(uClouds, uvB);
   float hB = clamp((cB.r - uThrB) / max(1.0 - uThrB, 0.06), 0.0, 1.0);
-  float aB = smoothstep(0.02, 0.34, hB) * uOpacityB;
+  // Same reasoning as layer A, one notch softer: the upper deck is read at a
+  // smaller angular size and a razor edge up there reads as confetti.
+  float aB = smoothstep(0.010, 0.16, hB) * uOpacityB;
   aB *= smoothstep(0.008, 0.062, up) / (1.0 + tB / 26000.0);
 
   float tA = uAltA * proj;
@@ -304,11 +306,20 @@ void main() {
   float detailFade = 1.0 / (1.0 + tA / 9000.0);
   float edge = 1.0 - smoothstep(0.0, 0.55, hA);
   float dn = texture2D(uClouds, uvA * 2.15 + vec2(0.37, 0.11)).r;
-  hA *= 1.0 - 0.30 * dn * edge * detailFade;
+  hA *= 1.0 - 0.24 * dn * edge * detailFade;
 
-  // A fairly tight alpha ramp: MM6's puffs have readable, individual outlines
-  // against flat blue, not a soft airbrushed falloff.
-  float aA = smoothstep(0.015, 0.17, hA);
+  // The alpha ramp is what decides whether a cloud has an *outline*.
+  //
+  // MM6's puffs are opaque bodies cut against flat blue: the transition from
+  // sky to full cloud happens over a couple of pixels, not over a third of the
+  // puff's radius. A wide ramp here is what produced the airbrushed-smoke
+  // reading — every cloud spent most of its area part-transparent, so the blue
+  // showed through the body and the silhouette dissolved. Ramping over the
+  // bottom 6% of the thresholded field instead of the bottom 17% makes the
+  // body solid and leaves the feathering to the field's own gradient, which at
+  // 250 m puffs is already only a pixel or two wide on screen. The floor stays
+  // non-zero so the very thinnest wisps still fade in rather than pop.
+  float aA = smoothstep(0.006, 0.062, hA);
   aA *= smoothstep(0.006, 0.055, up) / (1.0 + tA / 26000.0);
   aA *= uOpacityA;
 

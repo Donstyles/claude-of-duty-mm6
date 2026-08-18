@@ -373,7 +373,9 @@ function blobsP(h, u, v, G, rMin, rMax) {
       const r = rMin + (rMax - rMin) * cellVal(h, cx, cy, G, 2);
       const amp = 0.52 + 0.48 * cellVal(h, cx, cy, G, 3);
       // A mild random aspect keeps the blobs from reading as stamped circles.
-      const ex = 1 + (cellVal(h, cx, cy, G, 4) - 0.5) * 0.55;
+      // Kept modest: MM6's puffs are near-round, and a wide aspect spread is
+      // one of the two things that turns a cumulus field into a smear.
+      const ex = 1 + (cellVal(h, cx, cy, G, 4) - 0.5) * 0.34;
       const ddx = (fx - jx) / (r * ex);
       const ddy = (fy - jy) / (r / ex);
       const t2 = ddx * ddx + ddy * ddy;
@@ -437,14 +439,27 @@ function bakeCloudSheet(N, rng) {
   const shape = new Float32Array(N * N);
   const inv = 1 / N;
 
-  // Cells per tile for the three blob scales. At a 4 km layer-A repeat these
-  // are 670 m / 330 m / 180 m puffs, which the softened projection shows at
-  // roughly 20° / 10° / 5° across at 25° above the horizon — one big form,
-  // its lobes, and the buds on the lobes. MM6's sky carries four or five
-  // masses across a wide frame, never a mackerel stipple.
-  const G_BIG = 6;
-  const G_MID = 12;
-  const G_FINE = 22;
+  // Cells per tile for the three blob scales.
+  //
+  // This is *the* number that decides whether the sky reads as MM6. At the
+  // 4 km layer-A repeat, a base cell of 16 puts one puff at 250 m, and the
+  // softened projection shows that at ≈7° wide / ≈5° tall from 2 km out — a
+  // little over a tenth of the 65° viewport, which is what the reference
+  // frames measure (screenshot 33's upper-right cumulus run 8–12% of the
+  // viewport width, screenshot 17's bands are narrower still). An earlier
+  // build used 6 cells; that made 670 m masses subtending 19°, i.e. three
+  // airbrushed shapes sprawling across the whole frame with no blue between
+  // them, which is exactly the defect this replaces. Going the other way and
+  // pushing past ~24 cells turns the sky into a mackerel stipple that mips
+  // into a grey wash near the skyline.
+  //
+  // The two finer scales are capped against the sheet resolution so a low
+  // quality 256² bake never asks for blobs a few texels across, which would
+  // alias into speckle instead of budding lobes onto the mass.
+  const G_BIG = 16;
+  const G_MID = Math.min(32, Math.max(20, Math.round(N / 22)));
+  const G_FINE = Math.min(60, Math.max(28, Math.round(N / 12)));
+  const G_GRAIN = Math.min(40, Math.max(18, Math.round(N / 8)));
 
   for (let y = 0; y < N; y++) {
     const v = y * inv;
@@ -452,25 +467,36 @@ function bakeCloudSheet(N, rng) {
     for (let x = 0; x < N; x++) {
       const u = x * inv;
       // A gentle domain warp keeps the blob grid from ever being legible as a
-      // grid. Heavier than this and it shears the puffs into commas.
-      const wx = u + 0.026 * fbmP(hWarp, u, v, 3, 2, 0.5);
-      const wy = v + 0.026 * fbmP(hWarp, u + 0.37, v - 0.19, 3, 2, 0.5);
+      // grid. The amplitude is in *tile* units, so it has to shrink with the
+      // cell size or it stops nudging puffs apart and starts shearing each one
+      // into a comma: 0.011 is ≈0.18 of a 16-cell grid step.
+      const wx = u + 0.011 * fbmP(hWarp, u, v, 3, 2, 0.5);
+      const wy = v + 0.011 * fbmP(hWarp, u + 0.37, v - 0.19, 3, 2, 0.5);
 
-      // Three metaball scales stacked. `big` is the mass, `mid` the lobes it
-      // buds, `fine` the crumbs on the lobes' shoulders.
-      const big = blobsP(hBig, wx, wy, G_BIG, 0.54, 1.05);
-      const mid = blobsP(hMid, wx, wy, G_MID, 0.42, 0.86);
-      const fine = blobsP(hFine, wx, wy, G_FINE, 0.36, 0.72);
+      // Three metaball scales stacked. `big` is the puff, `mid` the lobes it
+      // buds, `fine` the crumbs on the lobes' shoulders. The radii are tuned
+      // so neighbouring big blobs only *sometimes* touch: an isolated one
+      // stays a single readable puff, a touching pair merges into a two-lobed
+      // cauliflower, and three or four make a small bank. That distribution —
+      // many discrete forms, occasional clusters — is what the reference sky
+      // actually shows.
+      const big = blobsP(hBig, wx, wy, G_BIG, 0.40, 0.80);
+      const mid = blobsP(hMid, wx, wy, G_MID, 0.34, 0.68);
+      const fine = blobsP(hFine, wx, wy, G_FINE, 0.28, 0.58);
 
       // Where clouds are allowed at all. §2.4: MM6's sky is 35–40% cloud with
       // real blue lanes through it, so the mask has to genuinely clear out.
-      const mask = fbmP(hMask, wx, wy, 3, 2, 0.5) * 0.5 + 0.5;
-      const gate = 0.20 + 1.05 * smoothstep(0.28, 0.74, mask);
+      // The gate runs a little faster than it used to (5 rather than 3 base
+      // lattice cells): against 250 m puffs a 3-cell gate is a 1.3 km blanket
+      // that gathers every puff into two or three continents, and the whole
+      // point is that the puffs are scattered across the *whole* sky.
+      const mask = fbmP(hMask, wx, wy, 5, 3, 0.5) * 0.5 + 0.5;
+      const gate = 0.30 + 0.98 * smoothstep(0.26, 0.76, mask);
 
-      let s = (big * 1.0 + mid * 0.46 + fine * 0.13) * gate;
+      let s = (big * 1.0 + mid * 0.42 + fine * 0.12) * gate;
       // A whisper of grain so the interiors are not glassy under the relief
       // lighting; too little to touch the silhouette.
-      s += 0.035 * fbmP(hGrain, wx, wy, 26, 2, 0.5);
+      s += 0.030 * fbmP(hGrain, wx, wy, G_GRAIN, 2, 0.5);
       shape[row + x] = s;
     }
   }
@@ -530,14 +556,20 @@ function bakeCloudSheet(N, rng) {
     return clamp((lo + frac) / BINS, 0.0, 0.985);
   };
 
-  const thick = blurWrap(shape, N, Math.max(2, Math.round(N / 26)));
+  // Thickness is the shape blurred by roughly a third of a puff — big enough
+  // to fill a puff's core and fall off through its skirt, small enough that a
+  // puff still has its own belly instead of borrowing its neighbour's. Both
+  // this and the relief radius below are expressed against the 16-cell base
+  // grid, so they follow the puff size rather than the texture size.
+  const cellTexels = N / G_BIG;
+  const thick = blurWrap(shape, N, Math.max(2, Math.round(cellTexels * 0.36)));
 
   // The gradient is taken from a *smoothed* copy. Differencing the raw field
   // would put every billow crinkle into the surface normal and the cloud comes
   // out looking like crumpled foil; MM6's clouds are broadly shaded masses
   // whose fine detail lives in the silhouette, not in the lighting. The radius
   // is set so one lobe carries one broad light-to-dark sweep.
-  const relief = blurWrap(shape, N, Math.max(3, Math.round(N / 58)));
+  const relief = blurWrap(shape, N, Math.max(2, Math.round(cellTexels * 0.20)));
 
   // Gradient, with an adaptive encode scale so `uBump` behaves at any size.
   let gsum = 0;
@@ -586,12 +618,18 @@ const QUALITY = {
  * These are not free parameters. With the softened projection (`PLANE_POW`)
  * the cloud plane sits at `alt · sin(e)^-p` metres, so at 25° above the
  * horizon layer A is ~2.2 km out and one degree of azimuth is ~35 m. A repeat
- * of 4 km with the bake's 6-cell base frequency puts a cumulus mass at ~670 m,
- * i.e. **≈19° wide by ≈13° tall** — big, rounded and individually readable,
- * with four or five of them across a wide frame. Raise `repeat` and the sky
- * turns into a mackerel stipple; lower it and one puff eats the viewport.
+ * of 4 km with the bake's 16-cell base frequency puts a puff at 250 m, i.e.
+ * **≈7° wide by ≈5° tall** — about a ninth of the 65° viewport, so a dozen or
+ * more of them are visible at once with real blue between them. That is the
+ * measured MM6 relationship; three 19° masses filling the frame is not.
+ *
+ * The repeat itself stays large on purpose. Shrinking puffs by shrinking
+ * `repeat` would work optically but would bring the tile seam inside the
+ * frame — at 2 km the eye sees roughly 2.5 km of plane across a wide shot, so
+ * anything under ~3 km repeats visibly. Puff size belongs to the bake's cell
+ * count; `repeat` only has to be bigger than the visible patch.
  */
-const LAYER_A = { repeat: 4000, alt: 1500, thickness: 430 };
+const LAYER_A = { repeat: 4000, alt: 1500, thickness: 260 };
 const LAYER_B = { repeat: 9500, alt: 3900 };
 
 /**
@@ -602,9 +640,17 @@ const LAYER_B = { repeat: 9500, alt: 3900 };
  */
 const PLANE_POW = 0.45;
 
-/** Fraction of the cloud sheet that survives thresholding, clear → storm. */
-const COVER_A = [0.37, 0.93];
-const COVER_B = [0.15, 0.74];
+/**
+ * Fraction of the cloud sheet that survives thresholding, clear → storm.
+ *
+ * This is *sheet* coverage, not screen coverage: the near-horizon compression
+ * concentrates a disproportionate share of the plane into the last few degrees
+ * of sky, so the fraction of visible sky that reads as cloud comes out several
+ * points above these numbers. §2.4 wants 35–40% of the sky covered on a clear
+ * day with plenty of blue holes, which lands here at a sheet coverage of 0.28.
+ */
+const COVER_A = [0.28, 0.90];
+const COVER_B = [0.11, 0.70];
 
 export class SkySystem extends System {
   static id = 'sky';
@@ -732,7 +778,7 @@ export class SkySystem extends System {
     // Anisotropy is doing real work here: near the horizon the cloud plane is
     // compressed 10–25× vertically and only an anisotropic tap keeps the thin
     // MM6 bands legible instead of averaging them into a haze band.
-    tex.anisotropy = Math.min(8, ctx.engine?.maxAnisotropy ?? 1);
+    tex.anisotropy = Math.min(16, ctx.engine?.maxAnisotropy ?? 1);
     tex.needsUpdate = true;
     this._texture = tex;
 

@@ -77,15 +77,14 @@ export function nu(v) {
  * a panel's are wide (58×30, aspect 1.95 : 1). They are never the same shape.
  */
 export function goldOval({ glyph, label, tall = false, textures, onClick, tip, className = '' }) {
+  // A texture that failed to paint returns an empty string; never emit
+  // `url("")`, which the browser resolves against the page and re-requests.
+  const src = tall ? textures?.tallOval(glyph) : textures?.wideOval(glyph);
   const b = el('button', {
     className: `mm-oval ${tall ? 'is-tall' : 'is-wide'} ${className}`.trim(),
     type: 'button',
     'aria-label': label ?? glyph,
-    style: {
-      backgroundImage: textures
-        ? `url("${tall ? textures.tallOval(glyph) : textures.wideOval(glyph)}")`
-        : undefined,
-    },
+    style: { backgroundImage: src ? `url("${src}")` : undefined },
   });
   if (onClick) b.addEventListener('click', onClick);
   if (tip) tooltip.attach(b, tip);
