@@ -119,11 +119,18 @@ export function spellPlates(SPELLS) {
  *
  * Landscape rather than square, because the frame is wider than it is tall.
  */
+// Four of the first nine came back as *photographs of artwork*: an open book
+// lying on a table, a framed painting propped on a table, a glass head on a
+// table. The generator read "framed illustration on a title page" as an object
+// to photograph rather than as a picture to paint. Hence the emphatic flatness
+// here — the image must BE the painting, edge to edge, with nothing around it.
 const COVER_STYLE =
-  'A framed illustration on the title page of a 1998 fantasy RPG spellbook: ' +
-  'watercolour and gouache over ink, rich saturated pigment, loose confident ' +
-  'brushwork, a single allegorical subject filling the frame against a simple ' +
-  'ground, no text, no lettering, no border decoration.';
+  'Painted in watercolour and gouache over ink with rich saturated pigment and ' +
+  'loose confident brushwork, in the style of a 1998 fantasy RPG illustration. ' +
+  'The painting fills the entire image and bleeds off all four edges. ' +
+  'Flat-on view of the artwork itself — this is the picture, not a photograph ' +
+  'of a picture. No table, no book, no easel, no frame, no mount, no border, ' +
+  'no white margin, no background beyond the painting, no text, no lettering.';
 
 const COVERS = {
   fire: 'A salamander coiled in the heart of a hearth fire, its scales lit from within, embers rising.',

@@ -51,6 +51,15 @@ def pack_spells(size=176, feather=0.05):
         h, w, _ = a.shape
 
         bg = _paper_mask(a)
+        # A third of the set came back as a painting on a pale square rather
+        # than a cut-out, and that square reads as a box on the page. The fill
+        # stops at whatever hard edge the generator painted round its paper, so
+        # when it has clearly failed, loosen the definition of "paper" and try
+        # again rather than shipping a rectangle.
+        for lo_thr, chroma in ((168, 56), (150, 68), (132, 82)):
+            if bg.mean() >= 0.16:
+                break
+            bg = _paper_mask(a, lo_thr, chroma)
         # Measured from what the fill actually caught, not from the border:
         # several plates are a white page inside a cream margin, so the border
         # colour alone is the wrong reference for the paper the subject sits on.
@@ -235,7 +244,7 @@ def _side_falloff(h, w, feather):
     return np.clip((1.0 - x) / feather, 0.0, 1.0) * np.ones((h, 1), np.float32)
 
 
-def _paper_mask(a):
+def _paper_mask(a, lo_thr=186, chroma=44):
     """The connected run of page reachable from the frame edge.
 
     Colour alone cannot separate page from paint: a bright highlight inside the
@@ -245,7 +254,7 @@ def _paper_mask(a):
     two orders of magnitude slower over 99 megapixel plates.
     """
     lo, hi = a.min(axis=2), a.max(axis=2)
-    paperish = ((lo > 186) & ((hi - lo) < 44)).astype(np.uint8) * 255
+    paperish = ((lo > lo_thr) & ((hi - lo) < chroma)).astype(np.uint8) * 255
 
     # A one-pixel apron of paper around the frame, so the fill still starts
     # even on a plate whose painting runs into a corner.

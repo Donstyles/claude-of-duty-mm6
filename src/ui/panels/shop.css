@@ -27,15 +27,22 @@
 
 .mm-shop-wall { position: absolute; inset: 0; }
 
-/* Two stops off the room so painted steel reads against painted timber. It is
-   heavier at the edges than in the middle, which keeps the hearth alight and
-   pulls the eye to the goods rather than to the corners. */
+/* Knocks the room back so painted steel reads against it, and lays a warm
+   board where the stock hangs.
+ *
+ * The first version darkened only, and measurement said that was backwards:
+ * the reference's background behind its goods reads 25 where ours read 14 —
+ * it hangs stock on a *pale* walnut board, and the brightness of that board is
+ * half of why its merchandise is legible. So the vignette is lighter now, and
+ * a warm panel sits under the goods doing the board's job without losing the
+ * room behind it. */
 .mm-shop-scrim {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 64% 58% at 50% 46%, rgba(12, 7, 3, 0.38) 0%, rgba(9, 5, 2, 0.72) 100%),
-    linear-gradient(180deg, rgba(6, 4, 2, 0.50) 0%, rgba(6, 4, 2, 0.10) 36%, rgba(6, 4, 2, 0.34) 100%);
+    radial-gradient(ellipse 58% 46% at 50% 44%, rgba(150, 108, 62, 0.34) 0%, rgba(90, 62, 32, 0.16) 62%, rgba(9, 5, 2, 0.0) 100%),
+    radial-gradient(ellipse 64% 58% at 50% 46%, rgba(12, 7, 3, 0.20) 0%, rgba(9, 5, 2, 0.60) 100%),
+    linear-gradient(180deg, rgba(6, 4, 2, 0.42) 0%, rgba(6, 4, 2, 0.06) 36%, rgba(6, 4, 2, 0.28) 100%);
   pointer-events: none;
 }
 
@@ -58,7 +65,7 @@
  * goods on a pale walnut board instead of in a dim forge. */
 .mm-panel[data-panel='shop'] .mm-shop-item {
   filter:
-    brightness(1.62) saturate(1.06)
+    brightness(1.95) saturate(1.08)
     drop-shadow(calc(var(--u) * -0.6) calc(var(--u) * -0.6) 0 rgba(18, 10, 4, 0.85))
     drop-shadow(calc(var(--u) * 0.6) calc(var(--u) * 0.6) 0 rgba(18, 10, 4, 0.85))
     drop-shadow(calc(var(--u) * 3) calc(var(--u) * 5) calc(var(--u) * 3) rgba(0, 0, 0, 0.75))
@@ -67,7 +74,7 @@
 }
 .mm-panel[data-panel='shop'] .mm-shop-item:hover {
   filter:
-    brightness(1.78) saturate(1.08)
+    brightness(2.12) saturate(1.10)
     drop-shadow(calc(var(--u) * 3) calc(var(--u) * 5) calc(var(--u) * 3) rgba(0, 0, 0, 0.75))
     drop-shadow(0 0 calc(var(--u) * 6) rgba(255, 240, 180, 0.95));
 }
