@@ -2936,21 +2936,37 @@ const FIGURE_LOOK = {
 
 // ── portrait painting ───────────────────────────────────────────────────────
 
+/**
+ * Flesh.
+ *
+ * The first set ran saturated orange (#f0a074, #ef794b), which is the single
+ * thing that made these read as cartoons rather than paintings: real flesh is a
+ * muted ochre-pink, and its *chroma* is low even when its value is high. These
+ * are also spread wider from `light` to `deep` than the originals, because at
+ * the ~90 px the HUD actually shows a portrait at, subtle modelling averages
+ * away and only a strong value structure survives the downsample.
+ *
+ * `warm` and `cool` carry the temperature shift a painter puts across a face —
+ * blood-warm at the cheeks, nose and ears, cooler at the temples and jaw.
+ * Flat one-temperature skin is what makes a face look like plastic.
+ */
 const SKIN_TONES = [
-  { base: '#f0a074', shadow: '#a85434', deep: '#5e2a15', light: '#ffd8b4' },
-  { base: '#ef794b', shadow: '#9c4526', deep: '#54200f', light: '#f7a582' },
-  { base: '#d9764a', shadow: '#8a3f22', deep: '#481d0e', light: '#f2a276' },
-  { base: '#b06238', shadow: '#6a331a', deep: '#38170a', light: '#d68d5c' },
-  { base: '#8a4c2c', shadow: '#4e2513', deep: '#291208', light: '#b26e46' },
+  { base: '#d9a887', shadow: '#9d6f57', deep: '#4e3125', light: '#f4dcc4', warm: '#c98a70', cool: '#a9998f' },
+  { base: '#cfa17e', shadow: '#93674e', deep: '#472c20', light: '#eed3b6', warm: '#c07f66', cool: '#a09287' },
+  { base: '#bb8a63', shadow: '#7d5540', deep: '#3d271b', light: '#dcbb97', warm: '#ad6f52', cool: '#8e8177' },
+  { base: '#a8764f', shadow: '#6c4530', deep: '#341f14', light: '#c99c74', warm: '#9a5d3e', cool: '#7f7166' },
+  { base: '#835538', shadow: '#523322', deep: '#26150d', light: '#a87a55', warm: '#7a4229', cool: '#645749' },
+  { base: '#5f3d27', shadow: '#3a2418', deep: '#1a0f08', light: '#82573a', warm: '#59301c', cool: '#4a4034' },
 ];
 
 const HAIR_COLOURS = [
-  { base: '#2b1c10', light: '#5c3f22', dark: '#120b05' },   // black-brown
-  { base: '#5a3a1c', light: '#996b34', dark: '#2a1a0a' },   // chestnut
-  { base: '#8a6026', light: '#d3a45a', dark: '#4a3210' },   // dark blond
-  { base: '#b08a3c', light: '#efd79a', dark: '#6a4c14' },   // flaxen
-  { base: '#8d3f1c', light: '#d2743a', dark: '#4c1f0b' },   // auburn
-  { base: '#9aa0a6', light: '#e2e6ea', dark: '#5a6068' },   // grey
+  { base: '#1a1109', light: '#42301a', dark: '#080503' },   // black
+  { base: '#3b2510', light: '#6f4d24', dark: '#180e04' },   // dark brown
+  { base: '#5c3f18', light: '#9c7238', dark: '#2a1c07' },   // chestnut
+  { base: '#836027', light: '#c9a55f', dark: '#3f2c0c' },   // dark blond
+  { base: '#a8823a', light: '#e4cd92', dark: '#5c4110' },   // flaxen
+  { base: '#6e2f14', light: '#b25c2c', dark: '#331306' },   // auburn
+  { base: '#7e858c', light: '#cfd5da', dark: '#42474e' },   // grey
 ];
 
 const EYE_COLOURS = ['#5b7f4e', '#3f6f9c', '#6b4a2a', '#4f6b74', '#7a5b8f'];
@@ -3024,10 +3040,14 @@ function resolvePortraitLook(spec, rng) {
  * painted portrait and a piece of clip art.
  */
 function paintPortrait(g, w, h, cfg, rng) {
+  // Scale. MM6's portraits are framed TIGHT: the head fills the oval, the crown
+  // is cropped by the frame and the shoulders run off the bottom edge. The
+  // first pass sat a small head in the middle of a lot of empty ground, which
+  // is why ours read as dolls in lockets next to their half-length portraits.
   const cx = w * 0.5;
-  const cy = h * 0.400;
-  const rx = w * 0.290;
-  const ry = h * 0.248;
+  const cy = h * 0.430;
+  const rx = w * 0.370;
+  const ry = h * 0.315;
   const geo = {
     cx, cy, rx, ry,
     browY: cy - ry * 0.30,
@@ -3036,7 +3056,7 @@ function paintPortrait(g, w, h, cfg, rng) {
     mouthY: cy + ry * 0.66,
     chinY: cy + ry * 1.06,
     neckTop: cy + ry * 0.74,
-    shoulderY: h * 0.800,
+    shoulderY: h * 0.855,
   };
 
   paintBackdrop(g, w, h, cfg, rng, geo);
@@ -3330,8 +3350,9 @@ function paintFaceMass(g, cfg, rng, geo, face) {
     cx + rx * 0.10, cy + ry * 0.28, rx * 1.75,
   );
   form.addColorStop(0, cfg.skin.light);
-  form.addColorStop(0.30, cfg.skin.base);
-  form.addColorStop(0.66, cfg.skin.shadow);
+  form.addColorStop(0.22, cfg.skin.base);
+  form.addColorStop(0.52, cfg.skin.shadow);
+  form.addColorStop(0.82, cfg.skin.deep);
   form.addColorStop(1, cfg.skin.deep);
   g.fillStyle = form;
   g.globalAlpha = 0.95;
@@ -3356,6 +3377,19 @@ function paintFaceMass(g, cfg, rng, geo, face) {
   UITextures.dab(g, cx - rx * 0.58, cy + ry * 0.44, rx * 0.30, ry * 0.20, 0.22, cfg.skin.shadow, 0.26, 18);
   UITextures.dab(g, cx + rx * 0.58, cy + ry * 0.44, rx * 0.30, ry * 0.20, -0.22, cfg.skin.shadow, 0.32, 18);
   UITextures.dab(g, cx, cy + ry * 0.95, rx * 0.52, ry * 0.20, 0, cfg.skin.shadow, 0.34, 18);
+
+  // Temperature. A painter lays blood-warm colour across the cheeks, nose and
+  // ears and cools the temples and jaw; skin held at one temperature is the
+  // other half of why the first pass read as plastic. These go under the
+  // highlights so the lit planes still sit on top.
+  const warm = cfg.skin.warm ?? cfg.skin.shadow;
+  const cool = cfg.skin.cool ?? cfg.skin.shadow;
+  UITextures.dab(g, cx - rx * 0.50, cy + ry * 0.20, rx * 0.34, ry * 0.24, -0.16, warm, 0.30, 22);
+  UITextures.dab(g, cx + rx * 0.48, cy + ry * 0.20, rx * 0.32, ry * 0.22, 0.16, warm, 0.26, 22);
+  UITextures.dab(g, cx, cy + ry * 0.34, rx * 0.20, ry * 0.20, 0, warm, 0.28, 18);
+  UITextures.dab(g, cx - rx * 0.74, cy - ry * 0.28, rx * 0.22, ry * 0.30, 0.3, cool, 0.24, 20);
+  UITextures.dab(g, cx + rx * 0.74, cy - ry * 0.28, rx * 0.22, ry * 0.30, -0.3, cool, 0.24, 20);
+  UITextures.dab(g, cx, cy + ry * 0.92, rx * 0.40, ry * 0.16, 0, cool, 0.22, 18);
 
   // Highlights: forehead, cheekbones, chin.
   UITextures.dab(g, cx - rx * 0.22, cy - ry * 0.66, rx * 0.46, ry * 0.24, -0.12, cfg.skin.light, 0.46, 18);
@@ -3408,8 +3442,10 @@ function paintEars(g, cfg, geo) {
 
 function paintEyes(g, cfg, geo) {
   const { cx, rx, ry, eyeY, browY } = geo;
-  const dx = rx * 0.42;
-  const ew = rx * 0.235;
+  const dx = rx * 0.40;
+  // One eye-width between the eyes is the classical proportion; at rx*0.235 the
+  // eyes were nearly a quarter of the face each, which is a doll, not a person.
+  const ew = rx * 0.185;
   const eh = ew * (cfg.gender === 'f' ? 0.50 : 0.46);
 
   for (const side of [-1, 1]) {
@@ -3811,6 +3847,27 @@ function paintFinish(g, w, h, cfg, rng, geo) {
   glaze.addColorStop(1, 'rgba(18,9,3,0.14)');
   g.fillStyle = glaze;
   g.fillRect(0, 0, w, h);
+
+  // Additive dabs accumulate toward the mid-tones, so the painting ends up soft
+  // however well it was structured underneath. One multiply pass in the darks
+  // and one screen pass in the lights restores the value separation that has to
+  // survive being shown at ~90 px in the HUD.
+  g.save();
+  g.globalCompositeOperation = 'multiply';
+  g.globalAlpha = 0.30;
+  g.fillStyle = 'rgba(96,72,54,1)';
+  g.fillRect(0, 0, w, h);
+  g.globalCompositeOperation = 'screen';
+  g.globalAlpha = 0.16;
+  const lift = g.createRadialGradient(
+    cx - rx * 0.34, cy - ry * 0.46, rx * 0.06,
+    cx - rx * 0.20, cy - ry * 0.10, rx * 1.25,
+  );
+  lift.addColorStop(0, 'rgba(255,232,198,1)');
+  lift.addColorStop(1, 'rgba(0,0,0,1)');
+  g.fillStyle = lift;
+  g.fillRect(0, 0, w, h);
+  g.restore();
 
   const vig = g.createRadialGradient(cx, h * 0.42, w * 0.30, cx, h * 0.5, w * 0.86);
   vig.addColorStop(0, 'rgba(0,0,0,0)');
