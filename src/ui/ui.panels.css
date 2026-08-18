@@ -47,7 +47,9 @@
 }
 
 .mm-ui * { box-sizing: border-box; }
-.mm-ui button {
+/* `:where` keeps the reset at zero specificity so a component rule further down
+   can still give a button a background, a padding or a border. */
+.mm-ui :where(button) {
   font: inherit;
   color: inherit;
   background: none;
@@ -217,7 +219,9 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 2400%;
+  /* 48 slots across 16 window-widths, so the window frames three of them at a
+     time: a tick, a cardinal, a tick — and clips letters mid-turn. */
+  width: 1600%;
   height: 100%;
   display: flex;
   align-items: center;
@@ -226,7 +230,7 @@
 .mm-tape-letter,
 .mm-tape-tick {
   flex: 1 0 auto;
-  width: calc(100% / 49);
+  width: calc(100% / 48);
   text-align: center;
   color: #16130c;
   text-shadow: none;
@@ -446,9 +450,14 @@
   display: flex;
   justify-content: center;
 }
+/* Native pitch is 113. On a widescreen frame the bar is wider than 4 x 113, so
+   the cells stretch a little and the group is centred: the portrait keeps its
+   measured 20%-of-frame-height size rather than being blown up. */
 .mm-cell {
   position: relative;
-  width: calc(var(--u) * 113);
+  flex: 0 1 calc(var(--u) * 152);
+  max-width: 25%;
+  min-width: calc(var(--u) * 108);
   height: 100%;
   outline: none;
 }
@@ -678,7 +687,7 @@
   align-items: baseline;
   gap: calc(var(--u) * 8);
   padding: 0 calc(var(--u) * 8);
-  line-height: calc(var(--u) * 19);
+  line-height: calc(var(--u) * 18);
   white-space: nowrap;
 }
 .mm-row-label { font-style: italic; overflow: hidden; text-overflow: ellipsis; }
@@ -699,10 +708,10 @@
 
 .mm-sheet {
   position: absolute;
-  inset: calc(var(--u) * 12) calc(var(--u) * 12) calc(var(--u) * 6);
+  inset: calc(var(--u) * 10) calc(var(--u) * 12) calc(var(--u) * 4);
   display: flex;
   flex-direction: column;
-  gap: calc(var(--u) * 8);
+  gap: calc(var(--u) * 6);
 }
 .mm-sheet-title {
   height: calc(var(--u) * 26);
@@ -714,12 +723,14 @@
   font-style: italic;
 }
 .mm-sheet-cols { flex: 1; display: flex; gap: calc(var(--u) * 12); min-height: 0; }
-.mm-sheet-col { display: flex; flex-direction: column; gap: calc(var(--u) * 8); min-width: 0; }
+.mm-sheet-col { display: flex; flex-direction: column; gap: calc(var(--u) * 6); min-width: 0; }
 .mm-sheet-col.is-left { flex: 160; }
 .mm-sheet-col.is-right { flex: 270; }
-.mm-block { padding: calc(var(--u) * 5) calc(var(--u) * 2); }
+.mm-block { padding: calc(var(--u) * 3) calc(var(--u) * 2); }
 .mm-block.is-fill { flex: 1; overflow: hidden; }
 .mm-block-head {
+  display: flex;
+  justify-content: space-between;
   padding: 0 calc(var(--u) * 8);
   line-height: calc(var(--u) * 20);
   font-style: italic;
@@ -775,6 +786,12 @@
   pointer-events: none;
 }
 .mm-pack-items { position: absolute; inset: 0; }
+.mm-pack-foot {
+  position: absolute;
+  left: calc(var(--u) * 12);
+  right: calc(var(--u) * 12);
+  bottom: calc(var(--u) * 4);
+}
 
 /* Items are free 2-D sprites at natural size: no backing square, no rarity
    tint, no per-cell normalisation. */
@@ -802,15 +819,7 @@
 
 /* ── spellbook ────────────────────────────────────────────────────────────── */
 
-.mm-book {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  height: 100%;
-  aspect-ratio: 460 / 344;
-  max-width: 100%;
-}
+.mm-book { position: absolute; inset: 0; }
 .mm-book-block {
   position: absolute;
   inset: calc(var(--u) * 6) calc(var(--u) * 34) calc(var(--u) * 22) calc(var(--u) * 14);
@@ -834,7 +843,10 @@
 }
 .mm-book-grid {
   position: absolute;
-  inset: calc(var(--u) * 6) calc(var(--u) * 10);
+  inset: calc(var(--u) * 6) 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, calc(var(--u) * 430));
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(4, 1fr);

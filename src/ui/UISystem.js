@@ -1,11 +1,13 @@
 /**
- * The UI subsystem: HUD, panel suite, and the adapters that feed them.
+ * The UI subsystem: the MM6 chrome, the panel suite, and the adapters that feed
+ * them.
  *
  * Everything visible is procedurally painted (`UITextures`) and laid out in
- * plain DOM. The system is deliberately defensive: every cross-system read goes
- * through `?.` and falls back to a representative party, pack, journal and
- * merchant, so the interface is complete and photographable whether or not the
- * simulation systems have been built yet.
+ * plain DOM at the game's own 640×480 measurements. The system is deliberately
+ * defensive: every cross-system read goes through `?.` and falls back to a
+ * representative party, pack, journal and merchant, so the interface is
+ * complete and photographable whether or not the simulation systems have been
+ * built yet.
  *
  * Contract (ARCHITECTURE §4):
  *   openPanel(id) · closePanel() · activePanel · toast(text, kind) · log(text, kind)
@@ -20,7 +22,8 @@ import { PANEL_CLASSES, itemFootprint } from './Panel.js';
 import { tooltip } from './widgets.js';
 
 import { getClass } from '../game/data/Classes.js';
-import { SKILLS, ATTRIBUTES, MASTERY, MASTERY_ORDER, masteryRank } from '../game/data/Skills.js';
+import { SKILLS, ATTRIBUTES, MASTERY, MASTERY_ORDER, MAGIC_SCHOOL_IDS, masteryRank } from '../game/data/Skills.js';
+import { spellsForSchool } from '../game/data/Spells.js';
 import { ITEMS, getItem } from '../game/data/Items.js';
 import { QUESTS } from '../game/data/Quests.js';
 import { NPCS, SHOPS } from '../game/data/NPCs.js';
@@ -39,6 +42,8 @@ const PANEL_KEYS = [
 
 const GRID_COLS = 14;
 const GRID_ROWS = 9;
+
+const MAGIC_IDS = new Set(MAGIC_SCHOOL_IDS ?? []);
 
 export class UISystem extends System {
   static id = 'ui';
@@ -61,6 +66,10 @@ export class UISystem extends System {
     this._sampleQuests = null;
     this._shop = null;
     this._boundEvents = [];
+    /** In-flight drag between the backpack and the equipment figure. */
+    this.drag = null;
+    /** Hireling slots shown in the sidebar's two panes. */
+    this.hirelings = [];
   }
 
   // ── lifecycle ─────────────────────────────────────────────────────────────
@@ -101,8 +110,7 @@ export class UISystem extends System {
 
     this._syncParty(true);
     this.hud.setGold(this.gold, this.food);
-    this.hud.log('The road out of New Sorpigal is open.', 'info');
-    this.hud.log('Press I for the pack, B for the sheet, M for the spellbook.', 'info');
+    this.hud.log('Welcome to New Sorpigal.', 'info');
 
     this._wireEvents(ctx);
     this._registerShots(ctx);
@@ -124,20 +132,17 @@ export class UISystem extends System {
       this.hud?.setReticleHint(hint ?? '');
     });
 
+    // MM6 draws no floating numbers anywhere: every message the game has for
+    // you goes through the one 460×15 strip.
     on('combat:hit', (p = {}) => {
       const amount = Math.round(p.amount ?? 0);
       const friendly = typeof p.target === 'number' || p.target?.isParty;
-      this.hud?.addFloatingText(`${amount}`, {
-        kind: friendly ? 'hurt' : 'damage',
-        crit: !!p.crit,
-        position: p.position ?? null,
-      });
       if (friendly) {
         const idx = typeof p.target === 'number' ? p.target : (p.target?.index ?? 0);
         this.hud?.flashDamage(idx);
-        this.log(`${this._name(idx)} takes ${amount} ${p.type ?? 'physical'} damage.`, 'combat');
+        this.log(`${this._name(idx)} takes ${amount} damage.`, 'combat');
       } else {
-        this.log(`${p.crit ? 'Critical! ' : ''}${amount} damage to ${p.target?.name ?? 'the enemy'}.`, 'combat');
+        this.log(`${p.crit ? 'Critical hit! ' : ''}${amount} damage to ${p.target?.name ?? 'the enemy'}.`, 'combat');
       }
     });
 
@@ -214,13 +219,24 @@ export class UISystem extends System {
     this._applyScale(width, height);
   }
 
+  /**
+   * `--u` is the size of one native MM6 pixel. Everything in the chrome is
+   * quoted in the game's own 640×480 measurements and multiplied through it,
+   * so the frame keeps MM6's exact proportions at any resolution.
+   *
+   * The sidebar is sized from height (which keeps the automap arch, the book
+   * spines and the ovals at their true aspect) and clamped so a very wide or a
+   * very short window never lets the chrome eat the viewport.
+   */
   _applyScale(width, height) {
     if (!this.root) return;
-    // Derived from height so the bar keeps its proportion, clamped so a very
-    // wide-and-short window does not blow the chrome out of the frame.
-    const raw = Math.min(height / 900, width / 1450);
-    const scale = Math.max(0.68, Math.min(1.9, raw));
-    this.root.style.setProperty('--ui-scale', scale.toFixed(3));
+    let u = height / 480;
+    // The sidebar is 172 native px and the bar 128: cap both as a share of the
+    // window so an extreme aspect ratio still leaves a usable 3-D view.
+    u = Math.min(u, (width * 0.30) / 172);
+    u = Math.max(u, 0.9);
+    this.root.style.setProperty('--u', `${u.toFixed(4)}px`);
+    this.root.style.setProperty('--ui-scale', (u / 1.875).toFixed(3));
   }
 
   // ── contract ──────────────────────────────────────────────────────────────
@@ -310,6 +326,7 @@ export class UISystem extends System {
     }
     this.hud?.setParty(this._vm, this.activeIndex);
     this.hud?.setGold(this.gold, this.food);
+    this.hud?.setHirelings(this.ctx?.get('npc')?.hirelings ?? this.hirelings);
 
     const combat = this.ctx?.get('combat');
     if (combat?.mode === 'turnbased') {
@@ -323,8 +340,21 @@ export class UISystem extends System {
     }
   }
 
-  /** Normalise whatever the party system holds into what the UI draws. */
+  /**
+   * Normalise whatever the party system holds into what the UI draws.
+   *
+   * Live data always wins, but a freshly-rolled party has an empty pack, no
+   * equipment and no skills, and a screen with nothing on it is not worth
+   * photographing. Where the live character has nothing to show, the matching
+   * sample character lends its own, so every panel stays complete.
+   */
   _toViewModel(c, index) {
+    const stand = this._chars[index] ?? null;
+    const fill = stand && stand !== c;
+    const skillsOf = fill && !Object.keys(c?.skills ?? {}).length ? stand.skills : (c?.skills ?? {});
+    const packOf = fill && !c?.inventory?.length ? stand.inventory : (c?.inventory ?? []);
+    const gearOf = fill && !Object.keys(c?.equipment ?? {}).length ? stand.equipment : (c?.equipment ?? {});
+    const awardsOf = fill && !c?.awards?.length ? stand.awards : (c?.awards ?? []);
     const classId = c?.classId ?? 'knight';
     const cls = getClass(classId) ?? getClass('knight');
     const level = c?.level ?? 1;
@@ -339,7 +369,7 @@ export class UISystem extends System {
       resistances[id] = { cur: (c?.bonuses?.resistances?.[id] ?? 0) + base, base };
     }
     const skills = [];
-    for (const [id, held] of Object.entries(c?.skills ?? {})) {
+    for (const [id, held] of Object.entries(skillsOf)) {
       const def = SKILLS?.[id];
       if (!def) continue;
       skills.push({
@@ -360,7 +390,7 @@ export class UISystem extends System {
 
     const hpMax = safe(() => hpForLevel(c), c?.hpMax ?? 30);
     const spMax = safe(() => spForLevel(c), c?.spMax ?? 0);
-    const weapon = c?.equipment?.mainhand ?? null;
+    const weapon = gearOf?.mainhand ?? null;
     const dmgBonus = safe(() => damageBonusFor(c), 0);
     const xp = c?.xp ?? experienceForLevel(level);
 
@@ -384,20 +414,22 @@ export class UISystem extends System {
       armourClass: safe(() => armourClassFor(c), 0),
       attack: safe(() => attackBonusFor(c), 0),
       damage: weapon?.dice ? `${weapon.dice[0]}d${weapon.dice[1]}${dmgBonus ? ` +${dmgBonus}` : ''}` : `1d3${dmgBonus ? ` +${dmgBonus}` : ''}`,
-      shoot: safe(() => attackBonusFor(c, c?.equipment?.ranged ?? null), 0),
-      shootDamage: c?.equipment?.ranged?.dice
-        ? `${c.equipment.ranged.dice[0]}d${c.equipment.ranged.dice[1]}` : '—',
+      shoot: safe(() => attackBonusFor(c, gearOf?.ranged ?? null), 0),
+      shootDamage: gearOf?.ranged?.dice
+        ? `${gearOf.ranged.dice[0]}d${gearOf.ranged.dice[1]}` : '—',
       stats,
       resistances,
       skills,
       skillPoints: c?.skillPoints ?? 0,
       conditions,
-      awards: c?.awards ?? [],
-      equipment: c?.equipment ?? {},
-      inventory: c?.inventory ?? [],
-      merchant: c?.skills?.merchant ?? { level: 0, mastery: MASTERY.NORMAL },
-      portraitSpec: c?.portraitSpec ?? { key: c?.name ?? `slot${index}`, classId, gender: c?.gender ?? 'm' },
-      portraitKey: c?.portraitSpec?.key ?? c?.name ?? `slot${index}`,
+      quickSpell: c?.quickSpell ?? 'None',
+      awards: awardsOf,
+      equipment: gearOf,
+      inventory: packOf,
+      merchant: skillsOf?.merchant ?? { level: 0, mastery: MASTERY.NORMAL },
+      portraitSpec: c?.portraitSpec ?? stand?.portraitSpec
+        ?? { key: c?.name ?? `slot${index}`, classId, gender: c?.gender ?? 'm' },
+      portraitKey: (c?.portraitSpec ?? stand?.portraitSpec)?.key ?? c?.name ?? `slot${index}`,
       source: c,
     };
   }
@@ -408,7 +440,7 @@ export class UISystem extends System {
     const rng = this.rng.fork('sample-party');
     const defs = [
       {
-        name: 'Sir Roland', classId: 'knight', gender: 'm', level: 12, skin: 0, hair: 1, helm: 1,
+        name: 'Sir Roland', classId: 'paladin', gender: 'm', level: 12, skin: 0, hair: 1, helm: 1, ground: 0,
         conditions: [], awards: ['Defender of New Sorpigal', 'Slayer of the Goblin King', 'Knight of Ironfist'],
         gear: {
           mainhand: 'sword_bastard', offhand: 'shield_kite', armour: 'plate_field', helm: 'helm_great',
@@ -419,7 +451,7 @@ export class UISystem extends System {
           'potion_white', 'torch', 'shield_buckler', 'helm_helm', 'gem_quartz', 'potion_grey', 'boots_leather'],
       },
       {
-        name: 'Cassandra', classId: 'sorcerer', gender: 'f', level: 12, skin: 0, hair: 3, helm: 0,
+        name: 'Cassandra', classId: 'sorcerer', gender: 'f', level: 12, skin: 0, hair: 3, helm: 0, ground: 2,
         conditions: ['weak'], awards: ['Apprentice of the Sorpigal Guild', 'Reader of the Burned Ledger'],
         gear: {
           mainhand: 'staff_rune', armour: 'leather_elven', cloak: 'cloak_cape',
@@ -429,7 +461,7 @@ export class UISystem extends System {
           'gem_amethyst', 'blue_lotus', 'poppysnaps', 'potion_bottle', 'dagger_dirk', 'torch', 'gem_opal'],
       },
       {
-        name: 'Serena', classId: 'cleric', gender: 'f', level: 11, skin: 2, hair: 0, helm: 0,
+        name: 'Serena', classId: 'cleric', gender: 'f', level: 11, skin: 2, hair: 0, helm: 0, ground: 1,
         conditions: [], awards: ['Ordained in the Temple of the Sun', 'Bearer of the Sun Rites'],
         gear: {
           mainhand: 'mace_morning_star', offhand: 'shield_small', armour: 'chain_chain', helm: 'helm_coif',
@@ -439,7 +471,7 @@ export class UISystem extends System {
           'crimson_toadstool', 'scroll_body_first_aid', 'potion_cyan', 'torch', 'mace_mace', 'gem_quartz'],
       },
       {
-        name: 'Kellen', classId: 'archer', gender: 'm', level: 12, skin: 1, hair: 2, helm: 0,
+        name: 'Kellen', classId: 'archer', gender: 'm', level: 12, skin: 1, hair: 2, helm: 0, ground: 4,
         conditions: ['poisoned_weak'], awards: ['Marchwarden of Bootleg Bay'],
         gear: {
           mainhand: 'sword_broad', ranged: 'bow_composite', armour: 'leather_studded',
@@ -458,8 +490,9 @@ export class UISystem extends System {
     const cls = getClass(d.classId) ?? getClass('knight');
     const stats = { ...cls.startingStats };
     const primaries = {
-      knight: ['might', 'endurance'], sorcerer: ['intellect', 'speed'],
-      cleric: ['personality', 'endurance'], archer: ['accuracy', 'intellect'],
+      knight: ['might', 'endurance'], paladin: ['might', 'personality'],
+      sorcerer: ['intellect', 'speed'], cleric: ['personality', 'endurance'],
+      archer: ['accuracy', 'intellect'],
     }[d.classId] ?? ['might'];
     for (const attr of ATTRIBUTES) {
       const gain = primaries.includes(attr) ? d.level * 1.6 : d.level * 0.5;
@@ -515,7 +548,7 @@ export class UISystem extends System {
       resistances: { fire: 8, air: 6, water: 6, earth: 10, mind: 4, body: 6, spirit: 6, light: 2, dark: 2 },
       portraitSpec: {
         key: d.name, classId: d.classId, gender: d.gender,
-        skin: d.skin, hair: d.hair, helm: d.helm,
+        skin: d.skin, hair: d.hair, helm: d.helm, ground: d.ground,
       },
     };
     char.hpMax = safe(() => hpForLevel(char), 40);
@@ -588,6 +621,46 @@ export class UISystem extends System {
     this.log(`${c.name} improves ${SKILLS?.[skillId]?.name ?? skillId} to ${held.level}.`, 'good');
     this._syncParty(true);
     return true;
+  }
+
+  /** The character sheet's three pages share one screen and one set of ovals. */
+  openCharacterPage(page) {
+    const panel = this.panels.get('character');
+    if (panel) panel.page = page;
+    if (this._activePanel === 'character') panel?.refresh?.();
+    else this.openPanel('character', { page });
+  }
+
+  /** Spell ids this character can actually cast, live or sampled. */
+  knownSpells(vm) {
+    if (!vm) return [];
+    const spells = this.ctx?.get('spells');
+    const live = safe(() => spells?.known?.(vm.index), null);
+    if (Array.isArray(live) && live.length) return live;
+    const known = [];
+    for (const s of vm.skills ?? []) {
+      if (!MAGIC_IDS.has(s.id)) continue;
+      const cap = 3 + masteryRank(s.mastery) * 2;
+      for (const spell of safe(() => spellsForSchool(s.id), []) ?? []) {
+        if ((spell.level ?? 1) <= cap) known.push(spell.id);
+      }
+    }
+    return known;
+  }
+
+  setQuickSpell(index, spellId) {
+    const c = this._chars[index];
+    if (c) c.quickSpell = prettyId(spellId);
+    this.log(`Quick spell set to ${prettyId(spellId)}.`, 'good');
+    this._syncParty(true);
+  }
+
+  /** Drop an item from the pack onto the painted figure to equip it. */
+  equipDragged(index, drag) {
+    if (!drag?.item) return false;
+    const slot = drag.item.slot ?? drag.item.category;
+    const wanted = slot === 'weapon' ? 'mainhand' : slot === 'ring' ? 'ring1' : slot;
+    return this.equipItem(index, drag, wanted);
   }
 
   castSpell(index, spellId) {
@@ -787,9 +860,17 @@ export class UISystem extends System {
     const colour = new Array(sizeX * sizeY);
     const explored = new Uint8Array(sizeX * sizeY);
 
+    // MM6's own automap palette, sampled from the real bitmaps: mid-greens for
+    // grass, rust-brown for roads and tilled ground, blue for water.
     const BIOME_COLOUR = {
-      grass: '#6f7a3a', forest: '#4d5c2c', rock: '#8c8578', sand: '#c4ab74',
-      snow: '#dfe4e8', swamp: '#4a5340', dirt: '#7a6244', water: '#3f6b9c',
+      grass: ['#294910', '#394918', '#315518', '#396118', '#4A7121', '#527D29'],
+      forest: ['#1E3A0C', '#26440F', '#2E4E14'],
+      rock: ['#8E8F94', '#ADAEB5', '#76777C'],
+      sand: ['#8C7139', '#9C824A'],
+      snow: ['#D6DAE0', '#E7E9EE'],
+      swamp: ['#3A4A28', '#2E3A1E'],
+      dirt: ['#522008', '#5A2810', '#633010', '#6B3821'],
+      water: ['#3A5A9C', '#42639C', '#31509C'],
     };
 
     // Sample the real world where we can; otherwise invent a believable one.
@@ -813,10 +894,11 @@ export class UISystem extends System {
           biome = n < 0.28 ? 'water' : n < 0.34 ? 'sand' : m > 0.66 ? 'forest'
             : n > 0.72 ? 'rock' : m < 0.3 ? 'dirt' : 'grass';
         }
-        const base = BIOME_COLOUR[biome] ?? BIOME_COLOUR.grass;
-        // Shade by height so the sheet reads as terrain, not a colour key.
-        const shade = 0.78 + Math.min(0.45, Math.max(-0.28, hgt / 220));
-        colour[i] = tintHex(base, shade);
+        // MM6's map is a flat colour key with per-cell variation, not a shaded
+        // relief: pick one of the biome's sampled values by position.
+        const ramp = BIOME_COLOUR[biome] ?? BIOME_COLOUR.grass;
+        const step = Math.abs((x * 7 + y * 13 + Math.round(hgt)) % ramp.length);
+        colour[i] = ramp[step];
       }
     }
 
@@ -1111,29 +1193,16 @@ export class UISystem extends System {
     };
 
     cap.registerShot('ui-hud', {
-      description: 'The MM6 bottom bar: four painted portraits, HP/SP bars, compass, spell cluster and message log.',
+      description: 'The full MM6 frame: architrave, three columns, automap arch with compass tape, '
+        + 'stained-glass hireling panes, book spines, food and gold, four brass ovals, and the '
+        + 'marble party bar with green HP and blue SP tubes.',
       apply: async () => {
         this.closePanel();
         populate();
         this.hud?.setRegion('New Sorpigal');
-        this._forcedTurnBar = true;
-        this.hud?.setTurnBased(true, this._sampleTurnOrder(), 0);
-        this.hud?.setReticle('hand');
-        this.hud?.setReticleHint('Open the chest');
-        for (const line of [
-          ['Sir Roland hits the Goblin Chief for 24 damage.', 'combat'],
-          ['The Goblin Chief hits Kellen for 11 damage.', 'combat'],
-          ['Cassandra casts Fire Bolt.', 'magic'],
-          ['The Goblin Chief is slain!', 'good'],
-          ['You found 148 gold.', 'loot'],
-          ['Kellen is poisoned.', 'warn'],
-          ['Journal updated — The Summons.', 'quest'],
-          ['Serena casts Heal on Kellen.', 'magic'],
-        ]) this.hud?.log(line[0], line[1]);
-        this.hud?.addFloatingText('24', { kind: 'damage', crit: true, screen: { x: window.innerWidth * 0.44, y: window.innerHeight * 0.36 }, life: 600 });
-        this.hud?.addFloatingText('11', { kind: 'hurt', screen: { x: window.innerWidth * 0.58, y: window.innerHeight * 0.44 }, life: 600 });
-        this.hud?.addFloatingText('Poisoned', { kind: 'status', screen: { x: window.innerWidth * 0.63, y: window.innerHeight * 0.5 }, life: 600 });
-        this.hud?.flashDamage(3);
+        this.selectMember(0);
+        // Everything the game has to say goes through the one message strip.
+        this.hud?.log('tree', 'info');
       },
     });
 
@@ -1148,24 +1217,33 @@ export class UISystem extends System {
       });
     };
 
-    panelShot('ui-character', 'character', 'MM6 character sheet: seven stats, resistances, skills with mastery pips and awards.', () => {
+    panelShot('ui-character', 'character', 'Character sheet on carved grey granite: engraved sub-panels, gold title, '
+      + 'white right-aligned values, five wide gold ovals and the full-body figure in its stone niche.', () => {
       this.selectMember(0);
       this.panels.get('character')?.tabs?.setActive('stats');
     });
-    panelShot('ui-inventory', 'inventory', 'Paper-doll equipment and the 14×9 grid backpack with multi-cell items.', () => this.selectMember(0));
-    panelShot('ui-spellbook', 'spellbook', 'The open spellbook: nine sigil bookmarks, spell grid and description page.', () => {
+    panelShot('ui-inventory', 'inventory', 'The 14×9 backpack: rust-red rules on dark brown leather, free-floating '
+      + 'item sprites, and the painted character render standing in the niche instead of a paper doll.',
+    () => this.selectMember(0));
+    panelShot('ui-spellbook', 'spellbook', 'The open spellbook: pale grey-beige pages on dark green cloth, the '
+      + 'illuminated school plate, unlearned spells as bare grey smudges, nine bookmark ribbons.', () => {
       this.selectMember(1);
       const p = this.panels.get('spellbook');
       if (p) { p.school = 'fire'; p.spellId = 'fire_fire_bolt'; }
     });
-    panelShot('ui-map', 'map', 'Automap of the region: explored fog, roads, pins and the party facing cone.', () => { this._map = null; });
-    panelShot('ui-quests', 'quests', 'Quest journal on parchment with objectives and awards.', () => {
+    panelShot('ui-map', 'map', 'The Maps book: the surveyed region drawn in MM6 automap colours with the white party arrow.',
+      () => { this._map = null; });
+    panelShot('ui-quests', 'quests', 'The quest book: warm parchment with the sepia horsemen watermark, black upright body '
+      + 'text, green cloth binding and gilt clasps.', () => {
       const p = this.panels.get('quests');
       if (p) { p.filter = 'active'; p.selected = 0; p.tabs?.setActive('active'); }
     });
-    panelShot('ui-rest', 'rest', 'The camp interface: hours, food cost and interruption chance.');
-    panelShot('ui-dialogue', 'dialogue', 'NPC conversation: painted portrait, topics and service buttons.');
-    panelShot('ui-shop', 'shop', 'Merchant screen: stock, party pack, and prices set by the Merchant skill.', () => {
+    panelShot('ui-rest', 'rest', 'Rest and Wait on warm terracotta marble: the mountain plate, raised buttons and the '
+      + 'serpentine clock panel with its hourglass.');
+    panelShot('ui-dialogue', 'dialogue', 'NPC conversation: the pre-rendered candle-lit interior in the viewport, the '
+      + 'keeper on wood grain with their name in azure and the options in white italic.');
+    panelShot('ui-shop', 'shop', 'The stock board: item art hand-placed on figured walnut planks inside a chiselled rock '
+      + 'margin, with "Select the Item to Buy" in the message strip.', () => {
       this.selectMember(0);
       const p = this.panels.get('shop');
       const shop = this.shopData();
@@ -1177,6 +1255,8 @@ export class UISystem extends System {
         p.selected = { item, side: 'stock', price: this.priceOf(item, 'buy', shop) };
       }
     });
+    panelShot('ui-create', 'create', 'Party creation on dark green serpentine: four columns under sky vignettes, gold '
+      + 'class emblems, colour-coded stats and the corner braziers.');
   }
 }
 

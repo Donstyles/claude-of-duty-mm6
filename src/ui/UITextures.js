@@ -354,12 +354,18 @@ export class UITextures {
     g.fillStyle = pal[0];
     g.fillRect(0, 0, w, h);
 
-    const blobs = Math.round((w * h) / 2600);
+    // Large patchiness first, then finer mottle on top of it.
+    for (let i = 0; i < Math.round((w * h) / 26000); i++) {
+      UITextures.dab(g, rng.range(0, w), rng.range(0, h),
+        rng.range(60, 260), rng.range(40, 180), rng.range(0, TAU),
+        pal[rng.int(0, pal.length - 1)], rng.range(0.35, 0.75), rng.range(20, 60));
+    }
+    const blobs = Math.round((w * h) / 1500);
     for (let i = 0; i < blobs; i++) {
       const c = pal[rng.int(0, pal.length - 1)];
       UITextures.dab(g, rng.range(0, w), rng.range(0, h),
-        rng.range(10, 96), rng.range(8, 54), rng.range(0, TAU),
-        c, rng.range(0.14, 0.42), rng.range(3, 16));
+        rng.range(6, 70), rng.range(5, 40), rng.range(0, TAU),
+        c, rng.range(0.22, 0.60), rng.range(2, 11));
     }
 
     // Pale mineral streaks, running one way like a bedding plane.
@@ -367,9 +373,9 @@ export class UITextures {
       const x0 = rng.range(-40, w);
       const y0 = rng.range(0, h);
       g.save();
-      g.globalAlpha = rng.range(0.05, 0.20);
+      g.globalAlpha = rng.range(0.10, 0.34);
       g.strokeStyle = rng.chance(0.5) ? (opts.streak ?? '#8B8C86') : (opts.streakDark ?? '#22221F');
-      g.lineWidth = rng.range(1, 6);
+      g.lineWidth = rng.range(1, 7);
       g.filter = `blur(${rng.range(1, 3.4).toFixed(2)}px)`;
       g.beginPath();
       g.moveTo(x0, y0);
@@ -383,11 +389,11 @@ export class UITextures {
       UITextures.crack(g, rng, rng.range(0, w), rng.range(0, h), rng.range(0, TAU),
         rng.range(h * 0.2, h * 0.8), rng.range(0.8, 2), opts.crack ?? '#17181A', 2);
     }
-    for (let i = 0; i < Math.round((w * h) / 1400); i++) {
-      UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(0.6, 2.6), rng.range(0.6, 2.2),
-        0, rng.chance(0.5) ? '#1D1E1C' : '#7A7B76', rng.range(0.10, 0.34), 0.6);
+    for (let i = 0; i < Math.round((w * h) / 700); i++) {
+      UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(0.6, 3.2), rng.range(0.6, 2.6),
+        0, rng.chance(0.5) ? '#151614' : '#8A8B86', rng.range(0.16, 0.48), 0.6);
     }
-    UITextures.grain(g, w, h, rng, opts.grain ?? 18);
+    UITextures.grain(g, w, h, rng, opts.grain ?? 24);
   }
 
   granite() {
@@ -420,7 +426,7 @@ export class UITextures {
         const x = off + c * w * 0.42;
         const bw = w * 0.42 - 3;
         const bh = course - 3;
-        const tone = mixHex('#4A423C', '#2A2622', rng.range(0, 1));
+        const tone = mixHex('#6A6058', '#39332D', rng.range(0, 1));
         g.fillStyle = tone;
         g.fillRect(x, y, bw, bh);
         g.fillStyle = 'rgba(255,246,230,0.10)';
@@ -449,15 +455,15 @@ export class UITextures {
       g.stroke();
     }
     // Dark vignette at the top; the key light comes from the front-left.
-    const vig = g.createLinearGradient(0, 0, 0, h * 0.5);
-    vig.addColorStop(0, 'rgba(0,0,0,0.82)');
+    const vig = g.createLinearGradient(0, 0, 0, h * 0.45);
+    vig.addColorStop(0, 'rgba(0,0,0,0.72)');
     vig.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = vig;
-    g.fillRect(0, 0, w, h * 0.5);
+    g.fillRect(0, 0, w, h * 0.45);
     const side = g.createLinearGradient(0, 0, w, 0);
-    side.addColorStop(0, 'rgba(0,0,0,0.42)');
-    side.addColorStop(0.4, 'rgba(0,0,0,0)');
-    side.addColorStop(1, 'rgba(0,0,0,0.58)');
+    side.addColorStop(0, 'rgba(0,0,0,0.22)');
+    side.addColorStop(0.35, 'rgba(0,0,0,0)');
+    side.addColorStop(1, 'rgba(0,0,0,0.48)');
     g.fillStyle = side;
     g.fillRect(0, 0, w, h);
     UITextures.grain(g, w, h, rng, 16);
@@ -780,7 +786,7 @@ export class UITextures {
    */
   stainedGlass() {
     return this._make('stained-glass', 132, 150, (g, w, h, rng) => {
-      // Bezel.
+      // Dark olive-charcoal bezel.
       g.fillStyle = '#424942';
       g.fillRect(0, 0, w, h);
       const bez = 6;
@@ -798,83 +804,83 @@ export class UITextures {
       const cx = w / 2;
       const cy = h / 2;
 
-      // Navy-teal ground.
-      g.fillStyle = '#1E3040';
+      // Navy-teal ground with steel-blue diagonal bands down both edges.
+      g.fillStyle = '#22384A';
       g.fillRect(bez, bez, iw, ih);
-
-      // Steel-blue diagonal bands down both sides.
+      const blues = ['#4A7DA5', '#517DA5', '#42618C'];
       for (const side of [-1, 1]) {
-        const bandsX = cx + side * iw * 0.40;
-        for (let i = -3; i < 6; i++) {
-          g.fillStyle = ['#4A7DA5', '#517DA5', '#42618C'][(i + 3) % 3];
+        for (let i = -2; i < 7; i++) {
+          g.fillStyle = blues[(i + 2) % 3];
           g.save();
-          g.translate(bandsX, bez + i * ih * 0.2);
-          g.rotate(side * 0.5);
-          g.fillRect(-iw * 0.16, 0, iw * 0.32, ih * 0.13);
+          g.translate(cx + side * iw * 0.40, bez + i * ih * 0.17);
+          g.rotate(side * 0.55);
+          g.fillRect(-iw * 0.20, 0, iw * 0.40, ih * 0.115);
           g.restore();
         }
       }
 
-      // Corner diamonds, four different colours.
-      const corners = [
-        [cx, bez + ih * 0.16, '#EFF3F7'],
-        [cx, bez + ih * 0.84, '#EFEFF7'],
-        [bez + iw * 0.17, cy, '#CEBA94'],
-        [bez + iw * 0.83, cy, '#BDC794'],
-      ];
-      for (const [dx, dy, col] of corners) {
-        g.fillStyle = col;
-        g.beginPath();
-        g.moveTo(dx, dy - ih * 0.14);
-        g.lineTo(dx + iw * 0.13, dy);
-        g.lineTo(dx, dy + ih * 0.14);
-        g.lineTo(dx - iw * 0.13, dy);
-        g.closePath();
-        g.fill();
-        g.strokeStyle = '#212421';
-        g.lineWidth = 2.6;
-        g.stroke();
-      }
-
-      // Four thick dusty maroon leaded arms radiating in an X.
+      // Four thick dusty maroon leaded arms radiating in an X, ending in
+      // scrolled volutes. These, not the blue, are what the pane reads as.
       g.strokeStyle = '#735552';
-      g.lineWidth = iw * 0.085;
+      g.lineWidth = iw * 0.155;
       g.lineCap = 'round';
       for (const [ax, ay] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
         g.beginPath();
         g.moveTo(cx, cy);
-        g.lineTo(cx + ax * iw * 0.44, cy + ay * ih * 0.42);
+        g.lineTo(cx + ax * iw * 0.46, cy + ay * ih * 0.44);
         g.stroke();
-        // Scrolled volute at the end.
-        g.save();
-        g.lineWidth = iw * 0.035;
-        g.beginPath();
+      }
+      g.strokeStyle = '#8A6A64';
+      g.lineWidth = iw * 0.045;
+      for (const [ax, ay] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
         const ex = cx + ax * iw * 0.42;
         const ey = cy + ay * ih * 0.40;
+        g.beginPath();
         for (let t = 0; t < TAU * 1.2; t += 0.2) {
-          const r = 1.5 + t * 1.6;
+          const r = 1.5 + t * 2.2;
           const px = ex + Math.cos(t) * r * ax;
           const py = ey + Math.sin(t) * r * ay;
           if (t === 0) g.moveTo(px, py); else g.lineTo(px, py);
         }
         g.stroke();
-        g.restore();
       }
 
-      // Central olive-gold medallion on concentric rings.
-      for (const [r, col] of [[iw * 0.20, '#5C5A3E'], [iw * 0.16, '#94825A'], [iw * 0.11, '#949E6B'], [iw * 0.055, '#C6C48C']]) {
+      // Four differently-coloured diamonds: cool white, plain white, warm
+      // cream, pale sage.
+      const diamonds = [
+        [cx, bez + ih * 0.15, '#EFF3F7', iw * 0.15, ih * 0.15],
+        [cx, bez + ih * 0.85, '#CEBA94', iw * 0.15, ih * 0.15],
+        [bez + iw * 0.16, cy, '#EFEFF7', iw * 0.13, ih * 0.13],
+        [bez + iw * 0.84, cy, '#BDC794', iw * 0.13, ih * 0.13],
+      ];
+      for (const [dx, dy, col, rx, ry] of diamonds) {
         g.fillStyle = col;
         g.beginPath();
-        g.arc(cx, cy, r, 0, TAU);
+        g.moveTo(dx, dy - ry);
+        g.lineTo(dx + rx, dy);
+        g.lineTo(dx, dy + ry);
+        g.lineTo(dx - rx, dy);
+        g.closePath();
+        g.fill();
+        g.strokeStyle = '#212421';
+        g.lineWidth = 2.4;
+        g.stroke();
+      }
+
+      // Central olive-gold medallion on two rings.
+      for (const [r, col] of [[iw * 0.155, '#5C5A3E'], [iw * 0.115, '#94825A'], [iw * 0.065, '#949E6B']]) {
+        g.fillStyle = col;
+        g.beginPath();
+        g.ellipse(cx, cy, r, r * 1.12, 0, 0, TAU);
         g.fill();
         g.strokeStyle = '#212421';
         g.lineWidth = 1.8;
         g.stroke();
       }
 
-      // Leading: a black lattice over everything.
+      // Near-black leading over everything, and glass grime.
       g.strokeStyle = '#212421';
-      g.lineWidth = 2.2;
+      g.lineWidth = 2.4;
       for (let i = 1; i < 4; i++) {
         g.beginPath();
         g.moveTo(bez, bez + (ih * i) / 4);
@@ -887,14 +893,13 @@ export class UITextures {
         g.lineTo(bez + (iw * i) / 3, h - bez);
         g.stroke();
       }
-      // Grime and glass unevenness.
-      for (let i = 0; i < 90; i++) {
+      for (let i = 0; i < 110; i++) {
         UITextures.dab(g, rng.range(bez, w - bez), rng.range(bez, h - bez),
-          rng.range(1.5, 9), rng.range(1.5, 7), rng.range(0, TAU),
-          rng.chance(0.5) ? '#000000' : '#FFFFFF', rng.range(0.03, 0.12), 2);
+          rng.range(1.5, 10), rng.range(1.5, 8), rng.range(0, TAU),
+          rng.chance(0.55) ? '#000000' : '#D8C89C', rng.range(0.04, 0.14), 2);
       }
       g.restore();
-      UITextures.grain(g, w, h, rng, 8);
+      UITextures.grain(g, w, h, rng, 9);
     });
   }
 
@@ -1487,6 +1492,34 @@ export class UITextures {
           rng.range(10, 46), rng.range(8, 32), rng.range(0, TAU),
           P[rng.int(0, P.length - 1)], rng.range(0.12, 0.36), rng.range(4, 14));
       }
+      // A readable subject, painted over the bloom the way the real plates are.
+      g.save();
+      g.globalAlpha = 0.92;
+      g.fillStyle = P[P.length - 1];
+      g.strokeStyle = P[P.length - 1];
+      g.lineWidth = 4;
+      g.lineCap = 'round';
+      const sx = w / 2;
+      const sy = h * 0.54;
+      // A robed figure wreathed in the school's element.
+      g.beginPath();
+      g.arc(sx, sy - h * 0.20, w * 0.045, 0, TAU);
+      g.fill();
+      g.beginPath();
+      g.moveTo(sx, sy - h * 0.14);
+      g.lineTo(sx - w * 0.085, sy + h * 0.26);
+      g.lineTo(sx + w * 0.085, sy + h * 0.26);
+      g.closePath();
+      g.fill();
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI + (i / 5) * Math.PI;
+        g.beginPath();
+        g.moveTo(sx + Math.cos(a) * w * 0.13, sy + Math.sin(a) * h * 0.18);
+        g.lineTo(sx + Math.cos(a) * w * 0.26, sy + Math.sin(a) * h * 0.38);
+        g.stroke();
+      }
+      g.restore();
+
       // Gilt frame with knotwork.
       const b = 10;
       const fr = g.createLinearGradient(0, 0, w, h);
@@ -2173,186 +2206,216 @@ const GLYPHS = {
     for (let i = 0; i < 5; i++) {
       const a = -Math.PI / 2 + (i / 5) * TAU;
       g.beginPath();
-      g.arc(cx + Math.cos(a) * r * 1.5, cy + Math.sin(a) * r * 1.5, Math.max(1.5, r * 0.14), 0, TAU);
+      g.arc(cx + Math.cos(a) * r * 1.5, cy + Math.sin(a) * r * 1.5, Math.max(1.5, r * 0.15), 0, TAU);
       g.fill();
     }
   },
+
   /** Peaked pavilion tent with a pennant — Rest. */
   tent(g, w, h) {
-    const cx = w / 2;
+    const cx = w * 0.52;
     const base = h * 0.70;
-    const top = h * 0.30;
+    const top = h * 0.32;
+    const half = w * 0.34;
+    // Body, with the door notch left unpainted rather than cut out — a
+    // destination-out here would erase the brass underneath.
     g.beginPath();
     g.moveTo(cx, top);
-    g.lineTo(cx + w * 0.28, base);
-    g.lineTo(cx - w * 0.28, base);
+    g.lineTo(cx + half, base);
+    g.lineTo(cx + half * 0.20, base);
+    g.lineTo(cx + half * 0.20, base - h * 0.16);
+    g.quadraticCurveTo(cx, base - h * 0.30, cx - half * 0.20, base - h * 0.16);
+    g.lineTo(cx - half * 0.20, base);
+    g.lineTo(cx - half, base);
     g.closePath();
     g.fill();
-    // Doorway notch.
-    g.save();
-    g.globalCompositeOperation = 'destination-out';
-    g.beginPath();
-    g.moveTo(cx, base - h * 0.22);
-    g.lineTo(cx + w * 0.07, base);
-    g.lineTo(cx - w * 0.07, base);
-    g.closePath();
-    g.fill();
-    g.restore();
+    // Mast and pennant.
     g.lineWidth = Math.max(1.4, w * 0.035);
     g.beginPath();
     g.moveTo(cx, top);
-    g.lineTo(cx, top - h * 0.12);
+    g.lineTo(cx, top - h * 0.14);
     g.stroke();
     g.beginPath();
-    g.moveTo(cx, top - h * 0.12);
-    g.lineTo(cx + w * 0.16, top - h * 0.08);
-    g.lineTo(cx, top - h * 0.03);
+    g.moveTo(cx, top - h * 0.14);
+    g.lineTo(cx + w * 0.20, top - h * 0.095);
+    g.lineTo(cx, top - h * 0.05);
     g.closePath();
     g.fill();
   },
+
   /** A rolled scroll that reads at a glance like a stylised "2". */
   scroll2(g, w, h) {
     const cx = w / 2;
-    g.lineWidth = Math.max(2.6, w * 0.11);
+    g.lineWidth = Math.max(2.6, w * 0.12);
     g.lineCap = 'round';
+    g.lineJoin = 'round';
     g.beginPath();
-    g.moveTo(cx - w * 0.17, h * 0.40);
-    g.quadraticCurveTo(cx - w * 0.17, h * 0.28, cx, h * 0.28);
-    g.quadraticCurveTo(cx + w * 0.19, h * 0.28, cx + w * 0.17, h * 0.44);
-    g.quadraticCurveTo(cx + w * 0.14, h * 0.58, cx - w * 0.18, h * 0.70);
+    g.moveTo(cx - w * 0.18, h * 0.40);
+    g.quadraticCurveTo(cx - w * 0.18, h * 0.28, cx, h * 0.28);
+    g.quadraticCurveTo(cx + w * 0.20, h * 0.28, cx + w * 0.18, h * 0.45);
+    g.quadraticCurveTo(cx + w * 0.15, h * 0.59, cx - w * 0.19, h * 0.70);
     g.stroke();
     g.beginPath();
-    g.moveTo(cx - w * 0.19, h * 0.70);
-    g.lineTo(cx + w * 0.20, h * 0.70);
+    g.moveTo(cx - w * 0.20, h * 0.70);
+    g.lineTo(cx + w * 0.21, h * 0.70);
     g.stroke();
   },
+
   /** A 3.5-inch floppy disk — Game Menu / Save. */
   floppy(g, w, h) {
-    const bw = w * 0.46;
-    const bh = h * 0.30;
+    const bw = w * 0.50;
+    const bh = h * 0.26;
     const x = (w - bw) / 2;
     const y = (h - bh) / 2;
+    // Shell.
     g.beginPath();
     g.moveTo(x, y);
-    g.lineTo(x + bw - bw * 0.16, y);
-    g.lineTo(x + bw, y + bh * 0.16);
+    g.lineTo(x + bw - bw * 0.18, y);
+    g.lineTo(x + bw, y + bh * 0.20);
     g.lineTo(x + bw, y + bh);
     g.lineTo(x, y + bh);
     g.closePath();
     g.fill();
-    g.save();
-    g.globalCompositeOperation = 'destination-out';
-    g.fillRect(x + bw * 0.24, y, bw * 0.44, bh * 0.36);
-    g.fillRect(x + bw * 0.18, y + bh * 0.55, bw * 0.64, bh * 0.45);
-    g.restore();
-    g.fillRect(x + bw * 0.5, y + bh * 0.02, bw * 0.12, bh * 0.30);
+    // Shutter and label, painted back in the brass colour instead of erased.
+    const save = g.fillStyle;
+    g.fillStyle = 'rgba(196,170,110,0.95)';
+    g.fillRect(x + bw * 0.26, y + bh * 0.06, bw * 0.40, bh * 0.34);
+    g.fillRect(x + bw * 0.16, y + bh * 0.56, bw * 0.68, bh * 0.38);
+    g.fillStyle = save;
+    g.fillRect(x + bw * 0.50, y + bh * 0.06, bw * 0.10, bh * 0.34);
   },
-  /** A head in profile — the Stats page. */
+
+  /** A head in profile, facing left — the Stats page. */
   head(g, w, h) {
-    const cx = w * 0.52;
+    const cx = w * 0.54;
     const cy = h * 0.5;
-    const r = Math.min(w * 0.5, h * 0.9) * 0.42;
+    const r = Math.min(w * 0.5, h) * 0.44;
     g.beginPath();
-    g.moveTo(cx - r * 0.2, cy + r);
-    g.bezierCurveTo(cx - r * 1.1, cy + r * 0.7, cx - r * 1.05, cy - r * 0.9, cx - r * 0.05, cy - r);
-    g.bezierCurveTo(cx + r * 0.75, cy - r, cx + r * 0.85, cy - r * 0.2, cx + r * 0.6, cy + r * 0.1);
-    g.lineTo(cx + r * 0.78, cy + r * 0.28);
-    g.lineTo(cx + r * 0.5, cy + r * 0.38);
-    g.lineTo(cx + r * 0.5, cy + r * 0.72);
-    g.lineTo(cx + r * 0.1, cy + r);
+    g.moveTo(cx + r * 0.30, cy + r);
+    g.lineTo(cx + r * 0.30, cy + r * 0.62);
+    g.bezierCurveTo(cx + r * 0.90, cy + r * 0.30, cx + r * 0.95, cy - r * 0.85, cx + r * 0.05, cy - r);
+    g.bezierCurveTo(cx - r * 0.75, cy - r * 0.95, cx - r * 0.90, cy - r * 0.10, cx - r * 0.62, cy + r * 0.12);
+    g.lineTo(cx - r * 0.82, cy + r * 0.30);
+    g.lineTo(cx - r * 0.52, cy + r * 0.40);
+    g.lineTo(cx - r * 0.52, cy + r * 0.70);
+    g.lineTo(cx - r * 0.10, cy + r);
     g.closePath();
     g.fill();
   },
+
   /** A clenched fist — the Skills page. */
   fist(g, w, h) {
-    const cx = w / 2;
-    const cy = h * 0.5;
-    const s = Math.min(w * 0.5, h) * 0.5;
-    g.beginPath();
-    g.ellipse(cx, cy, s * 0.78, s * 0.62, -0.12, 0, TAU);
-    g.fill();
-    g.save();
-    g.globalCompositeOperation = 'destination-out';
-    g.lineWidth = Math.max(1.2, s * 0.1);
-    g.strokeStyle = '#000';
-    for (let i = 0; i < 3; i++) {
-      g.beginPath();
-      g.moveTo(cx - s * 0.5, cy - s * 0.3 + i * s * 0.28);
-      g.lineTo(cx + s * 0.5, cy - s * 0.34 + i * s * 0.28);
-      g.stroke();
-    }
-    g.restore();
-    g.beginPath();
-    g.ellipse(cx - s * 0.85, cy + s * 0.18, s * 0.28, s * 0.36, 0.3, 0, TAU);
-    g.fill();
-  },
-  /** A sword across a shield — the Inventory page. */
-  swordShield(g, w, h) {
-    const cx = w / 2;
+    const cx = w * 0.52;
     const cy = h * 0.5;
     const s = Math.min(w * 0.5, h) * 0.52;
+    // Back of the hand.
     g.beginPath();
-    g.moveTo(cx - s * 0.6, cy - s * 0.62);
-    g.lineTo(cx + s * 0.6, cy - s * 0.62);
-    g.lineTo(cx + s * 0.6, cy + s * 0.1);
-    g.quadraticCurveTo(cx, cy + s * 0.8, cx - s * 0.6, cy + s * 0.1);
+    g.moveTo(cx - s * 0.62, cy - s * 0.46);
+    g.quadraticCurveTo(cx + s * 0.55, cy - s * 0.72, cx + s * 0.74, cy - s * 0.10);
+    g.quadraticCurveTo(cx + s * 0.86, cy + s * 0.52, cx + s * 0.10, cy + s * 0.66);
+    g.quadraticCurveTo(cx - s * 0.62, cy + s * 0.70, cx - s * 0.62, cy - s * 0.46);
     g.closePath();
     g.fill();
-    g.lineWidth = Math.max(2, s * 0.16);
-    g.lineCap = 'round';
+    // Knuckle grooves, drawn as brass-coloured strokes over the silhouette.
+    const save = g.strokeStyle;
+    g.strokeStyle = 'rgba(196,170,110,0.9)';
+    g.lineWidth = Math.max(1.1, s * 0.11);
+    for (let i = 0; i < 3; i++) {
+      g.beginPath();
+      g.moveTo(cx - s * 0.30, cy - s * 0.30 + i * s * 0.32);
+      g.lineTo(cx + s * 0.62, cy - s * 0.36 + i * s * 0.32);
+      g.stroke();
+    }
+    g.strokeStyle = save;
+    // Thumb and a cuff.
     g.beginPath();
-    g.moveTo(cx - s * 1.05, cy + s * 0.85);
-    g.lineTo(cx + s * 1.05, cy - s * 0.85);
+    g.ellipse(cx - s * 0.62, cy + s * 0.10, s * 0.26, s * 0.40, 0.25, 0, TAU);
+    g.fill();
+    g.fillRect(cx - s * 1.06, cy - s * 0.52, s * 0.30, s * 1.10);
+  },
+
+  /** A sword across a shield — the Inventory page. */
+  swordShield(g, w, h) {
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const s = Math.min(w * 0.5, h) * 0.54;
+    g.beginPath();
+    g.moveTo(cx - s * 0.64, cy - s * 0.70);
+    g.lineTo(cx + s * 0.64, cy - s * 0.70);
+    g.lineTo(cx + s * 0.62, cy + s * 0.06);
+    g.quadraticCurveTo(cx, cy + s * 0.86, cx - s * 0.62, cy + s * 0.06);
+    g.closePath();
+    g.fill();
+    // Blade, laid diagonally across the boss.
+    g.lineWidth = Math.max(2, s * 0.19);
+    g.lineCap = 'butt';
+    g.beginPath();
+    g.moveTo(cx - s * 1.12, cy + s * 0.92);
+    g.lineTo(cx + s * 1.08, cy - s * 0.90);
     g.stroke();
+    // Crossguard.
+    g.lineWidth = Math.max(1.6, s * 0.13);
     g.beginPath();
-    g.moveTo(cx + s * 0.35, cy - s * 0.95);
-    g.lineTo(cx + s * 0.9, cy - s * 0.32);
+    g.moveTo(cx + s * 0.34, cy - s * 1.00);
+    g.lineTo(cx + s * 0.98, cy - s * 0.28);
     g.stroke();
   },
-  /** A ribboned medal — the Awards page. */
+
+  /** A ribboned medal on a stand — the Awards page. */
   medal(g, w, h) {
-    const cx = w / 2;
-    const cy = h * 0.56;
-    const r = Math.min(w * 0.5, h) * 0.26;
+    const cx = w * 0.5;
+    const r = Math.min(w * 0.5, h) * 0.30;
+    // Ribbon bar.
+    g.fillRect(cx - r * 1.25, h * 0.20, r * 2.5, h * 0.10);
+    // Ribbon fall.
     g.beginPath();
-    g.moveTo(cx - r * 1.1, h * 0.20);
-    g.lineTo(cx + r * 1.1, h * 0.20);
-    g.lineTo(cx + r * 0.55, h * 0.44);
-    g.lineTo(cx - r * 0.55, h * 0.44);
+    g.moveTo(cx - r * 0.95, h * 0.30);
+    g.lineTo(cx + r * 0.95, h * 0.30);
+    g.lineTo(cx + r * 0.42, h * 0.52);
+    g.lineTo(cx - r * 0.42, h * 0.52);
     g.closePath();
     g.fill();
+    // Star medallion.
+    const cy = h * 0.66;
     g.beginPath();
     for (let i = 0; i < 16; i++) {
       const a = -Math.PI / 2 + (i / 16) * TAU;
-      const rr = i % 2 ? r * 0.62 : r;
+      const rr = i % 2 ? r * 0.52 : r;
       const px = cx + Math.cos(a) * rr;
-      const py = cy + r * 0.5 + Math.sin(a) * rr;
+      const py = cy + Math.sin(a) * rr;
       if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
     }
     g.closePath();
     g.fill();
+    const save = g.fillStyle;
+    g.fillStyle = 'rgba(196,170,110,0.9)';
+    g.beginPath();
+    g.arc(cx, cy, r * 0.30, 0, TAU);
+    g.fill();
+    g.fillStyle = save;
   },
+
   /** An arrow entering a doorway — Exit. */
   exitDoor(g, w, h) {
     const x = w * 0.56;
-    const y = h * 0.22;
+    const y = h * 0.20;
     const dw = w * 0.20;
-    const dh = h * 0.56;
+    const dh = h * 0.60;
     g.fillRect(x, y, dw, dh);
-    g.save();
-    g.globalCompositeOperation = 'destination-out';
-    g.fillRect(x + dw * 0.22, y + dh * 0.12, dw * 0.56, dh * 0.76);
-    g.restore();
-    g.lineWidth = Math.max(2.2, w * 0.05);
-    g.lineCap = 'round';
+    const save = g.fillStyle;
+    g.fillStyle = 'rgba(196,170,110,0.9)';
+    g.fillRect(x + dw * 0.24, y + dh * 0.14, dw * 0.52, dh * 0.72);
+    g.fillStyle = save;
+    g.lineWidth = Math.max(2.2, w * 0.055);
+    g.lineCap = 'butt';
     g.beginPath();
-    g.moveTo(x - w * 0.26, h * 0.5);
-    g.lineTo(x - w * 0.02, h * 0.5);
+    g.moveTo(x - w * 0.28, h * 0.5);
+    g.lineTo(x - w * 0.04, h * 0.5);
     g.stroke();
     g.beginPath();
-    g.moveTo(x - w * 0.12, h * 0.38);
-    g.lineTo(x + w * 0.02, h * 0.5);
-    g.lineTo(x - w * 0.12, h * 0.62);
+    g.moveTo(x - w * 0.14, h * 0.34);
+    g.lineTo(x + w * 0.04, h * 0.5);
+    g.lineTo(x - w * 0.14, h * 0.66);
     g.closePath();
     g.fill();
   },
@@ -2399,15 +2462,15 @@ function paintFigure(g, w, h, spec, rng) {
   const top = h * 0.10;
   const bottom = h * 0.94;
   const H = bottom - top;
-  const headR = H * 0.072;
+  const headR = H * 0.090;
   const headY = top + headR;
   const shoulderY = top + H * 0.185;
   const waistY = top + H * 0.44;
   const hipY = top + H * 0.50;
   const kneeY = top + H * 0.72;
   const footY = bottom;
-  const halfShoulder = H * 0.115;
-  const halfHip = H * 0.085;
+  const halfShoulder = H * 0.140;
+  const halfHip = H * 0.100;
 
   // Contact shadow on the flagstones.
   UITextures.dab(g, cx, footY + H * 0.012, halfShoulder * 1.5, H * 0.018, 0, 'rgba(0,0,0,0.6)', 1, 5);
@@ -2450,7 +2513,7 @@ function paintFigure(g, w, h, spec, rng) {
     const fx = cx + side * halfHip * (side < 0 ? 1.15 : 0.5);
     g.save();
     g.strokeStyle = look.hose;
-    g.lineWidth = H * 0.052;
+    g.lineWidth = H * 0.064;
     g.lineCap = 'round';
     g.beginPath();
     g.moveTo(hx, hipY);
@@ -2541,10 +2604,11 @@ function paintFigure(g, w, h, spec, rng) {
 
   // Arms. The sword arm is raised; the shield arm hangs across the body.
   const armLen = H * 0.30;
+  const armW = H * 0.052;
   // Shield arm (viewer's right).
   g.save();
   g.strokeStyle = look.sleeve;
-  g.lineWidth = H * 0.040;
+  g.lineWidth = armW;
   g.lineCap = 'round';
   g.beginPath();
   g.moveTo(cx + halfShoulder * 0.9, shoulderY + H * 0.02);
@@ -2552,7 +2616,7 @@ function paintFigure(g, w, h, spec, rng) {
   g.stroke();
   g.restore();
   // Shield.
-  const shR = H * 0.085;
+  const shR = H * 0.098;
   const shX = cx + halfShoulder * 1.25;
   const shY = shoulderY + armLen * 1.05;
   const shGrd = g.createRadialGradient(shX - shR * 0.35, shY - shR * 0.35, shR * 0.1, shX, shY, shR);
@@ -2572,7 +2636,7 @@ function paintFigure(g, w, h, spec, rng) {
   // Weapon arm (viewer's left), raised.
   g.save();
   g.strokeStyle = look.sleeve;
-  g.lineWidth = H * 0.040;
+  g.lineWidth = armW;
   g.lineCap = 'round';
   g.beginPath();
   g.moveTo(cx - halfShoulder * 0.9, shoulderY + H * 0.02);
@@ -2766,9 +2830,9 @@ function resolvePortraitLook(spec, rng) {
  */
 function paintPortrait(g, w, h, cfg, rng) {
   const cx = w * 0.5;
-  const cy = h * 0.385;
-  const rx = w * 0.222;
-  const ry = h * 0.188;
+  const cy = h * 0.400;
+  const rx = w * 0.290;
+  const ry = h * 0.248;
   const geo = {
     cx, cy, rx, ry,
     browY: cy - ry * 0.30,
@@ -2777,7 +2841,7 @@ function paintPortrait(g, w, h, cfg, rng) {
     mouthY: cy + ry * 0.66,
     chinY: cy + ry * 1.06,
     neckTop: cy + ry * 0.74,
-    shoulderY: h * 0.715,
+    shoulderY: h * 0.800,
   };
 
   paintBackdrop(g, w, h, cfg, rng, geo);

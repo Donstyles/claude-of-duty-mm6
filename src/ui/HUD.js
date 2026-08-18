@@ -325,6 +325,22 @@ export class HUD {
     }
   }
 
+  /** With hirelings hired each pane holds their portrait instead of glass. */
+  setHirelings(list = []) {
+    for (let i = 0; i < 2; i++) {
+      const pane = this.hirelings?.[i];
+      if (!pane) continue;
+      const h = list[i] ?? null;
+      pane.classList.toggle('has-face', !!h);
+      if (h) {
+        const url = this.textures?.portrait(h.portraitSpec ?? { key: h.name ?? `hire${i}`, classId: 'ranger' });
+        const face = pane.querySelector('.mm-pane-face');
+        if (face) face.style.backgroundImage = url ? `url("${url}")` : '';
+      }
+    }
+    this.setPlaque(list[0]?.name ?? '');
+  }
+
   setGold(gold, food) {
     if (this.goldEl) this.goldEl.textContent = fmt(gold);
     if (this.foodEl) this.foodEl.textContent = fmt(food);
@@ -460,7 +476,7 @@ export class HUD {
     if (this._tapeBuilt !== true) {
       this._tapeBuilt = true;
       const names = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-      // Three copies so the tape can scroll without ever showing an end.
+      // Three copies — 48 slots — so the tape never scrolls off its own end.
       const frag = [];
       for (let rep = 0; rep < 3; rep++) {
         for (const n of names) {
@@ -468,13 +484,14 @@ export class HUD {
           frag.push(el('span', { className: 'mm-tape-letter', text: n }));
         }
       }
-      frag.push(el('span', { className: 'mm-tape-tick' }));
       this.compassTape.replaceChildren(...frag);
     }
-    // One eighth of the tape is 45°; the middle copy keeps us away from the ends.
-    const seg = 100 / 24;
-    const offset = -(seg * (deg / 45) + seg * 8) + 50;
-    this.compassTape.style.transform = `translateX(${offset.toFixed(3)}%)`;
+    // Slot i spans [i/48, (i+1)/48] of the tape; letters are the odd slots. The
+    // window is 1/16 of the tape, so its centre sits at 1/32. Park the current
+    // heading's letter there, working from the middle copy.
+    const k = 8 + deg / 45;
+    const offset = (1 / 32 - (2 * k + 1.5) / 48) * 100;
+    this.compassTape.style.transform = `translateX(${offset.toFixed(4)}%)`;
   }
 
   /**
@@ -493,7 +510,10 @@ export class HUD {
     const H = cv.height;
     g.clearRect(0, 0, W, H);
 
-    const arch = this.textures.constructor.archPath(W, H * 0.965, W * 0.012);
+    // Clipped to exactly the opening the stone arch frame punches, so the
+    // rolled mouldings and the ogee apex read instead of being covered.
+    const arch = this.textures.constructor.archPath(
+      W, H - Math.round(H * 0.055), Math.round(W * 0.055));
     g.save();
     g.clip(arch);
 
@@ -525,10 +545,10 @@ export class HUD {
       const steps = 64;
       for (let i = 0; i <= steps; i++) {
         const a = (i / steps) * Math.PI * 2 - Math.PI / 2;
-        const bulge = 1 + 0.13 * Math.sin(a * 2) + 0.07 * Math.sin(a * 5 + 1.2);
-        const notch = a > 0.3 && a < Math.PI - 0.3 ? 1 - 0.16 * Math.abs(Math.sin(a * 6)) : 1;
-        const rx = W * 0.52 * bulge * notch;
-        const ry = H * 0.50 * bulge * notch;
+        const bulge = 1 + 0.11 * Math.sin(a * 2) + 0.06 * Math.sin(a * 5 + 1.2);
+        const notch = a > 0.3 && a < Math.PI - 0.3 ? 1 - 0.15 * Math.abs(Math.sin(a * 6)) : 1;
+        const rx = W * 0.44 * bulge * notch;
+        const ry = H * 0.43 * bulge * notch;
         const px = cx + Math.cos(a) * rx;
         const py = cy + Math.sin(a) * ry;
         if (i === 0) blob.moveTo(px, py); else blob.lineTo(px, py);
@@ -562,7 +582,7 @@ export class HUD {
       g.lineCap = 'butt';
       g.lineJoin = 'miter';
       g.strokeStyle = '#5A2810';
-      g.lineWidth = px * 1.6;
+      g.lineWidth = px * 0.9;
       for (const road of map.roads ?? []) {
         g.beginPath();
         road.forEach((p, i) => {

@@ -273,6 +273,24 @@ export function generateTerrain(rng) {
         + hills * hills * 54
         + detail * 7;
 
+      // Bluffs and terraces.
+      //
+      // Pure billow gives hills that are all the same rounded hump, and the
+      // horizon reads soft and samey because of it. Quantising the height in a
+      // few places into stepped benches — with a hard face between them —
+      // gives the skyline the outcrops and broken edges MM6's regions have,
+      // without turning the whole map into a staircase.
+      const benchMask = smoothstep(0.52, 0.78, fbm(permMount, wu * 2.2 + 11.3, wv * 2.2 - 4.7, 3) * 0.5 + 0.5);
+      if (benchMask > 0.01) {
+        const STEP = 13.5;
+        const stepped = Math.round(h / STEP) * STEP;
+        // Blend toward the quantised height, then sharpen the tread edge so
+        // the transition reads as a rock face rather than a smooth ramp.
+        const frac = h / STEP - Math.floor(h / STEP);
+        const edge = smoothstep(0.34, 0.66, frac);
+        h = lerp(h, lerp(stepped - STEP * 0.5, stepped + STEP * 0.5, edge), benchMask * 0.62);
+      }
+
       // A mountain wall along the north-west, giving the region a horizon.
       const mountMask = smoothstep(0.18, 0.62, -(u * 0.72 + v * 0.55) - 0.06);
       if (mountMask > 0) {

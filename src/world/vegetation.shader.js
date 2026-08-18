@@ -127,12 +127,16 @@ const DITHER_GLSL = /* glsl */`
  *                                  blade to the ground texture beneath it)
  * @param {number}  [opts.worldUvScale] metres per texture repeat
  * @param {number}  [opts.tipLight]  extra brightening toward the mobile tip
+ * @param {boolean} [opts.monochrome] keep the map's silhouette and luminance but
+ *                                  discard its hue, so `material.color` decides
+ *                                  it outright (blossom off a green leaf card)
  */
 export function patchFoliageMaterial(material, opts = {}) {
   const worldUv = !!opts.worldUv;
   const worldUvScale = opts.worldUvScale ?? 5.5;
   const tipLight = opts.tipLight ?? 0.0;
-  const key = `veg-foliage-${worldUv ? 1 : 0}-${worldUvScale}-${tipLight}`;
+  const monochrome = !!opts.monochrome;
+  const key = `veg-foliage-${worldUv ? 1 : 0}-${worldUvScale}-${tipLight}-${monochrome ? 1 : 0}`;
   // Grass takes its albedo UV from world XZ so a blade is literally coloured by
   // the ground texture it stands on. Only the base map does this; blades are
   // far too small for a normal or roughness map to earn its varying.
@@ -200,6 +204,18 @@ ${worldUvBlock}
         #include <clipping_planes_fragment>
         if (vVegFade < 0.999 && vVegFade < vegBayer4(gl_FragCoord.xy)) discard;
       `);
+
+    if (monochrome) {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <map_fragment>', /* glsl */`
+        #ifdef USE_MAP
+          vec4 vegTexel = texture2D( map, vMapUv );
+          float vegLum = dot( vegTexel.rgb, vec3( 0.32, 0.54, 0.14 ) );
+          diffuseColor.rgb *= 0.30 + 1.05 * vegLum;
+          diffuseColor.a *= vegTexel.a;
+        #endif
+      `);
+    }
   };
 
   material.customProgramCacheKey = () => key;

@@ -456,7 +456,7 @@ export class InventoryPanel extends Panel {
       this.refresh();
     });
 
-    const foot = el('div', { className: 'mm-sheet', style: { top: 'auto', bottom: nu(4), inset: 'auto 12px 4px 12px' } });
+    const foot = el('div', { className: 'mm-pack-foot' });
     body.appendChild(foot);
     this.buildOvalRow(foot, 'swordShield');
     this.buildNiche(side);
