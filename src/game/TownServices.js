@@ -1,5 +1,5 @@
 import { getCondition } from './rules.js';
-import { getVenue, venuesInTown } from './data/Venues.js';
+import { getVenue, venuesInTown, venuesOfKind } from './data/Venues.js';
 
 /**
  * The three civic buildings a town has besides its shops: the counting house,
@@ -415,14 +415,18 @@ export class TownServices {
    * Accepts a venue id, a venue record, or a `{ service, venue }` context of
    * the kind `VenueSystem` emits, and always answers with something usable —
    * an unknown id falls back to the same kind of building in the town the
-   * party is actually in, and failing that to the starting town's.
+   * party is in, then to the starting town's, and finally to any in the
+   * kingdom, because only two towns keep a counting house at all.
    */
   resolve(context = {}) {
     const wanted = typeof context === 'string' ? { venue: context } : (context ?? {});
     const direct = wanted.venue && getVenue(wanted.venue);
     if (direct) return direct;
     const kind = wanted.service ?? wanted.kind ?? 'tavern';
-    return this.venueIn(this.townId(), kind) ?? this.venueIn('town_millhaven', kind) ?? null;
+    return this.venueIn(this.townId(), kind)
+      ?? this.venueIn('town_millhaven', kind)
+      ?? venuesOfKind(kind)[0]
+      ?? null;
   }
 
   /** The town the party is standing in, as far as anything knows. */
@@ -1004,14 +1008,16 @@ export class TownServices {
     const picked = [];
     const bag = [...eligible];
     const givens = [...GIVEN];
+    const families = [...SURNAME];
     for (let i = 0; i < count && bag.length; i++) {
       const idx = rng?.int ? rng.int(0, bag.length - 1) : i % bag.length;
       const prof = HIRELINGS[bag.splice(idx, 1)[0]];
-      // Two people at the same bar do not share a name, so the given name is
+      // Two people at the same bar share neither name, so both halves are
       // drawn from what is left rather than from the whole book.
       const gi = rng?.int ? rng.int(0, givens.length - 1) : i % givens.length;
       const given = givens.splice(gi, 1)[0];
-      const family = rng?.pick ? rng.pick(SURNAME) : SURNAME[i % SURNAME.length];
+      const si = rng?.int ? rng.int(0, families.length - 1) : i % families.length;
+      const family = families.splice(si, 1)[0];
       picked.push({
         id: prof.id,
         key: `${key}:${prof.id}`,
@@ -1146,6 +1152,11 @@ export class TownServices {
       }
       m.bonuses.resist = resist;
       m.bonuses.resistances = { ...resist };
+    } else if (m.bonuses.resistances) {
+      // A character whose bonuses are not rebuilt from equipment (the
+      // interface's stand-in party) would otherwise keep a burnt-out
+      // blessing's resistances for ever.
+      delete m.bonuses.resistances;
     }
   }
 

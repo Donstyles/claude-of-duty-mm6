@@ -48,8 +48,9 @@ const CELL = 32;
  * Where the goods hang, in the viewport's own 460x352 pixels. The band clears
  * the ceiling beams at the top and the foreground counter at the bottom, so the
  * stock reads as hung on the shop's back wall rather than floating in the room.
- * `unit` is one pack cell blown up to object size: on the reference wall the
- * tallest piece stands about half the panel high, which is a 1x3 sword at 52.
+ * `unit` is one pack cell blown up to object size, shrunk only as far as it
+ * takes to fit the run: at 44 a plain sword stands a little under half the
+ * panel high, which is where the reference wall puts it.
  */
 const WALL = Object.freeze({
   x: 14, y: 22, w: 432, h: 274,
@@ -479,7 +480,7 @@ export class ShopPanel extends Panel {
 
   // ── capture ───────────────────────────────────────────────────────────────
 
-  /** A counter, a wall of goods, and a pack laid out for sale. */
+  /** The counter, a wall of goods, a pack laid out for sale, and a ruin stall. */
   _registerShots() {
     const cap = this.ui?.ctx?.get?.('capture');
     if (!cap?.registerShot) return;
@@ -512,7 +513,7 @@ export class ShopPanel extends Panel {
 /**
  * Hang the stock.
  *
- * The reference wall is six large objects spread evenly across the planks at
+ * The reference wall is six large objects spread evenly across the board at
  * six different heights — even horizontal spacing, deliberately uneven vertical
  * placement, everything upright, nothing overlapping. So: justify the run
  * horizontally (which guarantees no two pieces collide), and take each piece's

@@ -225,7 +225,9 @@ const TRADES = Object.freeze([
     'Breaks, dislocations, and the sort of cut that needs closing before it needs praying over.',
     'The temple will not touch a man who cannot pay. I will, and I take it out in firewood.',
   ] },
-  { id: 'herbwife', title: 'Herb-wife', tags: ['any'], hire: 'herbwife', work: [
+  // The only trade name in the list that is gendered; a man in the same trade is
+  // an herbalist, and the hireling record follows the same rule.
+  { id: 'herbwife', title: 'Herb-wife', titleFor: { m: 'Herbalist' }, tags: ['any'], hire: 'herbwife', work: [
     'Fever, flux, poison, and childbed. Four things, and between them they account for most of the graves out there.',
     'Everything I use grows within a morning\'s walk. There is nothing mystical about it, whatever the Concord would like you to think.',
   ] },
@@ -278,34 +280,43 @@ const TRADE_BY_ID = Object.freeze(Object.fromEntries(TRADES.map((t) => [t.id, t]
 const HOUSE_HIRE = Object.freeze({
   linkboy: {
     id: 'linkboy', name: 'Linkboy', wage: 5, effect: { mapReveal: 30 },
+    offer: 'I can carry a light all night, and I know every cut-through in this parish. Nobody gets lost with me in front.',
     desc: 'Carries the light and knows every lane and cut-through in the parish. The map fills in behind him.',
   },
   ratter: {
     id: 'ratter', name: 'Ratter', wage: 9, effect: { attack: 2, skills: { perception: 2 } },
+    offer: 'The dog finds them before you hear them and I follow the dog. Between us we have never yet missed a cellar.',
     desc: 'Comes with the dog. The dog finds things in the dark a long time before anybody else does.',
   },
   waterman: {
     id: 'waterman', name: 'Waterman', wage: 12, effect: { travelTime: -0.15, mapReveal: 15 },
+    offer: 'Every ford, ferry and shortcut between here and the next town. I will have you there before the coach does.',
     desc: 'Knows every ford, ferry and shortcut between here and the next town. Takes a sixth off the road.',
   },
   bonesetter: {
     id: 'bonesetter', name: 'Bonesetter', wage: 16, effect: { healPerHour: 3 },
+    offer: 'I can keep four people upright who have no business being upright. You bring the linen, I will bring the hands.',
     desc: 'Three hit points an hour to everyone who sleeps, and a running commentary on how you fight.',
   },
   herbwife: {
-    id: 'herbwife', name: 'Herb-wife', wage: 18, effect: { curesConditions: true, foodPerRest: 1 },
-    desc: 'Draws poison and breaks a fever overnight, and puts something green in the pot while she is at it.',
+    id: 'herbwife', name: 'Herb-wife', nameFor: { m: 'Herbalist' }, wage: 18,
+    effect: { curesConditions: true, foodPerRest: 1 },
+    offer: 'I draw poison and I break fevers, and I will put something green in the pot while I am about it.',
+    desc: 'Draws poison and breaks a fever overnight, and keeps something green in the party\'s pot.',
   },
   beadsman: {
     id: 'beadsman', name: 'Beadsman', wage: 22, effect: { spPerHour: 2 },
+    offer: 'I say the hours aloud whether anyone is sleeping or not. Your casters will wake the fuller for it.',
     desc: 'Says the hours aloud whether you are sleeping or not. The casters wake fuller and nobody argues.',
   },
   hedge_scribe: {
     id: 'hedge_scribe', name: 'Hedge-scribe', wage: 26, effect: { skills: { learning: 2, identify_item: 2 } },
+    offer: 'I will write the campaign up nightly and read you the maker\'s mark on anything you drag out of a barrow.',
     desc: 'Writes the campaign up nightly and reads a maker\'s mark better than most shops.',
   },
   old_hand: {
     id: 'old_hand', name: 'Old Hand', wage: 30, effect: { hp: 6, ac: 2, damage: 2 },
+    offer: 'Twenty-two years with the Chapter. I walk on the open side, I take the first blow, and I complain about the knee.',
     desc: 'Chapter pensioner. Walks on the open side, takes the first blow, and complains about the knee.',
   },
 });
@@ -898,7 +909,7 @@ export class DialogueSystem {
       source: 'house',
       name: this._name(rng),
       trade: trade.id,
-      profession: trade.title,
+      profession: trade.titleFor?.[sex] ?? trade.title,
       place: `House on ${street}`,
       town,
       venueKind: 'house',
@@ -944,7 +955,7 @@ export class DialogueSystem {
     if (!rng.chance(0.62)) return null;
     const prof = HOUSE_HIRE[trade.hire];
     if (!prof) return null;
-    return { ...prof, key: `${s.key}:${prof.id}` };
+    return { ...prof, name: prof.nameFor?.[s.sex] ?? prof.name, key: `${s.key}:${prof.id}` };
   }
 
   _errandFor(s, rng) {
@@ -1064,34 +1075,47 @@ export class DialogueSystem {
   }
 
   partyLevel() {
-    const members = this.ctx?.get?.('party')?.members;
+    const members = this.ctx?.get?.('party')?.members ?? this.ctx?.get?.('ui')?.members?.();
     if (!Array.isArray(members) || !members.length) return 1;
     return Math.max(1, Math.round(members.reduce((a, m) => a + (m?.level ?? 1), 0) / members.length));
   }
 
-  gold() {
+  /**
+   * The purse.
+   *
+   * The party system holds it once the game is running; before that the
+   * interface keeps its own, and the shop screen already spends from there. A
+   * transaction that silently fails because the simulation has not booted is a
+   * dead end on the screen, so both are honoured.
+   */
+  _purse() {
     const party = this.ctx?.get?.('party');
-    return Math.max(0, Math.round(party?.gold ?? 0));
+    if (party) return party;
+    const ui = this.ctx?.get?.('ui');
+    return ui && typeof ui.gold === 'number' ? ui : null;
+  }
+
+  gold() {
+    return Math.max(0, Math.round(this._purse()?.gold ?? 0));
   }
 
   /** True when the money was there and has been taken. */
   spend(amount) {
     const n = Math.round(amount);
     if (n <= 0) return true;
-    const party = this.ctx?.get?.('party');
-    if (!party) return false;
-    if ((party.gold ?? 0) < n) return false;
-    if (typeof party.spendGold === 'function') return !!party.spendGold(n);
-    party.gold -= n;
+    const purse = this._purse();
+    if (!purse || (purse.gold ?? 0) < n) return false;
+    if (typeof purse.spendGold === 'function') return !!purse.spendGold(n);
+    purse.gold -= n;
     return true;
   }
 
   pay(reward) {
-    const party = this.ctx?.get?.('party');
-    if (party) {
-      if (typeof party.addGold === 'function') party.addGold(reward.gold);
-      else party.gold = (party.gold ?? 0) + reward.gold;
-      party.addExperience?.(reward.xp);
+    const purse = this._purse();
+    if (purse) {
+      if (typeof purse.addGold === 'function') purse.addGold(reward.gold);
+      else purse.gold = (purse.gold ?? 0) + reward.gold;
+      purse.addExperience?.(reward.xp);
     }
     this.ctx?.events?.emit?.('ui:log', { text: `${reward.gold} gold and ${reward.xp} experience.`, kind: 'loot' });
   }
@@ -1294,17 +1318,43 @@ class Conversation {
         { id: 'errand-no', label: 'Not For That' },
       ];
     }
+    const reward = this.model.rewardFor(this.speaker, def);
     return [
-      { id: 'errand-yes', label: 'We Will Do It', special: true },
+      {
+        id: 'errand-yes', label: 'We Will Do It', special: true,
+        tip: {
+          title: def.name,
+          subtitle: def.kind === 'hunt' ? `${def.count} to kill` : 'To be carried',
+          lines: [
+            { k: 'Pays', v: `${reward.gold} gold` },
+            { k: 'Experience', v: String(reward.xp) },
+            { k: 'Standing', v: `+${reward.rep}` },
+          ],
+          flavour: 'Taken on a handshake. Nobody here writes anything down.',
+        },
+      },
       { id: 'errand-reward', label: 'The Pay' },
       { id: 'errand-no', label: 'Not Today' },
     ];
   }
 
   _hireBranch() {
-    const wage = this.model.wageFor(this.speaker.hire);
+    const offer = this.speaker.hire;
+    const wage = this.model.wageFor(offer);
     return [
-      { id: 'hire-yes', label: `Hire — ${wage} Gold a Day`, special: true },
+      {
+        id: 'hire-yes', label: `Hire — ${wage} Gold a Day`, special: true,
+        tip: {
+          title: this.speaker.name,
+          subtitle: offer.name,
+          lines: [
+            { k: 'Wage', v: `${wage} gold a day` },
+            { k: 'Places', v: `${this.model.retinue().length}/${RETINUE_LIMIT} filled` },
+            { k: 'Purse', v: `${this.model.gold()} gold` },
+          ],
+          flavour: offer.desc,
+        },
+      },
       { id: 'hire-no', label: 'Leave It' },
     ];
   }
@@ -1336,13 +1386,13 @@ class Conversation {
         const trade = TRADE_BY_ID[s.trade];
         const lines = trade ? [...trade.work]
           : (KIND_TRADE[s.venueKind] ?? ['I do what the town needs doing, and it does not need much.']);
-        this.text = { lines, note: s.profession, tone: 'plain' };
+        this.text = { lines, note: null, tone: 'plain' };
         return;
       }
 
       case 'town': {
         const notes = TOWN_NOTES[s.town] ?? TOWN_NOTES.generic;
-        this.text = { lines: [pick(this.rng, notes.note)], note: notes.name, tone: 'plain' };
+        this.text = { lines: [pick(this.rng, notes.note)], note: null, tone: 'plain' };
         return;
       }
 
@@ -1351,7 +1401,11 @@ class Conversation {
         const line = pool[this._rumourIndex] ?? null;
         if (line) {
           this._rumourIndex += 1;
-          this.text = { lines: [line], note: 'Talk, and worth what talk is worth.', tone: 'plain' };
+          this.text = {
+            lines: [line],
+            note: `Being said in ${(TOWN_NOTES[s.town] ?? TOWN_NOTES.generic).name} this week.`,
+            tone: 'plain',
+          };
         } else {
           this.text = { lines: [pick(this.rng, EXHAUSTED)], note: null, tone: 'plain' };
         }
@@ -1378,7 +1432,7 @@ class Conversation {
         const offer = s.hire;
         this.text = {
           lines: [
-            `${offer.desc}`,
+            offer.offer ?? offer.desc,
             `${model.wageFor(offer)} gold a day, and the first day before I put my boots on.`,
           ],
           note: `${offer.name} · ${model.retinue().length}/${RETINUE_LIMIT} places filled`,

@@ -3,9 +3,13 @@
  * The Maps screen is a stone table with a drawing laid on it: the frame, the
  * tabs and the tools are carved granite, and every colour that means something
  * lives on the canvas instead. Nothing here paints the map itself.
+ *
+ * Every rule is prefixed with .mm-ui so it outranks the shared sheet: the
+ * bundler emits a panel's own CSS before ui.panels.css, so equal specificity
+ * would silently lose to it.
  */
 
-.mm-mapview {
+.mm-ui .mm-mapview {
   position: absolute;
   inset: calc(var(--u) * 8) calc(var(--u) * 10) calc(var(--u) * 6);
   display: flex;
@@ -13,7 +17,7 @@
   gap: calc(var(--u) * 5);
 }
 
-.mm-map-head {
+.mm-ui .mm-map-head {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -21,26 +25,26 @@
   height: calc(var(--u) * 26);
 }
 
-.mm-map-titles { text-align: center; }
-.mm-mapview-title {
+.mm-ui .mm-map-titles { text-align: center; }
+.mm-ui .mm-mapview-title {
   font-size: calc(var(--u) * 17);
   font-style: italic;
   color: var(--gold);
   line-height: 1;
 }
-.mm-map-sub {
+.mm-ui .mm-map-sub {
   font-size: calc(var(--u) * 10);
   color: #cfcac2;
   line-height: calc(var(--u) * 13);
 }
 
-.mm-map-tabs { display: flex; gap: calc(var(--u) * 4); }
-.mm-map-tools { display: flex; gap: calc(var(--u) * 4); justify-content: flex-end; align-items: center; }
+.mm-ui .mm-map-tabs { display: flex; gap: calc(var(--u) * 4); }
+.mm-ui .mm-map-tools { display: flex; gap: calc(var(--u) * 4); justify-content: flex-end; align-items: center; }
 
 /* Tabs and the note tool are raised plaques of the same granite: a panel
    button in MM6 is a bevel, never a filled shape in another colour. */
-.mm-map-tab,
-.mm-map-tool {
+.mm-ui .mm-map-tab,
+.mm-ui .mm-map-tool {
   height: calc(var(--u) * 22);
   display: flex;
   align-items: center;
@@ -53,21 +57,21 @@
     inset calc(var(--u) * 1) calc(var(--u) * 1) 0 var(--bevel-light),
     inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--bevel-dark);
 }
-.mm-map-tab:hover,
-.mm-map-tool:hover { color: var(--gold); }
-.mm-map-tab.is-active {
+.mm-ui .mm-map-tab:hover,
+.mm-ui .mm-map-tool:hover { color: var(--gold); }
+.mm-ui .mm-map-tab.is-active {
   color: var(--gold);
   background: rgba(200, 178, 108, 0.20);
   box-shadow:
     inset calc(var(--u) * 1) calc(var(--u) * 1) 0 var(--bevel-dark),
     inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--bevel-light);
 }
-.mm-map-tool.is-armed { color: #fff2c0; background: rgba(200, 160, 60, 0.32); }
-.mm-map-tool svg { display: block; }
+.mm-ui .mm-map-tool.is-armed { color: #fff2c0; background: rgba(200, 160, 60, 0.32); }
+.mm-ui .mm-map-tool svg { display: block; }
 
 /* Zoom is cut into the stone at the arch shoulders in the sidebar, and it is
    cut into the stone here too: one shade lighter, a soft shadow, no outline. */
-.mm-map-zoom {
+.mm-ui .mm-map-zoom {
   width: calc(var(--u) * 22);
   height: calc(var(--u) * 22);
   display: grid;
@@ -75,27 +79,27 @@
   color: #d6d0c8;
   filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.85));
 }
-.mm-map-zoom:hover { color: #fff2c0; }
+.mm-ui .mm-map-zoom:hover { color: #fff2c0; }
 
-.mm-mapview-body {
+.mm-ui .mm-mapview-body {
   flex: 1;
   position: relative;
   padding: calc(var(--u) * 3);
   background: #080000;
   min-height: 0;
 }
-.mm-map-full {
+.mm-ui .mm-map-full {
   position: absolute;
   inset: calc(var(--u) * 3);
   width: calc(100% - var(--u) * 6);
   height: calc(100% - var(--u) * 6);
   cursor: grab;
 }
-.mm-map-full:active { cursor: grabbing; }
-.mm-map-full.is-noting { cursor: crosshair; }
+.mm-ui .mm-map-full:active { cursor: grabbing; }
+.mm-ui .mm-map-full.is-noting { cursor: crosshair; }
 
-.mm-map-notelayer { position: absolute; inset: calc(var(--u) * 3); pointer-events: none; }
-.mm-map-note-input {
+.mm-ui .mm-map-notelayer { position: absolute; inset: calc(var(--u) * 3); pointer-events: none; }
+.mm-ui .mm-map-note-input {
   position: absolute;
   display: none;
   width: calc(var(--u) * 150);
@@ -112,9 +116,9 @@
     inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(90, 78, 50, 0.8),
     0 calc(var(--u) * 2) calc(var(--u) * 5) rgba(0, 0, 0, 0.6);
 }
-.mm-map-note-input.is-open { display: block; }
+.mm-ui .mm-map-note-input.is-open { display: block; }
 
-.mm-map-foot {
+.mm-ui .mm-map-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -122,25 +126,25 @@
   height: calc(var(--u) * 16);
   font-size: calc(var(--u) * 11);
 }
-.mm-map-legend { display: flex; gap: calc(var(--u) * 10); flex-wrap: nowrap; overflow: hidden; }
-.mm-map-key { display: flex; align-items: center; gap: calc(var(--u) * 4); color: #d8d2c6; white-space: nowrap; }
-.mm-map-key i {
+.mm-ui .mm-map-legend { display: flex; gap: calc(var(--u) * 10); flex-wrap: nowrap; overflow: hidden; }
+.mm-ui .mm-map-key { display: flex; align-items: center; gap: calc(var(--u) * 4); color: #d8d2c6; white-space: nowrap; }
+.mm-ui .mm-map-key i {
   width: calc(var(--u) * 10);
   height: calc(var(--u) * 8);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
 }
-.mm-map-key i.is-road { background: #5a2810; }
-.mm-map-key i.is-building { background: linear-gradient(180deg, #ce8e63 0 45%, #945531 45%); }
-.mm-map-key i.is-door { background: #e7dfd6; }
-.mm-map-key i.is-folk { background: #e7cf21; border-radius: 50%; }
-.mm-map-key i.is-note { background: #f4dd92; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-.mm-map-key i.is-coach { background: #7a4a20; height: calc(var(--u) * 3); }
-.mm-map-key i.is-ship {
+.mm-ui .mm-map-key i.is-road { background: #5a2810; }
+.mm-ui .mm-map-key i.is-building { background: linear-gradient(180deg, #ce8e63 0 45%, #945531 45%); }
+.mm-ui .mm-map-key i.is-door { background: #e7dfd6; }
+.mm-ui .mm-map-key i.is-folk { background: #e7cf21; border-radius: 50%; }
+.mm-ui .mm-map-key i.is-note { background: #f4dd92; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.mm-ui .mm-map-key i.is-coach { background: #7a4a20; height: calc(var(--u) * 3); }
+.mm-ui .mm-map-key i.is-ship {
   height: calc(var(--u) * 3);
   background: repeating-linear-gradient(90deg, #2a4a78 0 calc(var(--u) * 4), transparent calc(var(--u) * 4) calc(var(--u) * 7));
   box-shadow: none;
 }
-.mm-map-key i.is-town { background: linear-gradient(180deg, #ce8e63 0 45%, #945531 45%); }
-.mm-map-key i.is-unknown { background: #7a756a; }
-.mm-map-key i.is-here { background: #fff; clip-path: polygon(50% 0, 100% 100%, 50% 72%, 0 100%); }
-.mm-map-coord { color: var(--gold); white-space: nowrap; font-style: italic; }
+.mm-ui .mm-map-key i.is-town { background: linear-gradient(180deg, #ce8e63 0 45%, #945531 45%); }
+.mm-ui .mm-map-key i.is-unknown { background: #7a756a; }
+.mm-ui .mm-map-key i.is-here { background: #fff; clip-path: polygon(50% 0, 100% 100%, 50% 72%, 0 100%); }
+.mm-ui .mm-map-coord { color: var(--gold); white-space: nowrap; font-style: italic; }

@@ -186,7 +186,11 @@ export class ServicesPanel extends Panel {
     setChildren(this.optionsEl, ...this._offices(venue));
     this.boardEl.dataset.venue = this.service;
     this.boardEl.classList.toggle('is-open', this.page !== 'room');
-    this.boardEl.classList.toggle('is-tall', TALL_PAGES.has(this.page));
+    // The healing page normally sits low; a refusal notice takes the room a
+    // fourth roster row would otherwise have, so it grows the board instead.
+    const tall = TALL_PAGES.has(this.page)
+      || (this.page === 'healing' && !!this.model.refusal(venue));
+    this.boardEl.classList.toggle('is-tall', tall);
     setChildren(this.boardEl, ...this._page(venue));
   }
 

@@ -661,8 +661,8 @@ export class CreatePanel extends Panel {
 
   /**
    * Hand the party over. The four `Character`s built here are the ones the game
-   * plays with — the party system takes them whole, and the interface picks
-   * them up on its next sync, portraits and all.
+   * plays with — the party system takes them whole, and the interface is pushed
+   * at them before the screen closes, portraits and all.
    */
   _start() {
     const check = this.model.validate();

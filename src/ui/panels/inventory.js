@@ -95,7 +95,7 @@ export class InventoryPanel extends Panel {
     this.goldEl = el('b', { className: 'mm-count' });
 
     const arrange = el('button', { className: 'mm-inv-button mm-engraved', type: 'button', text: 'Arrange' });
-    arrange.addEventListener('click', () => this.ui.sortInventory?.(this.ui.activeIndex));
+    arrange.addEventListener('click', () => this._act(() => this.ui.sortInventory?.(this.ui.activeIndex)));
     tooltip.attach(arrange, () => tipMarkup({
       title: 'Arrange',
       flavour: 'Repack the whole load largest first, so a dungeon\'s worth of holes closes up.',
@@ -241,9 +241,35 @@ export class InventoryPanel extends Panel {
       // While carrying, the press belongs to the zone underneath: let it bubble.
       if (!this.held) { e.stopPropagation(); this._lift(item, src, e, node); }
     });
-    node.addEventListener('mouseenter', () => this.ui.hud?.setMessage?.(this._name(item)));
-    node.addEventListener('mouseleave', () => this.ui.hud?.setMessage?.(''));
+    node.addEventListener('mouseenter', () => this._hover(this._name(item)));
+    node.addEventListener('mouseleave', () => this._hover(''));
     tooltip.attach(node, () => this._tip(item, src));
+  }
+
+  // ── the message strip ─────────────────────────────────────────────────────
+
+  /**
+   * MM6 has exactly one text channel, and everything queues through it. That
+   * makes hover names and results compete: an action redraws the pack, the
+   * cursor lands on the rebuilt sprite, and "the repair failed" is replaced by
+   * "Buckler" before it can be read. So a result holds the strip for a beat and
+   * hover names wait their turn.
+   */
+  _say(text) {
+    this._quietUntil = performance.now() + 1400;
+    this.ui.hud?.setMessage?.(text);
+  }
+
+  _hover(text) {
+    if (performance.now() < (this._quietUntil ?? 0)) return;
+    this.ui.hud?.setMessage?.(text);
+  }
+
+  /** Run a model action, then hold whatever it logged on the strip. */
+  _act(fn) {
+    const ok = fn();
+    this._quietUntil = performance.now() + 1400;
+    return ok;
   }
 
   // ── carrying ──────────────────────────────────────────────────────────────
@@ -270,7 +296,7 @@ export class InventoryPanel extends Panel {
     window.addEventListener('mousemove', this._onMove);
     window.addEventListener('mouseup', this._onUp);
     this._track(e.clientX, e.clientY);
-    this.ui.hud?.setMessage?.(this._name(item));
+    this._hover(this._name(item));
     this.refresh();
   }
 
@@ -317,7 +343,7 @@ export class InventoryPanel extends Panel {
       const fp = itemFootprint(held.item);
       const gx = clamp(Math.round((x - pr.left) / cell - held.gx), 0, GRID_COLS - fp.w);
       const gy = clamp(Math.round((y - pr.top) / cell - held.gy), 0, GRID_ROWS - fp.h);
-      if (this.ui.moveItemToGrid(held.owner, held, gx, gy, GRID_COLS, GRID_ROWS)) {
+      if (this._act(() => this.ui.moveItemToGrid(held.owner, held, gx, gy, GRID_COLS, GRID_ROWS))) {
         this._endCarry();
         this.refresh();
       }
@@ -353,12 +379,19 @@ export class InventoryPanel extends Panel {
     this.refresh();
   }
 
+  /**
+   * Escape has to mean two things in order: put down what the cursor is
+   * holding, and only then leave. Both are taken here rather than left to the
+   * panel's own handler, which needs the focus to still be inside the screen —
+   * and after a few pick-ups it very often is not.
+   */
   _key(e) {
     if (!this.opened) return;
-    if (e.key === 'Escape' && (this.held || this.inspecting)) {
+    if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      this._cancel();
+      if (this.held || this.inspecting) this._cancel();
+      else this.ui.closePanel();
       return;
     }
     if (e.key === 'Tab') {
@@ -419,17 +452,17 @@ export class InventoryPanel extends Panel {
     const vm = this.ui.active();
     const check = this._canEquip(vm, held.item, slotId);
     if (!check.ok) {
-      this.ui.hud?.setMessage?.(check.why);
+      this._say(check.why);
       return false;
     }
     // A two-hander wants the shield hand as well.
     if (slotId === 'mainhand' && held.slot !== 'mainhand' && held.item.hands === 2 && vm.equipment?.offhand) {
       if (!this._stow(vm, 'offhand')) {
-        this.ui.hud?.setMessage?.('No room in the pack for the off hand.');
+        this._say('No room in the pack for the off hand.');
         return false;
       }
     }
-    return this.ui.equipItem(held.owner, held, slotId);
+    return this._act(() => this.ui.equipItem(held.owner, held, slotId));
   }
 
   /** Take a worn item off into the first cell of the pack that will hold it. */
@@ -438,7 +471,7 @@ export class InventoryPanel extends Panel {
     if (!item) return true;
     const cell = this._freeCell(vm, item);
     if (!cell) return false;
-    return this.ui.moveItemToGrid(vm.index, { item, from: 'equip', slot }, cell.x, cell.y, GRID_COLS, GRID_ROWS);
+    return this._act(() => this.ui.moveItemToGrid(vm.index, { item, from: 'equip', slot }, cell.x, cell.y, GRID_COLS, GRID_ROWS));
   }
 
   _freeCell(vm, item) {
@@ -465,13 +498,13 @@ export class InventoryPanel extends Panel {
   _toggleInspect() {
     this.inspecting = !this.inspecting;
     // Instructions live in the message strip, exactly as the shop's do.
-    this.ui.hud?.setMessage?.(this.inspecting ? 'Select the Item to Appraise' : '');
+    this._say(this.inspecting ? 'Select the Item to Appraise' : '');
     this.glass.classList.toggle('is-active', this.inspecting);
   }
 
   _appraise(item) {
     this.inspecting = false;
-    this.ui.appraiseItem?.(this.ui.activeIndex, item);
+    this._act(() => this.ui.appraiseItem?.(this.ui.activeIndex, item));
     this.refresh();
   }
 
@@ -479,7 +512,7 @@ export class InventoryPanel extends Panel {
   _use(item, src) {
     if (item.broken || item.identified === false) { this._appraise(item); return; }
     if (src.from === 'equip') {
-      if (!this._stow(this.ui.active(), src.slot)) this.ui.hud?.setMessage?.('No room in the pack.');
+      if (!this._stow(this.ui.active(), src.slot)) this._say('No room in the pack.');
       this.refresh();
       return;
     }
@@ -489,7 +522,7 @@ export class InventoryPanel extends Panel {
       this.refresh();
       return;
     }
-    this.ui.useItem(this.ui.activeIndex, src.entry);
+    this._act(() => this.ui.useItem(this.ui.activeIndex, src.entry));
   }
 
   // ── text ──────────────────────────────────────────────────────────────────

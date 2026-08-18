@@ -96,7 +96,15 @@
   flex-direction: column;
   align-items: center;
   overflow: hidden;
-  background: var(--tex-wood-vert) center / 100% calc(var(--u) * 240) repeat-y;
+  /* A light raking across the boards from the room's fire: the plank texture is
+     shared with every wooden panel, and without this the board reads as a flat
+     brown rectangle rather than a lit surface. */
+  background:
+    linear-gradient(101deg,
+      rgba(0, 0, 0, 0.44) 0%,
+      rgba(255, 214, 150, 0.09) 44%,
+      rgba(0, 0, 0, 0.40) 100%) center / cover no-repeat,
+    var(--tex-wood-vert) center / 100% calc(var(--u) * 240) repeat-y;
   background-color: #3a1e0e;
   box-shadow:
     inset 0 0 0 calc(var(--u) * 1) rgba(12, 5, 0, 0.85),

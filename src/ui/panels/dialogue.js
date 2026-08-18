@@ -130,12 +130,20 @@ export class DialoguePanel extends Panel {
         type: 'button', text: t.label,
       });
       b.addEventListener('click', () => this._choose(t.id));
+      // Terms — a wage, a purse, what an errand pays — hang off the option
+      // rather than crowding the speech, which is prose and should stay prose.
+      if (t.tip) tooltip.attach(b, () => tipMarkup(t.tip));
       return b;
     });
     if (!rows.length) {
       rows.push(el('div', { className: 'mm-npc-closed', text: 'The door is closing.' }));
     }
     setChildren(this.optionsEl, ...rows);
+
+    // The sidebar's two stained-glass panes read the retinue off the interface,
+    // so point them at whichever array the model is actually filling — the
+    // party's when the simulation is up, its own before that.
+    this.ui.hirelings = this.model().retinue();
 
     tooltip.attach(this.portraitEl, () => tipMarkup({
       title: s.name,

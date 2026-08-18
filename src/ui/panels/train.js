@@ -119,16 +119,17 @@ export class TrainPanel extends Panel {
     this.nameEl.textContent = hall.keeper;
 
     // One adventurer's account, in the sidebar where MM6 keeps the counter.
-    const shortText = state.level >= hall.maxLevel ? '—'
-      : state.short > 0 ? fmt(state.short) : 'ready';
+    // Past the yard's ceiling nothing is owed and nothing is short, so those
+    // two rows go quiet rather than reporting a colour they do not mean.
+    const capped = state.level >= hall.maxLevel;
+    const needTone = capped ? '' : state.short > 0 ? 'mm-t-down' : 'mm-t-up';
+    const feeTone = !capped && !state.ok && state.short === 0 ? 'mm-t-down' : '';
     setChildren(this.accountEl,
       el('div', { className: 'mm-train-who mm-t-gold', text: ellipsis(vm?.name ?? '—', 17) }),
-      labelRow('Level', String(state.level), { tone: state.level >= hall.maxLevel ? 'mm-t-down' : '' }),
+      labelRow('Level', String(state.level), { tone: capped ? 'mm-t-down' : '' }),
       labelRow('Experience', fmt(state.xp)),
-      labelRow('Needs', shortText, { tone: state.short > 0 ? 'mm-t-down' : 'mm-t-up' }),
-      labelRow('Fee', state.level >= hall.maxLevel ? '—' : fmt(state.cost), {
-        tone: !state.ok && state.short === 0 && state.level < hall.maxLevel ? 'mm-t-down' : '',
-      }),
+      labelRow('Needs', capped ? '—' : state.short > 0 ? fmt(state.short) : 'ready', { tone: needTone }),
+      labelRow('Fee', capped ? '—' : fmt(state.cost), { tone: feeTone }),
       labelRow('In the purse', fmt(guilds.gold())));
 
     const options = [];
@@ -178,7 +179,7 @@ export class TrainPanel extends Panel {
       el('span', { className: `is-num${capped ? ' mm-t-down' : ''}`, text: String(state.level) }),
       el('span', { className: 'is-num', text: fmt(state.xp) }),
       el('span', {
-        className: `is-num${state.short > 0 ? ' mm-t-down' : ' mm-t-up'}`,
+        className: `is-num${capped ? '' : state.short > 0 ? ' mm-t-down' : ' mm-t-up'}`,
         text: capped ? '—' : state.short > 0 ? fmt(state.short) : 'ready',
       }),
       el('span', {
@@ -246,26 +247,16 @@ export class TrainPanel extends Panel {
   // ── capture ────────────────────────────────────────────────────────────────
 
   /**
-   * Panels register their own viewpoints. `UISystem` photographs the screens it
-   * built; these are not its, so they register here — the capture system's shot
-   * table exists from construction, which is when panels are made.
+   * `UISystem` photographs the plain state of every venue screen, including
+   * this one, through the venue that opens it. What it deliberately will not do
+   * is reach in and set a screen's private state, so the states that only this
+   * screen knows about — the roll, and a yard that has to refuse — register
+   * here instead. The capture system's shot table exists from construction,
+   * which is when panels are made.
    */
   _registerShots() {
     const cap = this.ui.ctx?.get?.('capture');
     if (!cap?.registerShot) return;
-
-    cap.registerShot('ui-train', {
-      description: 'The training hall: the painted sand yard with its dummies and racked blades '
-        + 'filling the viewport, the drillmaster and the selected adventurer\'s account — level, '
-        + 'experience, what is still needed, the fee — down the sidebar.',
-      apply: async () => {
-        this._stage('town_thornwick_trainer', 9000,
-          [{ level: 8, over: 2400 }, { level: 6, over: 30 }, { level: 5, short: 900 }, { level: 4, short: 260 }]);
-        this.ui.selectMember(0);
-        this.view = 'yard';
-        this.ui.openPanel('train', { venue: this.venueId });
-      },
-    });
 
     cap.registerShot('ui-train-roll', {
       description: 'The muster roll over the sand: all four adventurers with what each has '

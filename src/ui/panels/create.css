@@ -423,8 +423,8 @@
   flex: 1;
   min-width: 0;
   padding: 0 calc(var(--u) * 4) 0 calc(var(--u) * 6);
-  font-size: calc(var(--u) * 9);
-  line-height: calc(var(--u) * 9.2);
+  font-size: calc(var(--u) * 8.5);
+  line-height: calc(var(--u) * 9);
   overflow: hidden;
   box-shadow: inset calc(var(--u) * 1) 0 0 rgba(10, 16, 10, 0.55);
 }

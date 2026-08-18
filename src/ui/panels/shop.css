@@ -87,12 +87,13 @@
     0 calc(var(--u) * 4) calc(var(--u) * 14) rgba(0, 0, 0, 0.7);
 }
 
-/* Unlabelled goods are dulled — nothing about the piece tells you what it is.
-   Bent ones are darkened and desaturated: metal that has been in a fire. */
+/* Unlabelled goods are dulled — nothing about the piece tells you what it is —
+   but only far enough to read as dull, because a shape drained to grey stops
+   being a shape. Bent ones go darker: metal that has been in a fire. */
 .mm-item.is-unknown,
 .mm-panel[data-panel='shop'] .mm-shop-item.is-unknown {
   filter:
-    saturate(0.3) brightness(0.82)
+    saturate(0.55) brightness(0.88)
     drop-shadow(calc(var(--u) * 3) calc(var(--u) * 5) calc(var(--u) * 3) rgba(0, 0, 0, 0.75));
 }
 .mm-item.is-broken,
@@ -122,12 +123,17 @@
   padding: calc(var(--u) * 4) calc(var(--u) * 8) calc(var(--u) * 46);
 }
 
-/* The shop's name sits at the very top of the timber, white upright serif. */
+/* The shop's name sits at the very top of the timber, white upright serif. A
+   sign like "The Scavenged Cabinet" is wider than the panel, so it wraps
+   rather than being cut off mid-word. */
 .mm-npc-side.mm-shop-side .mm-venue {
   position: static;
   margin: calc(var(--u) * 3) 0 0;
   font-size: calc(var(--u) * 14);
-  line-height: calc(var(--u) * 17);
+  line-height: calc(var(--u) * 16);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 /* A framed painting, not a cut-out: rectangular, ~4:5, thin grey-green bevel

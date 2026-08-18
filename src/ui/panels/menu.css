@@ -4,9 +4,13 @@
  * cartouche and recessed plaques in warm gold serif with Quit in red. The
  * pages behind it — options, slots, controls — are built from the same three
  * materials, so nothing on them reads as a different game's dialogue box.
+ *
+ * Every rule is prefixed with .mm-ui so it outranks the shared sheet: the
+ * bundler emits a panel's own CSS before ui.panels.css, so equal specificity
+ * would silently lose to it.
  */
 
-.mm-menu {
+.mm-ui .mm-menu {
   padding: calc(var(--u) * 14) calc(var(--u) * 18) calc(var(--u) * 12);
   gap: calc(var(--u) * 10);
   justify-content: flex-start;
@@ -19,7 +23,7 @@
   background-blend-mode: normal, luminosity, normal;
 }
 
-.mm-menu-logo {
+.mm-ui .mm-menu-logo {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
@@ -28,8 +32,14 @@
   padding: calc(var(--u) * 5) calc(var(--u) * 30);
   font-size: calc(var(--u) * 26);
 }
-.mm-menu-logo-name { letter-spacing: 0.16em; line-height: 1.05; }
-.mm-menu-logo-sub {
+.mm-ui .mm-menu-logo-name { letter-spacing: 0.16em; line-height: 1.05; }
+/* Off the title page the logo is a header, not the point of the screen. */
+.mm-ui .mm-panel[data-page]:not([data-page='root']) .mm-menu-logo {
+  font-size: calc(var(--u) * 17);
+  padding: calc(var(--u) * 2) calc(var(--u) * 20);
+}
+.mm-ui .mm-panel[data-page]:not([data-page='root']) .mm-menu-logo-sub { display: none; }
+.mm-ui .mm-menu-logo-sub {
   font-size: calc(var(--u) * 11);
   letter-spacing: 0.30em;
   color: #c9a44a;
@@ -37,7 +47,7 @@
 
 /* The root page keeps MM6's centred column; every other page is a working
    sheet and fills the width it is given. */
-.mm-menu-page {
+.mm-ui .mm-menu-page {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -46,10 +56,10 @@
   align-items: center;
   gap: calc(var(--u) * 8);
 }
-.mm-panel[data-panel='menu'][data-page='root'] .mm-menu-page { justify-content: center; }
+.mm-ui .mm-panel[data-panel='menu'][data-page='root'] .mm-menu-page { justify-content: center; }
 
-.mm-menu-grid { grid-template-columns: repeat(2, calc(var(--u) * 156)); gap: calc(var(--u) * 8); }
-.mm-menu-item {
+.mm-ui .mm-menu-grid { grid-template-columns: repeat(2, calc(var(--u) * 156)); gap: calc(var(--u) * 8); }
+.mm-ui .mm-menu-item {
   height: calc(var(--u) * 32);
   display: flex;
   flex-direction: column;
@@ -58,16 +68,16 @@
   gap: calc(var(--u) * 1);
   padding: 0 calc(var(--u) * 6);
 }
-.mm-menu-item small {
+.mm-ui .mm-menu-item small {
   font-size: calc(var(--u) * 9);
   font-style: italic;
   color: #a09070;
   line-height: 1;
 }
-.mm-menu-item.is-dead { color: #8a7c5c; cursor: default; }
-.mm-menu-item.is-dead:hover { color: #8a7c5c; }
+.mm-ui .mm-menu-item.is-dead { color: #8a7c5c; cursor: default; }
+.mm-ui .mm-menu-item.is-dead:hover { color: #8a7c5c; }
 
-.mm-menu-hint {
+.mm-ui .mm-menu-hint {
   font-size: calc(var(--u) * 10);
   font-style: italic;
   color: #8a7f66;
@@ -75,15 +85,15 @@
 
 /* ── page furniture ───────────────────────────────────────────────────────── */
 
-.mm-menu-head { width: 100%; text-align: center; flex: 0 0 auto; }
-.mm-menu-head h2 {
+.mm-ui .mm-menu-head { width: 100%; text-align: center; flex: 0 0 auto; }
+.mm-ui .mm-menu-head h2 {
   margin: 0;
   font-size: calc(var(--u) * 18);
   font-weight: normal;
   letter-spacing: 0.12em;
   color: #ffdf94;
 }
-.mm-menu-head p {
+.mm-ui .mm-menu-head p {
   margin: calc(var(--u) * 2) auto 0;
   max-width: calc(var(--u) * 360);
   font-size: calc(var(--u) * 10);
@@ -92,18 +102,18 @@
   color: #b6a988;
 }
 
-.mm-menu-prose {
+.mm-ui .mm-menu-prose {
   max-width: calc(var(--u) * 340);
   font-size: calc(var(--u) * 11);
   line-height: 1.45;
   color: #d8ccb0;
 }
-.mm-menu-prose p { margin: 0 0 calc(var(--u) * 6); }
+.mm-ui .mm-menu-prose p { margin: 0 0 calc(var(--u) * 6); }
 
-.mm-menu-actions { display: flex; gap: calc(var(--u) * 8); flex: 0 0 auto; }
-.mm-menu-actions.is-foot { margin-top: auto; }
+.mm-ui .mm-menu-actions { display: flex; gap: calc(var(--u) * 8); flex: 0 0 auto; }
+.mm-ui .mm-menu-actions.is-foot { margin-top: auto; }
 
-.mm-menu-plaque {
+.mm-ui .mm-menu-plaque {
   height: calc(var(--u) * 26);
   padding: 0 calc(var(--u) * 16);
   display: grid;
@@ -115,12 +125,12 @@
     inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(10, 8, 4, 0.95),
     inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(140, 122, 74, 0.6);
 }
-.mm-menu-plaque:hover { color: #fff2c0; }
-.mm-menu-plaque.is-lead { color: #fff2c0; background: rgba(70, 58, 26, 0.75); }
+.mm-ui .mm-menu-plaque:hover { color: #fff2c0; }
+.mm-ui .mm-menu-plaque.is-lead { color: #fff2c0; background: rgba(70, 58, 26, 0.75); }
 
 /* ── save slots ───────────────────────────────────────────────────────────── */
 
-.mm-slot-list {
+.mm-ui .mm-slot-list {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -130,11 +140,11 @@
   gap: calc(var(--u) * 4);
   padding-right: calc(var(--u) * 4);
 }
-.mm-slot-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
-.mm-slot-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+.mm-ui .mm-slot-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-ui .mm-slot-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
 
-.mm-slot-wrap { position: relative; display: flex; }
-.mm-slot {
+.mm-ui .mm-slot-wrap { position: relative; display: flex; }
+.mm-ui .mm-slot {
   flex: 1;
   min-width: 0;
   padding: calc(var(--u) * 4) calc(var(--u) * 10);
@@ -144,67 +154,73 @@
     inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(8, 6, 2, 0.95),
     inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(120, 104, 62, 0.55);
 }
-.mm-slot:hover { background: rgba(46, 40, 24, 0.85); }
-.mm-slot.is-empty { color: #8a7f66; }
-.mm-slot:disabled { cursor: default; }
-.mm-slot:disabled:hover { background: rgba(26, 24, 18, 0.75); }
+.mm-ui .mm-slot:hover { background: rgba(46, 40, 24, 0.85); }
+.mm-ui .mm-slot.is-empty { color: #8a7f66; }
+.mm-ui .mm-slot:disabled { cursor: default; }
+.mm-ui .mm-slot:disabled:hover { background: rgba(26, 24, 18, 0.75); }
 
-.mm-slot-head { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
-.mm-slot-name { font-size: calc(var(--u) * 13); color: #ffd773; }
-.mm-slot.is-empty .mm-slot-name { color: #9a8c6a; }
-.mm-slot-when { font-size: calc(var(--u) * 9); color: #9a8c6a; white-space: nowrap; }
-.mm-slot-body { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
-.mm-slot-party {
+.mm-ui .mm-slot-head { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
+.mm-ui .mm-slot-name { font-size: calc(var(--u) * 13); color: #ffd773; }
+.mm-ui .mm-slot.is-empty .mm-slot-name { color: #9a8c6a; }
+.mm-ui .mm-slot-when { font-size: calc(var(--u) * 9); color: #9a8c6a; white-space: nowrap; }
+.mm-ui .mm-slot-body { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
+.mm-ui .mm-slot-party {
   font-size: calc(var(--u) * 10);
   color: #d8ccb0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mm-slot-place { font-size: calc(var(--u) * 10); font-style: italic; color: #a5966f; white-space: nowrap; }
+.mm-ui .mm-slot-place { font-size: calc(var(--u) * 10); font-style: italic; color: #a5966f; white-space: nowrap; }
 
-.mm-slot-del {
+.mm-ui .mm-slot-del {
   width: calc(var(--u) * 20);
   display: grid;
   place-items: center;
   color: #b06050;
 }
-.mm-slot-del:hover { color: #ff8a70; }
+.mm-ui .mm-slot-del:hover { color: #ff8a70; }
 
 /* ── options ──────────────────────────────────────────────────────────────── */
 
-.mm-opt-list {
+.mm-ui .mm-opt-list {
   flex: 1;
   min-height: 0;
   width: 100%;
   overflow-y: auto;
   padding-right: calc(var(--u) * 4);
 }
-.mm-opt-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
-.mm-opt-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+.mm-ui .mm-opt-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-ui .mm-opt-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
 
-.mm-opt-row {
+/* Eight settings have to fit on one screen without a scrollbar, so a row is a
+   name, a one-line gloss under it, the control and its reading — nothing else. */
+.mm-ui .mm-opt-row {
   display: grid;
-  grid-template-columns: 1fr calc(var(--u) * 150) calc(var(--u) * 44);
+  grid-template-columns: 1fr calc(var(--u) * 140) calc(var(--u) * 40);
   align-items: center;
-  gap: calc(var(--u) * 10);
-  padding: calc(var(--u) * 4) calc(var(--u) * 6);
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 2) calc(var(--u) * 6);
   border-bottom: 1px solid rgba(120, 104, 62, 0.22);
 }
-.mm-opt-label span { font-size: calc(var(--u) * 12); color: #ffd773; }
-.mm-opt-label small {
+.mm-ui .mm-opt-label { min-width: 0; }
+.mm-ui .mm-opt-label span { font-size: calc(var(--u) * 12); color: #ffd773; }
+.mm-ui .mm-opt-label small {
   display: block;
   font-size: calc(var(--u) * 9);
   font-style: italic;
-  line-height: 1.3;
+  line-height: 1.25;
   color: #a5966f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.mm-opt-value { font-size: calc(var(--u) * 11); text-align: right; color: #fff2c0; }
-.mm-opt-wide { grid-column: 2 / span 2; display: flex; gap: calc(var(--u) * 4); }
+.mm-ui .mm-opt-value { font-size: calc(var(--u) * 11); text-align: right; color: #fff2c0; }
+.mm-ui .mm-opt-wide { grid-column: 2 / span 2; display: flex; gap: calc(var(--u) * 4); }
 
 /* A slider MM6 never had, built out of the parts it did: a recessed channel
    and a brass fitting sliding in it. */
-.mm-opt-slider {
+.mm-ui .mm-opt-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -216,7 +232,7 @@
   outline: none;
   cursor: pointer;
 }
-.mm-opt-slider::-webkit-slider-thumb {
+.mm-ui .mm-opt-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: calc(var(--u) * 11);
@@ -224,7 +240,7 @@
   background: linear-gradient(180deg, #ebe2a7 0 18%, #c3b37a 45%, #a98e57 70%, #7a6031);
   box-shadow: 0 0 0 1px #302410;
 }
-.mm-opt-slider::-moz-range-thumb {
+.mm-ui .mm-opt-slider::-moz-range-thumb {
   width: calc(var(--u) * 11);
   height: calc(var(--u) * 18);
   border: 1px solid #302410;
@@ -232,8 +248,8 @@
   background: linear-gradient(180deg, #ebe2a7 0 18%, #c3b37a 45%, #a98e57 70%, #7a6031);
 }
 
-.mm-opt-toggle,
-.mm-opt-choice {
+.mm-ui .mm-opt-toggle,
+.mm-ui .mm-opt-choice {
   min-width: calc(var(--u) * 40);
   height: calc(var(--u) * 20);
   padding: 0 calc(var(--u) * 8);
@@ -246,10 +262,10 @@
     inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(8, 6, 2, 0.95),
     inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(120, 104, 62, 0.5);
 }
-.mm-opt-toggle:hover,
-.mm-opt-choice:hover { color: #fff2c0; }
-.mm-opt-toggle.is-on,
-.mm-opt-choice.is-on {
+.mm-ui .mm-opt-toggle:hover,
+.mm-ui .mm-opt-choice:hover { color: #fff2c0; }
+.mm-ui .mm-opt-toggle.is-on,
+.mm-ui .mm-opt-choice.is-on {
   color: #16301e;
   background: linear-gradient(180deg, #f4dd92, #c19a34);
   box-shadow: inset 0 calc(var(--u) * 1) 0 rgba(255, 255, 255, 0.5);
@@ -258,7 +274,7 @@
 
 /* ── controls ─────────────────────────────────────────────────────────────── */
 
-.mm-ctrl-list {
+.mm-ui .mm-ctrl-list {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -267,9 +283,9 @@
   column-gap: calc(var(--u) * 20);
   padding-right: calc(var(--u) * 4);
 }
-.mm-ctrl-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
-.mm-ctrl-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
-.mm-ctrl-row {
+.mm-ui .mm-ctrl-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-ui .mm-ctrl-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+.mm-ui .mm-ctrl-row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -280,8 +296,8 @@
   color: #d8ccb0;
   border-bottom: 1px solid rgba(120, 104, 62, 0.18);
 }
-.mm-ctrl-keys { display: flex; gap: calc(var(--u) * 3); }
-.mm-ctrl-row kbd {
+.mm-ui .mm-ctrl-keys { display: flex; gap: calc(var(--u) * 3); }
+.mm-ui .mm-ctrl-row kbd {
   font: inherit;
   font-size: calc(var(--u) * 10);
   padding: 0 calc(var(--u) * 5);

@@ -371,8 +371,11 @@ export class SpellbookPanel extends Panel {
     const learned = known.has(spell.id);
     const check = this._castable(spell, state, known);
     const classes = ['mm-sb-cell'];
+    // Two different kinds of unavailable, and they are not worth the same
+    // amount of grey: a rank the caster has not reached is a wall, while being
+    // out of spell points is until tonight.
     if (!learned) classes.push('is-unknown');
-    else if (!check.ok) classes.push('is-locked');
+    else if (!check.ok) classes.push(/spell points/i.test(check.reason) ? 'is-costly' : 'is-locked');
     if (spell.id === this.spellId) classes.push('is-selected');
 
     const ink = el('div', { className: 'mm-sb-ink' });

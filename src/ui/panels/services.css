@@ -255,7 +255,9 @@
   box-shadow: inset 0 0 0 calc(var(--u) * 1) rgba(0, 0, 0, 0.4);
 }
 .mm-svc-hire:hover, .mm-svc-slot:hover { color: var(--gold); }
-.mm-svc-hire-name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* `min-width: 0` or the name refuses to shrink and pushes "Pay off" off the
+   edge of the board — the classic flexbox floor. */
+.mm-svc-hire-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .mm-svc-hire-name b { color: var(--gold); font-weight: normal; }
 .mm-svc-hire-name i { color: #cfc6b2; }
 .mm-svc-hire:hover .mm-svc-hire-name b { color: #fff; }

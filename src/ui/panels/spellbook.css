@@ -183,11 +183,16 @@
 .mm-sb-cell.is-unknown .mm-sb-name { display: none; }
 .mm-sb-cell.is-unknown { cursor: default; }
 
-/* Learned but out of reach today — the rank is too low or the spell points are
-   spent. The painting stays on the page, drained of its colour. */
+/* Learned but beyond this caster's rank in the school: the painting stays on
+   the page, drained of its colour, because that is a wall and not a delay. */
 .mm-sb-cell.is-locked { cursor: default; }
 .mm-sb-cell.is-locked .mm-sb-ink { filter: grayscale(0.82) contrast(0.86) opacity(0.34); }
 .mm-sb-cell.is-locked .mm-sb-name { color: rgba(52, 40, 26, 0.42); }
+
+/* Learned, in rank, and simply unaffordable right now. A night's rest fixes it,
+   so the painting only dims rather than draining. */
+.mm-sb-cell.is-costly .mm-sb-ink { filter: saturate(0.5) opacity(0.6); }
+.mm-sb-cell.is-costly .mm-sb-name { color: rgba(58, 44, 28, 0.62); }
 
 /* Selection is the page catching the light under the chosen spell, and its name
    in the deep red-brown the game marks a choice with. No box, no tint. */

@@ -428,6 +428,16 @@ function gridSize(item) {
   return { w: 1, h: 1 };
 }
 
+/**
+ * What kind of thing this is, for the purpose of keeping a shelf varied. A
+ * weapon's family is its type — a rack of six daggers is not a weapon smith —
+ * and everything else groups by category.
+ */
+function familyOf(item) {
+  if (!item) return 'misc';
+  return item.category === 'weapon' ? `weapon:${item.weaponType}` : item.category;
+}
+
 /** Where an item sits in the tier ladder, whatever shape its record takes. */
 function tierOf(item) {
   if (!item) return 1;
@@ -509,22 +519,50 @@ export class ShopSystem extends System {
     const out = [];
     const seen = new Set();
 
+    /** How many of each family are already on the shelf. */
+    const held = new Map();
+    const take = (id) => {
+      seen.add(id);
+      const fam = familyOf(ITEMS[id]);
+      held.set(fam, (held.get(fam) ?? 0) + 1);
+      const rolled = this._roll(def, id, rng);
+      if (rolled) out.push(rolled);
+    };
+
     // Staples first: a smith without a long sword is not a smith.
     for (const id of type?.staples ?? []) {
       if (!ITEMS[id] || seen.has(id)) continue;
-      seen.add(id);
-      out.push(this._roll(def, id, rng));
+      take(id);
     }
 
-    // Then the delivery proper, biased towards the town's own means: a
-    // Millhaven counter is mostly tier-1 goods with one thing to save up for.
-    const weights = pool.map((id) => 1 / (1 + Math.abs(tierOf(ITEMS[id]) - def.tier)));
+    /**
+     * Then the delivery proper, on two biases.
+     *
+     * Tier: a Millhaven counter is mostly tier-1 goods with one thing to save
+     * up for, and Emberhold's is the other way round.
+     *
+     * Family: the catalogue holds ninety-nine scrolls and sixteen wands, so an
+     * unweighted draw makes every magic shop in Caerwen a scroll rack. Dividing
+     * by the size of each family evens the shelf out, and a hard cap of two per
+     * family stops any one delivery becoming three daggers in a row.
+     */
+    const counts = new Map();
+    for (const id of pool) {
+      const fam = familyOf(ITEMS[id]);
+      counts.set(fam, (counts.get(fam) ?? 0) + 1);
+    }
+    const weights = pool.map((id) => {
+      const it = ITEMS[id];
+      return (1 / (1 + Math.abs(tierOf(it) - def.tier))) / (counts.get(familyOf(it)) ?? 1);
+    });
+    const perFamily = Math.max(2, Math.ceil(def.slots / 3));
     let guard = 0;
-    while (out.length < def.slots && pool.length && guard++ < 400) {
+    while (out.length < def.slots && pool.length && guard++ < 600) {
       const id = rng.weighted(pool, weights);
       if (seen.has(id)) continue;
-      seen.add(id);
-      out.push(this._roll(def, id, rng));
+      // Late in the draw, take what is offered rather than leave a bare shelf.
+      if (guard < 400 && (held.get(familyOf(ITEMS[id])) ?? 0) >= perFamily) continue;
+      take(id);
     }
 
     // The board reads left to right, cheapest first, exactly like a counter.
@@ -978,7 +1016,8 @@ export class ShopSystem extends System {
             : `${shop.keeper} looks over your kit. "Not a rivet out of place. Come back when there is."` };
       }
       case 'recharge': {
-        const dry = bag.filter((it) => it.maxCharges && (it.charges ?? 0) < it.maxCharges);
+        const holds = bag.filter((it) => it.maxCharges);
+        const dry = holds.filter((it) => (it.charges ?? 0) < it.maxCharges);
         const cost = Math.round(dry.reduce((sum, it) => {
           const missing = it.maxCharges - (it.charges ?? 0);
           return sum + (it.value ?? 100) * (missing / it.maxCharges) * 0.55;
@@ -986,7 +1025,9 @@ export class ShopSystem extends System {
         return { id, label: 'Have the wands filled', ready: dry.length > 0, cost, count: dry.length,
           note: dry.length
             ? `${shop.keeper} eyes ${dry.length} spent wand${dry.length > 1 ? 's' : ''}. "${cost} gold and an hour."`
-            : `${shop.keeper}: "Every charge you own is full. Do not waste them."` };
+            : holds.length
+              ? `${shop.keeper}: "Every charge you own is full. Do not waste them."`
+              : `${shop.keeper}: "Bring me something that holds a charge and we shall talk."` };
       }
       case 'appraise_flasks': {
         const murky = bag.filter((it) => !isIdentified(it) && ['potion', 'reagent', 'gem'].includes(it.category));

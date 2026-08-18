@@ -326,8 +326,11 @@ export function experienceOf(char) {
  * A guess, and a cheap one — the plate is a portrait, not a record.
  */
 function guessSex(name) {
-  const given = String(name ?? '').split(' ').filter(Boolean).pop() ?? '';
-  return /(a|e|ia|wife|ess)$/i.test(given) ? 'f' : 'm';
+  if (!name) return null;
+  // Any part of the name may be the given one — "Adept Sella Roon" carries the
+  // title first — so a feminine ending anywhere in it decides the plate.
+  const parts = String(name).split(/[\s'’-]+/).filter((w) => w.length > 3);
+  return parts.some((w) => /(a|e|ia|wife|ess)$/i.test(w)) ? 'f' : 'm';
 }
 
 const nameOf = (char) => char?.name ?? 'This one';
@@ -432,7 +435,9 @@ export class GuildSystem extends System {
       spellStock: order.school
         ? spellsForSchool(order.school).filter((s) => s.level <= maxSpellLevel).map((s) => s.id)
         : [],
-      portrait: { key: venue?.keeper ?? order.id, classId: order.face[0], gender: order.face[1] },
+      // The plate is chosen by the order's own look but sexed by whoever
+      // Venues.js actually put behind this counter.
+      portrait: { key: venue?.keeper ?? order.id, classId: order.face[0], gender: guessSex(venue?.keeper) ?? order.face[1] },
     };
   }
 

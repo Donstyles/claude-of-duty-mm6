@@ -397,10 +397,18 @@ export class QuestPanel extends Panel {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(n);
     }
-    // Notes are short and want reading, not selecting: both pages carry prose,
-    // the left the first half of the groups and the right the rest.
+    // Notes are short and want reading, not selecting, so both pages carry
+    // prose. The split is by weight of text rather than by group count, or one
+    // long category leaves a page and a half of empty parchment.
     const all = [...groups];
-    const half = Math.ceil(all.length / 2);
+    const weight = ([, items]) => items.reduce((a, n) => a + n.text.length + 60, 0);
+    const total = all.reduce((a, g) => a + weight(g), 0);
+    let carried = 0;
+    let half = all.length;
+    for (let i = 0; i < all.length; i++) {
+      carried += weight(all[i]);
+      if (carried >= total / 2) { half = i + 1; break; }
+    }
     const render = (pairs) => pairs.flatMap(([group, items]) => [
       el('div', { className: 'mm-qb-note-head', text: group }),
       ...items.map((n) => el('p', { className: 'mm-qb-note', text: n.text })),

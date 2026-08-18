@@ -728,11 +728,11 @@ function unit(str) {
  * them. A hash would scatter them and the descent would stop being a descent.
  */
 const AUTHORED_ENTRANCES = {
-  dun_the_rim_camp: [1180, -880],
-  dun_the_wound: [1560, -520],
-  dun_ossra_first_descent: [1545, -565],
-  dun_the_long_gallery: [1615, -495],
-  dun_the_pilots_chamber: [1672, -437],
+  dun_the_rim_camp: [1300, -830],
+  dun_the_wound: [1470, -640],
+  dun_ossra_first_descent: [1545, -575],
+  dun_the_long_gallery: [1610, -505],
+  dun_the_pilots_chamber: [1675, -440],
 };
 
 function placeEntrances() {

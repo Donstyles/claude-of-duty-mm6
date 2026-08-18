@@ -118,7 +118,7 @@ export class MapPanel extends Panel {
     /** Metres per screen pixel is derived; this is the multiplier on the fit. */
     this.zoom = { local: 1, world: 1 };
     /** Centre of the view, in world metres (local) or normalised units (world). */
-    this.centre = { local: null, world: { x: 0, z: 0 } };
+    this.centre = { local: null, world: { x: null, z: null } };
     this.noting = false;
     this.hover = null;
     this._notes = loadJSON(NOTE_KEY, {});
@@ -672,8 +672,11 @@ export class MapPanel extends Panel {
         danger: r.danger ?? spec.danger,
         x: r.center[0] / (WORLD_SIZE / 2),
         z: r.center[1] / (WORLD_SIZE / 2),
-        rx: Math.abs(r.bounds.maxX - r.bounds.minX) / WORLD_SIZE,
-        rz: Math.abs(r.bounds.maxZ - r.bounds.minZ) / WORLD_SIZE,
+        // The world's regions are laid out edge to edge; a chart that drew them
+        // that way would be a grid of tiles, so each province is pulled in far
+        // enough for its border to read as a border.
+        rx: (Math.abs(r.bounds.maxX - r.bounds.minX) / WORLD_SIZE) * 0.86,
+        rz: (Math.abs(r.bounds.maxZ - r.bounds.minZ) / WORLD_SIZE) * 0.86,
         world: true,
       });
     }
@@ -702,16 +705,35 @@ export class MapPanel extends Panel {
     return this._townCache;
   }
 
+  /** The chart's own extent, so the fit follows the data rather than a guess. */
+  _chartBox() {
+    if (this._box) return this._box;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const r of this._regions()) {
+      minX = Math.min(minX, r.x - r.rx);
+      maxX = Math.max(maxX, r.x + r.rx);
+      minZ = Math.min(minZ, r.z - r.rz);
+      maxZ = Math.max(maxZ, r.z + r.rz);
+    }
+    this._box = { minX, maxX, minZ, maxZ, cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2 };
+    return this._box;
+  }
+
   _drawWorld(g) {
     const W = g.canvas.width;
     const H = g.canvas.height;
     const regions = this._regions();
     const towns = this._towns();
-    // The chart runs from the islands in the west to the sands in the east and
-    // is drawn to one scale on both axes, or the coast stops being a coast.
-    const pad = 24;
-    const base = Math.min((W - pad * 2) / 2.3, (H - pad * 2) / 1.95);
+    const box = this._chartBox();
+    // One scale on both axes, always: the moment the chart stretches, the coast
+    // stops being a coast and the roads stop being the length they are.
+    const pad = 22;
+    const base = Math.min(
+      (W - pad * 2) / (box.maxX - box.minX + 0.12),
+      (H - pad * 2) / (box.maxZ - box.minZ + 0.12));
     const s = base * this.zoom.world;
+    this.centre.world.x ??= box.cx;
+    this.centre.world.z ??= box.cz;
     const c = this.centre.world;
     const toX = (nx) => W / 2 + (nx - c.x) * s;
     const toZ = (nz) => H / 2 + (nz - c.z) * s;
@@ -738,17 +760,29 @@ export class MapPanel extends Panel {
       if (r.kind === 'under') continue;
       const poly = blob(r).map(([x, z]) => [toX(x), toZ(z)]);
       const seen = this._seenRegions.has(r.id);
+      // An island has to be surrounded by water even where the region grid puts
+      // it inside a coastal province, so it is drawn on its own patch of sea.
+      if (r.kind === 'island' || r.kind === 'volcanic') {
+        g.save();
+        g.beginPath();
+        blob({ ...r, rx: r.rx * 1.5, rz: r.rz * 1.5 }).forEach(([x, z], i) => {
+          const px = toX(x);
+          const pz = toZ(z);
+          if (i) g.lineTo(px, pz); else g.moveTo(px, pz);
+        });
+        g.closePath();
+        g.fillStyle = '#8C9DB0';
+        g.shadowColor = 'rgba(20,30,45,0.5)';
+        g.shadowBlur = 8;
+        g.fill();
+        g.restore();
+      }
       g.beginPath();
       poly.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z)));
       g.closePath();
       g.fillStyle = seen ? (LAND[r.kind] ?? LAND.meadow) : shade(LAND[r.kind] ?? LAND.meadow, -0.22);
       g.fill();
-      if (r.kind === 'island' || r.kind === 'volcanic') {
-        g.strokeStyle = 'rgba(40,32,20,0.55)';
-        g.lineWidth = 2;
-        g.stroke();
-      }
-      g.strokeStyle = this.hover?.id === r.id ? 'rgba(255,255,156,0.9)' : 'rgba(58,46,30,0.42)';
+      g.strokeStyle = this.hover?.id === r.id ? 'rgba(255,255,156,0.9)' : 'rgba(58,46,30,0.45)';
       g.lineWidth = this.hover?.id === r.id ? 2 : 1;
       g.stroke();
     }
@@ -776,8 +810,8 @@ export class MapPanel extends Panel {
     this.titleEl.textContent = 'The Kingdom of Caerwen';
     this.subEl.textContent = `${known} of ${regions.length - 1} regions travelled · ${this._seenTowns.size} of ${towns.length} towns`;
     this._setLegend([
-      ['coach', 'Coach road'], ['ship', 'Packet ship'], ['town', 'Town'],
-      ['unknown', 'Unvisited'], ['here', 'The party'],
+      ['coach', 'Coach'], ['ship', 'Packet'], ['town', 'Town'],
+      ['unknown', 'Unvisited'], ['here', 'Party'],
     ]);
     this.coordEl.textContent = this.hover?.name ?? 'Drag to pan · wheel to zoom';
   }
@@ -1109,10 +1143,11 @@ export class MapPanel extends Panel {
     const p = this._proj;
     if (!p) return;
     if (this.view === 'world') {
-      this.centre.world.x -= dx / p.s;
-      this.centre.world.z -= dy / p.s;
-      this.centre.world.x = clamp(this.centre.world.x, -1.4, 1.4);
-      this.centre.world.z = clamp(this.centre.world.z, -1.4, 1.4);
+      const box = this._chartBox();
+      // Panning may not lose the chart: the centre stays within half a province
+      // of the drawing itself.
+      this.centre.world.x = clamp(this.centre.world.x - dx / p.s, box.minX - 0.2, box.maxX + 0.2);
+      this.centre.world.z = clamp(this.centre.world.z - dy / p.s, box.minZ - 0.2, box.maxZ + 0.2);
     } else {
       const c = this.centre.local ?? { ...p.centre };
       c.x -= dx / p.s;
@@ -1207,7 +1242,7 @@ export class MapPanel extends Panel {
       apply: () => {
         this.view = 'world';
         this.zoom.world = 1;
-        this.centre.world = { x: 0, z: 0 };
+        this.centre.world = { x: null, z: null };
         // A chart nobody has travelled is all grey; show the opening act's reach.
         for (const id of ['millhaven_downs', 'thornwick_vale', 'saltmarch', 'ashford_hollow', 'greywater_fen']) this._see(id);
         for (const id of ['town_millhaven', 'town_thornwick', 'town_saltmarch', 'town_ashford']) this._seeTown(id);
@@ -1254,16 +1289,22 @@ function regionKey(region) {
   return String(raw).toLowerCase().replace(/^the[\s_]/, '').replace(/[^a-z]+/g, '_');
 }
 
-/** A wobbling ellipse, stable for a given region because it hashes its id. */
-function blob(r, steps = 40) {
+/**
+ * A wobbling ellipse, stable for a given region because it hashes its id.
+ *
+ * The wobble is the difference between a chart and a diagram: the world's
+ * regions are rectangles on a grid, and the eye reads rectangles as data.
+ */
+function blob(r, steps = 44) {
   const h = hash(r.id);
   const pts = [];
   for (let i = 0; i < steps; i++) {
     const a = (i / steps) * Math.PI * 2;
     const w = 1
-      + 0.10 * Math.sin(a * 3 + h * 0.7)
-      + 0.07 * Math.sin(a * 5 - h * 1.3)
-      + 0.04 * Math.sin(a * 8 + h);
+      + 0.15 * Math.sin(a * 3 + h * 0.7)
+      + 0.10 * Math.sin(a * 5 - h * 1.3)
+      + 0.06 * Math.sin(a * 8 + h)
+      + 0.03 * Math.sin(a * 13 - h * 0.4);
     pts.push([r.x + Math.cos(a) * r.rx * w, r.z + Math.sin(a) * r.rz * w]);
   }
   return pts;

@@ -259,9 +259,11 @@ export class GuildPanel extends Panel {
     const { vm, char } = this.pupil();
     const rows = guilds.stock(hall, char);
 
+    // Cell one is the school's gilt cover, exactly where the spellbook keeps
+    // its illuminated plate.
     const cells = [el('div', {
       className: 'mm-guild-plate is-illumination',
-      style: { backgroundImage: `url("${this.ui.textures.illuminatedPlate(hall.school) || ''}")` },
+      style: { backgroundImage: `url("${PLATE_BASE}cover_${hall.school}.jpg")` },
     })];
 
     for (const row of rows) {
@@ -390,6 +392,12 @@ export class GuildPanel extends Panel {
 
   // ── capture ────────────────────────────────────────────────────────────────
 
+  /**
+   * `UISystem` photographs the plain state of every venue screen through the
+   * venue that opens it, and deliberately never reaches into a screen to set
+   * its private state. So the states only this screen knows about — the door,
+   * the shelf, the teaching board — register their own viewpoints here.
+   */
   _registerShots() {
     const cap = this.ui.ctx?.get?.('capture');
     if (!cap?.registerShot) return;
@@ -406,15 +414,6 @@ export class GuildPanel extends Panel {
         },
       });
     };
-
-    shot('ui-guild', 'The guild hall as you walk in: the painted room — long table, chained '
-      + 'books, banners from the beams — with the master and the offices of the house down the '
-      + 'sidebar and his greeting along the bottom.',
-    'town_thornwick_guild_ember', 9000, () => {
-      this.ui.selectMember(2);
-      this._joinForShot('guild_ember');
-      this.view = 'hall';
-    });
 
     shot('ui-guild-door', 'A guild that will not have you: the Long Shadow\'s terms of entry, '
       + 'every one ticked or crossed, over the room it will not let you into. No stock is shown '

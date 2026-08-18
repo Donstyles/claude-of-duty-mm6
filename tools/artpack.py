@@ -188,8 +188,12 @@ def _write_item_index(names):
     absence by failing to load flickers through the fallback on every draw, and
     an inventory redraws constantly.
     """
-    dst = os.path.join(os.path.dirname(ROOT), 'src', 'ui', 'itemPlates.js')
-    body = ',\n'.join(f"  '{n}'," for n in sorted(names))
+    # ROOT is <repo>/public/art, so the repository is two levels up. It was
+    # one, which silently wrote the index into public/src/ui/ — the build kept
+    # reading the empty stub in src/ and every item fell back to a flat icon.
+    repo = os.path.dirname(os.path.dirname(ROOT))
+    dst = os.path.join(repo, 'src', 'ui', 'itemPlates.js')
+    body = '\n'.join(f"  '{n}'," for n in sorted(names))
     with open(dst, 'w') as f:
         f.write(
             '/**\n'
@@ -201,7 +205,7 @@ def _write_item_index(names):
             ' * redraw — and an inventory redraws constantly.\n'
             ' */\n'
             'export const ITEM_PLATES = new Set([\n'
-            + body.replace(',,', ',') +
+            + body +
             '\n]);\n\n'
             "export const ITEM_PLATE_BASE = 'art/items/';\n"
         )
