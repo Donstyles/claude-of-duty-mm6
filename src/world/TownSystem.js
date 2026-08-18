@@ -13,33 +13,33 @@ import { buildBuilding, BUILDING_TYPES, STYLE_MATERIALS, SLOT_COUNT } from './Bu
  * what makes a procedural town look designed rather than scattered.
  */
 
-const TOWN = { x: -260, z: 240, radius: 118 };
+const TOWN = { x: -260, z: 240, radius: 74 };
 
 /** Street spokes from the square, as compass bearings in degrees. */
 const STREETS = [0, 72, 144, 216, 288];
 
 const PLOTS = [
   // ring: which street ring the plot sits on; along: metres from the square
-  { type: 'temple', street: 0, along: 46, side: 0, name: 'Temple of the Sun' },
-  { type: 'townHall', street: 2, along: 44, side: 0, name: 'Town Hall' },
-  { type: 'tavern', street: 1, along: 30, side: -1, name: 'The Laughing Bandit' },
-  { type: 'weaponSmith', street: 1, along: 30, side: 1, name: 'The Knife Shoppe' },
-  { type: 'armoury', street: 3, along: 30, side: -1, name: 'Ironhand Armoury' },
-  { type: 'magicShop', street: 3, along: 30, side: 1, name: 'Arcane Sundries' },
-  { type: 'alchemist', street: 4, along: 30, side: -1, name: 'The Green Flask' },
-  { type: 'generalStore', street: 4, along: 30, side: 1, name: 'Sorpigal Provisions' },
-  { type: 'trainingHall', street: 2, along: 68, side: 1, name: 'Training Grounds' },
-  { type: 'guildHall', street: 0, along: 70, side: -1, name: 'Guild of Elements' },
-  { type: 'tower', street: 2, along: 86, side: -1, name: 'The Watchtower' },
-  { type: 'house', street: 0, along: 66, side: 1 },
-  { type: 'house', street: 1, along: 52, side: -1 },
-  { type: 'house', street: 1, along: 52, side: 1 },
-  { type: 'cottage', street: 3, along: 54, side: -1 },
-  { type: 'cottage', street: 3, along: 54, side: 1 },
-  { type: 'house', street: 4, along: 54, side: -1 },
-  { type: 'cottage', street: 4, along: 54, side: 1 },
-  { type: 'house', street: 2, along: 88, side: 1 },
-  { type: 'cottage', street: 0, along: 88, side: 0 },
+  { type: 'temple', street: 0, along: 26, side: 0, name: 'Temple of the Sun' },
+  { type: 'townHall', street: 2, along: 25, side: 0, name: 'Town Hall' },
+  { type: 'tavern', street: 1, along: 17, side: -1, name: 'The Laughing Bandit' },
+  { type: 'weaponSmith', street: 1, along: 17, side: 1, name: 'The Knife Shoppe' },
+  { type: 'armoury', street: 3, along: 17, side: -1, name: 'Ironhand Armoury' },
+  { type: 'magicShop', street: 3, along: 17, side: 1, name: 'Arcane Sundries' },
+  { type: 'alchemist', street: 4, along: 17, side: -1, name: 'The Green Flask' },
+  { type: 'generalStore', street: 4, along: 17, side: 1, name: 'Sorpigal Provisions' },
+  { type: 'trainingHall', street: 2, along: 38, side: 1, name: 'Training Grounds' },
+  { type: 'guildHall', street: 0, along: 39, side: -1, name: 'Guild of Elements' },
+  { type: 'tower', street: 2, along: 48, side: -1, name: 'The Watchtower' },
+  { type: 'house', street: 0, along: 37, side: 1 },
+  { type: 'house', street: 1, along: 29, side: -1 },
+  { type: 'house', street: 1, along: 29, side: 1 },
+  { type: 'cottage', street: 3, along: 30, side: -1 },
+  { type: 'cottage', street: 3, along: 30, side: 1 },
+  { type: 'house', street: 4, along: 30, side: -1 },
+  { type: 'cottage', street: 4, along: 30, side: 1 },
+  { type: 'house', street: 2, along: 49, side: 1 },
+  { type: 'cottage', street: 0, along: 49, side: 0 },
 ];
 
 export class TownSystem extends System {
@@ -143,7 +143,7 @@ export class TownSystem extends System {
         const x = Math.sin(a) * rr;
         const z = Math.cos(a) * rr;
         verts.push(x, 0, z);
-        uvs.push(x / 2.4, z / 2.4);
+        uvs.push(x / 1.5, z / 1.5);
         // Opaque across the paved centre, feathering over the outer 28%.
         const alpha = 1 - smoothstep(0.72, 1.0, t);
         cols.push(1, 1, 1, alpha);
@@ -164,7 +164,7 @@ export class TownSystem extends System {
     geom.setIndex(idx);
     geom.computeVertexNormals();
 
-    const mat = lib.get('cobblestone', { repeat: 1 });
+    const mat = lib.get('cobblestone', { repeat: 1, tint: 0xc9b79a });
     mat.vertexColors = true;
     mat.transparent = true;
     mat.depthWrite = false;
@@ -299,9 +299,9 @@ export class TownSystem extends System {
     this.group.add(well);
 
     // Market stalls with striped awnings around the square.
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2 + 0.5;
-      const r = 13 + rng.range(-1.5, 1.5);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.5;
+      const r = 9 + rng.range(-1.2, 1.2);
       const stall = new THREE.Group();
       const counter = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.12, 1.1), plank);
       counter.position.y = 0.95;
@@ -334,10 +334,10 @@ export class TownSystem extends System {
     }
 
     // Lantern posts, each carrying a real point light.
-    const lanternCount = ctx.config.quality === 'low' ? 3 : 6;
+    const lanternCount = ctx.config.quality === 'low' ? 4 : 8;
     for (let i = 0; i < lanternCount; i++) {
       const a = (i / lanternCount) * Math.PI * 2 + 0.3;
-      const r = 20;
+      const r = 14;
       const x = TOWN.x + Math.sin(a) * r;
       const z = TOWN.z + Math.cos(a) * r;
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 3.0, 8), iron);
@@ -369,7 +369,7 @@ export class TownSystem extends System {
       const bearing = (STREETS[plot.street] * Math.PI) / 180;
       // Offset perpendicular to the street so buildings front it rather than
       // sitting in the middle of it.
-      const lateral = plot.side * (spec.width / 2 + 4.2);
+      const lateral = plot.side * (spec.width / 2 + 2.6);
       const fx = Math.sin(bearing), fz = Math.cos(bearing);
       const px = -fz, pz = fx;
 

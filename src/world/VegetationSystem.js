@@ -28,9 +28,10 @@ import {
  * nothing pops.
  *
  * **Grass streams and is deliberately faint.** MM6 has literally no ground
- * clutter — grass is terrain texture and nothing else — so ours is short, dark,
- * sparse and gone by 34 m. It exists to soften the contact between the ground
- * plane and everything standing on it, not to carpet the world.
+ * clutter — grass is terrain texture and nothing else — so ours is short, takes
+ * its colour from the ground texture directly beneath it, and is gone by 34 m.
+ * It exists to give the ground plane relief where the player can actually see
+ * it, not to carpet the world with a modern grass field.
  */
 
 /* ───────────────────────────── tuning ───────────────────────────────────── */
@@ -43,24 +44,39 @@ import {
  */
 const QUALITY = {
   low: { copses: 54, perCopse: 0.6, singles: 0.45, grass: 0.0, grassRadius: 0, variants: 2 },
-  medium: { copses: 72, perCopse: 0.8, singles: 0.7, grass: 0.55, grassRadius: 22, variants: 2 },
-  high: { copses: 88, perCopse: 0.94, singles: 1.0, grass: 0.85, grassRadius: 30, variants: 3 },
-  ultra: { copses: 96, perCopse: 1.0, singles: 1.0, grass: 1.0, grassRadius: 34, variants: 3 },
+  medium: { copses: 72, perCopse: 0.8, singles: 0.7, grass: 0.6, grassRadius: 13, variants: 2 },
+  high: { copses: 88, perCopse: 0.94, singles: 1.0, grass: 0.85, grassRadius: 17, variants: 3 },
+  ultra: { copses: 96, perCopse: 1.0, singles: 1.0, grass: 1.0, grassRadius: 21, variants: 3 },
 };
 
-/** LOD switch distances in metres: [fade-in start, fade-in end]. */
+/**
+ * LOD switch distances in metres: [dissolve start, dissolve end].
+ *
+ * The bands are deliberately *narrow*. A wide band is the textbook advice — it
+ * hides popping — but every tree caught inside one is rendered half-dissolved,
+ * and a still frame full of half-dissolved canopies reads as a stippling
+ * artefact rather than as a transition. Narrow bands plus the sharpened fade
+ * curve below keep the number of trees mid-dissolve at any moment tiny, and the
+ * levels differ only in card count, so the pop they hide is small to begin with.
+ */
 const LOD_BANDS = [
   [0, 0],        // level 0 is always on at zero distance
-  [36, 46],      // 0 → 1
-  [92, 112],     // 1 → 2
-  [200, 240],    // 2 → imposter
+  [36, 43],      // 0 → 1
+  [96, 105],     // 1 → 2
+  [292, 308],    // 2 → imposter
   [520, 600],    // imposter → nothing
 ];
 
-const GRASS_TILE = 8;              // metres per streaming tile
-const GRASS_PER_TILE = 34;         // clusters attempted per tile at ultra
+/**
+ * Grass is spent close in rather than spread thin. A given budget of blades
+ * scattered over 34 m reads as litter — isolated dark hairs on a smooth
+ * meadow — while the same budget inside 21 m reads as continuous relief on the
+ * ground the player is actually standing on, and is simply gone beyond it.
+ */
+const GRASS_TILE = 4;              // metres per streaming tile
+const GRASS_PER_TILE = 42;         // clusters attempted per tile at ultra
 const GRASS_BLADES = 6;            // blades per cluster
-const GRASS_FADE = 10;             // metres of soft edge at the streaming rim
+const GRASS_FADE = 7;              // metres of soft edge at the streaming rim
 
 /** Keep-out radii around named places so nothing grows through a building. */
 const LANDMARK_CLEAR = {
@@ -75,6 +91,13 @@ const smoothstep = (a, b, x) => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a || 1e-6)));
   return t * t * (3 - 2 * t);
 };
+
+/**
+ * Sharpen a 0–1 dissolve so it spends as little time as possible near 0.5.
+ * `s(1-x) === 1-s(x)`, so applying it to both sides of a transition still
+ * conserves total coverage — the two levels together always fill the silhouette.
+ */
+const sharpen = (t) => t * t * (3 - 2 * t);
 
 /* ─────────────────────────────── system ─────────────────────────────────── */
 
@@ -117,7 +140,6 @@ export class VegetationSystem extends System {
     if (!lib) return;
 
     const q = QUALITY[ctx.config?.quality] ?? QUALITY.high;
-    this._q = q;
     this._software = !!lib.software;
 
     this.group = new THREE.Group();
@@ -170,7 +192,7 @@ export class VegetationSystem extends System {
       vertexColors: true,
       side: THREE.DoubleSide,
       transparent: false,
-      alphaTest: 0.32,
+      alphaTest: 0.26,
       depthWrite: true,
       // Foliage has no business catching a specular sheen off a normal map at
       // 40 m; softening it keeps the canopy reading as a flat poster mass.
@@ -191,7 +213,7 @@ export class VegetationSystem extends System {
       vertexColors: true,
       side: THREE.DoubleSide,
       transparent: false,
-      alphaTest: 0.32,
+      alphaTest: 0.26,
       depthWrite: true,
       normalScale: new THREE.Vector2(0.4, 0.4),
     });
@@ -602,8 +624,8 @@ export class VegetationSystem extends System {
 
   /**
    * Sort every tree into a level and write the instance buffers. Runs only when
-   * the camera has actually moved or turned — the fade bands are wide enough
-   * that a few metres of staleness is invisible.
+   * the camera has actually moved or turned by enough to matter — a couple of
+   * metres of staleness is invisible against switch distances of tens.
    */
   _rebin(ctx) {
     const cam = ctx.camera;
@@ -642,14 +664,15 @@ export class VegetationSystem extends System {
         const t3 = smoothstep(LOD_BANDS[3][0], LOD_BANDS[3][1], d);
         const t4 = smoothstep(LOD_BANDS[4][0], LOD_BANDS[4][1], d);
 
-        const fades = [1 - t1, t1 * (1 - t2), t2 * (1 - t3)];
+        const s1 = sharpen(t1), s2 = sharpen(t2), s3 = sharpen(t3);
+        const fades = [1 - s1, s1 * (1 - s2), s2 * (1 - s3)];
         for (let l = 0; l < levels.length; l++) {
           const f = fades[l];
           if (f <= 0.015) continue;
           this._writeInstance(levels[l], tree, f);
         }
 
-        const fImp = t3 * (1 - t4);
+        const fImp = s3 * (1 - sharpen(t4));
         if (imp && fImp > 0.015) {
           impCount = this._writeImposter(imp, impCount, tree, fImp);
         }
@@ -737,14 +760,14 @@ export class VegetationSystem extends System {
 
     for (let b = 0; b < GRASS_BLADES; b++) {
       const a = rng.range(0, Math.PI * 2);
-      const rad = Math.sqrt(rng.next()) * 0.16;
+      const rad = Math.sqrt(rng.next()) * 0.20;
       const ox = Math.cos(a) * rad, oz = Math.sin(a) * rad;
       const lean = rng.range(0, Math.PI * 2);
       const dir = new THREE.Vector3(Math.cos(lean), 0, Math.sin(lean));
       // Short and broad. A tall thin blade is a modern-engine grass carpet and
       // reads as a black hair at 1600 px; this reads as relief on the ground.
-      const h = rng.range(0.10, 0.19);
-      const w = rng.range(0.032, 0.052);
+      const h = rng.range(0.11, 0.21);
+      const w = rng.range(0.030, 0.050);
       const bendAmt = rng.range(0.30, 0.72);
       const phase = rng.range(0, Math.PI * 2);
       const side = new THREE.Vector3().crossVectors(dir, up).normalize();
@@ -1053,19 +1076,22 @@ export class VegetationSystem extends System {
     });
 
     // ── veg-canopy: under the biggest tree, looking up through it ────────
+    // Deliberately a *lone* tree: standing inside a thicket and tilting up gives
+    // an undifferentiated wall of leaves, whereas one crown against open sky
+    // shows the branch structure the whole generator exists to produce.
     let canopyCam = groveCam;
     let canopyYaw = groveYaw;
-    const big = this._biggestTreeNear(grove ?? { x: 0, z: 0, radius: 400 });
+    const big = this._loneTree(terrain);
     if (big) {
-      const off = big.radius * 0.42 + 1.1;
-      const cx = big.x + off * 0.72;
-      const cz = big.z + off * 0.70;
-      canopyCam = eye(cx, cz, 1.6);
+      const off = big.radius * 0.62 + 1.4;
+      const cx = big.x + off * 0.74;
+      const cz = big.z + off * 0.67;
+      canopyCam = eye(cx, cz, 1.7);
       canopyYaw = yawTo(cx, cz, big.x, big.z);
     }
     capture.registerShot('veg-canopy', {
       description: 'Standing under a broad oak, looking up through the branches.',
-      camera: { position: canopyCam, yaw: canopyYaw, pitch: 30, fov: 75 },
+      camera: { position: canopyCam, yaw: canopyYaw, pitch: 36, fov: 75 },
       apply(c) { c.state.worldTime = 12.0 * 3600; },
     });
   }
@@ -1086,7 +1112,7 @@ export class VegetationSystem extends System {
     for (const target of candidates) {
       for (let i = 0; i < 12; i++) {
         const a = (i / 12) * Math.PI * 2;
-        for (const dist of [86, 118, 150]) {
+        for (const dist of [68, 88, 112]) {
           const x = target.x + Math.cos(a) * dist;
           const z = target.z + Math.sin(a) * dist;
           if (terrain.isWater(x, z)) continue;
@@ -1096,7 +1122,7 @@ export class VegetationSystem extends System {
           if (!this._hasSightline(terrain, x, z, target.x, target.z, 1.75, 5)) continue;
           const rise = terrain.heightAt(target.x, target.z) - terrain.heightAt(x, z);
           const seen = this._treesInView(x, z, target.x, target.z, dist + 90);
-          const score = seen * 1.5 + rise * 1.4 - Math.abs(dist - 118) * 0.05;
+          const score = seen * 1.5 + rise * 1.4 - Math.abs(dist - 88) * 0.05;
           if (score > bestScore) {
             bestScore = score;
             best = { x, z, tx: target.x, tz: target.z };
@@ -1105,6 +1131,34 @@ export class VegetationSystem extends System {
       }
     }
     return best;
+  }
+
+  /** The biggest broadleaf standing on its own, with sky all around its crown. */
+  _loneTree(terrain) {
+    for (const wanted of [['oak'], ['oak', 'birch', 'fruit']]) {
+      let best = null, bestH = 0;
+      for (const t of this.trees) {
+        const v = this.variants[t.variant];
+        if (!wanted.includes(v.species)) continue;
+        if (t.height < bestH) continue;
+        if (terrain.slopeAt(t.x, t.z) > 0.22) continue;
+        // Standing on grass, not on a dune: the ground under the hero tree is
+        // half the frame in a shot that tilts up.
+        if (terrain.biomeAt(t.x, t.z) !== 'grass') continue;
+        // Nothing else within a canopy-and-a-half, so the crown reads clean.
+        let crowded = false;
+        const clear = (t.radius + 11) ** 2;
+        for (const o of this.trees) {
+          if (o === t) continue;
+          if ((o.x - t.x) ** 2 + (o.z - t.z) ** 2 < clear) { crowded = true; break; }
+        }
+        if (crowded) continue;
+        bestH = t.height;
+        best = t;
+      }
+      if (best) return best;
+    }
+    return this._biggestTreeNear({ x: 0, z: 0, radius: 400 });
   }
 
   /** The tallest broadleaf near a point — the one worth standing under. */

@@ -55,9 +55,9 @@ const SPECIES = {
     taper: 0.72, upBias: 0.30, gnarl: 0.16, droop: 0.010,
     // As wide as it is tall, sitting low: screenshot 35's hero tree exactly.
     canopy: { cy: 0.630, rx: 0.470, ry: 0.395, lumps: 0.20 },
-    cards: [112, 52, 24],
-    card: [0.62, 0.82, 1.14],
-    leafTint: [0.78, 0.86, 0.58],
+    cards: [150, 72, 30],
+    card: [0.60, 0.80, 1.15],
+    leafTint: [0.70, 0.84, 0.56],
     barkTint: [1.30, 1.24, 1.16],
     scale: [0.82, 1.20],
     blossom: 0,
@@ -80,8 +80,8 @@ const SPECIES = {
     taper: 0.88, upBias: 0.10, gnarl: 0.07, droop: 0.055,
     // Broad-shouldered and full — MM6's conifers are dark masses, not spires.
     canopy: { cy: 0.600, rx: 0.305, ry: 0.390, lumps: 0.15 },
-    cards: [104, 50, 22],
-    card: [0.86, 1.10, 1.46],
+    cards: [130, 66, 28],
+    card: [0.84, 1.08, 1.46],
     cardAspect: 0.48,
     leafTint: [0.50, 0.63, 0.46],
     barkTint: [1.22, 1.10, 1.02],
@@ -92,22 +92,24 @@ const SPECIES = {
     label: 'slender birch',
     bark: 'bark-oak',
     weight: 16,
-    height: [7.4, 9.2],
-    trunkLen: [2.9, 3.6],
-    trunkRadius: [0.13, 0.18],
+    height: [7.0, 8.8],
+    // Slender is about the *trunk*, not about a long bare pole: MM6's birches
+    // still carry the crown low, a third of the way up.
+    trunkLen: [2.0, 2.6],
+    trunkRadius: [0.14, 0.19],
     levels: 3,
-    childCount: [3, 3, 2],
-    lengthScale: [0.58, 0.56, 0.5],
+    childCount: [4, 3, 2],
+    lengthScale: [0.60, 0.56, 0.5],
     radiusScale: [0.58, 0.58, 0.56],
-    spread: [0.48, 0.62, 0.72],
-    segments: [6, 4, 3, 2],
+    spread: [0.66, 0.76, 0.84],
+    segments: [5, 4, 3, 2],
     sides: [7, 5, 4, 4],
-    forkStart: [0.5, 0.5, 0.55],
-    taper: 0.80, upBias: 0.42, gnarl: 0.10, droop: 0.030,
-    canopy: { cy: 0.680, rx: 0.360, ry: 0.320, lumps: 0.24 },
-    cards: [92, 44, 20],
-    card: [0.64, 0.86, 1.16],
-    leafTint: [0.92, 0.96, 0.60],
+    forkStart: [0.42, 0.46, 0.52],
+    taper: 0.80, upBias: 0.30, gnarl: 0.12, droop: 0.030,
+    canopy: { cy: 0.618, rx: 0.395, ry: 0.360, lumps: 0.24 },
+    cards: [124, 60, 26],
+    card: [0.62, 0.84, 1.18],
+    leafTint: [0.82, 0.92, 0.56],
     barkTint: [1.70, 1.66, 1.56],
     scale: [0.85, 1.15],
     blossom: 0,
@@ -178,9 +180,9 @@ const SPECIES = {
     forkStart: [0.36, 0.42, 0.48],
     taper: 0.74, upBias: 0.26, gnarl: 0.20, droop: 0.012,
     canopy: { cy: 0.640, rx: 0.480, ry: 0.375, lumps: 0.22 },
-    cards: [100, 48, 22],
-    card: [0.64, 0.84, 1.14],
-    leafTint: [0.84, 0.90, 0.60],
+    cards: [130, 64, 28],
+    card: [0.62, 0.82, 1.16],
+    leafTint: [0.76, 0.88, 0.58],
     barkTint: [1.24, 1.18, 1.12],
     scale: [0.88, 1.18],
     // MM6's blossom trees are blood-crimson or rose-magenta, never pastel pink
@@ -214,8 +216,6 @@ class Part {
     this.wind.push(ws, wp, wf);
     return this.vertexCount - 1;
   }
-
-  tri(a, b, c) { this.idx.push(a, b, c); }
 
   quad(a, b, c, d) { this.idx.push(a, b, c, a, c, d); }
 }
@@ -437,11 +437,12 @@ function makeLumper(rng, amount) {
  * Scatter leaf cards over the canopy shell.
  *
  * Cards face outward from the canopy centre, and at the two near levels each is
- * a *crossed pair* — a second quad rotated 90° about the card's own up axis. A
- * lone quad seen edge-on collapses into a bright sliver, which from underneath a
- * tree turns the canopy into a scribble of streaks; the partner quad is always
- * broadside when its mate is not, so the mass stays a mass from every angle.
- * The far level drops back to single quads, where a sliver is a sub-pixel event.
+ * a splayed pair — two quads sharing an up axis, swung ±38° apart. A lone quad
+ * seen edge-on collapses into a sliver, which from underneath a tree turns the
+ * canopy into a scribble of streaks; a right-angled cross fixes that but
+ * guarantees one half is always *exactly* edge-on, which is its own artefact.
+ * A shallow V keeps both halves broadside enough from every direction. The far
+ * level drops back to single quads, where a sliver is a sub-pixel event.
  *
  * The card's UV covers several tiles of the leaf texture, so one card carries a
  * dozen small leaves rather than three enormous ones — MM6's canopies read as
@@ -463,7 +464,7 @@ function addCanopy(leafPart, blossomPart, rng, spec, state, height, level) {
   const tint = spec.leafTint;
 
   const crossed = level <= 1;
-  const uvRepeat = 2.3;
+  const uvRepeat = 1.9;
 
   const dir = new THREE.Vector3();
   const pos = new THREE.Vector3();
@@ -478,7 +479,7 @@ function addCanopy(leafPart, blossomPart, rng, spec, state, height, level) {
     const t = rng.range(0, Math.PI * 2);
     const s = Math.sqrt(Math.max(0, 1 - z * z));
     dir.set(s * Math.cos(t), z, s * Math.sin(t));
-    const shell = 0.68 + 0.32 * Math.pow(rng.next(), 0.5);
+    const shell = 0.58 + 0.42 * Math.pow(rng.next(), 0.55);
     const l = lump(dir);
     pos.set(
       centre.x + dir.x * rx * shell * l,
@@ -554,10 +555,22 @@ function addCanopy(leafPart, blossomPart, rng, spec, state, height, level) {
       part.quad(ids[0], ids[1], ids[2], ids[3]);
     };
 
-    emit(uAxis.x, uAxis.y, uAxis.z, vAxis.x, vAxis.y, vAxis.z);
     if (crossed) {
-      // Same up axis, swung 90° so the pair is never both edge-on at once.
-      emit(face.x, face.y, face.z, vAxis.x, vAxis.y, vAxis.z);
+      // A shallow V rather than a right-angled cross. Two planes at 90° means
+      // one of them is always exactly edge-on, and a hundred edge-on cards read
+      // as vertical drapes hanging through the canopy. Splaying them ±38° keeps
+      // both broadside enough to carry colour from every direction.
+      const c = Math.cos(0.66), s2 = Math.sin(0.66);
+      emit(
+        uAxis.x * c + face.x * s2, uAxis.y * c + face.y * s2, uAxis.z * c + face.z * s2,
+        vAxis.x, vAxis.y, vAxis.z,
+      );
+      emit(
+        uAxis.x * c - face.x * s2, uAxis.y * c - face.y * s2, uAxis.z * c - face.z * s2,
+        vAxis.x, vAxis.y, vAxis.z,
+      );
+    } else {
+      emit(uAxis.x, uAxis.y, uAxis.z, vAxis.x, vAxis.y, vAxis.z);
     }
   }
 }

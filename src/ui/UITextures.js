@@ -50,7 +50,8 @@ export const MM6 = Object.freeze({
   marbleVein: ['#736D6B', '#635952', '#5A5552'],
   marbleCrack: '#212021',
   marbleOchre: '#E79273',
-  granite: ['#4A494A', '#424142', '#393C39', '#525152', '#424542', '#2A2A2A', '#6B6C68'],
+  granite: ['#4A494A', '#424142', '#393C39', '#525152', '#424542', '#2A2A2A', '#6B6C68',
+    '#5B5C58', '#333433', '#616259'],
   graniteDark: '#0F1210',
   graniteLight: '#C4C0C4',
   gold: '#FFFF9C',
@@ -262,9 +263,10 @@ export class UITextures {
       const ang = rng.range(-0.85, -0.35) + (rng.chance(0.25) ? Math.PI * 0.5 : 0);
       const len = rng.range(h * 0.7, h * 3.2);
       g.save();
-      g.globalAlpha = rng.range(0.08, 0.24);
+      const va = opts.veinAlpha ?? [0.08, 0.24];
+      g.globalAlpha = rng.range(va[0], va[1]);
       g.strokeStyle = veins[rng.int(0, veins.length - 1)];
-      g.lineWidth = rng.range(1.5, 7);
+      g.lineWidth = rng.range(1.5, 7) * (opts.crackAlpha ?? 1);
       g.filter = `blur(${rng.range(1.4, 4).toFixed(2)}px)`;
       g.beginPath();
       g.moveTo(x0, y0);
@@ -298,7 +300,7 @@ export class UITextures {
     const cracks = Math.max(2, Math.round(w / 260));
     for (let i = 0; i < cracks; i++) {
       UITextures.crack(g, rng, rng.range(0, w), rng.range(0, h), rng.range(0, TAU),
-        rng.range(h * 0.6, h * 2.2), rng.range(0.7, 1.6), crackCol, 2);
+        rng.range(h * 0.6, h * 2.2), rng.range(0.7, 1.6) * (opts.crackAlpha ?? 1), crackCol, 2);
     }
 
     UITextures.grain(g, w, h, rng, opts.grain ?? 9);
@@ -336,10 +338,12 @@ export class UITextures {
     return this._make('marble-rest', 900, 700, (g, w, h, rng) => {
       UITextures.paintMarble(g, w, h, rng, {
         palette: ['#B5826B', '#AD7963', '#AD755A', '#AD7152', '#A56B52', '#BD8A73'],
-        veins: ['#D6B5A5', '#E0C4B0', '#8C5A42'],
-        crack: '#4A2418',
+        veins: ['#E8D0C0', '#F0DCCE', '#7A4632'],
+        crack: '#3E1C12',
         ochre: false,
-        grain: 10,
+        grain: 12,
+        veinAlpha: [0.18, 0.46],
+        crackAlpha: 1.4,
       });
     });
   }
@@ -1403,7 +1407,8 @@ export class UITextures {
       const cy = h * 0.46;
       const P = SPELL_PALETTE[school] ?? SPELL_PALETTE.fire;
 
-      // Ragged watercolour body: overlapping blurred blooms.
+      // Ragged watercolour body: overlapping blurred blooms in the school's
+      // own palette, which is what ties a page together.
       for (let i = 0; i < 40; i++) {
         const a = rng.range(0, TAU);
         const r = rng.range(0, 1) ** 0.6;
@@ -1413,75 +1418,170 @@ export class UITextures {
           rng.range(8, 34), rng.range(6, 24), rng.range(0, TAU),
           P[rng.int(0, P.length - 1)], rng.range(0.10, 0.34), rng.range(3, 10));
       }
-      // A readable subject: a simple silhouette scene, per school.
-      g.save();
-      g.globalAlpha = 0.9;
+
+      // Each icon is a miniature scene, not a symbol, so the eleven spells of a
+      // school never repeat: the motif is chosen by the spell's own slot.
       const dark = P[P.length - 1];
+      const mid = P[Math.max(0, P.length - 3)];
+      g.save();
+      g.globalAlpha = 0.92;
       g.fillStyle = dark;
       g.strokeStyle = dark;
-      g.lineWidth = 3;
+      g.lineWidth = 3.2;
       g.lineCap = 'round';
-      if (school === 'fire') {
-        g.beginPath();
-        g.moveTo(cx, cy - h * 0.3);
-        g.bezierCurveTo(cx + w * 0.16, cy, cx + w * 0.07, cy + h * 0.3, cx, cy + h * 0.3);
-        g.bezierCurveTo(cx - w * 0.09, cy + h * 0.3, cx - w * 0.16, cy, cx, cy - h * 0.3);
-        g.fill();
-      } else if (school === 'water') {
-        g.beginPath();
-        g.moveTo(cx, cy - h * 0.32);
-        g.bezierCurveTo(cx + w * 0.14, cy, cx + w * 0.1, cy + h * 0.28, cx, cy + h * 0.28);
-        g.bezierCurveTo(cx - w * 0.1, cy + h * 0.28, cx - w * 0.14, cy, cx, cy - h * 0.32);
-        g.fill();
-      } else if (school === 'air') {
-        for (let i = 0; i < 3; i++) {
+      g.lineJoin = 'round';
+      const S = w * 0.30;
+      switch (index % 11) {
+        case 0: { // a robed figure with arms raised
+          g.beginPath(); g.arc(cx, cy - S * 0.62, S * 0.20, 0, TAU); g.fill();
           g.beginPath();
-          g.moveTo(cx - w * 0.26, cy + (i - 1) * h * 0.16);
-          g.quadraticCurveTo(cx, cy + (i - 1) * h * 0.16 - h * 0.12, cx + w * 0.26, cy + (i - 1) * h * 0.16);
+          g.moveTo(cx, cy - S * 0.40);
+          g.lineTo(cx - S * 0.42, cy + S * 0.86);
+          g.lineTo(cx + S * 0.42, cy + S * 0.86);
+          g.closePath(); g.fill();
+          g.beginPath();
+          g.moveTo(cx - S * 0.20, cy - S * 0.20); g.lineTo(cx - S * 0.72, cy - S * 0.64);
+          g.moveTo(cx + S * 0.20, cy - S * 0.20); g.lineTo(cx + S * 0.72, cy - S * 0.64);
+          g.stroke();
+          break;
+        }
+        case 1: { // a flask with a stopper
+          g.beginPath();
+          g.moveTo(cx - S * 0.14, cy - S * 0.80);
+          g.lineTo(cx + S * 0.14, cy - S * 0.80);
+          g.lineTo(cx + S * 0.14, cy - S * 0.30);
+          g.lineTo(cx + S * 0.52, cy + S * 0.76);
+          g.lineTo(cx - S * 0.52, cy + S * 0.76);
+          g.lineTo(cx - S * 0.14, cy - S * 0.30);
+          g.closePath(); g.fill();
+          g.fillStyle = mid;
+          g.fillRect(cx - S * 0.20, cy - S * 0.94, S * 0.40, S * 0.18);
+          break;
+        }
+        case 2: { // a stone gatehouse
+          g.fillRect(cx - S * 0.72, cy - S * 0.30, S * 0.28, S * 1.10);
+          g.fillRect(cx + S * 0.44, cy - S * 0.30, S * 0.28, S * 1.10);
+          g.fillRect(cx - S * 0.80, cy - S * 0.52, S * 1.60, S * 0.24);
+          g.beginPath();
+          g.moveTo(cx - S * 0.30, cy + S * 0.80);
+          g.lineTo(cx - S * 0.30, cy + S * 0.10);
+          g.quadraticCurveTo(cx, cy - S * 0.34, cx + S * 0.30, cy + S * 0.10);
+          g.lineTo(cx + S * 0.30, cy + S * 0.80);
+          g.closePath(); g.fill();
+          break;
+        }
+        case 3: { // a bird crowing before a rising disc
+          g.fillStyle = mid;
+          g.beginPath(); g.arc(cx + S * 0.55, cy - S * 0.30, S * 0.42, 0, TAU); g.fill();
+          g.fillStyle = dark;
+          g.beginPath();
+          g.moveTo(cx - S * 0.70, cy + S * 0.82);
+          g.quadraticCurveTo(cx - S * 0.70, cy - S * 0.10, cx - S * 0.14, cy - S * 0.34);
+          g.quadraticCurveTo(cx + S * 0.16, cy - S * 0.46, cx + S * 0.06, cy - S * 0.80);
+          g.quadraticCurveTo(cx + S * 0.44, cy - S * 0.52, cx + S * 0.22, cy - S * 0.16);
+          g.quadraticCurveTo(cx + S * 0.10, cy + S * 0.52, cx - S * 0.20, cy + S * 0.82);
+          g.closePath(); g.fill();
+          break;
+        }
+        case 4: { // a bolt
+          g.beginPath();
+          g.moveTo(cx + S * 0.34, cy - S * 0.92);
+          g.lineTo(cx - S * 0.30, cy + S * 0.06);
+          g.lineTo(cx + S * 0.06, cy + S * 0.06);
+          g.lineTo(cx - S * 0.28, cy + S * 0.92);
+          g.lineTo(cx + S * 0.44, cy - S * 0.14);
+          g.lineTo(cx + S * 0.06, cy - S * 0.14);
+          g.closePath(); g.fill();
+          break;
+        }
+        case 5: { // a breaking wave
+          g.beginPath();
+          g.moveTo(cx - S * 0.90, cy + S * 0.60);
+          g.bezierCurveTo(cx - S * 0.40, cy - S * 0.90, cx + S * 0.70, cy - S * 0.70, cx + S * 0.86, cy + S * 0.16);
+          g.bezierCurveTo(cx + S * 0.50, cy - S * 0.20, cx + S * 0.10, cy + S * 0.10, cx - S * 0.10, cy + S * 0.60);
+          g.closePath(); g.fill();
+          g.lineWidth = 2.4;
+          g.beginPath();
+          g.moveTo(cx - S * 0.90, cy + S * 0.82);
+          g.quadraticCurveTo(cx, cy + S * 0.56, cx + S * 0.90, cy + S * 0.82);
+          g.stroke();
+          break;
+        }
+        case 6: { // a rayed star
+          g.beginPath();
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * TAU;
+            const r = i % 2 ? S * 0.30 : S * 0.92;
+            const px = cx + Math.cos(a) * r;
+            const py = cy + Math.sin(a) * r;
+            if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+          }
+          g.closePath(); g.fill();
+          break;
+        }
+        case 7: { // an open hand
+          g.beginPath();
+          g.ellipse(cx, cy + S * 0.30, S * 0.44, S * 0.50, 0, 0, TAU);
+          g.fill();
+          for (let i = 0; i < 4; i++) {
+            g.lineWidth = S * 0.16;
+            g.beginPath();
+            g.moveTo(cx - S * 0.30 + i * S * 0.20, cy);
+            g.lineTo(cx - S * 0.34 + i * S * 0.22, cy - S * 0.80 + Math.abs(i - 1.5) * S * 0.12);
+            g.stroke();
+          }
+          break;
+        }
+        case 8: { // an eye
+          g.beginPath();
+          g.moveTo(cx - S * 0.92, cy);
+          g.quadraticCurveTo(cx, cy - S * 0.78, cx + S * 0.92, cy);
+          g.quadraticCurveTo(cx, cy + S * 0.78, cx - S * 0.92, cy);
+          g.closePath();
+          g.lineWidth = 3.6;
+          g.stroke();
+          g.beginPath(); g.arc(cx, cy, S * 0.30, 0, TAU); g.fill();
+          break;
+        }
+        case 9: { // a rocky mound
+          g.beginPath();
+          g.moveTo(cx - S * 0.96, cy + S * 0.80);
+          g.lineTo(cx - S * 0.30, cy - S * 0.84);
+          g.lineTo(cx + S * 0.16, cy - S * 0.02);
+          g.lineTo(cx + S * 0.50, cy - S * 0.50);
+          g.lineTo(cx + S * 0.96, cy + S * 0.80);
+          g.closePath(); g.fill();
+          break;
+        }
+        default: { // an open book
+          g.beginPath();
+          g.moveTo(cx, cy - S * 0.36);
+          g.quadraticCurveTo(cx - S * 0.50, cy - S * 0.66, cx - S * 0.96, cy - S * 0.40);
+          g.lineTo(cx - S * 0.96, cy + S * 0.52);
+          g.quadraticCurveTo(cx - S * 0.50, cy + S * 0.26, cx, cy + S * 0.56);
+          g.quadraticCurveTo(cx + S * 0.50, cy + S * 0.26, cx + S * 0.96, cy + S * 0.52);
+          g.lineTo(cx + S * 0.96, cy - S * 0.40);
+          g.quadraticCurveTo(cx + S * 0.50, cy - S * 0.66, cx, cy - S * 0.36);
+          g.closePath();
+          g.lineWidth = 3.4;
+          g.stroke();
+          g.beginPath();
+          g.moveTo(cx, cy - S * 0.34);
+          g.lineTo(cx, cy + S * 0.54);
           g.stroke();
         }
-      } else if (school === 'earth') {
-        g.beginPath();
-        g.moveTo(cx - w * 0.26, cy + h * 0.26);
-        g.lineTo(cx - w * 0.08, cy - h * 0.28);
-        g.lineTo(cx + w * 0.10, cy + h * 0.04);
-        g.lineTo(cx + w * 0.26, cy + h * 0.26);
-        g.closePath();
-        g.fill();
-      } else if (school === 'light' || school === 'spirit') {
-        g.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * TAU;
-          g.moveTo(cx, cy);
-          g.lineTo(cx + Math.cos(a) * w * 0.28, cy + Math.sin(a) * h * 0.28);
-        }
-        g.stroke();
-        g.beginPath(); g.arc(cx, cy, w * 0.09, 0, TAU); g.fill();
-      } else if (school === 'dark') {
-        g.beginPath(); g.arc(cx, cy, w * 0.16, 0, TAU); g.fill();
-        g.globalAlpha = 0.5;
-        g.beginPath(); g.arc(cx, cy, w * 0.24, 0, TAU); g.stroke();
-      } else {
-        // A robed figure — mind and body schools act on people.
-        g.beginPath();
-        g.arc(cx, cy - h * 0.22, w * 0.06, 0, TAU);
-        g.fill();
-        g.beginPath();
-        g.moveTo(cx, cy - h * 0.14);
-        g.lineTo(cx - w * 0.12, cy + h * 0.3);
-        g.lineTo(cx + w * 0.12, cy + h * 0.3);
-        g.closePath();
-        g.fill();
       }
       g.restore();
-      // Ragged edge: erase the outer boundary irregularly.
+
+      // Ragged edge: erase the outer boundary irregularly, so the vignette has
+      // no frame and no hard cut.
       g.save();
       g.globalCompositeOperation = 'destination-out';
       for (let i = 0; i < 60; i++) {
         const a = rng.range(0, TAU);
-        UITextures.dab(g, cx + Math.cos(a) * w * rng.range(0.34, 0.5),
-          cy + Math.sin(a) * h * rng.range(0.34, 0.55),
-          rng.range(8, 26), rng.range(6, 20), rng.range(0, TAU), '#000', rng.range(0.4, 1), 6);
+        UITextures.dab(g, cx + Math.cos(a) * w * rng.range(0.36, 0.5),
+          cy + Math.sin(a) * h * rng.range(0.38, 0.55),
+          rng.range(8, 24), rng.range(6, 18), rng.range(0, TAU), '#000', rng.range(0.4, 1), 6);
       }
       g.restore();
     });
@@ -1625,102 +1725,179 @@ export class UITextures {
   prerendered(kind = 'forge') {
     return this._make(`interior-${kind}`, 640, 480, (g, w, h, rng) => {
       const warm = kind === 'temple' ? '#8CA0C6' : '#FFB24A';
-      g.fillStyle = '#0B0805';
+      const vpX = w * 0.46;
+      const vpY = h * 0.44;
+      g.fillStyle = '#080604';
       g.fillRect(0, 0, w, h);
 
-      // Timber ceiling beams in perspective.
-      for (let i = 0; i < 9; i++) {
-        const t = i / 8;
-        const y = h * (0.02 + t * 0.20);
-        const inset = w * 0.5 * t * 0.30;
-        const grd = g.createLinearGradient(0, y, 0, y + h * 0.028);
-        grd.addColorStop(0, '#6A4526');
-        grd.addColorStop(0.5, '#43290F');
-        grd.addColorStop(1, '#1E1206');
-        g.fillStyle = grd;
-        g.fillRect(inset, y, w - inset * 2, h * 0.026);
-      }
-      // Back wall: plank boarding.
-      const wall = g.createLinearGradient(0, h * 0.22, 0, h * 0.78);
-      wall.addColorStop(0, '#2E2114');
-      wall.addColorStop(0.5, '#3A2A18');
-      wall.addColorStop(1, '#1C1409');
+      // Back wall: vertical boarding, dimmer at the edges.
+      const wall = g.createLinearGradient(0, h * 0.16, 0, h * 0.74);
+      wall.addColorStop(0, '#241A10');
+      wall.addColorStop(0.5, '#33240F');
+      wall.addColorStop(1, '#170F08');
       g.fillStyle = wall;
-      g.fillRect(0, h * 0.20, w, h * 0.58);
-      for (let x = 0; x < w; x += 22) {
-        g.fillStyle = 'rgba(10,6,2,0.55)';
-        g.fillRect(x, h * 0.20, 2.5, h * 0.58);
-        g.fillStyle = 'rgba(150,104,52,0.10)';
-        g.fillRect(x + 3, h * 0.20, 2, h * 0.58);
+      g.fillRect(0, h * 0.14, w, h * 0.62);
+      for (let x = 0; x < w; x += 21) {
+        g.fillStyle = 'rgba(8,4,0,0.6)';
+        g.fillRect(x, h * 0.14, 2.5, h * 0.62);
+        g.fillStyle = 'rgba(160,110,56,0.09)';
+        g.fillRect(x + 3, h * 0.14, 2, h * 0.62);
       }
-      // Floor: flagstones falling away.
-      const floor = g.createLinearGradient(0, h * 0.72, 0, h);
-      floor.addColorStop(0, '#332618');
-      floor.addColorStop(1, '#100B06');
-      g.fillStyle = floor;
-      g.fillRect(0, h * 0.72, w, h * 0.28);
-      for (let i = 0; i < 10; i++) {
-        g.strokeStyle = 'rgba(90,68,42,0.25)';
-        g.lineWidth = 1.6;
+
+      // Ceiling beams running back to the vanishing point.
+      for (let i = -6; i <= 6; i++) {
+        g.strokeStyle = i % 2 ? '#3A2410' : '#553venue'.slice(0, 7);
+        g.strokeStyle = i % 2 ? '#3A2410' : '#553415';
+        g.lineWidth = 7;
         g.beginPath();
-        g.moveTo(w * 0.5 + (i - 5) * w * 0.05, h * 0.72);
-        g.lineTo(w * 0.5 + (i - 5) * w * 0.26, h);
+        g.moveTo(w * 0.5 + i * w * 0.16, -10);
+        g.lineTo(vpX + i * w * 0.045, h * 0.16);
         g.stroke();
       }
-
-      // A hearth, a counter and hanging tools: shapes, not detail.
-      if (kind !== 'temple') {
-        const hx = w * 0.44;
-        const hy = h * 0.62;
-        g.fillStyle = '#1A1410';
-        g.fillRect(hx - w * 0.14, h * 0.30, w * 0.28, h * 0.36);
-        const fire = g.createRadialGradient(hx, hy, 4, hx, hy, w * 0.20);
-        fire.addColorStop(0, '#FFF0B4');
-        fire.addColorStop(0.2, warm);
-        fire.addColorStop(0.5, '#B4460A');
-        fire.addColorStop(1, 'rgba(60,20,0,0)');
-        g.fillStyle = fire;
-        g.beginPath();
-        g.ellipse(hx, hy, w * 0.13, h * 0.12, 0, 0, TAU);
-        g.fill();
-        for (let i = 0; i < 40; i++) {
-          UITextures.dab(g, hx + rng.range(-w * 0.07, w * 0.07), hy + rng.range(-h * 0.08, h * 0.03),
-            rng.range(3, 12), rng.range(5, 22), 0, rng.chance(0.5) ? '#FFD46A' : '#F07A16', rng.range(0.2, 0.6), 5);
-        }
-        // Counter.
-        const cg = g.createLinearGradient(0, h * 0.66, 0, h * 0.92);
-        cg.addColorStop(0, '#6A4526');
-        cg.addColorStop(1, '#2A1A0C');
-        g.fillStyle = cg;
-        g.fillRect(w * 0.62, h * 0.62, w * 0.36, h * 0.30);
-        g.fillStyle = 'rgba(255,190,110,0.20)';
-        g.fillRect(w * 0.62, h * 0.62, w * 0.36, 4);
-        // Tools on the left wall.
-        for (let i = 0; i < 7; i++) {
-          const x = w * (0.06 + i * 0.035);
-          g.strokeStyle = 'rgba(180,170,160,0.35)';
-          g.lineWidth = 2.4;
-          g.beginPath();
-          g.moveTo(x, h * 0.30);
-          g.lineTo(x + rng.range(-4, 4), h * rng.range(0.40, 0.50));
-          g.stroke();
-        }
+      for (let i = 0; i < 6; i++) {
+        const t = i / 5;
+        const y = h * (0.015 + t * 0.13);
+        const inset = w * 0.5 * t * 0.62;
+        g.fillStyle = mixHex('#6A4526', '#1E1206', t);
+        g.fillRect(inset, y, w - inset * 2, h * 0.016);
       }
 
-      // Global warm key from the fire, and a heavy vignette.
-      const key = g.createRadialGradient(w * 0.44, h * 0.6, w * 0.05, w * 0.44, h * 0.6, w * 0.75);
-      key.addColorStop(0, 'rgba(255,180,90,0.34)');
-      key.addColorStop(0.5, 'rgba(180,110,40,0.12)');
-      key.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = key;
-      g.fillRect(0, 0, w, h);
-      const vig = g.createRadialGradient(w * 0.5, h * 0.55, w * 0.20, w * 0.5, h * 0.55, w * 0.78);
+      // Floor: flagstones converging.
+      const floor = g.createLinearGradient(0, h * 0.74, 0, h);
+      floor.addColorStop(0, '#2E2214');
+      floor.addColorStop(1, '#0C0805');
+      g.fillStyle = floor;
+      g.fillRect(0, h * 0.74, w, h * 0.26);
+      g.strokeStyle = 'rgba(120,92,54,0.20)';
+      g.lineWidth = 1.4;
+      for (let i = -8; i <= 8; i++) {
+        g.beginPath();
+        g.moveTo(vpX + i * w * 0.03, h * 0.74);
+        g.lineTo(vpX + i * w * 0.30, h);
+        g.stroke();
+      }
+      for (let i = 1; i < 5; i++) {
+        const y = h * (0.74 + (i / 5) ** 1.8 * 0.26);
+        g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
+      }
+
+      if (kind !== 'temple') {
+        // Chimney hood over the forge.
+        g.fillStyle = '#14100C';
+        g.beginPath();
+        g.moveTo(w * 0.24, h * 0.14);
+        g.lineTo(w * 0.60, h * 0.14);
+        g.lineTo(w * 0.54, h * 0.40);
+        g.lineTo(w * 0.30, h * 0.40);
+        g.closePath();
+        g.fill();
+        g.fillStyle = '#2A2620';
+        g.fillRect(w * 0.36, 0, w * 0.14, h * 0.15);
+        g.fillStyle = 'rgba(200,180,150,0.18)';
+        g.fillRect(w * 0.24, h * 0.14, w * 0.36, 3);
+
+        // Forge body: a stone drum.
+        const drum = g.createLinearGradient(w * 0.26, 0, w * 0.58, 0);
+        drum.addColorStop(0, '#3A3128');
+        drum.addColorStop(0.4, '#6B5C48');
+        drum.addColorStop(1, '#241D16');
+        g.fillStyle = drum;
+        g.beginPath();
+        g.moveTo(w * 0.27, h * 0.78);
+        g.lineTo(w * 0.31, h * 0.46);
+        g.lineTo(w * 0.53, h * 0.46);
+        g.lineTo(w * 0.57, h * 0.78);
+        g.closePath();
+        g.fill();
+        g.fillStyle = '#100C08';
+        g.beginPath();
+        g.ellipse(w * 0.42, h * 0.60, w * 0.10, h * 0.075, 0, 0, TAU);
+        g.fill();
+
+        // Fire: stacked tongues, hot core, and the glow it throws.
+        const fx = w * 0.42;
+        const fy = h * 0.60;
+        const glow = g.createRadialGradient(fx, fy, 4, fx, fy, w * 0.38);
+        glow.addColorStop(0, 'rgba(255,224,150,0.85)');
+        glow.addColorStop(0.16, 'rgba(255,150,50,0.45)');
+        glow.addColorStop(0.5, 'rgba(180,80,20,0.16)');
+        glow.addColorStop(1, 'rgba(60,20,0,0)');
+        g.fillStyle = glow;
+        g.fillRect(0, 0, w, h);
+        for (const [sc, col, a] of [[1.0, '#B4460A', 0.75], [0.72, warm, 0.85], [0.46, '#FFD46A', 0.9], [0.24, '#FFF6D8', 0.95]]) {
+          g.save();
+          g.globalAlpha = a;
+          g.fillStyle = col;
+          g.filter = 'blur(3px)';
+          g.beginPath();
+          g.moveTo(fx, fy - h * 0.20 * sc);
+          g.bezierCurveTo(fx + w * 0.09 * sc, fy - h * 0.06 * sc, fx + w * 0.06 * sc, fy + h * 0.05, fx, fy + h * 0.05);
+          g.bezierCurveTo(fx - w * 0.06 * sc, fy + h * 0.05, fx - w * 0.09 * sc, fy - h * 0.06 * sc, fx, fy - h * 0.20 * sc);
+          g.closePath();
+          g.fill();
+          g.restore();
+        }
+        for (let i = 0; i < 26; i++) {
+          UITextures.dab(g, fx + rng.range(-w * 0.05, w * 0.05), fy - rng.range(0, h * 0.24),
+            rng.range(1.2, 3), rng.range(1.2, 3), 0, '#FFE08A', rng.range(0.25, 0.7), 1.5);
+        }
+
+        // Anvil on a stump, in silhouette against the fire.
+        g.fillStyle = '#0E0C0A';
+        g.beginPath();
+        g.moveTo(w * 0.14, h * 0.78);
+        g.lineTo(w * 0.30, h * 0.78);
+        g.lineTo(w * 0.27, h * 0.72);
+        g.lineTo(w * 0.30, h * 0.70);
+        g.lineTo(w * 0.10, h * 0.70);
+        g.lineTo(w * 0.13, h * 0.72);
+        g.closePath();
+        g.fill();
+        g.fillRect(w * 0.17, h * 0.78, w * 0.09, h * 0.12);
+        g.fillStyle = 'rgba(255,190,110,0.28)';
+        g.fillRect(w * 0.10, h * 0.695, w * 0.20, 3);
+
+        // Counter along the right, with legs and a lit top edge.
+        const cg = g.createLinearGradient(0, h * 0.60, 0, h * 0.94);
+        cg.addColorStop(0, '#6A4526');
+        cg.addColorStop(1, '#221408');
+        g.fillStyle = cg;
+        g.fillRect(w * 0.62, h * 0.62, w * 0.36, h * 0.08);
+        g.fillStyle = '#180E06';
+        g.fillRect(w * 0.66, h * 0.70, w * 0.03, h * 0.24);
+        g.fillRect(w * 0.92, h * 0.70, w * 0.03, h * 0.24);
+        g.fillStyle = 'rgba(255,190,110,0.30)';
+        g.fillRect(w * 0.62, h * 0.62, w * 0.36, 3);
+
+        // Tools hanging on the left wall, and a barrel.
+        for (let i = 0; i < 8; i++) {
+          const x = w * (0.04 + i * 0.028);
+          g.strokeStyle = `rgba(190,178,166,${rng.range(0.16, 0.36).toFixed(2)})`;
+          g.lineWidth = rng.range(1.8, 3.4);
+          g.beginPath();
+          g.moveTo(x, h * 0.24);
+          g.lineTo(x + rng.range(-3, 3), h * rng.range(0.36, 0.48));
+          g.stroke();
+        }
+        const bg2 = g.createLinearGradient(w * 0.60, 0, w * 0.74, 0);
+        bg2.addColorStop(0, '#4A3018');
+        bg2.addColorStop(0.4, '#7A5028');
+        bg2.addColorStop(1, '#2A1A0C');
+        g.fillStyle = bg2;
+        g.fillRect(w * 0.60, h * 0.70, w * 0.10, h * 0.20);
+        g.fillStyle = 'rgba(30,20,10,0.8)';
+        g.fillRect(w * 0.60, h * 0.74, w * 0.10, 3);
+        g.fillRect(w * 0.60, h * 0.84, w * 0.10, 3);
+      }
+
+      // Blacks dominate, and the light falls off hard toward the frame.
+      const vig = g.createRadialGradient(vpX, vpY + h * 0.12, w * 0.14, vpX, vpY, w * 0.72);
       vig.addColorStop(0, 'rgba(0,0,0,0)');
-      vig.addColorStop(1, 'rgba(0,0,0,0.86)');
+      vig.addColorStop(0.55, 'rgba(0,0,0,0.34)');
+      vig.addColorStop(1, 'rgba(0,0,0,0.92)');
       g.fillStyle = vig;
       g.fillRect(0, 0, w, h);
-      // Soft depth of field on the far wall.
-      UITextures.grain(g, w, h, rng, 11);
+      UITextures.grain(g, w, h, rng, 12);
     });
   }
 
@@ -1891,10 +2068,17 @@ export class UITextures {
         g.beginPath();
         g.arc(cx + w * 0.12, cy, w * 0.32, Math.PI * 0.62, Math.PI * 1.38);
         g.stroke();
-        g.lineWidth = 2.4;
+        g.lineWidth = 3.4;
+        g.strokeStyle = '#F4E2A0';
         g.beginPath();
-        g.moveTo(cx - w * 0.06, cy - h * 0.30);
-        g.lineTo(cx - w * 0.06, cy + h * 0.30);
+        g.moveTo(cx - w * 0.055, cy - h * 0.29);
+        g.lineTo(cx - w * 0.055, cy + h * 0.29);
+        g.stroke();
+        // Nocked arrow, so the emblem does not read as a crescent moon.
+        g.lineWidth = 4;
+        g.beginPath();
+        g.moveTo(cx - w * 0.10, cy);
+        g.lineTo(cx + w * 0.30, cy);
         g.stroke();
       } else if (kind === 'ankh') {
         g.strokeStyle = gold;
@@ -2466,7 +2650,7 @@ const SPELL_PALETTE = {
  */
 function paintFigure(g, w, h, spec, rng) {
   const look = FIGURE_LOOK[spec.classId] ?? FIGURE_LOOK.knight;
-  const skin = ['#F2D0AC', '#E3B489', '#C98F63', '#A3653F'][spec.skin ?? 1];
+  const skin = ['#F0A074', '#EF794B', '#D9764A', '#B06238'][spec.skin ?? 1];
   const skinDark = mixHex(skin, '#3A1C0C', 0.45);
   const cx = w * 0.5;
   const top = h * 0.10;
@@ -2708,11 +2892,13 @@ function paintFigure(g, w, h, spec, rng) {
   g.beginPath();
   g.ellipse(cx, headY, headR * 0.78, headR, 0, 0, TAU);
   g.fill();
-  // Hair or helm.
+  // Hair: a mass that overhangs the skull, with a lit crown.
   g.fillStyle = look.hair;
   g.beginPath();
-  g.ellipse(cx, headY - headR * 0.30, headR * 0.84, headR * 0.62, 0, Math.PI, TAU);
+  g.ellipse(cx, headY - headR * 0.22, headR * 0.90, headR * 0.72, 0, Math.PI * 0.94, TAU * 1.03);
   g.fill();
+  UITextures.dab(g, cx - headR * 0.30, headY - headR * 0.62, headR * 0.36, headR * 0.14, -0.2,
+    mixHex(look.hair, '#FFFFFF', 0.35), 0.5, 2);
   if (look.helm) {
     g.fillStyle = look.trim;
     g.fillRect(cx - headR * 0.86, headY - headR * 0.34, headR * 1.72, headR * 0.20);
@@ -2752,11 +2938,11 @@ const FIGURE_LOOK = {
 // ── portrait painting ───────────────────────────────────────────────────────
 
 const SKIN_TONES = [
-  { base: '#f2d0ac', shadow: '#b07c53', deep: '#6f4529', light: '#fff0da' },
-  { base: '#e3b489', shadow: '#9c6a42', deep: '#5e3a20', light: '#f9dcbd' },
-  { base: '#c98f63', shadow: '#824f2c', deep: '#4a2916', light: '#e9bf94' },
-  { base: '#a3653f', shadow: '#63371c', deep: '#361a0c', light: '#c98d5f' },
-  { base: '#79452a', shadow: '#472314', deep: '#26120a', light: '#a26642' },
+  { base: '#f0a074', shadow: '#a85434', deep: '#5e2a15', light: '#ffd8b4' },
+  { base: '#ef794b', shadow: '#9c4526', deep: '#54200f', light: '#f7a582' },
+  { base: '#d9764a', shadow: '#8a3f22', deep: '#481d0e', light: '#f2a276' },
+  { base: '#b06238', shadow: '#6a331a', deep: '#38170a', light: '#d68d5c' },
+  { base: '#8a4c2c', shadow: '#4e2513', deep: '#291208', light: '#b26e46' },
 ];
 
 const HAIR_COLOURS = [
@@ -3154,15 +3340,15 @@ function paintFaceMass(g, cfg, rng, geo, face) {
 
   // A second, directional pass: without it the head reads as a flat cut-out.
   const side = g.createLinearGradient(cx - rx, cy - ry, cx + rx * 1.1, cy + ry * 0.6);
-  side.addColorStop(0, 'rgba(255,244,224,0.22)');
+  side.addColorStop(0, 'rgba(255,238,206,0.30)');
   side.addColorStop(0.42, 'rgba(0,0,0,0)');
-  side.addColorStop(1, 'rgba(52,26,10,0.42)');
+  side.addColorStop(1, 'rgba(52,26,10,0.56)');
   g.globalAlpha = 1;
   g.fillStyle = side;
   g.fillRect(cx - rx * 1.4, cy - ry * 1.4, rx * 2.8, ry * 2.8);
 
   // Core shadow down the shadow side, then bounce light beyond it.
-  UITextures.dab(g, cx + rx * 0.80, cy + ry * 0.10, rx * 0.42, ry * 0.86, -0.08, cfg.skin.deep, 0.50, 26);
+  UITextures.dab(g, cx + rx * 0.80, cy + ry * 0.10, rx * 0.42, ry * 0.86, -0.08, cfg.skin.deep, 0.62, 22);
   UITextures.dab(g, cx + rx * 0.99, cy + ry * 0.18, rx * 0.16, ry * 0.60, -0.12, cfg.skin.light, 0.30, 16);
 
   // Planes: temples, cheekbones, jaw and the shadow under the cheek.
@@ -3179,7 +3365,7 @@ function paintFaceMass(g, cfg, rng, geo, face) {
   UITextures.dab(g, cx, cy + ry * 0.86, rx * 0.20, ry * 0.11, 0, cfg.skin.light, 0.34, 10);
 
   // Warmth in the cheeks, ears and nose — flesh is never one hue.
-  const blush = cfg.undead ? 0.05 : 0.22;
+  const blush = cfg.undead ? 0.05 : 0.34;
   UITextures.dab(g, cx - rx * 0.52, cy + ry * 0.26, rx * 0.30, ry * 0.20, 0, '#c25a44', blush, 18);
   UITextures.dab(g, cx + rx * 0.52, cy + ry * 0.28, rx * 0.28, ry * 0.19, 0, '#c25a44', blush * 0.85, 18);
   UITextures.dab(g, cx, cy + ry * 0.40, rx * 0.16, ry * 0.12, 0, '#bd6a4a', blush * 0.7, 12);

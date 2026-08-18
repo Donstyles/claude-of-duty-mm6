@@ -450,6 +450,72 @@ export function icon(name, opts = {}) {
     + '</svg>';
 }
 
+/**
+ * Item art.
+ *
+ * MM6 draws items as painted 2-D sprites, not as flat mono icons: steel is
+ * bright and blue-grey, leather is tan, potions are coloured glass and gold is
+ * gold. This renders the same path set through a per-material gradient so the
+ * backpack and the shop counter read as painted objects rather than as a
+ * stencil sheet.
+ */
+const MATERIALS = {
+  steel: ['#F4F8FC', '#AEBECC', '#4E5A66'],
+  iron: ['#D8DCE0', '#8C949C', '#3A4046'],
+  gold: ['#FFF4C4', '#D8B24E', '#6A4E12'],
+  leather: ['#D6A25E', '#8A5424', '#39200C'],
+  wood: ['#D8A868', '#8A5A2A', '#2E1A0A'],
+  cloth: ['#D8C4A8', '#96795A', '#3A2C1E'],
+  glass: ['#CFF0F8', '#5AA6C8', '#1E4A66'],
+  jewel: ['#E4F2FF', '#5A9AD8', '#22406E'],
+  paper: ['#F4EBD2', '#C4AF84', '#6A5A38'],
+  bone: ['#F0EADA', '#BFB49A', '#6E6552'],
+};
+
+const ITEM_MATERIAL = {
+  weapon: 'steel', shield: 'wood', armour: 'iron', helm: 'iron',
+  gauntlets: 'leather', boots: 'leather', belt: 'leather', cloak: 'cloth',
+  amulet: 'gold', ring: 'gold', potion: 'glass', reagent: 'glass',
+  scroll: 'paper', wand: 'wood', gem: 'jewel', misc: 'gold', quest: 'paper',
+};
+
+let gradSeq = 0;
+
+/** The material a category is painted in; weapons vary by their own type. */
+export function itemMaterial(item) {
+  if (!item) return 'iron';
+  if (item.material && MATERIALS[item.material]) return item.material;
+  if (item.category === 'weapon') {
+    if (item.weaponType === 'staff') return 'wood';
+    if (item.weaponType === 'bow') return 'wood';
+    return 'steel';
+  }
+  return ITEM_MATERIAL[item.category] ?? 'iron';
+}
+
+/**
+ * An icon painted in a material gradient rather than in `currentColor`.
+ * `size` is ignored in favour of filling its box, because item sprites are laid
+ * out at their natural grid footprint.
+ */
+export function paintedIcon(name, material = 'iron', opts = {}) {
+  const { className = '' } = opts;
+  const ramp = MATERIALS[material] ?? MATERIALS.iron;
+  const id = `mmg${(gradSeq = (gradSeq + 1) % 100000)}`;
+  const body = resolve(name);
+  // Item sprites fill their whole grid footprint: a sword laid across 1x3 cells
+  // is a long sword, not a small sword floating in a tall box.
+  return `<svg class="mm-icon ${className}" viewBox="0 0 24 24" width="100%" height="100%"`
+    + ' preserveAspectRatio="none" role="img" aria-hidden="true" focusable="false">'
+    + `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0.85" y2="1">`
+    + `<stop offset="0" stop-color="${ramp[0]}"/>`
+    + `<stop offset="0.42" stop-color="${ramp[1]}"/>`
+    + `<stop offset="1" stop-color="${ramp[2]}"/>`
+    + '</linearGradient></defs>'
+    + `<g fill="url(#${id})">${body}</g>`
+    + '</svg>';
+}
+
 /** Same icon, already wrapped in a span you can append. */
 export function iconEl(name, opts = {}) {
   const span = document.createElement('span');

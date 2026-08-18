@@ -400,6 +400,12 @@ export class HUD {
     }
   }
 
+  /** Write the strip directly, including clearing it. */
+  setMessage(text = '') {
+    if (this.msgText) this.msgText.textContent = text;
+    if (this.msgEl) this.msgEl.dataset.kind = 'info';
+  }
+
   /** Toasts have no MM6 equivalent — they are folded into the message strip. */
   toast(text, kind = 'info') {
     this.log(text, kind);

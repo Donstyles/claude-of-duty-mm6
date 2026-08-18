@@ -22,7 +22,7 @@ import {
   el, setChildren, tooltip, tipMarkup, fmt, ellipsis, titleCase,
   nu, goldOval, engraved, labelRow,
 } from './widgets.js';
-import { icon } from './Icons.js';
+import { icon, paintedIcon, itemMaterial } from './Icons.js';
 import { MAGIC_SCHOOLS, ATTRIBUTES, ATTRIBUTE_LABEL, MASTERY_LABEL, masteryRank } from '../game/data/Skills.js';
 import { spellsForSchool } from '../game/data/Spells.js';
 
@@ -263,7 +263,7 @@ function itemSprite(item, w, h, cls = 'mm-item') {
   const node = el('div', {
     className: `${cls} is-${itemQuality(item)}`,
     dataset: { cat: item.category ?? 'misc' },
-    html: icon(itemIconName(item), { size: 24 }),
+    html: paintedIcon(itemIconName(item), itemMaterial(item)),
     style: { width: w, height: h },
   });
   if (item.count > 1) node.appendChild(el('span', { className: 'mm-item-count', text: String(item.count) }));
@@ -304,7 +304,15 @@ export class CharacterPanel extends Panel {
   refresh() {
     const c = this.ui.active();
     if (!c) return;
-    this.titleLeft.textContent = `${c.name} the ${c.className}`;
+    if (this.page === 'skills') {
+      setChildren(this.titleLeft,
+        el('span', { className: 'mm-t-white', text: 'Skills for ' }),
+        el('span', { text: c.name }));
+    } else if (this.page === 'awards') {
+      setChildren(this.titleLeft, el('span', { text: `Awards for ${c.name}` }));
+    } else {
+      setChildren(this.titleLeft, el('span', { text: `${c.name} the ${c.className}` }));
+    }
     this.titleRight.textContent = `Skill Points: ${c.skillPoints ?? 0}`;
     this.titleRight.className = (c.skillPoints ?? 0) > 0 ? 'mm-t-up' : '';
     this.refreshNiche();
@@ -378,7 +386,7 @@ export class CharacterPanel extends Panel {
           el('span', { text: label }),
           el('span', { className: 'mm-t-gold', text: 'Level', style: { float: 'right' } })));
         const list = byCat[key] ?? [];
-        if (!list.length) scroll.appendChild(labelRow('—', ''));
+        if (!list.length) scroll.appendChild(labelRow('None', ''));
         for (const s of list) {
           const rank = masteryRank(s.mastery);
           const name = rank > 1
@@ -538,7 +546,17 @@ export class SpellbookPanel extends Panel {
   refresh() {
     const T = this.ui.textures;
     const vm = this.ui.active();
-    const known = new Set(this.ui.knownSpells(vm));
+    let known = new Set(this.ui.knownSpells(vm));
+    // Open on a school this caster has actually studied, the way the game
+    // remembers the last page you had open.
+    if (![...known].some((id) => id.startsWith(`${this.school}_`))) {
+      const first = [...known][0];
+      if (first) {
+        const school = MAGIC_SCHOOLS.find((s) => first.startsWith(`${s.id}_`));
+        if (school) this.school = school.id;
+      }
+    }
+    known = new Set([...known]);
     for (const tab of this.tabsEl.children) {
       tab.classList.toggle('is-active', tab.dataset.school === this.school);
     }
@@ -899,7 +917,7 @@ export class ShopPanel extends Panel {
     for (const [id, label] of [['buy', 'Buy'], ['sell', 'Sell'], ['identify', 'Identify'], ['repair', 'Repair']]) {
       const b = el('button', { className: 'mm-npc-option', type: 'button', text: label });
       b.addEventListener('click', () => { this.mode = id; this.refresh(); });
-      if (this.mode === id) b.classList.add('is-special');
+      if (this.mode === id) b.classList.add('mm-t-gold');
       rows.push(b);
     }
     const special = el('button', { className: 'mm-npc-option is-special', type: 'button', text: 'Special' });
@@ -1025,16 +1043,21 @@ export class CreatePanel extends Panel {
 
   refresh() {
     const T = this.ui.textures;
-    const cols = this.ui.members().slice(0, 4).map((vm, i) => {
+    // Creation shows a party being rolled, which is what makes the colour rule
+    // legible: green above the class norm, red below, white unmodified.
+    const cols = this.ui.creationParty().slice(0, 4).map((vm, i) => {
       const stats = el('div', { className: 'mm-create-stats mm-engraved' });
       for (const attr of ATTRIBUTES) {
-        const s = vm.stats[attr] ?? { cur: 10, base: 10 };
-        const tone = s.cur > s.base ? 'mm-t-up' : s.cur < s.base ? 'mm-t-down' : '';
+        // Colour encodes deviation from the class norm: green raised, red
+        // reduced, white unmodified.
+        const s = vm.stats[attr] ?? { cur: 10, norm: 10 };
+        const norm = s.norm ?? s.base ?? s.cur;
+        const tone = s.cur > norm ? 'mm-t-up' : s.cur < norm ? 'mm-t-down' : '';
         stats.appendChild(labelRow(ATTRIBUTE_LABEL?.[attr] ?? titleCase(attr), Math.round(s.cur), { tone }));
       }
       const skills = el('div', { className: 'mm-create-skills mm-engraved' },
         el('div', { className: 'mm-block-head', text: 'SKILLS' }));
-      (vm.skills ?? []).slice(0, 4).forEach((s, k) => {
+      (vm.skills ?? []).slice(0, 3).forEach((s, k) => {
         skills.appendChild(labelRow(s.name, '', { tone: k >= 2 ? 'mm-t-up' : '' }));
       });
       return el('div', { className: 'mm-create-col', dataset: { index: String(i) } },
@@ -1051,9 +1074,9 @@ export class CreatePanel extends Panel {
       className: i === this.picked ? 'mm-t-cyan' : '', text: titleCase(id.replace('_', ' ')),
     })));
 
-    const pool = ['Sword', 'Axe', 'Bow', 'Shield', 'Leather', 'Chain', 'Plate', 'Fire Magic',
-      'Water Magic', 'Body Magic', 'Merchant', 'Repair', 'Identify Item', 'Perception',
-      'Disarm Trap', 'Learning', 'Meditation', 'Bodybuilding'];
+    const pool = ['Sword', 'Axe', 'Bow', 'Shield', 'Leather', 'Chain', 'Plate',
+      'Fire Magic', 'Water Magic', 'Body Magic', 'Merchant', 'Repair',
+      'Identify Item', 'Perception', 'Disarm Trap'];
     setChildren(this.skillListEl, ...pool.map((s, i) => el('div', {
       className: i < 2 ? 'mm-t-cyan' : '', text: s,
     })));

@@ -967,9 +967,12 @@ const ARCHITECTURE = {
         float sweep = tFbm01(w, vec2(7.0, 4.0), 4);
         float fine = tFbm01(uv, 40.0, 4);
         float blister = smoothstep(0.86, 1.0, tValue(uv + 0.4, 60.0));
-        float crack = tCracks(uv + 0.21, 6.0, 0.045, 0.95) * smoothstep(0.4, 0.8, tFbm01(uv, 3.0, 3));
-        float spall = smoothstep(0.72, 0.95, tFbm01(uv + 0.9, 9.0, 5));
-        float h = 0.55 + sweep * 0.2 + fine * 0.08 + blister * 0.08 - crack * 0.2 - spall * 0.18;
+        // Hairline, and only in patches. At full strength this crack network
+        // covers the whole wall evenly and reads as crazed dried mud rather
+        // than lime plaster — it was the "cracked reptile-skin" defect.
+        float crack = tCracks(uv + 0.21, 6.0, 0.018, 0.97) * smoothstep(0.62, 0.92, tFbm01(uv, 3.0, 3));
+        float spall = smoothstep(0.88, 0.99, tFbm01(uv + 0.9, 9.0, 5));
+        float h = 0.55 + sweep * 0.2 + fine * 0.08 + blister * 0.08 - crack * 0.09 - spall * 0.14;
         return vec3(clamp(h, 0.0, 1.0), sweep, max(crack, spall));
       }
       Surf mShade(vec2 uv, MSample m) {
@@ -980,7 +983,7 @@ const ARCHITECTURE = {
         vec3 c = mix(warm, lime, smoothstep(0.35, 0.85, m.h));
         c = mix(c, stain, smoothstep(0.5, 0.9, streaks(uv, 22.0, 18.0)) * 0.5);
         c = mix(c, stain * 0.9, tFbm01(uv + 0.6, 5.0, 4) * 0.25);
-        c = mix(c, under, smoothstep(0.2, 0.8, m.mask) * 0.85);
+        c = mix(c, under, smoothstep(0.35, 0.9, m.mask) * 0.38);
         c *= 0.86 + 0.26 * m.ao;
         Surf s = surf(c, mix(0.82, 0.94, m.mask) - m.h * 0.06, 0.0);
         s.ao = mix(0.6, 1.0, m.aoFar);

@@ -294,6 +294,15 @@ export class UISystem extends System {
 
   members() { return this._vm; }
 
+  /**
+   * The party-creation view: always the rolled sample characters, because the
+   * screen exists to show stats deviating from the class norm and a live party
+   * that has not been rolled yet would render four columns of plain white.
+   */
+  creationParty() {
+    return this._chars.slice(0, 4).map((c, i) => this._toViewModel(c, i));
+  }
+
   active() { return this._vm[this.activeIndex] ?? this._vm[0]; }
 
   selectMember(index) {
@@ -361,7 +370,12 @@ export class UISystem extends System {
     const statsRaw = c?.stats ?? cls.startingStats;
     const stats = {};
     for (const attr of ATTRIBUTES) {
-      stats[attr] = { cur: effectiveStat(c, attr) || (statsRaw?.[attr] ?? 10), base: statsRaw?.[attr] ?? 10 };
+      stats[attr] = {
+        cur: effectiveStat(c, attr) || (statsRaw?.[attr] ?? 10),
+        base: statsRaw?.[attr] ?? 10,
+        // The class norm, which is what party creation colours against.
+        norm: cls.startingStats?.[attr] ?? 10,
+      };
     }
     const resistances = {};
     for (const id of ['fire', 'air', 'water', 'earth', 'mind', 'body', 'spirit', 'light', 'dark']) {
@@ -518,6 +532,13 @@ export class UISystem extends System {
       };
     }
     if (!skills.merchant) skills.merchant = { level: 4, mastery: MASTERY.NORMAL };
+    // A caster must have their schools, or the spellbook opens on empty pages.
+    const schools = Object.keys(cls.skills ?? {}).filter((id) => MAGIC_IDS.has(id));
+    for (const id of schools.slice(0, 3)) {
+      if (!skills[id]) {
+        skills[id] = { level: Math.max(4, Math.round(d.level * 0.6)), mastery: MASTERY.EXPERT };
+      }
+    }
 
     const equipment = {};
     for (const [slot, id] of Object.entries(d.gear ?? {})) {
@@ -1202,6 +1223,8 @@ export class UISystem extends System {
       this._syncParty(true);
       this.hud?.setGold(this.gold, this.food);
       this.hud?.setRegion('New Sorpigal');
+      // Every screen starts with an empty message strip, as the game does.
+      this.hud?.setMessage('');
     };
 
     cap.registerShot('ui-hud', {

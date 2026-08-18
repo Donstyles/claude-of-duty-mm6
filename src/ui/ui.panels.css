@@ -188,23 +188,34 @@
   pointer-events: none;
 }
 
-/* Zoom bars are carved into the stone: one shade lighter, soft dark shadow,
-   and no button outline whatsoever. */
+/* Thick minus and plus bars carved into the stone at the arch shoulders: one
+   shade lighter than the surround, a soft dark shadow, and no button outline
+   whatsoever. Drawn as bars rather than as glyphs, because that is what they
+   are in the game. */
 .mm-zoom {
   position: absolute;
-  top: calc(var(--u) * 26);
-  width: calc(var(--u) * 14);
-  height: calc(var(--u) * 14);
-  font-size: calc(var(--u) * 19);
-  line-height: calc(var(--u) * 14);
-  font-weight: 700;
-  text-align: center;
-  color: #d8d2cb;
-  text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) calc(var(--u) * 1) rgba(40, 36, 34, 0.9);
+  top: calc(var(--u) * 24);
+  width: calc(var(--u) * 15);
+  height: calc(var(--u) * 15);
+  font-size: 0;
+  filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(72, 66, 62, 0.85));
 }
-.mm-zoom.is-minus { left: calc(var(--u) * 6); }
-.mm-zoom.is-plus { right: calc(var(--u) * 6); }
-.mm-zoom:hover { color: #fff; }
+.mm-zoom::before,
+.mm-zoom::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: #d9d3cc;
+  transform: translate(-50%, -50%);
+}
+.mm-zoom::before { width: calc(var(--u) * 13); height: calc(var(--u) * 3.5); }
+.mm-zoom.is-minus::after { display: none; }
+.mm-zoom.is-plus::after { width: calc(var(--u) * 3.5); height: calc(var(--u) * 13); }
+.mm-zoom.is-minus { left: calc(var(--u) * 5); }
+.mm-zoom.is-plus { right: calc(var(--u) * 5); }
+.mm-zoom:hover::before,
+.mm-zoom:hover::after { background: #fff; }
 
 /* Compass: a scrolling tape of black serif capitals behind a brass window. */
 .mm-compass {
@@ -707,6 +718,7 @@
 .mm-t-up { color: var(--up); }
 .mm-t-down { color: var(--down); }
 .mm-t-dim { color: #cfcac2; }
+.mm-t-white { color: #fff; }
 
 .mm-panel-error { padding: calc(var(--u) * 20); font-style: italic; }
 
@@ -788,8 +800,8 @@
   position: absolute;
   inset: 0;
   background-image:
-    repeating-linear-gradient(90deg, rgba(123, 48, 8, 0.85) 0 calc(var(--u) * 1), transparent calc(var(--u) * 1) calc(var(--u) * 32)),
-    repeating-linear-gradient(180deg, rgba(107, 40, 8, 0.85) 0 calc(var(--u) * 1), transparent calc(var(--u) * 1) calc(var(--u) * 32));
+    repeating-linear-gradient(90deg, rgba(123, 48, 8, 0.62) 0 calc(var(--u) * 1), transparent calc(var(--u) * 1) calc(var(--u) * 32)),
+    repeating-linear-gradient(180deg, rgba(107, 40, 8, 0.62) 0 calc(var(--u) * 1), transparent calc(var(--u) * 1) calc(var(--u) * 32));
   pointer-events: none;
 }
 .mm-pack-items { position: absolute; inset: 0; }
@@ -810,10 +822,9 @@
   filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 1) rgba(0, 0, 0, 0.75));
   cursor: pointer;
 }
-.mm-item svg { width: 88%; height: 88%; }
-.mm-item.is-magic { color: #b9d0ee; }
-.mm-item.is-rare { color: #e8d68e; }
-.mm-item.is-artifact { color: #f0b072; }
+.mm-item svg { width: 94%; height: 94%; }
+/* Quality never tints the sprite in MM6 — the art itself is the only cue. */
+.mm-item.is-artifact svg { filter: saturate(1.25) brightness(1.08); }
 .mm-item:hover { filter: drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 240, 180, 0.9)); }
 .mm-item.is-dragging { opacity: 0.4; }
 .mm-item-count {
@@ -1295,13 +1306,14 @@
 }
 .mm-create-stats { margin-top: calc(var(--u) * 3); padding: calc(var(--u) * 2) 0; }
 .mm-create-skills { margin-top: calc(var(--u) * 3); padding: calc(var(--u) * 2) 0; }
+.mm-create-col > * { flex: 0 0 auto; }
 .mm-create-col .mm-row { line-height: calc(var(--u) * 13); font-size: calc(var(--u) * 11); padding: 0 calc(var(--u) * 5); }
 .mm-create-col .mm-block-head { line-height: calc(var(--u) * 15); font-size: calc(var(--u) * 11); padding: 0 calc(var(--u) * 5); }
-.mm-create-bottom { height: calc(var(--u) * 80); display: flex; gap: calc(var(--u) * 6); padding: calc(var(--u) * 4); }
+.mm-create-bottom { height: calc(var(--u) * 86); display: flex; gap: calc(var(--u) * 6); padding: calc(var(--u) * 4); }
 .mm-create-bottom > * { flex: 1; padding: calc(var(--u) * 3) 0; overflow: hidden; }
 .mm-list-cols { column-count: 2; column-gap: calc(var(--u) * 8); padding: 0 calc(var(--u) * 8); }
 .mm-list-cols.is-three { column-count: 3; }
-.mm-list-cols div { font-size: calc(var(--u) * 12); line-height: calc(var(--u) * 15); }
+.mm-list-cols div { font-size: calc(var(--u) * 11); line-height: calc(var(--u) * 12); }
 .mm-t-cyan { color: #4ad8f0; }
 .mm-torch {
   position: absolute;
@@ -1347,21 +1359,6 @@
 .mm-tip-foot { margin-top: calc(var(--u) * 4); font-size: calc(var(--u) * 10); color: #b8b2a8; }
 .mm-tip-magic { color: #b9d0ee; }
 
-/* ── misc primitives kept for compatibility ───────────────────────────────── */
+/* ── icons ────────────────────────────────────────────────────────────────── */
 
 .mm-icon { display: block; }
-.mm-backdrop { position: absolute; inset: 0; }
-.mm-list { position: relative; overflow-y: auto; }
-.mm-list-viewport { position: relative; }
-.mm-list-row { display: flex; align-items: center; }
-.mm-btn { display: inline-grid; place-items: center; }
-.mm-tabs { display: flex; }
-.mm-slider { display: flex; align-items: center; gap: calc(var(--u) * 6); }
-.mm-pips { display: inline-flex; gap: calc(var(--u) * 2); }
-.mm-pip {
-  width: calc(var(--u) * 5);
-  height: calc(var(--u) * 5);
-  background: rgba(255, 255, 255, 0.22);
-  transform: rotate(45deg);
-}
-.mm-pip.is-on { background: var(--gold); }
