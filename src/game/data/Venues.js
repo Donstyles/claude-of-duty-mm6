@@ -90,7 +90,8 @@ function venue(town, kind, def) {
   if (!spec) throw new Error(`unknown venue kind "${kind}"`);
   // Ids are derived rather than authored so a renamed sign never orphans a
   // save file or a quest that points at the building.
-  const id = `${town}_${kind}${def.guild ? `_${def.guild.replace(/^guild_/, '')}` : ''}`;
+  const suffix = def.suffix ?? (def.guild ? def.guild.replace(/^guild_/, '') : '');
+  const id = `${town}_${kind}${suffix ? `_${suffix}` : ''}`;
   venues[id] = {
     id,
     town,
@@ -101,6 +102,7 @@ function venue(town, kind, def) {
     keeper: def.keeper ?? null,
     tier: def.tier ?? 1,
     guild: def.guild ?? null,
+    trade: def.trade ?? null,
     sign: spec.sign,
   };
   return venues[id];
@@ -213,6 +215,103 @@ venue('town_duskorn', 'generalstore', { name: 'Ossran’s Stall', keeper: 'Isabe
 venue('town_duskorn', 'magicshop', { name: 'The Scavenged Cabinet', keeper: 'Isabeau Ossran', tier: 5 });
 venue('town_duskorn', 'guild', { name: 'Guild of the Dawnbell', keeper: 'Warden-in-Exile Coll', tier: 4, guild: 'guild_dawnbell' });
 venue('town_duskorn', 'coachstop', { name: 'The Broken Post', keeper: 'Driver Ockham', tier: 1 });
+
+// ── Houses ──────────────────────────────────────────────────────────────────
+//
+// A town lays out far more dwellings than trades, and a door that opens on
+// nothing is worse than a wall — it teaches the player to stop trying doors,
+// which is how a town stops being a place. Every residential plot gets a
+// household: a name, a trade, and somebody worth one conversation.
+//
+// Written out rather than generated, because "Tanner's, Ivo Lasker" is a
+// person and `house_4` is not.
+const HOUSEHOLDS = {
+  town_millhaven: [
+    ['The Netmender', 'Goodwife Perrin Nye', 'net-mender'],
+    ['Lasker the Tanner', 'Ivo Lasker', 'tanner'],
+    ['The Wheelwright', 'Sim Carter', 'wheelwright'],
+    ['Bell Cottage', 'Old Mother Bell', 'midwife'],
+    ['The Reeve’s House', 'Reeve Hallam Roon', 'reeve'],
+    ['Salter’s', 'Nan Salter', 'fish-salter'],
+    ['The Chandlery', 'Ovid’s Widow', 'chandler'],
+    ['Quarry Cottage', 'Dunn Quarrier', 'stonecutter'],
+    ['The Empty House', null, null],
+  ],
+  town_thornwick: [
+    ['Vellory’s House', 'Archivist Nim Vellory', 'archivist'],
+    ['The Magister’s Lodging', 'Corvane Wysk', 'queen’s magister'],
+    ['Ashe House', 'Prior Tamsin Ashe', 'prior'],
+    ['The Scrivener', 'Edmun Quill', 'scrivener'],
+    ['Goldsmith’s Row', 'Perrin Fane', 'goldsmith'],
+    ['The Physician', 'Doctor Ivo Marrow', 'physician'],
+    ['Tallow Court', 'Widow Tallow', 'candlemaker'],
+    ['The Grey House', null, null],
+  ],
+  town_ashford: [
+    ['The Charcoal House', 'Bar Colm', 'charcoal-burner'],
+    ['Oakhallow Lodge', 'Lord Marshal Bren Oakhallow', 'lord marshal'],
+    ['The Sawyer', 'Ged Sawyer', 'sawyer'],
+    ['Hollow Cottage', 'Anse Wold', 'forester'],
+    ['The Fletcher’s', 'Dena Fletcher', 'fletcher'],
+    ['Mill House', 'Tam Miller', 'miller'],
+  ],
+  town_saltmarch: [
+    ['Salter House', 'Factor Merrigan Salter', 'factor'],
+    ['The Pilot’s', 'Pilot Wend Quay', 'harbour pilot'],
+    ['Ropewalk Cottage', 'Cob Twine', 'ropemaker'],
+    ['The Customs House', 'Searcher Pell', 'customs searcher'],
+    ['Eel Cottage', 'Marsh-wife Sib', 'eel-fisher'],
+    ['The Boarded House', null, null],
+  ],
+  town_greywater: [
+    ['The Stilt House', 'Fen-reeve Onna', 'fen-reeve'],
+    ['Reed Cottage', 'Cob Reedy', 'reed-cutter'],
+    ['The Leech-wife', 'Goodwife Sallow', 'leech-wife'],
+    ['Punt House', 'Hask the Younger', 'punter'],
+  ],
+  town_coldwater: [
+    ['The Whaler’s', 'Harpooner Grim Ossran', 'whaler'],
+    ['Skald’s House', 'Skald Vey', 'skald'],
+    ['Fur Cottage', 'Gerda Tholm', 'furrier'],
+    ['The Ice House', 'Keeper Dain', 'ice-keeper'],
+    ['Sound Cottage', 'Aud Brack', 'net-mender'],
+  ],
+  town_netherby: [
+    ['The Sexton’s', 'Sexton Absalon', 'sexton'],
+    ['Barrow Cottage', 'Watchman Coll', 'barrow-watch'],
+    ['The Herbwife', 'Goodwife Perrin', 'herbwife'],
+    ['Grist House', 'Tam Grist', 'miller'],
+    ['The Shuttered House', null, null],
+  ],
+  town_brackwater: [
+    ['Hessa’s Hut', 'Old Hessa', 'hermit'],
+    ['Roon Cottage', 'Sib Roon', 'eel-fisher'],
+    ['The Ferrier’s', 'Ferrier Colm', 'ferrier'],
+  ],
+  town_fallowmere: [
+    ['Ansel House', 'Widow Ansel', 'farmer'],
+    ['The Sexton’s Cottage', null, null],
+    ['Fallow Cottage', 'Jem Ansel', 'farmer'],
+  ],
+  town_emberhold: [
+    ['Bellows Cottage', 'Bellows-wife Kar', 'bellows-wife'],
+    ['The Slag House', 'Smith Orim', 'smith'],
+    ['Cantor’s Lodging', 'Smith-Cantor Vulk', 'forge-cantor'],
+  ],
+  town_duskorn: [
+    ['Ossran’s Camp', 'Isabeau Ossran', 'scavenger'],
+    ['The Standing House', null, null],
+    ['The Last Roof', 'Scavenger Roon', 'scavenger'],
+  ],
+};
+
+for (const [town, list] of Object.entries(HOUSEHOLDS)) {
+  // Numbered rather than named, so a household can be renamed without
+  // orphaning a save or a quest that points at the building.
+  list.forEach(([name, keeper, trade], i) => {
+    venue(town, 'house', { name, keeper, trade, tier: 1, suffix: String(i + 1) });
+  });
+}
 
 export const VENUES = deepFreeze(venues);
 export const VENUE_IDS = Object.freeze(Object.keys(venues));

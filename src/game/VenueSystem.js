@@ -84,14 +84,21 @@ export class VenueSystem extends System {
     // town with three guild halls gets three different guilds rather than the
     // same one three times.
     const handedOut = new Map();
-    this._doors = doors.map((d) => {
-      const kind = DOOR_KIND[d.type] ?? d.type;
+    const take = (kind) => {
       const pool = byKind.get(kind);
       if (!pool?.length) return null;
       const n = handedOut.get(kind) ?? 0;
       handedOut.set(kind, n + 1);
-      const v = pool[Math.min(n, pool.length - 1)];
-      return { venue: v.id, position: d.position };
+      return pool[Math.min(n, pool.length - 1)] ?? null;
+    };
+
+    this._doors = doors.map((d) => {
+      // A small town lays out a town hall and a magic shop it has no trade
+      // for. Rather than leave those doors dead — which teaches the player to
+      // stop trying doors, and is how a town stops being a place — anything
+      // with no matching trade becomes the next household on the street.
+      const v = take(DOOR_KIND[d.type] ?? d.type) ?? take('house');
+      return v ? { venue: v.id, position: d.position } : null;
     }).filter(Boolean);
 
     this._doorSource = doors;
@@ -200,28 +207,32 @@ const DOOR_RANGE = 3.2;
  * on purpose — a street layout does not care which guild is behind the door.
  */
 const DOOR_KIND = Object.freeze({
-  guildHall: 'guild',
-  trainingHall: 'trainer',
-  smith: 'weaponsmith',
-  weaponsmith: 'weaponsmith',
+  // The left-hand names are exactly the `type` strings in TownSystem's PLOTS
+  // table, which is camelCase. They were written lowercase here first, so
+  // `weaponSmith` matched nothing and most of a town's doors bound to no venue
+  // at all — the party could walk into the temple and the tavern and nothing
+  // else. Keep these in step with that table.
+  weaponSmith: 'weaponsmith',
   armoury: 'armourer',
-  armourer: 'armourer',
-  magic: 'magicshop',
-  magicshop: 'magicshop',
-  alchemy: 'alchemist',
+  magicShop: 'magicshop',
   alchemist: 'alchemist',
-  shop: 'generalstore',
-  store: 'generalstore',
-  generalstore: 'generalstore',
-  inn: 'tavern',
-  tavern: 'tavern',
+  generalStore: 'generalstore',
+  trainingHall: 'trainer',
+  guildHall: 'guild',
   temple: 'temple',
-  bank: 'bank',
-  stable: 'coachstop',
-  coachstop: 'coachstop',
+  tavern: 'tavern',
+  // The town hall is where the Ledger keeps its branch counter, which is the
+  // only reason a small town has a bank at all.
+  townHall: 'bank',
+  // A tower is a guild's, in every town that has one.
+  tower: 'guild',
+  house: 'house',
+  cottage: 'house',
+  // Not laid out by the town generator yet; kept so a town that grows a coach
+  // yard or a jetty binds without a second edit here.
+  coachStop: 'coachstop',
   dock: 'dock',
   harbour: 'dock',
-  house: 'house',
 });
 
 export { VENUES };
