@@ -45,7 +45,9 @@ function parseArgs(argv) {
 }
 
 async function freePort(start = 4173) {
-  for (let p = start; p < start + 60; p++) {
+  // Concurrent captures each hold a port for minutes at a time, so this needs
+  // real headroom — a 60-port window ran out with two runs overlapping.
+  for (let p = start; p < start + 400; p++) {
     const ok = await new Promise((res) => {
       const s = net.createServer();
       s.once('error', () => res(false));

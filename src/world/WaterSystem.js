@@ -256,22 +256,52 @@ export class WaterSystem extends System {
     this.mesh.visible = true;
   }
 
+
+  /** Degrees of yaw from a shore point toward the open water it was scored on. */
+  _aimYaw(shore) {
+    const aim = this._shoreAim ?? { x: shore.x, z: shore.z + 60 };
+    return (Math.atan2(-(aim.x - shore.x), -(aim.z - shore.z)) * 180) / Math.PI;
+  }
+
   _registerShots(ctx) {
     const capture = ctx.get('capture');
     const terrain = ctx.get('terrain');
     if (!capture) return;
 
-    // Walk outward from the middle of the map until the ground drops below the
-    // waterline; that is a real shoreline wherever the generator put one.
+    // Find a real shoreline by scanning the whole heightfield for a dry cell
+    // with open water nearby, then pick the one with the most water in view.
+    // Walking a single fixed diagonal, as this did before, missed the coast
+    // entirely and framed the sea as a grey band on the horizon.
     let shore = { x: 430, z: 520 };
     if (terrain) {
-      for (let r = 120; r < 980; r += 12) {
-        const x = r * 0.62, z = r * 0.78;
-        if (terrain.heightAt(x, z) < this.level + 0.4) {
-          shore = { x: x - 24 * 0.62, z: z - 24 * 0.78 };
-          break;
+      const half = terrain.worldSize / 2 - 40;
+      let best = -1;
+      for (let z = -half; z <= half; z += 32) {
+        for (let x = -half; x <= half; x += 32) {
+          const h = terrain.heightAt(x, z);
+          // Stand just above the waterline, on the beach rather than in it.
+          if (h < this.level + 0.6 || h > this.level + 4.0) continue;
+          // Score by how much water lies within 120 m — favours open sea over
+          // a puddle in a river bend.
+          let water = 0;
+          for (let a = 0; a < 8; a++) {
+            const ang = (a / 8) * Math.PI * 2;
+            for (let d = 20; d <= 120; d += 20) {
+              if (terrain.heightAt(x + Math.sin(ang) * d, z + Math.cos(ang) * d) < this.level) water++;
+            }
+          }
+          if (water > best) { best = water; shore = { x, z }; }
         }
       }
+      // Aim at the deepest water within range, so the sea fills the frame.
+      let aim = { x: shore.x, z: shore.z + 60 }, deepest = Infinity;
+      for (let a = 0; a < 16; a++) {
+        const ang = (a / 16) * Math.PI * 2;
+        const px = shore.x + Math.sin(ang) * 90, pz = shore.z + Math.cos(ang) * 90;
+        const h = terrain.heightAt(px, pz);
+        if (h < deepest) { deepest = h; aim = { x: px, z: pz }; }
+      }
+      this._shoreAim = aim;
     }
     const eye = (x, z) => (terrain?.heightAt?.(x, z) ?? 0) + 1.7;
 
@@ -279,18 +309,18 @@ export class WaterSystem extends System {
       description: 'Standing on the shoreline looking out to sea at golden hour.',
       camera: {
         position: [shore.x, Math.max(this.level + 1.8, eye(shore.x, shore.z)), shore.z],
-        yaw: (Math.atan2(-0.62, -0.78) * 180) / Math.PI, pitch: -4, fov: 75,
+        yaw: this._aimYaw(shore), pitch: -4, fov: 75,
       },
-      apply(c) { c.state.worldTime = 18.2 * 3600; },
+      apply(c) { c.state.worldTime = 18.2 * 3600; c.events.emit('weather:force', { kind: 'clear' }); },
     });
 
     capture.registerShot('water-noon', {
       description: 'The bay at midday, sun glinting off the chop.',
       camera: {
         position: [shore.x, Math.max(this.level + 2.4, eye(shore.x, shore.z) + 0.7), shore.z],
-        yaw: (Math.atan2(-0.62, -0.78) * 180) / Math.PI, pitch: -6, fov: 75,
+        yaw: this._aimYaw(shore), pitch: -6, fov: 75,
       },
-      apply(c) { c.state.worldTime = 12.0 * 3600; },
+      apply(c) { c.state.worldTime = 12.0 * 3600; c.events.emit('weather:force', { kind: 'clear' }); },
     });
   }
 
