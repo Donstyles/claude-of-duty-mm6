@@ -34,20 +34,20 @@ export const VENUE_KINDS = deepFreeze({
   weaponsmith: { panel: 'shop', context: { shop: 'weapon' }, label: 'Weapon Smith', sign: 'sword' },
   armourer: { panel: 'shop', context: { shop: 'armour' }, label: 'Armourer', sign: 'shield' },
   magicshop: { panel: 'shop', context: { shop: 'magic' }, label: 'Magic Shop', sign: 'star' },
-  alchemist: { panel: 'shop', context: { shop: 'alchemy' }, label: 'Alchemist', sign: 'flask' },
-  generalstore: { panel: 'shop', context: { shop: 'general' }, label: 'General Store', sign: 'pouch' },
+  alchemist: { panel: 'shop', context: { shop: 'alchemy' }, label: 'Alchemist', sign: 'potion' },
+  generalstore: { panel: 'shop', context: { shop: 'general' }, label: 'General Store', sign: 'chest' },
 
   bank: { panel: 'services', context: { service: 'bank' }, label: 'Bank', sign: 'coin' },
-  temple: { panel: 'services', context: { service: 'temple' }, label: 'Temple', sign: 'lamp' },
-  tavern: { panel: 'services', context: { service: 'tavern' }, label: 'Tavern', sign: 'tankard' },
+  temple: { panel: 'services', context: { service: 'temple' }, label: 'Temple', sign: 'sun' },
+  tavern: { panel: 'services', context: { service: 'tavern' }, label: 'Tavern', sign: 'food' },
 
-  trainer: { panel: 'train', context: {}, label: 'Training Hall', sign: 'tent' },
-  guild: { panel: 'guild', context: {}, label: 'Guild Hall', sign: 'scroll2' },
+  trainer: { panel: 'train', context: {}, label: 'Training Hall', sign: 'shield' },
+  guild: { panel: 'guild', context: {}, label: 'Guild Hall', sign: 'scroll' },
 
   coachstop: { panel: 'travel', context: { mode: 'coach' }, label: 'Coach Stop', sign: 'boot' },
-  dock: { panel: 'travel', context: { mode: 'ship' }, label: 'Harbour Office', sign: 'anchor' },
+  dock: { panel: 'travel', context: { mode: 'ship' }, label: 'Harbour Office', sign: 'compass' },
 
-  house: { panel: 'dialogue', context: {}, label: 'House', sign: 'door' },
+  house: { panel: 'dialogue', context: {}, label: 'House', sign: 'key' },
 });
 
 export const VENUE_KIND_IDS = Object.freeze(Object.keys(VENUE_KINDS));
