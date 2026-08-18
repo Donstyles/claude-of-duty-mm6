@@ -1392,6 +1392,12 @@ export class UISystem extends System {
     () => this.selectMember(0));
     panelShot('ui-create', 'create', 'Party creation on dark green serpentine: four columns under sky vignettes, gold '
       + 'class emblems, colour-coded stats and the corner braziers.');
+    panelShot('ui-menu', 'menu', 'The game menu over the viewport: raised buttons on stone, the sidebar untouched.');
+    // The skills page is a separate photograph from the stats page because the
+    // two are different screens to a reviewer even though they share a panel.
+    panelShot('ui-skills', 'character', 'The skills page: four categories across two columns, mastery in gold, the '
+      + 'point cost of the next level, and untaught skills listed rather than hidden.',
+    () => this.selectMember(0), { page: 'skills' });
 
     // The town-service screens. Each is opened through a real venue so the
     // painted room, the sign and the proprietor are the ones the game shows.

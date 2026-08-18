@@ -44,6 +44,8 @@ PAIRS = {
     'ui-services': 'screenshot-28-.jpg',
     'ui-dialogue': 'screenshot-28-.jpg',
     'ui-menu': 'screenshot-18-.jpg',
+    'ui-guild': 'screenshot-29-.jpg',
+    'ui-train': 'screenshot-29-.jpg',
     'dungeon-corridor': 'screenshot-26-.jpg',
     'town-square': 'screenshot-34-.jpg',
     'town-street': 'screenshot-32-.jpg',
