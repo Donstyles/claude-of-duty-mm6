@@ -1,1 +1,324 @@
-/* Styles owned by ./services.js. Shared chrome stays in ../ui.panels.css. */
+/* Styles owned by ./services.js. Shared chrome stays in ../ui.panels.css.
+
+   The viewport is the painted room — `Panel` puts it there — so nothing here
+   may cover it by default. The only thing that ever lies over the room is the
+   counter board, which is MM6's own device (the stock board you get after
+   choosing "Buy"), and it sits in the lower half so the lamp, the altar and
+   the fire are never hidden.
+
+   The board's material changes per venue, as the shop's wood species does in
+   the real game: horizontal walnut for the inn, dark vertical oak for the
+   counting house, and coursed warm ashlar for the temple, which is stone
+   because the building is. Every measurement is in native 640x480 pixels
+   through `--u`. */
+
+.mm-svc { position: absolute; inset: 0; }
+
+.mm-svc-board {
+  position: absolute;
+  left: calc(var(--u) * 18);
+  right: calc(var(--u) * 18);
+  top: calc(var(--u) * 150);
+  bottom: calc(var(--u) * 14);
+  border-radius: calc(var(--u) * 6);
+  padding: calc(var(--u) * 7) calc(var(--u) * 9);
+  display: none;
+  flex-direction: column;
+  gap: calc(var(--u) * 5);
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 1) rgba(10, 4, 0, 0.75),
+    0 calc(var(--u) * 3) calc(var(--u) * 12) rgba(0, 0, 0, 0.7);
+}
+.mm-svc-board.is-open { display: flex; }
+/* Two offices are a page rather than a counter — the account and the hiring
+   board — and MM6 gives those the taller board. The room still frames it. */
+.mm-svc-board.is-tall { top: calc(var(--u) * 96); }
+
+.mm-svc-board[data-venue='tavern'] {
+  background: var(--tex-planks) center / 100% calc(var(--u) * 92) repeat-y;
+  background-color: #4a2c18;
+}
+.mm-svc-board[data-venue='bank'] {
+  background: var(--tex-wood-vert) center / 100% calc(var(--u) * 210) repeat-y;
+  background-color: #33200f;
+}
+/* Coursed warm ashlar with deep mortar: tan-brown blocks in courses, lit from
+   above, painted rather than modelled — the temple wall of Screenshot 26. The
+   vertical joints are kept faint so the eye reads courses, not a grid. */
+.mm-svc-board[data-venue='temple'] {
+  background-color: #6d573f;
+  background-image:
+    linear-gradient(180deg, rgba(255, 226, 170, 0.12), rgba(0, 0, 0, 0.38)),
+    repeating-linear-gradient(90deg, rgba(34, 25, 15, 0) 0 calc(var(--u) * 46), rgba(34, 25, 15, 0.55) calc(var(--u) * 46) calc(var(--u) * 48)),
+    repeating-linear-gradient(180deg, #7a6248 0 calc(var(--u) * 21), #3d3021 calc(var(--u) * 21) calc(var(--u) * 23));
+}
+
+/* ── board furniture ─────────────────────────────────────────────────────── */
+
+/* A group header on the near-black dark-green plate, exactly as the rest
+   screen labels "Wait without healing". */
+.mm-svc-head {
+  height: calc(var(--u) * 19);
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--u) * 13);
+  font-style: italic;
+  color: #efe6cf;
+  background: linear-gradient(180deg, #101c18, #080c08);
+  box-shadow: inset 0 0 0 calc(var(--u) * 1) rgba(0, 0, 0, 0.8);
+  padding: 0 calc(var(--u) * 6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mm-svc-cols { flex: 1; display: flex; gap: calc(var(--u) * 9); min-height: 0; }
+.mm-svc-col { flex: 1; display: flex; flex-direction: column; gap: calc(var(--u) * 5); min-width: 0; }
+.mm-svc-col.is-wide { flex: 1.25; }
+
+.mm-svc-rows {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 4);
+  min-height: 0;
+  overflow-y: auto;
+}
+.mm-svc-rows.is-wide { gap: calc(var(--u) * 6); justify-content: center; }
+.mm-svc-rows.is-tight { flex: 0 0 auto; gap: calc(var(--u) * 3); }
+.mm-svc-rows::-webkit-scrollbar { width: calc(var(--u) * 4); }
+.mm-svc-rows::-webkit-scrollbar-thumb { background: rgba(200, 176, 140, 0.45); }
+
+.mm-svc-plaquegroup {
+  padding: calc(var(--u) * 4) calc(var(--u) * 7);
+  background: rgba(28, 16, 8, 0.34);
+}
+.mm-svc-plaquegroup .mm-row { font-size: calc(var(--u) * 13); }
+
+.mm-svc-note {
+  font-size: calc(var(--u) * 12);
+  font-style: italic;
+  color: #d8cdb6;
+  line-height: 1.25;
+}
+
+/* ── rows of people ──────────────────────────────────────────────────────── */
+
+.mm-svc-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 2) calc(var(--u) * 4);
+  background: rgba(24, 14, 6, 0.30);
+  box-shadow: inset 0 0 0 calc(var(--u) * 1) rgba(0, 0, 0, 0.45);
+}
+.mm-svc-row.is-well { opacity: 0.72; }
+.mm-svc-who { flex: 0 0 34%; font-size: calc(var(--u) * 13); overflow: hidden; white-space: nowrap; }
+.mm-svc-who b { color: var(--gold); font-weight: normal; }
+.mm-svc-who i { color: #cfc6b2; }
+.mm-svc-chips { flex: 1; display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); justify-content: flex-end; }
+
+.mm-svc-chip {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 5);
+  padding: 0 calc(var(--u) * 5);
+  height: calc(var(--u) * 17);
+  font-size: calc(var(--u) * 12);
+  background: rgba(20, 10, 6, 0.78);
+  box-shadow: inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.9);
+}
+.mm-svc-chip b { color: var(--gold); font-weight: normal; }
+.mm-svc-chip:hover { color: var(--gold); }
+.mm-svc-chip:hover b { color: #fff; }
+.mm-svc-chip.is-well { color: #a8c8a0; background: rgba(16, 26, 14, 0.6); }
+
+/* ── plaques ─────────────────────────────────────────────────────────────── */
+
+.mm-svc-plaque {
+  min-height: calc(var(--u) * 24);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 8);
+  padding: 0 calc(var(--u) * 10);
+  font-size: calc(var(--u) * 14);
+  background: rgba(150, 106, 66, 0.30);
+}
+.mm-svc-plaque:hover { color: var(--gold); }
+.mm-svc-plaque.is-idle { color: #b0a894; }
+
+.mm-svc-cost {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  padding: 0 calc(var(--u) * 5);
+  background: rgba(28, 14, 6, 0.8);
+  box-shadow: inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(12, 6, 2, 0.95);
+  font-size: calc(var(--u) * 13);
+}
+.mm-svc-cost i { display: block; width: calc(var(--u) * 12); height: calc(var(--u) * 12); color: #ffd342; }
+.mm-svc-cost i svg { display: block; width: 100%; height: 100%; }
+.mm-svc-cost b { color: var(--gold); font-weight: normal; }
+.mm-svc-cost u { color: #cfc6b2; text-decoration: none; font-style: italic; font-size: calc(var(--u) * 11); }
+
+.mm-svc-steps { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); }
+.mm-svc-step {
+  min-width: calc(var(--u) * 40);
+  height: calc(var(--u) * 20);
+  display: grid;
+  place-items: center;
+  padding: 0 calc(var(--u) * 6);
+  font-size: calc(var(--u) * 13);
+  background: rgba(150, 106, 66, 0.28);
+}
+.mm-svc-step:hover { color: var(--gold); }
+.mm-svc-step.is-current { color: var(--gold-deep); }
+
+/* ── the ledger sheet ────────────────────────────────────────────────────── */
+
+/* Ruled parchment, and the one place on this screen that follows the quest
+   book's rule: black upright text with no shadow at all. */
+.mm-svc-sheet {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: calc(var(--u) * 5) calc(var(--u) * 7);
+  background: var(--tex-quest-page) center / 100% 100% no-repeat;
+  background-color: #c6b69c;
+  color: #100c08;
+  text-shadow: none;
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(60, 40, 20, 0.55),
+    0 calc(var(--u) * 1) calc(var(--u) * 4) rgba(0, 0, 0, 0.5);
+}
+.mm-svc-entry {
+  display: grid;
+  grid-template-columns: calc(var(--u) * 52) 1fr calc(var(--u) * 54) calc(var(--u) * 58);
+  gap: calc(var(--u) * 4);
+  align-items: baseline;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 17);
+  border-bottom: 1px solid rgba(60, 44, 24, 0.28);
+}
+.mm-svc-entry.is-head { font-style: italic; border-bottom-color: rgba(40, 28, 12, 0.65); }
+.mm-svc-entry.is-empty { display: block; font-style: italic; border: 0; padding-top: calc(var(--u) * 6); }
+.mm-svc-entry-note { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mm-svc-entry-sum, .mm-svc-entry-bal { text-align: right; }
+.mm-svc-entry.is-interest .mm-svc-entry-sum { color: #1c5210; }
+.mm-svc-entry.is-withdraw .mm-svc-entry-sum,
+.mm-svc-entry.is-draft .mm-svc-entry-sum { color: #7a1408; }
+
+/* ── the temple ──────────────────────────────────────────────────────────── */
+
+.mm-svc-gift { display: flex; flex-direction: column; gap: calc(var(--u) * 2); }
+.mm-svc-refusal { padding: calc(var(--u) * 6) calc(var(--u) * 8); background: rgba(30, 12, 8, 0.45); font-size: calc(var(--u) * 13); }
+.mm-svc-refusal-head { color: var(--down); font-size: calc(var(--u) * 14); margin-bottom: calc(var(--u) * 2); }
+
+/* ── the taproom ─────────────────────────────────────────────────────────── */
+
+.mm-svc-talk {
+  flex: 1;
+  min-height: 0;
+  padding: calc(var(--u) * 8) calc(var(--u) * 10);
+  display: flex;
+  align-items: center;
+  background: rgba(24, 14, 6, 0.42);
+}
+.mm-svc-quote { font-size: calc(var(--u) * 15); font-style: italic; line-height: 1.35; }
+.mm-svc-quote.is-dim { color: #cfc6b2; }
+.mm-svc-earlier-head { font-size: calc(var(--u) * 12); font-style: italic; color: var(--gold-deep); }
+.mm-svc-earlier {
+  font-size: calc(var(--u) * 12);
+  font-style: italic;
+  color: #cfc6b2;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mm-svc-hire, .mm-svc-slot {
+  min-height: calc(var(--u) * 24);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  padding: 0 calc(var(--u) * 8);
+  font-size: calc(var(--u) * 13);
+  background: rgba(150, 106, 66, 0.26);
+  text-align: left;
+}
+.mm-svc-slot { background: rgba(24, 14, 6, 0.36); }
+.mm-svc-slot.is-empty {
+  justify-content: center;
+  font-style: italic;
+  color: #b8ae98;
+  box-shadow: inset 0 0 0 calc(var(--u) * 1) rgba(0, 0, 0, 0.4);
+}
+.mm-svc-hire:hover, .mm-svc-slot:hover { color: var(--gold); }
+.mm-svc-hire-name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mm-svc-hire-name b { color: var(--gold); font-weight: normal; }
+.mm-svc-hire-name i { color: #cfc6b2; }
+.mm-svc-hire:hover .mm-svc-hire-name b { color: #fff; }
+.mm-svc-slot-pay { font-size: calc(var(--u) * 12); font-style: italic; color: #cfc6b2; }
+.mm-svc-slot-go { color: var(--gold-deep); font-style: italic; }
+
+/* ── the keeper's side of the counter ────────────────────────────────────── */
+
+.mm-svc-side { position: absolute; inset: 0; padding: calc(var(--u) * 6) calc(var(--u) * 8); }
+
+/* The venue's name runs across the top of the wood, white upright serif and
+   centred, exactly where MM6 puts "The Knife Shoppe". */
+.mm-svc-title {
+  text-align: center;
+  font-size: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 16);
+  /* "The Ledger, Crown Branch" does not fit a 148px sidebar on one line, and
+     MM6 wraps its own two-word names the same way rather than clipping them. */
+  max-height: calc(var(--u) * 32);
+  overflow: hidden;
+}
+.mm-svc-portrait {
+  width: calc(var(--u) * 70);
+  height: calc(var(--u) * 88);
+  margin: calc(var(--u) * 8) auto 0;
+  background: center / cover no-repeat;
+  background-color: #211a12;
+  box-shadow: 0 0 0 calc(var(--u) * 2) #6e7a6e, 0 0 0 calc(var(--u) * 3) #2a2e2a;
+}
+.mm-svc-name {
+  margin-top: calc(var(--u) * 6);
+  text-align: center;
+  font-size: calc(var(--u) * 15);
+  line-height: 1.1;
+  color: var(--azure);
+}
+.mm-svc-role { text-align: center; font-size: calc(var(--u) * 12); font-style: italic; color: #cfc6b2; }
+/* An unattended house still gets its frame, but the face behind the glass is
+   dimmed rather than replaced — there is nobody there to paint. */
+.mm-svc-portrait.is-vacant { filter: grayscale(0.85) brightness(0.5); }
+.mm-svc-options {
+  margin-top: calc(var(--u) * 10);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+}
+.mm-svc-option {
+  font-size: calc(var(--u) * 16);
+  font-style: italic;
+  text-align: center;
+  line-height: calc(var(--u) * 16);
+  max-width: calc(var(--u) * 124);
+}
+.mm-svc-option:hover { color: var(--gold); }
+.mm-svc-option.is-current { color: var(--gold); }
+.mm-svc-option.is-door { font-size: calc(var(--u) * 14); color: var(--gold-deep); }
+.mm-svc-option.is-door:hover { color: var(--gold); }
+.mm-svc-doors {
+  margin-top: calc(var(--u) * 2);
+  font-size: calc(var(--u) * 12);
+  font-style: italic;
+  color: #b8ae98;
+}
+.mm-svc-exit { position: absolute; left: 50%; bottom: calc(var(--u) * 8); transform: translateX(-50%); }

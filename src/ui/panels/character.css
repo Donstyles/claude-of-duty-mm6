@@ -1,1 +1,85 @@
-/* Styles owned by ./character.js. Shared chrome stays in ../ui.panels.css. */
+/* Styles owned by ./character.js. Shared chrome stays in ../ui.panels.css.
+
+   The sheet is measured in native 640x480 pixels through `--u`, like the rest
+   of the frame: title bar y 14-37, left column x 16-176, right column
+   x 190-460, five wide gold ovals across the bottom. What is left for the two
+   columns is 268 native pixels of height, and the right column has to fit
+   fifteen lines into it, so this page runs a tighter pitch than the shared
+   row — that is the whole reason these overrides exist. */
+
+[data-panel="character"] .mm-row {
+  line-height: calc(var(--u) * 15);
+  font-size: calc(var(--u) * 13);
+  padding: 0 calc(var(--u) * 6);
+  gap: calc(var(--u) * 6);
+}
+[data-panel="character"] .mm-block-head {
+  line-height: calc(var(--u) * 15);
+  font-size: calc(var(--u) * 13);
+  padding: 0 calc(var(--u) * 6);
+}
+
+/* The pressed oval is the only thing telling you which of the three pages you
+   are on, so it reads as struck brass sunk a pixel into the stone. */
+[data-panel="character"] .mm-oval.is-current {
+  transform: translateY(calc(var(--u) * 1));
+  filter: brightness(1.22) saturate(1.12) drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 236, 160, 0.85));
+}
+
+/* ── skills ────────────────────────────────────────────────────────────────
+   Thirty-odd skills in two columns: even columns here, not the stats page's
+   160/270 split, because a mastery word is as long as the skill it qualifies. */
+
+.mm-sheet.is-skills .mm-sheet-col.is-left,
+.mm-sheet.is-skills .mm-sheet-col.is-right { flex: 1; }
+.mm-sheet.is-skills .mm-block-head { line-height: calc(var(--u) * 14); }
+
+.mm-skill {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 5);
+  padding: 0 calc(var(--u) * 6);
+  line-height: calc(var(--u) * 13);
+  font-size: calc(var(--u) * 11);
+  font-style: italic;
+  white-space: nowrap;
+}
+.mm-skill-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.mm-skill-rank { color: var(--gold); }
+.mm-skill-level { width: calc(var(--u) * 26); text-align: right; }
+.mm-skill-cost { width: calc(var(--u) * 28); text-align: right; }
+/* The two column heads ride at the row's own size, or their words overflow the
+   narrow boxes they label and run into each other. */
+.mm-skill-heads { display: flex; gap: calc(var(--u) * 5); font-size: calc(var(--u) * 11); }
+
+/* Points enough to buy the next level: the cost turns green, exactly as the
+   available-points count in the title bar does. */
+.mm-skill.is-ready .mm-skill-cost { color: var(--up); }
+
+/* MM6's one piece of cursor feedback on this page: name, rank and both numbers
+   go red together. Only rows that can actually be trained answer to it. */
+.mm-skill.is-known:hover,
+.mm-skill.is-known:hover > * { color: var(--down); }
+
+/* Not learned is listed, not hidden — recessed to a stone grey so the roster
+   reads as a plan rather than a inventory of failures. */
+.mm-skill.is-untaught > * { color: #9d968c; }
+.mm-skill.is-untaught .mm-skill-rank { color: #86807a; font-size: calc(var(--u) * 10); }
+
+/* ── awards ────────────────────────────────────────────────────────────────
+   Award lines are prose and wrap; a small deep-gold lozenge marks each one. */
+
+.mm-award {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 1) calc(var(--u) * 6);
+  font-size: calc(var(--u) * 13);
+  font-style: italic;
+  line-height: calc(var(--u) * 15);
+}
+.mm-award-mark { color: var(--gold-deep); font-size: calc(var(--u) * 9); }
+.mm-award-text { flex: 1; }
+.mm-award:hover .mm-award-text { color: var(--gold); }
+.mm-award.is-empty { color: #9d968c; }
+.mm-award.is-empty:hover .mm-award-text { color: #9d968c; }

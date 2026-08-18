@@ -1,1 +1,350 @@
-/* Styles owned by ./spellbook.js. Shared chrome stays in ../ui.panels.css. */
+/* Styles owned by ./spellbook.js. Shared chrome stays in ../ui.panels.css.
+ *
+ * Every figure is a native 640x480 measurement taken off the real screen
+ * (REFERENCE.md section 3.4) and expressed through `--u`, then made
+ * panel-relative: the spellbook replaces the viewport only, so the frame's 8 px
+ * left column comes off every x.
+ *
+ * The one thing to hold on to: this is not a symmetric two-page spread. MM6
+ * shows the right-hand leaf of a very thick book — fold and gilt plait down the
+ * LEFT margin, fore-edge stack past the right, dark green cloth binding beyond
+ * that. Nothing on the page is framed except the illumination, and nothing has
+ * a hard rectangular edge.
+ */
+
+/* The book is 460 native pixels across, and it stays that size: the viewport
+   rectangle is only that wide at 4:3, and on a wider window the extra is bare
+   binding cloth to either side rather than a page stretched out of its own
+   proportions. */
+.mm-sb {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: min(100%, calc(var(--u) * 460));
+  transform: translateX(-50%);
+}
+
+/* One broad leaf, brightest a third of the way across and falling off into the
+   fold at the left and the fore-edge at the right. The corner radii are
+   deliberately unequal: a page turned ten thousand times is not a rectangle. */
+.mm-sb-page {
+  position: absolute;
+  left: calc(var(--u) * 5);
+  right: calc(var(--u) * 56);
+  top: calc(var(--u) * 16);
+  bottom: calc(var(--u) * 25);
+  border-radius:
+    calc(var(--u) * 4) calc(var(--u) * 10) calc(var(--u) * 12) calc(var(--u) * 5) /
+    calc(var(--u) * 7) calc(var(--u) * 8) calc(var(--u) * 10) calc(var(--u) * 6);
+  background:
+    radial-gradient(118% 84% at 36% 38%, rgba(255, 252, 244, 0.55), rgba(255, 252, 244, 0) 68%),
+    linear-gradient(90deg, rgba(74, 66, 50, 0.42) 0, rgba(74, 66, 50, 0.10) calc(var(--u) * 30),
+      rgba(74, 66, 50, 0) calc(var(--u) * 62)),
+    linear-gradient(270deg, rgba(74, 66, 50, 0.30) 0, rgba(74, 66, 50, 0.06) calc(var(--u) * 22),
+      rgba(74, 66, 50, 0) calc(var(--u) * 54)),
+    var(--tex-spell-page) center / 100% 100% no-repeat;
+  background-color: #d2c8bc;
+  box-shadow:
+    inset 0 calc(var(--u) * 1) 0 rgba(255, 252, 244, 0.5),
+    0 calc(var(--u) * 3) calc(var(--u) * 10) rgba(0, 0, 0, 0.55);
+}
+
+/* The fore-edge: the leaves under this one, seen down the right and along the
+   bottom. It is what stops the page ending in a drawn rectangle. */
+.mm-sb-page::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--u) * 5);
+  bottom: calc(var(--u) * -3);
+  right: calc(var(--u) * -8);
+  width: calc(var(--u) * 9);
+  border-radius: 0 calc(var(--u) * 4) calc(var(--u) * 6) 0;
+  background: linear-gradient(90deg,
+    #cdc3b5 0 22%, #b9ad9b 40%, #d6ccbe 55%, #a89c88 72%, #c6bcac 86%, #8e8371 100%);
+  box-shadow: calc(var(--u) * 1) calc(var(--u) * 1) calc(var(--u) * 3) rgba(0, 0, 0, 0.45);
+}
+.mm-sb-page::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--u) * 12);
+  right: calc(var(--u) * -2);
+  bottom: calc(var(--u) * -5);
+  height: calc(var(--u) * 6);
+  border-radius: 0 0 calc(var(--u) * 5) calc(var(--u) * 9);
+  background: linear-gradient(180deg, #ccc2b4 0 30%, #ab9f8c 55%, #cdc3b3 74%, #8d8270 100%);
+}
+
+/* ── the fold ─────────────────────────────────────────────────────────────── */
+
+/* The paper curving away into the spine, with the gilt plait laid along it. */
+.mm-sb-fold {
+  position: absolute;
+  left: calc(var(--u) * 19);
+  width: calc(var(--u) * 13);
+  top: calc(var(--u) * 9);
+  bottom: calc(var(--u) * 9);
+}
+.mm-sb-fold::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--u) * -9) calc(var(--u) * -12);
+  background: linear-gradient(90deg,
+    rgba(92, 88, 70, 0) 0%, rgba(92, 88, 70, 0.26) 34%, rgba(84, 82, 66, 0.34) 52%,
+    rgba(92, 88, 70, 0.16) 72%, rgba(92, 88, 70, 0) 100%);
+}
+.mm-sb-plait { position: relative; display: block; width: 100%; height: 100%; }
+/* The device that breaks the plait halfway down, as the real border does. */
+.mm-sb-device {
+  position: absolute;
+  left: calc(var(--u) * -3);
+  top: 50%;
+  width: calc(var(--u) * 19);
+  height: calc(var(--u) * 32);
+  margin-top: calc(var(--u) * -16);
+}
+.mm-sb-device svg { display: block; width: 100%; height: 100%; }
+
+/* ── the twelve cells ─────────────────────────────────────────────────────── */
+
+/* 3 columns x 4 rows. Cell (0,0) is the school's illumination; the other eleven
+   are its spells in level order. */
+.mm-sb-grid {
+  position: absolute;
+  left: calc(var(--u) * 29);
+  right: 0;
+  top: calc(var(--u) * 4);
+  height: calc(var(--u) * 288);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, calc(var(--u) * 72));
+}
+.mm-sb-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+/* The smudge belongs to the page, not to the spell: it is still there when the
+   spell is not, which is how you know there is something left to buy. */
+.mm-sb-cell::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--u) * 5);
+  left: 50%;
+  width: calc(var(--u) * 74);
+  height: calc(var(--u) * 42);
+  margin-left: calc(var(--u) * -37);
+  border-radius: 50%;
+  background: radial-gradient(closest-side,
+    rgba(120, 134, 136, 0.30) 0%, rgba(122, 134, 136, 0.20) 58%, rgba(126, 140, 141, 0) 78%);
+}
+.mm-sb-art { position: relative; width: 100%; height: calc(var(--u) * 50); }
+
+/* The plate is a square file that is mostly margin, so it hangs out of its own
+   box on every side: what has to measure 55 px on the page is the ink, not the
+   PNG. Nothing is clipped — the whole point of an alpha matte is soft edges. */
+.mm-sb-ink {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--u) * -12);
+  width: calc(var(--u) * 78);
+  height: calc(var(--u) * 78);
+  margin-left: calc(var(--u) * -39);
+  background: center / contain no-repeat;
+  /* A handful of the plates were matted onto a pale paper square rather than
+     cut out, and that square reads as a box on the darker page. Feathering the
+     outer margin turns it back into a vignette and costs a cleanly matted plate
+     nothing, since none of them paint into their corners. */
+  mask-image: radial-gradient(closest-side, #000 72%, rgba(0, 0, 0, 0.5) 88%, transparent 100%);
+  filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(72, 62, 48, 0.35));
+}
+
+/* Labels are small dark brown-black serif, centred under the art, wrapping to
+   two centred lines. Ink on paper carries no drop shadow — that rule belongs to
+   the white text on the chrome. */
+.mm-sb-name {
+  position: relative;
+  max-width: calc(var(--u) * 108);
+  text-align: center;
+  font-size: calc(var(--u) * 11);
+  line-height: 1.06;
+  letter-spacing: calc(var(--u) * 0.35);
+  font-style: normal;
+  color: #2b1f12;
+  text-shadow: none;
+}
+
+/* Not learned: the smudge and nothing else, exactly as the game draws it. */
+.mm-sb-cell.is-unknown .mm-sb-ink,
+.mm-sb-cell.is-unknown .mm-sb-name { display: none; }
+.mm-sb-cell.is-unknown { cursor: default; }
+
+/* Learned but out of reach today — the rank is too low or the spell points are
+   spent. The painting stays on the page, drained of its colour. */
+.mm-sb-cell.is-locked { cursor: default; }
+.mm-sb-cell.is-locked .mm-sb-ink { filter: grayscale(0.82) contrast(0.86) opacity(0.34); }
+.mm-sb-cell.is-locked .mm-sb-name { color: rgba(52, 40, 26, 0.42); }
+
+/* Selection is the page catching the light under the chosen spell, and its name
+   in the deep red-brown the game marks a choice with. No box, no tint. */
+.mm-sb-cell.is-selected .mm-sb-name { color: #6b1008; }
+.mm-sb-cell.is-selected .mm-sb-art::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(var(--u) * -6);
+  width: calc(var(--u) * 90);
+  height: calc(var(--u) * 62);
+  margin-left: calc(var(--u) * -45);
+  border-radius: 50%;
+  background: radial-gradient(closest-side,
+    rgba(214, 176, 92, 0.44) 0%, rgba(214, 176, 92, 0.17) 56%, rgba(214, 176, 92, 0) 78%);
+}
+
+/* ── the illumination ─────────────────────────────────────────────────────── */
+
+/* The cover painting in a gilt-and-ivory frame: noticeably taller than a spell
+   plate, and the only framed thing on the page. It takes the whole cell — the
+   original captions nothing here, so the school's rank goes in the page's foot
+   instead. */
+.mm-sb-illum { position: relative; width: 100%; height: 100%; }
+.mm-sb-illum-frame {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--u) * -3);
+  width: calc(var(--u) * 100);
+  height: calc(var(--u) * 74);
+  margin-left: calc(var(--u) * -50);
+  overflow: hidden;
+  background: linear-gradient(148deg, #f2e6c8 0%, #ded0ac 46%, #cec0a0 100%);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 1) rgba(58, 42, 14, 0.8),
+    inset 0 0 0 calc(var(--u) * 4) rgba(184, 150, 60, 0.95),
+    inset 0 0 0 calc(var(--u) * 5) rgba(240, 223, 162, 0.85),
+    inset 0 0 0 calc(var(--u) * 6) rgba(58, 42, 14, 0.7),
+    calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 5) rgba(60, 50, 36, 0.5);
+}
+/* The cover fills the mount; the procedural stand-in is blown up instead, until
+   the gilt border painted into it is off the edge and only its watercolour is
+   inside our own. Which of the two is showing decides the size, so the JS sets
+   it. */
+.mm-sb-illum-art {
+  position: absolute;
+  inset: calc(var(--u) * 6);
+  background: center no-repeat;
+}
+.mm-sb-cell.is-locked .mm-sb-illum-art { filter: grayscale(0.75) opacity(0.55); }
+
+/* ── the caster's line ────────────────────────────────────────────────────── */
+
+/* An engraved rule of tiny diamonds and then the one thing on this page the
+   original does not have, kept as quiet as ink can be. */
+.mm-sb-colophon {
+  position: absolute;
+  left: calc(var(--u) * 30);
+  right: calc(var(--u) * 8);
+  bottom: calc(var(--u) * 4);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: calc(var(--u) * 12);
+  padding-top: calc(var(--u) * 5);
+  font-size: calc(var(--u) * 11);
+  color: #4a3826;
+  text-shadow: none;
+  white-space: nowrap;
+}
+.mm-sb-colophon::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(var(--u) * 2);
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(96, 80, 56, 0.45) 0 calc(var(--u) * 1),
+      rgba(96, 80, 56, 0) calc(var(--u) * 1) calc(var(--u) * 5)),
+    linear-gradient(180deg, rgba(96, 80, 56, 0.18), rgba(96, 80, 56, 0) 60%);
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+}
+.mm-sb-rank { color: #5a3a1c; }
+.mm-sb-sp { color: #3a2a18; }
+
+/* ── binding, ribbons and plates ──────────────────────────────────────────── */
+
+/* Nine ribbons down the binding. Selection slides the tab LEFT onto the page,
+   brightens it and turns its glyph from flat sepia to full colour — never a
+   border, an underline or a background swap. */
+.mm-sb-tabs {
+  position: absolute;
+  right: calc(var(--u) * 6);
+  top: calc(var(--u) * 30);
+  width: calc(var(--u) * 46);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 3);
+}
+.mm-sb-tab {
+  position: relative;
+  height: calc(var(--u) * 27);
+  margin-left: calc(var(--u) * 14);
+  display: flex;
+  align-items: center;
+  padding-left: calc(var(--u) * 7);
+  color: #7d6a4a;
+  background: linear-gradient(180deg, #eee5d1 0%, #e0d6bf 52%, #c8bda3 100%);
+  clip-path: polygon(0 0, 100% 0, 72% 25%, 100% 50%, 72% 75%, 100% 100%, 0 100%);
+  filter: drop-shadow(calc(var(--u) * -1) calc(var(--u) * 1) calc(var(--u) * 2) rgba(0, 0, 0, 0.55));
+  transition: margin-left 0.12s ease-out;
+}
+/* The sigil is sized in native pixels like everything else on the page, not in
+   the CSS pixels the shared icon helper defaults to. */
+.mm-sb-tab svg { width: calc(var(--u) * 15); height: calc(var(--u) * 15); }
+.mm-sb-tab.is-active {
+  margin-left: calc(var(--u) * -8);
+  background: linear-gradient(180deg, #fdf6e4 0%, #f0e6cc 52%, #dbcfb2 100%);
+}
+/* A school this character was never taught: the flap is there, dulled to old
+   card, and it does not open. Never hidden — you are meant to see what you are
+   missing. */
+.mm-sb-tab.is-locked {
+  background: linear-gradient(180deg, #b6ad99 0%, #a89e89 52%, #928871 100%);
+  color: rgba(58, 48, 32, 0.5);
+  cursor: default;
+}
+
+.mm-sb-clasp {
+  position: absolute;
+  right: calc(var(--u) * 3);
+  width: calc(var(--u) * 26);
+}
+.mm-sb-clasp svg { display: block; width: 100%; height: 100%; }
+.mm-sb-clasp.is-head { top: calc(var(--u) * 2); height: calc(var(--u) * 26); }
+.mm-sb-clasp.is-foot { bottom: calc(var(--u) * 5); height: calc(var(--u) * 44); }
+
+/* Bone-coloured plates on the cloth below the page. */
+.mm-sb-btns {
+  position: absolute;
+  right: calc(var(--u) * 56);
+  bottom: calc(var(--u) * 3);
+  display: flex;
+  gap: calc(var(--u) * 4);
+}
+.mm-sb-btn {
+  width: calc(var(--u) * 54);
+  height: calc(var(--u) * 16);
+  display: grid;
+  place-items: center;
+  color: #241a0e;
+  border-radius: calc(var(--u) * 2);
+  background: linear-gradient(180deg, #f4ecd8 0%, #e6dcc4 58%, #cabfa4 100%);
+  box-shadow:
+    inset 0 calc(var(--u) * 1) 0 rgba(255, 255, 255, 0.85),
+    inset 0 calc(var(--u) * -1) 0 rgba(94, 84, 64, 0.75),
+    calc(var(--u) * 1) calc(var(--u) * 1) calc(var(--u) * 3) rgba(0, 0, 0, 0.5);
+}
+.mm-sb-btn svg { width: calc(var(--u) * 30); height: calc(var(--u) * 13); }
+.mm-sb-btn.is-off { color: rgba(36, 26, 14, 0.32); cursor: default; }

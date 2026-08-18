@@ -1,1 +1,173 @@
-/* Styles owned by ./dialogue.js. Shared chrome stays in ../ui.panels.css. */
+/* Styles owned by ./dialogue.js. Shared chrome stays in ../ui.panels.css.
+ *
+ * Two rules decide this screen. The painted room owns the viewport and is never
+ * covered — the speaker's words sit in a gradient across the bottom of the
+ * painting, over the floor, and fade out instead of boxing themselves in. And
+ * the sidebar is not a slab of wood: it is marble with a plank board inset into
+ * it, the venue title sitting on the bare marble above the board, exactly as
+ * MM6 arranges it (REFERENCE §3.4, screenshot 28).
+ */
+
+/* ── the room, and the words over the bottom of it ─────────────────────────── */
+
+.mm-talk-say {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: calc(var(--u) * 30) calc(var(--u) * 22) calc(var(--u) * 12);
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 5, 3, 0) 0%,
+    rgba(8, 5, 3, 0.42) 30%,
+    rgba(8, 5, 3, 0.78) 62%,
+    rgba(8, 5, 3, 0.90) 100%);
+}
+
+.mm-talk-lines { max-width: calc(var(--u) * 400); }
+
+.mm-talk-line {
+  margin: 0 0 calc(var(--u) * 3);
+  font-size: calc(var(--u) * 13);
+  font-style: italic;
+  line-height: calc(var(--u) * 17);
+  color: #f4ecd8;
+  text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #000, 0 0 calc(var(--u) * 6) rgba(0, 0, 0, 0.9);
+}
+
+/* The ledger line: what an errand pays, who a packet is for, where the party
+   stands. Never a sentence — a caption. */
+.mm-talk-note {
+  margin-top: calc(var(--u) * 5);
+  font-size: calc(var(--u) * 11);
+  letter-spacing: calc(var(--u) * 0.4);
+  color: #bfae8e;
+  text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #000;
+}
+
+.mm-talk-note.is-empty { display: none; }
+.mm-talk-say[data-tone='quest'] .mm-talk-note { color: var(--gold); }
+.mm-talk-say[data-tone='good'] .mm-talk-note { color: #d8b25c; }
+.mm-talk-say[data-tone='warn'] .mm-talk-note { color: #c9803f; }
+
+/* ── the sidebar block ────────────────────────────────────────────────────── */
+
+.mm-npc-side {
+  position: absolute;
+  inset: 0;
+  background: var(--tex-marble-side) center / 100% calc(var(--u) * 352) no-repeat;
+  background-color: #8c8578;
+}
+
+/* Venue title: bare marble above the board, white upright serif, centred. */
+.mm-venue {
+  position: absolute;
+  top: calc(var(--u) * 3);
+  left: calc(var(--u) * 4);
+  right: calc(var(--u) * 4);
+  text-align: center;
+  font-size: calc(var(--u) * 13);
+  line-height: calc(var(--u) * 16);
+  color: var(--ink);
+  text-shadow: var(--shadow);
+}
+
+/* The plank board, inset into the marble with rounded corners. */
+.mm-npc-board {
+  position: absolute;
+  top: calc(var(--u) * 21);
+  left: calc(var(--u) * 4);
+  right: calc(var(--u) * 4);
+  bottom: calc(var(--u) * 3);
+  border-radius: calc(var(--u) * 7);
+  padding: calc(var(--u) * 6) calc(var(--u) * 5) calc(var(--u) * 4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  background: var(--tex-wood-vert) center / 100% calc(var(--u) * 240) repeat-y;
+  background-color: #3a1e0e;
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 1) rgba(12, 5, 0, 0.85),
+    inset 0 calc(var(--u) * 2) calc(var(--u) * 6) rgba(0, 0, 0, 0.45),
+    0 calc(var(--u) * 1) calc(var(--u) * 3) rgba(0, 0, 0, 0.5);
+}
+
+/* Rectangular, 4:5, in a thin grey-green bevel — never an oval. The party's
+   own portraits are the eggs; a shopkeeper's is a framed picture. */
+.mm-npc-portrait {
+  width: calc(var(--u) * 62);
+  height: calc(var(--u) * 78);
+  margin: calc(var(--u) * 4) 0 0;
+  background: center / cover no-repeat;
+  background-color: #241a12;
+  box-shadow:
+    0 0 0 calc(var(--u) * 2) #6e7a6e,
+    0 0 0 calc(var(--u) * 3) #23271f,
+    inset 0 0 calc(var(--u) * 8) rgba(0, 0, 0, 0.55);
+}
+
+.mm-npc-name {
+  margin-top: calc(var(--u) * 8);
+  text-align: center;
+  font-size: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 15);
+  color: var(--azure);
+  text-shadow: var(--shadow);
+}
+
+.mm-npc-trade {
+  margin-top: calc(var(--u) * 2);
+  text-align: center;
+  font-size: calc(var(--u) * 10);
+  line-height: calc(var(--u) * 12);
+  color: #a8b6c4;
+  text-shadow: var(--shadow);
+}
+
+/* Options: centred white italic, wrapping to centred second lines. */
+.mm-npc-options {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  margin-top: calc(var(--u) * 9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 9);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.mm-npc-options::-webkit-scrollbar { display: none; }
+
+.mm-npc-option {
+  font-size: calc(var(--u) * 14);
+  font-style: italic;
+  text-align: center;
+  line-height: calc(var(--u) * 15);
+  max-width: calc(var(--u) * 122);
+  color: var(--ink);
+  text-shadow: var(--shadow);
+}
+
+.mm-npc-option:hover,
+.mm-npc-option:focus-visible { color: var(--gold); outline: none; }
+.mm-npc-option.is-special { color: var(--gold-deep); }
+.mm-npc-option.is-special:hover { color: var(--gold); }
+
+.mm-npc-closed {
+  font-size: calc(var(--u) * 12);
+  font-style: italic;
+  color: #b3a58a;
+  text-align: center;
+}
+
+.mm-npc-exit {
+  position: static;
+  transform: none;
+  margin: calc(var(--u) * 6) 0 calc(var(--u) * 2);
+  flex: none;
+}

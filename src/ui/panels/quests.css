@@ -1,1 +1,271 @@
-/* Styles owned by ./quests.js. Shared chrome stays in ../ui.panels.css. */
+/* Styles owned by ./quests.js. Shared chrome stays in ../ui.panels.css.
+ *
+ * The book is an open spread rather than a single leaf, so the page rules here
+ * take over the layout while leaving the identifying materials — the warm
+ * parchment, the ivory cartouche, the green cloth binding and its gilt clasps —
+ * exactly as the shared sheet paints them.
+ *
+ * Body text is the one place in the whole interface with no shadow and no
+ * outline: black upright sans on paper, as in the original.
+ */
+
+.mm-questbook {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  padding: calc(var(--u) * 6) 0 calc(var(--u) * 6) calc(var(--u) * 8);
+}
+
+.mm-quest-page {
+  padding: calc(var(--u) * 8) calc(var(--u) * 12) calc(var(--u) * 10);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mm-quest-page.is-left { flex: 196; }
+.mm-quest-page.is-right { flex: 214; }
+
+/* The gutter: two pages of one sheet, folded — the shadow belongs to the paper
+   on both sides of the fold, not to a gap between two cards. */
+.mm-qb-gutter {
+  width: calc(var(--u) * 16);
+  background:
+    linear-gradient(90deg,
+      rgba(60, 48, 30, 0.42) 0%, rgba(80, 66, 44, 0.16) 34%,
+      rgba(255, 250, 235, 0.20) 50%, rgba(80, 66, 44, 0.16) 66%,
+      rgba(60, 48, 30, 0.42) 100%),
+    var(--tex-quest-page) center / 100% 100% no-repeat;
+  background-color: #b5ae94;
+}
+
+/* The cartouche is smaller here than on a single-page book, because it shares
+   its line with the count of what is on the page. */
+.mm-quest-head {
+  width: 96%;
+  height: calc(var(--u) * 26);
+  margin: 0 auto calc(var(--u) * 2);
+  flex: 0 0 auto;
+}
+.mm-quest-head span { font-size: calc(var(--u) * 17); }
+
+.mm-qb-count {
+  flex: 0 0 auto;
+  margin: 0 0 calc(var(--u) * 5);
+  text-align: center;
+  font-size: calc(var(--u) * 10);
+  font-style: italic;
+  color: #4a4034;
+  text-shadow: none;
+}
+
+/* ── the index page ────────────────────────────────────────────────────────── */
+
+.mm-qb-index {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: calc(var(--u) * 4);
+}
+.mm-qb-index::-webkit-scrollbar,
+.mm-qb-entry::-webkit-scrollbar { width: calc(var(--u) * 4); }
+.mm-qb-index::-webkit-scrollbar-thumb,
+.mm-qb-entry::-webkit-scrollbar-thumb { background: rgba(70, 58, 38, 0.45); }
+
+.mm-qb-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: calc(var(--u) * 6);
+  margin: calc(var(--u) * 8) 0 calc(var(--u) * 2);
+  padding-bottom: calc(var(--u) * 1);
+  border-bottom: 1px solid rgba(70, 58, 38, 0.4);
+  text-shadow: none;
+}
+.mm-qb-group:first-child { margin-top: 0; }
+.mm-qb-group-name {
+  font-size: calc(var(--u) * 11);
+  font-style: italic;
+  color: #2a2418;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mm-qb-group-place { font-size: calc(var(--u) * 9); color: #6a5c44; white-space: nowrap; }
+
+.mm-qb-row {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 5);
+  padding: calc(var(--u) * 2) calc(var(--u) * 3);
+  text-align: left;
+  text-shadow: none;
+  color: #100c06;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: calc(var(--u) * 10);
+  line-height: calc(var(--u) * 14);
+}
+.mm-qb-row:hover { color: #7a1010; }
+.mm-qb-row.is-selected {
+  color: #100c06;
+  /* Selection is a wash of ink into the paper, not a filled bar. */
+  background: linear-gradient(90deg, rgba(120, 96, 40, 0.28), rgba(120, 96, 40, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(90, 74, 40, 0.35);
+}
+.mm-qb-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-qb-row-step { font-size: calc(var(--u) * 9); color: #6a5c44; white-space: nowrap; }
+
+/* The mark in the margin says what kind of work it is: a filled lozenge for the
+   main road, an open one for an errand, a ring for guild business. */
+.mm-qb-mark {
+  width: calc(var(--u) * 6);
+  height: calc(var(--u) * 6);
+  transform: rotate(45deg);
+  flex: 0 0 auto;
+  background: #6a5c44;
+}
+.mm-qb-mark.is-main { background: #7a1010; }
+.mm-qb-mark.is-side { background: none; box-shadow: inset 0 0 0 1px #6a5c44; }
+.mm-qb-mark.is-guild { background: none; border-radius: 50%; box-shadow: inset 0 0 0 1px #3a5a20; transform: none; }
+
+.mm-qb-empty {
+  margin: calc(var(--u) * 14) 0 0;
+  color: #2a2418;
+  text-shadow: none;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: calc(var(--u) * 11);
+  line-height: 1.45;
+  font-style: italic;
+}
+
+/* ── the entry page ───────────────────────────────────────────────────────── */
+
+.mm-qb-entry {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: calc(var(--u) * 4);
+  color: #000;
+  text-shadow: none;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+}
+.mm-qb-title {
+  margin: 0 0 calc(var(--u) * 4);
+  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  font-size: calc(var(--u) * 16);
+  font-weight: normal;
+  color: #1a1408;
+  line-height: 1.1;
+}
+.mm-qb-meta { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); margin-bottom: calc(var(--u) * 6); }
+.mm-qb-chip,
+.mm-qb-reward {
+  display: inline-flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 4);
+  padding: calc(var(--u) * 1) calc(var(--u) * 5);
+  font-size: calc(var(--u) * 9);
+  color: #241a0e;
+  background: rgba(120, 100, 60, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(90, 74, 40, 0.35);
+}
+.mm-qb-chip b,
+.mm-qb-reward b { font-weight: normal; color: #6a5c44; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.mm-qb-summary {
+  margin: 0 0 calc(var(--u) * 6);
+  font-style: italic;
+  font-size: calc(var(--u) * 11);
+  line-height: 1.4;
+}
+
+/* A thin engraved braided rule of tiny diamonds, with its heading sitting in a
+   break in the middle of it. */
+.mm-qb-rule {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 5);
+  margin: calc(var(--u) * 7) 0 calc(var(--u) * 4);
+}
+.mm-qb-rule span {
+  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  font-size: calc(var(--u) * 9);
+  font-style: italic;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #5a4c34;
+  white-space: nowrap;
+}
+.mm-qb-rule::after {
+  content: '';
+  flex: 1;
+  height: calc(var(--u) * 5);
+  background-image: radial-gradient(circle, rgba(70, 58, 38, 0.6) 0 22%, transparent 24%);
+  background-size: calc(var(--u) * 6) 100%;
+  opacity: 0.75;
+}
+
+.mm-qb-stage {
+  margin: 0 0 calc(var(--u) * 5);
+  padding-left: calc(var(--u) * 7);
+  font-size: calc(var(--u) * 10);
+  line-height: 1.42;
+  border-left: 1px solid rgba(70, 58, 38, 0.35);
+}
+/* The newest line is the one the party is acting on; the older ones have had
+   time to fade into the page. */
+.mm-qb-stage { color: #3a3226; }
+.mm-qb-stage.is-latest { color: #000; border-left-color: rgba(122, 16, 16, 0.6); }
+
+.mm-qb-obj {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 5);
+  font-size: calc(var(--u) * 10);
+  line-height: calc(var(--u) * 15);
+}
+.mm-qb-obj i { color: #5a4c34; line-height: 0; }
+.mm-qb-obj.is-done { color: #4a5a3a; text-decoration: line-through; text-decoration-color: rgba(70, 90, 50, 0.6); }
+.mm-qb-obj.is-done i { color: #3a5a20; }
+
+.mm-qb-rewards { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); }
+
+.mm-qb-blank {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #6a5c44;
+  text-shadow: none;
+  font-style: italic;
+  font-size: calc(var(--u) * 11);
+}
+
+/* ── autonotes ────────────────────────────────────────────────────────────── */
+
+.mm-qb-note-head {
+  margin: calc(var(--u) * 6) 0 calc(var(--u) * 3);
+  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  font-size: calc(var(--u) * 11);
+  font-style: italic;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a4c34;
+  text-shadow: none;
+  border-bottom: 1px solid rgba(70, 58, 38, 0.4);
+}
+.mm-qb-note-head:first-child { margin-top: 0; }
+.mm-qb-note {
+  margin: 0 0 calc(var(--u) * 5);
+  color: #100c06;
+  text-shadow: none;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: calc(var(--u) * 10);
+  line-height: 1.4;
+}
+
+/* ── tabs and the exit plaque ─────────────────────────────────────────────── */
+
+.mm-quest-tabs { right: calc(var(--u) * 34); top: calc(var(--u) * 2); }
+.mm-quest-tab { width: calc(var(--u) * 44); height: calc(var(--u) * 20); font-size: calc(var(--u) * 10); }
+.mm-stone-plaque { right: calc(var(--u) * 34); bottom: calc(var(--u) * 8); }

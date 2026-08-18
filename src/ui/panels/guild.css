@@ -1,1 +1,293 @@
-/* Styles owned by ./guild.js. Shared chrome stays in ../ui.panels.css. */
+/* Styles owned by ./guild.js. Shared chrome stays in ../ui.panels.css.
+
+   The panel is 460 x 352 native pixels on chiselled blue-grey rock, with the
+   working surface inset into it — dark green baize for a magic hall's shelf,
+   walnut planks for the Sword Chapter's and the Ledger's boards. The spell
+   plates are the painted 176px miniatures, laid free on the cloth the way MM6
+   lays out a stock board: no slots, no cells, no backing squares. */
+
+.mm-guild {
+  position: absolute;
+  inset: calc(var(--u) * 6) calc(var(--u) * 12) calc(var(--u) * 6);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 4);
+}
+
+/* The venue's name sits on the bare margin above the board, white upright
+   serif, centred, exactly as MM6 titles a shop or a temple. */
+.mm-guild-title {
+  text-align: center;
+  font-size: calc(var(--u) * 15);
+  line-height: calc(var(--u) * 18);
+}
+
+.mm-guild-sub {
+  text-align: center;
+  font-style: italic;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 14);
+  color: var(--gold);
+}
+
+.mm-guild-board {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  margin-top: calc(var(--u) * 2);
+  border-radius: calc(var(--u) * 6);
+  background: var(--tex-cloth) center / calc(var(--u) * 90) calc(var(--u) * 90) repeat;
+  background-color: #16241d;
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 1) rgba(8, 12, 8, 0.85),
+    inset 0 0 calc(var(--u) * 26) rgba(0, 0, 0, 0.55),
+    0 calc(var(--u) * 2) calc(var(--u) * 8) rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+/* The two guilds that sell no magic keep a plank board instead of baize. */
+.mm-panel[data-kind='martial'] .mm-guild-board,
+.mm-panel[data-kind='trade'] .mm-guild-board {
+  background: var(--tex-planks) center / 100% calc(var(--u) * 105) repeat-y;
+  background-color: #4e2a16;
+}
+
+/* ── the door ─────────────────────────────────────────────────────────────── */
+
+.mm-guild-door {
+  position: absolute;
+  inset: calc(var(--u) * 12) calc(var(--u) * 18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 7);
+}
+.mm-guild-device {
+  color: #d8cfae;
+  opacity: 0.92;
+  filter: drop-shadow(0 calc(var(--u) * 2) calc(var(--u) * 3) rgba(0, 0, 0, 0.8));
+}
+.mm-guild-speech {
+  text-align: center;
+  font-style: italic;
+  font-size: calc(var(--u) * 13);
+  line-height: calc(var(--u) * 16);
+  max-width: calc(var(--u) * 370);
+}
+.mm-guild-terms {
+  width: 100%;
+  max-width: calc(var(--u) * 380);
+  padding: calc(var(--u) * 5) calc(var(--u) * 8);
+  background: rgba(8, 12, 10, 0.35);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 var(--bevel-dark),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(196, 192, 196, 0.65);
+}
+.mm-guild-term {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 6);
+  font-style: italic;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 15);
+  color: #d9998f;
+}
+.mm-guild-term.is-met { color: #cfe6c0; }
+.mm-guild-tick { color: var(--down); position: relative; top: calc(var(--u) * 1); }
+.mm-guild-term.is-met .mm-guild-tick { color: var(--up); }
+
+.mm-guild-join {
+  margin-top: auto;
+  min-width: calc(var(--u) * 190);
+  padding: calc(var(--u) * 4) calc(var(--u) * 14);
+  font-size: calc(var(--u) * 15);
+  text-align: center;
+  color: var(--gold);
+  background: rgba(20, 26, 20, 0.5);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 var(--bevel-light),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--bevel-dark);
+}
+.mm-guild-join:hover { color: #fff; }
+.mm-guild-join.is-dim { color: #a49e96; }
+
+/* ── the shelf ────────────────────────────────────────────────────────────── */
+
+.mm-guild-shelf {
+  position: absolute;
+  inset: calc(var(--u) * 6) calc(var(--u) * 8);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: calc(var(--u) * 2);
+}
+
+.mm-guild-plate {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: calc(var(--u) * 2);
+  text-align: center;
+}
+/* The illuminated school plate sits where the spellbook keeps it: cell one,
+   framed, bleeding a little past its own border. */
+.mm-guild-plate.is-illumination {
+  background: center / 92% 92% no-repeat;
+  filter: drop-shadow(0 calc(var(--u) * 2) calc(var(--u) * 4) rgba(0, 0, 0, 0.7));
+}
+
+.mm-guild-art {
+  width: calc(var(--u) * 56);
+  height: calc(var(--u) * 56);
+  background: center / contain no-repeat;
+  filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 3) rgba(0, 0, 0, 0.75));
+}
+.mm-guild-plate-name {
+  margin-top: calc(var(--u) * 1);
+  font-size: calc(var(--u) * 11);
+  line-height: calc(var(--u) * 11);
+  max-width: 100%;
+}
+.mm-guild-plate-price {
+  font-style: italic;
+  font-size: calc(var(--u) * 11);
+  line-height: calc(var(--u) * 12);
+}
+
+.mm-guild-plate:hover .mm-guild-art {
+  filter: drop-shadow(0 0 calc(var(--u) * 4) rgba(255, 240, 180, 0.95));
+}
+.mm-guild-plate.is-known .mm-guild-art { opacity: 0.55; }
+.mm-guild-plate.is-known .mm-guild-plate-name { color: #cfc9bd; }
+/* Not carried at this hall: the plate is a ghost of itself, and says so. */
+.mm-guild-plate.is-absent .mm-guild-art { opacity: 0.16; filter: grayscale(1); }
+.mm-guild-plate.is-absent .mm-guild-plate-name { color: #8f8a80; }
+
+/* ── the yard: what the guild teaches ─────────────────────────────────────── */
+
+.mm-guild-rows {
+  position: absolute;
+  inset: calc(var(--u) * 6) calc(var(--u) * 10);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.mm-guild-rows::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-guild-rows::-webkit-scrollbar-thumb { background: rgba(180, 176, 172, 0.45); }
+
+.mm-guild-row {
+  display: grid;
+  grid-template-columns: 1fr calc(var(--u) * 42) calc(var(--u) * 92) calc(var(--u) * 92) calc(var(--u) * 56);
+  align-items: baseline;
+  gap: calc(var(--u) * 6);
+  padding: 0 calc(var(--u) * 6);
+  line-height: calc(var(--u) * 19);
+  font-style: italic;
+  font-size: calc(var(--u) * 13);
+  text-align: left;
+  width: 100%;
+  flex: 0 0 auto;
+}
+.mm-guild-row .is-num { text-align: right; }
+.mm-guild-row.is-head {
+  color: var(--gold);
+  font-size: calc(var(--u) * 12);
+  border-bottom: calc(var(--u) * 1) solid rgba(8, 12, 8, 0.7);
+  margin-bottom: calc(var(--u) * 2);
+  cursor: default;
+  position: sticky;
+  top: 0;
+  background: rgba(12, 20, 15, 0.92);
+}
+.mm-panel[data-kind='martial'] .mm-guild-row.is-head,
+.mm-panel[data-kind='trade'] .mm-guild-row.is-head { background: rgba(38, 20, 10, 0.94); }
+
+.mm-guild-lesson { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-guild-row.is-topped { color: #a8a29a; }
+.mm-guild-row:not(.is-head):hover,
+.mm-guild-row:not(.is-head):hover span { color: var(--down); }
+
+/* ── the plaque that explains every refusal ───────────────────────────────── */
+
+.mm-guild-notice {
+  flex: 0 0 auto;
+  min-height: calc(var(--u) * 40);
+  padding: calc(var(--u) * 5) calc(var(--u) * 10);
+  background: rgba(24, 28, 30, 0.55);
+}
+.mm-guild-notice-text {
+  font-style: italic;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 14);
+}
+
+/* ── sidebar ──────────────────────────────────────────────────────────────── */
+
+/* The master's panel on rough-sawn timber: a framed rectangular painting, the
+   name in MM6's azure, then the offices in white italic. Styled here rather
+   than borrowed from the shop's chrome so the two screens can be reworked
+   independently. */
+.mm-guild-side { position: absolute; inset: 0; padding: calc(var(--u) * 8); }
+
+.mm-guild-portrait {
+  width: calc(var(--u) * 68);
+  height: calc(var(--u) * 84);
+  margin: calc(var(--u) * 14) auto 0;
+  background: center / cover no-repeat;
+  box-shadow:
+    0 0 0 calc(var(--u) * 1) #10120f,
+    0 0 0 calc(var(--u) * 3) #75806f,
+    0 0 0 calc(var(--u) * 4) #23261f,
+    0 calc(var(--u) * 2) calc(var(--u) * 5) rgba(0, 0, 0, 0.55);
+}
+.mm-guild-master {
+  margin-top: calc(var(--u) * 8);
+  text-align: center;
+  font-size: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 16);
+  color: var(--azure);
+}
+.mm-guild-options {
+  margin-top: calc(var(--u) * 12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 12);
+}
+.mm-guild-option {
+  font-size: calc(var(--u) * 15);
+  font-style: italic;
+  text-align: center;
+  line-height: calc(var(--u) * 16);
+  max-width: calc(var(--u) * 128);
+}
+.mm-guild-option:hover { color: var(--gold); }
+.mm-guild-exit {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--u) * 8);
+  transform: translateX(-50%);
+}
+
+.mm-guild-motto {
+  margin-top: calc(var(--u) * 5);
+  padding: 0 calc(var(--u) * 4);
+  text-align: center;
+  font-style: italic;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 14);
+  color: #e6e0d4;
+}
+.mm-guild-pupil {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--u) * 46);
+  text-align: center;
+  font-style: italic;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 14);
+}
+.mm-guild-purse { display: block; color: var(--gold-deep); }

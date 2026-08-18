@@ -1,1 +1,107 @@
-/* Styles owned by ./rest.js. Shared chrome stays in ../ui.panels.css. */
+/* Styles owned by ./rest.js. Shared chrome stays in ../ui.panels.css.
+ *
+ * The screen keeps the shared terracotta marble, the raised plaques and the
+ * serpentine clock exactly as the art bible measures them; what is added here
+ * is the camp plaque and the calendar, which need room the original layout did
+ * not have to find. Everything is still bevel and marble — no new material.
+ */
+
+.mm-rest { inset: calc(var(--u) * 12) calc(var(--u) * 14); }
+
+/* The landscape plate loses a little height to the camp plaque below it. */
+.mm-rest-plate { height: calc(var(--u) * 92); }
+
+.mm-rest-cols {
+  gap: calc(var(--u) * 12);
+  margin-top: calc(var(--u) * 10);
+  height: calc(100% - var(--u) * 104);
+}
+.mm-rest-left { flex: 250; gap: calc(var(--u) * 6); }
+.mm-rest-right { flex: 176; gap: calc(var(--u) * 8); }
+
+.mm-rest-btn {
+  height: calc(var(--u) * 24);
+  justify-content: space-between;
+  font-size: calc(var(--u) * 14);
+}
+.mm-rest-btn > span:first-child { flex: 1; text-align: center; }
+.mm-rest-btn.is-barred { color: #f0c0b0; }
+.mm-rest-btn.is-barred:hover { color: #ff9c8c; }
+
+/* The hour a wait ends, sitting where the apple sits on the rest button. */
+.mm-rest-when {
+  font-size: calc(var(--u) * 10);
+  font-style: italic;
+  color: #f4e0d2;
+  opacity: 0.75;
+}
+
+.mm-rest-group-head { height: calc(var(--u) * 20); font-size: calc(var(--u) * 13); }
+.mm-rest-group { gap: calc(var(--u) * 4); padding: calc(var(--u) * 5); }
+
+/* ── the camp plaque ──────────────────────────────────────────────────────── */
+
+.mm-rest-camp {
+  flex: 1;
+  min-height: 0;
+  padding: calc(var(--u) * 6) calc(var(--u) * 2) calc(var(--u) * 5);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 1);
+  background: rgba(120, 62, 44, 0.24);
+  font-size: calc(var(--u) * 12);
+}
+.mm-rest-camp .mm-row { line-height: calc(var(--u) * 16); }
+
+/* Interruption, as a bar that fills from safe green into danger — the only
+   place on the screen where colour carries a number. */
+.mm-rest-risk {
+  height: calc(var(--u) * 7);
+  margin: calc(var(--u) * 3) calc(var(--u) * 8) calc(var(--u) * 4);
+  background: rgba(40, 20, 14, 0.7);
+  box-shadow: inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(20, 10, 8, 0.9);
+}
+.mm-rest-risk i {
+  display: block;
+  height: 100%;
+  min-width: calc(var(--u) * 2);
+  background: linear-gradient(90deg, #00b208, #b5c700 45%, #de2831);
+}
+
+.mm-rest-verdict {
+  margin: 0 calc(var(--u) * 8);
+  font-size: calc(var(--u) * 11);
+  font-style: italic;
+  line-height: 1.25;
+  color: #f6e6da;
+}
+.mm-rest-verdict.is-bad { color: #ffc0b0; }
+
+/* ── the clock ────────────────────────────────────────────────────────────── */
+
+.mm-clock { padding: calc(var(--u) * 8) calc(var(--u) * 8); gap: calc(var(--u) * 8); }
+.mm-clock-instruments {
+  width: calc(var(--u) * 46);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 6);
+}
+.mm-clock-glass { width: 100%; flex: 1; }
+.mm-moon {
+  width: calc(var(--u) * 34);
+  height: calc(var(--u) * 34);
+  margin: 0 auto;
+  filter: drop-shadow(0 0 calc(var(--u) * 4) rgba(220, 230, 200, 0.35));
+}
+.mm-moon svg { display: block; }
+
+.mm-clock-rows { gap: calc(var(--u) * 1); font-size: calc(var(--u) * 12); }
+.mm-clock-rows .mm-row { padding: 0 calc(var(--u) * 4); line-height: calc(var(--u) * 17); }
+.mm-clock-time {
+  margin-bottom: calc(var(--u) * 4);
+  padding-right: calc(var(--u) * 4);
+  text-align: right;
+  font-size: calc(var(--u) * 18);
+  font-style: italic;
+  color: #fff;
+}

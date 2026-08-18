@@ -1,1 +1,142 @@
-/* Styles owned by ./train.js. Shared chrome stays in ../ui.panels.css. */
+/* Styles owned by ./train.js. Shared chrome stays in ../ui.panels.css.
+
+   The screen is 460 x 352 native pixels, like every other panel, and every
+   measurement below is quoted in those units through `--u`. Granite surround,
+   engraved sub-panels (dark line top and left, pale bottom and right), values
+   right-aligned, hierarchy by position and colour only. */
+
+.mm-train {
+  position: absolute;
+  inset: calc(var(--u) * 8) calc(var(--u) * 14) calc(var(--u) * 8);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 6);
+}
+
+.mm-train-title {
+  text-align: center;
+  font-size: calc(var(--u) * 15);
+  line-height: calc(var(--u) * 18);
+}
+
+/* The hall's ceiling is the one number that decides whether the party is in the
+   right town, so it sits under the name where the eye lands next. */
+.mm-train-sub {
+  text-align: center;
+  font-style: italic;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 14);
+  color: var(--gold);
+}
+
+.mm-train-board { padding: calc(var(--u) * 5) calc(var(--u) * 4); }
+
+.mm-train-roll { display: flex; flex-direction: column; }
+
+.mm-train-row {
+  display: grid;
+  grid-template-columns: 1fr calc(var(--u) * 44) calc(var(--u) * 86) calc(var(--u) * 74) calc(var(--u) * 62);
+  align-items: baseline;
+  gap: calc(var(--u) * 6);
+  padding: 0 calc(var(--u) * 8);
+  line-height: calc(var(--u) * 21);
+  font-style: italic;
+  font-size: calc(var(--u) * 14);
+  text-align: left;
+  width: 100%;
+}
+.mm-train-row .is-num { text-align: right; }
+
+.mm-train-row.is-head {
+  color: var(--gold);
+  line-height: calc(var(--u) * 19);
+  font-size: calc(var(--u) * 12);
+  border-bottom: calc(var(--u) * 1) solid rgba(15, 18, 16, 0.55);
+  margin-bottom: calc(var(--u) * 2);
+  cursor: default;
+}
+
+.mm-train-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-train-row.is-selected .mm-train-who { color: var(--gold); }
+.mm-train-row.is-ready .mm-train-who { text-shadow: var(--shadow); }
+
+/* MM6 turns the whole row under the cursor red — name, rank and number
+   together. It is the only hover state the interface has. */
+.mm-train-row:not(.is-head):hover,
+.mm-train-row:not(.is-head):hover span { color: var(--down); }
+
+.mm-train-notice {
+  min-height: calc(var(--u) * 46);
+  padding: calc(var(--u) * 6) calc(var(--u) * 10);
+}
+.mm-train-notice-text {
+  font-style: italic;
+  font-size: calc(var(--u) * 13);
+  line-height: calc(var(--u) * 15);
+}
+
+.mm-train-foot {
+  display: flex;
+  gap: calc(var(--u) * 10);
+  justify-content: center;
+  margin-top: auto;
+}
+
+/* Raised plaques, the polarity MM6 uses for anything you press. */
+.mm-train-btn {
+  min-width: calc(var(--u) * 150);
+  padding: calc(var(--u) * 4) calc(var(--u) * 12);
+  font-size: calc(var(--u) * 15);
+  text-align: center;
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 var(--bevel-light),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--bevel-dark);
+}
+.mm-train-btn:hover { color: var(--gold); }
+.mm-train-btn.is-dim { color: #a49e96; }
+
+/* ── sidebar ──────────────────────────────────────────────────────────────── */
+
+.mm-train-side { position: absolute; inset: 0; padding: calc(var(--u) * 8); }
+
+.mm-train-portrait {
+  width: calc(var(--u) * 68);
+  height: calc(var(--u) * 84);
+  margin: calc(var(--u) * 18) auto 0;
+  background: center / cover no-repeat;
+  box-shadow:
+    0 0 0 calc(var(--u) * 1) #10120f,
+    0 0 0 calc(var(--u) * 3) #75806f,
+    0 0 0 calc(var(--u) * 4) #23261f,
+    0 calc(var(--u) * 2) calc(var(--u) * 5) rgba(0, 0, 0, 0.55);
+}
+.mm-train-trainer {
+  margin-top: calc(var(--u) * 8);
+  text-align: center;
+  font-size: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 16);
+  color: var(--azure);
+}
+.mm-train-exit {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--u) * 8);
+  transform: translateX(-50%);
+}
+
+/* The trainer's own words, then who is being put through it. */
+.mm-train-greeting {
+  margin-top: calc(var(--u) * 6);
+  padding: 0 calc(var(--u) * 4);
+  text-align: center;
+  font-style: italic;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 14);
+  color: #e6e0d4;
+}
+.mm-train-pupil {
+  margin-top: calc(var(--u) * 12);
+  text-align: center;
+  font-style: italic;
+  font-size: calc(var(--u) * 13);
+}

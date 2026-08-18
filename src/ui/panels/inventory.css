@@ -1,1 +1,157 @@
-/* Styles owned by ./inventory.js. Shared chrome stays in ../ui.panels.css. */
+/* Styles owned by ./inventory.js. Shared chrome stays in ../ui.panels.css.
+
+   The measured screen (REFERENCE.md §3.4): the backpack is 14 x 9 cells of
+   32 native pixels at x 14-462, y 16-304, which inside a panel body pinned at
+   x 8 is x 6-454. That leaves exactly 48 pixels underneath for the readout
+   strip and the five wide gold ovals, and nothing above it — MM6's inventory
+   has no title bar, and adding one would push the grid off its measurement. */
+
+/* ── the readout strip, y 305-318 ─────────────────────────────────────────── */
+
+/* 48 native pixels under the grid, and the five 58 x 30 ovals want 32 of them:
+   the strip takes the 13 above and the row sits on the last 2. Both are pinned
+   to the grid's own 448-pixel column rather than to the panel, which is wider
+   than MM6's 460 on any window that is not 4:3. */
+[data-panel="inventory"] .mm-pack-foot {
+  left: 50%;
+  right: auto;
+  bottom: calc(var(--u) * 2);
+  width: calc(var(--u) * 448);
+  transform: translateX(-50%);
+}
+
+.mm-inv-strip {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--u) * 305);
+  width: calc(var(--u) * 448);
+  height: calc(var(--u) * 13);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 12);
+}
+/* Titles left, counters right — the character sheet's rule, kept. */
+.mm-inv-owner {
+  flex: 1;
+  min-width: 0;
+  font-style: italic;
+  font-size: calc(var(--u) * 13);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mm-inv-button {
+  height: calc(var(--u) * 13);
+  padding: 0 calc(var(--u) * 9);
+  font-style: italic;
+  font-size: calc(var(--u) * 11);
+  line-height: calc(var(--u) * 13);
+  background: rgba(18, 17, 16, 0.42);
+}
+.mm-inv-button:hover { color: var(--gold); }
+
+/* Labels flush left of their value, the numerals right-aligned in a dark
+   recessed plate: the sidebar's own supply row is still live below this one, so
+   these are worded rather than given a second apple and a second coin stack. */
+.mm-inv-supply { display: flex; align-items: center; gap: calc(var(--u) * 4); }
+.mm-inv-label { font-style: italic; font-size: calc(var(--u) * 11); }
+.mm-inv-count {
+  width: calc(var(--u) * 32);
+  height: calc(var(--u) * 13);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: calc(var(--u) * 4);
+  background: rgba(99, 89, 82, 0.85);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(24, 22, 22, 0.9),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(200, 194, 188, 0.45);
+}
+.mm-inv-count.is-wide { width: calc(var(--u) * 52); }
+.mm-inv-count .mm-count { font-size: calc(var(--u) * 11); }
+
+/* The page you are on is told by the struck oval, as on the character sheet. */
+[data-panel="inventory"] .mm-oval.is-current {
+  transform: translateY(calc(var(--u) * 1));
+  filter: brightness(1.22) saturate(1.12) drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 236, 160, 0.85));
+}
+
+/* ── item condition ───────────────────────────────────────────────────────── */
+
+/* MM6 draws the same sprite whatever state an item is in and says the rest in
+   the description, but a 126-cell grid needs the difference to survive a glance,
+   so the metal goes dull rather than the outline changing. */
+.mm-item.is-broken svg { filter: saturate(0.22) brightness(0.6); }
+.mm-item.is-unknown svg { filter: saturate(0.5) brightness(0.84); }
+.mm-item.is-lifted { visibility: hidden; }
+
+.mm-tip.is-broken .mm-tip-head { color: var(--down); }
+.mm-tip.is-unknown .mm-tip-head { color: var(--azure); }
+
+/* ── the item on the cursor ───────────────────────────────────────────────── */
+
+/* Lives on the root rather than in the panel so it crosses the divider column
+   between the backpack and the figure without being clipped. */
+.mm-item.mm-inv-ghost {
+  position: fixed;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0.95;
+  filter: drop-shadow(calc(var(--u) * 2) calc(var(--u) * 4) calc(var(--u) * 3) rgba(0, 0, 0, 0.8));
+}
+.mm-item.mm-inv-ghost.is-bad {
+  filter: drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 0, 0, 0.95)) brightness(0.85);
+}
+
+/* ── equipment on the figure ──────────────────────────────────────────────── */
+
+.mm-inv-slots { position: absolute; inset: 0; }
+.mm-inv-slot { position: absolute; }
+
+/* Worn pieces are composited onto a painted body, so each one gets a soft
+   pool of shade under it: without that they read as stickers laid on a poster
+   rather than as gear the figure is actually wearing. */
+.mm-inv-slot.is-worn {
+  background: radial-gradient(ellipse at 50% 56%, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0) 72%);
+}
+
+/* An empty slot is invisible until you are holding something it will take —
+   the niche is a painting of a person, not a form to fill in. */
+.mm-inv-slot.is-open {
+  background: rgba(255, 236, 170, 0.12);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 1) rgba(255, 240, 170, 0.75),
+    0 0 calc(var(--u) * 4) rgba(255, 236, 170, 0.35);
+}
+.mm-inv-hint { display: none; }
+.mm-inv-slot.is-open .mm-inv-hint {
+  display: block;
+  position: absolute;
+  left: calc(var(--u) * -12);
+  right: calc(var(--u) * -12);
+  bottom: calc(var(--u) * -10);
+  text-align: center;
+  font-style: italic;
+  font-size: calc(var(--u) * 9);
+  color: var(--gold);
+}
+
+/* Worn gear carries its own baked highlights and reads markedly brighter than
+   the masonry behind it. */
+.mm-item.mm-inv-worn {
+  left: 0;
+  top: 0;
+  filter:
+    drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.85))
+    brightness(1.08) contrast(1.06);
+}
+.mm-item.mm-inv-worn:hover {
+  filter: drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 240, 180, 0.9)) brightness(1.14);
+}
+
+.mm-inv-glass { cursor: pointer; }
+.mm-inv-glass:hover,
+.mm-inv-glass.is-active {
+  filter: drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 240, 170, 0.95));
+}
