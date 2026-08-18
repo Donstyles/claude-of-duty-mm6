@@ -79,6 +79,13 @@ const GRASS_BLADES = 7;            // blades per cluster
 const GRASS_FADE = 7;              // metres of soft edge at the streaming rim
 
 /** Keep-out radii around named places so nothing grows through a building. */
+/**
+ * The market square, kept clear of deliberate planting. Wide enough that the
+ * five street spokes are open from the well to the first plots, which is what
+ * the square is for.
+ */
+const SQUARE_CLEAR = 30;
+
 const LANDMARK_CLEAR = {
   millhaven: 152,
   thornwickKeep: 96,
@@ -273,7 +280,13 @@ export class VegetationSystem extends System {
     const { x: tx, z: tz } = town;
 
     const near = (x, z, r) => (x - tx) * (x - tx) + (z - tz) * (z - tz) < r * r;
-    const ok = (x, z) => !terrain.isWater(x, z) && terrain.roadAt(x, z) <= 0.30;
+    // Nothing is planted in the square itself. The street ring's inner rank sat
+    // at 27 m on a bearing the town-square viewpoint stands on, which put a
+    // full-grown oak in the middle of the market — the camera opened inside a
+    // tree, and a player walking out of the inn would have done the same.
+    const ok = (x, z) => !terrain.isWater(x, z)
+      && terrain.roadAt(x, z) <= 0.30
+      && !near(x, z, SQUARE_CLEAR);
 
     // Two big broadleaf trees flanking the gate, just inside the wall. The gate
     // sits on the south bearing (PI), which is -Z.
@@ -301,7 +314,7 @@ export class VegetationSystem extends System {
     // Street trees between the spokes, set back from the doors.
     for (let s = 0; s < 5; s++) {
       const bearing = (s * 72 + 36) * Math.PI / 180;   // between the streets
-      for (const along of [27, 40]) {
+      for (const along of [34, 46]) {
         const x = tx + Math.sin(bearing) * along;
         const z = tz + Math.cos(bearing) * along;
         if (ok(x, z) && near(x, z, 70)) {
