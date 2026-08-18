@@ -141,6 +141,10 @@ export const LANDMARKS = {
 
 /** Road control points, in order. Roads flatten and re-texture the ground. */
 export const ROADS = [
+  // South out of New Sorpigal, through the gate. The reference frames its gate
+  // with a packed-dirt approach running up to it; without this spur the road
+  // network stopped at the town centre and the gate opened onto open grass.
+  [[-260, 240], [-260, 166], [-256, 108], [-196, 44]],
   [[-260, 240], [-140, 150], [-20, 40], [120, -180]],
   [[120, -180], [280, -300], [470, -430]],
   [[-260, 240], [-450, 340], [-700, 640]],

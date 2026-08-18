@@ -183,6 +183,59 @@ export class TownSystem extends System {
     this.group.add(mesh);
   }
 
+
+  /**
+   * A painted signboard face: planked timber with carved-and-gilded lettering,
+   * the letters cut with a dark incision and lit on their lower edge so they
+   * read as carved rather than printed.
+   */
+  _signMaterial(text) {
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 182;
+    const g = c.getContext('2d');
+
+    const grain = g.createLinearGradient(0, 0, 0, c.height);
+    grain.addColorStop(0, '#6b4a2a');
+    grain.addColorStop(0.5, '#5a3d22');
+    grain.addColorStop(1, '#4a3119');
+    g.fillStyle = grain;
+    g.fillRect(0, 0, c.width, c.height);
+
+    // Plank seams and grain.
+    g.strokeStyle = 'rgba(30,18,8,0.55)';
+    g.lineWidth = 2;
+    for (const y of [c.height / 3, (c.height * 2) / 3]) {
+      g.beginPath(); g.moveTo(0, y); g.lineTo(c.width, y); g.stroke();
+    }
+    g.strokeStyle = 'rgba(20,12,5,0.16)';
+    g.lineWidth = 1;
+    for (let i = 0; i < 90; i++) {
+      const y = (i / 90) * c.height;
+      g.beginPath();
+      g.moveTo(0, y);
+      g.bezierCurveTo(c.width * 0.3, y + 3, c.width * 0.7, y - 3, c.width, y + 1);
+      g.stroke();
+    }
+
+    g.font = 'bold 62px Georgia, "Times New Roman", serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    // Incision first, then the gilded face offset up-left, so the letter reads
+    // as cut into the plank and catching the light on its lower lip.
+    g.fillStyle = 'rgba(12,7,2,0.85)';
+    g.fillText(text, c.width / 2 + 3, c.height / 2 + 3);
+    g.fillStyle = '#d8b25c';
+    g.fillText(text, c.width / 2, c.height / 2);
+    g.strokeStyle = 'rgba(60,38,10,0.7)';
+    g.lineWidth = 1.5;
+    g.strokeText(text, c.width / 2, c.height / 2);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.82, metalness: 0.05 });
+  }
+
   /** Perimeter wall in segments, with a gate arch on the south approach. */
   _buildWallAndGate(ctx, lib, rng) {
     const stone = lib.get('rubble', { repeat: 2.2 });
@@ -238,7 +291,14 @@ export class TownSystem extends System {
     lintel.castShadow = true;
     gate.add(lintel);
 
-    const board = new THREE.Mesh(new THREE.BoxGeometry(3.1, 1.1, 0.12), timber);
+    // The reference's signboard carries legible carved lettering; a blank plank
+    // reads as an unfinished prop. Painted to a canvas texture rather than
+    // modelled, since the letters only ever need to survive being read at a
+    // distance.
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(3.1, 1.1, 0.12),
+      [timber, timber, timber, timber, this._signMaterial('NEW SORPIGAL'), timber],
+    );
     board.position.set(0, pierH - 1.35, 0);
     board.castShadow = true;
     gate.add(board);

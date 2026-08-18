@@ -278,7 +278,9 @@ export class VegetationSystem extends System {
     // Two big broadleaf trees flanking the gate, just inside the wall. The gate
     // sits on the south bearing (PI), which is -Z.
     for (const side of [-1, 1]) {
-      const x = tx + side * 9;
+      // Clear of the gate road's shoulder, which is ~12 m half-width; at 9 m
+      // these were being rejected by the road test and the gate lost its trees.
+      const x = tx + side * 17;
       const z = tz - 64;
       if (ok(x, z)) this._addTree(terrain, rng, x, z, 'oak');
     }
