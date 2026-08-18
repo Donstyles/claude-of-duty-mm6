@@ -44,6 +44,12 @@ export class Panel {
   static coversSidebar = false;
   /** granite | wood | none — the material of that replacement. */
   static sideSurface = 'granite';
+  /**
+   * A venue kind from Venues.js, when this screen always shows the same room.
+   * Screens opened by a venue get theirs from the open options instead and
+   * leave this null.
+   */
+  static interior = null;
 
   constructor(ui) {
     this.ui = ui;
