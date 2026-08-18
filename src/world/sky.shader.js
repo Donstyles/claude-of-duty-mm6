@@ -339,6 +339,16 @@ void main() {
   float amb = (0.15 + 0.20 * n.y) * ao;
   float direct = wrapped * shade * 0.68 * (0.72 + 0.28 * ao);
   float lumA = amb + direct;
+
+  // Crown and belly. Every puff is seen from underneath, so the part of it we
+  // read as "top" is the near face and the part we read as "underside" is the
+  // far face — the one whose relief tilts away from the camera along the view
+  // ray's own ground direction. Keying a signed term off that gives MM6's
+  // bright crown / soft grey-cream belly on every mass at once, whatever the
+  // sun is doing, which a pure N·L never does with a near-overhead sun.
+  vec2 rad2 = normalize(d.xz + vec2(1e-5, 1e-5));
+  lumA -= dot(n.xz, rad2) * 0.19 * smoothstep(0.02, 0.30, hA);
+
   // Silver lining: thin edges facing the sun burn out.
   float rim = pow(max(0.0, dot(d, uSunDir)), 9.0) * (1.0 - smoothstep(0.10, 0.55, hA));
   lumA += rim * uSilver * 0.55;

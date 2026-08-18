@@ -99,8 +99,8 @@ const KEYS = [
     gNear: C(0x2e2a1e), gFar: C(0x4a3f33),
     cmul: [1.28, 0.90, 0.68], cadd: [0.090, 0.020, 0.0], cbright: 1.0, silver: 0.95,
     sunTint: C(0xffb572), sunDisc: 1.0, sunHalo: 0.90,
-    lightCol: C(0xffa95e), lightI: 0.88,
-    ambSky: C(0x8091b8), ambGnd: C(0x6c5f4a), ambI: 1.45,
+    lightCol: C(0xffa95e), lightI: 0.74,
+    ambSky: C(0x8091b8), ambGnd: C(0x6c5f4a), ambI: 1.26,
     fog: C(0x6d5f76), fogD: 0.00040,
     stars: 0.10, night: 0.14, moonDisc: 0.20, moonTint: C(0xdde3ef),
   },
@@ -110,8 +110,8 @@ const KEYS = [
     gNear: C(0x384326), gFar: C(0x455438),
     cmul: [1.10, 1.00, 0.90], cadd: [0.020, 0.008, 0.0], cbright: 1.0, silver: 0.60,
     sunTint: C(0xffe0b0), sunDisc: 0.50, sunHalo: 0.40,
-    lightCol: C(0xffe3b6), lightI: 1.60,
-    ambSky: C(0x9db0d6), ambGnd: C(0x7d7350), ambI: 1.98,
+    lightCol: C(0xffe8c2), lightI: 1.32,
+    ambSky: C(0x9db0d6), ambGnd: C(0x797052), ambI: 1.68,
     fog: C(0x45589a), fogD: 0.00026,
     stars: 0.0, night: 0.02, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
@@ -121,8 +121,8 @@ const KEYS = [
     gNear: C(0x3c4a28), gFar: C(0x4a5a3a),
     cmul: [1.02, 1.00, 0.99], cadd: [0.0, 0.0, 0.0], cbright: 1.0, silver: 0.40,
     sunTint: C(0xfff0d2), sunDisc: 0.26, sunHalo: 0.14,
-    lightCol: C(0xffeecb), lightI: 2.02,
-    ambSky: C(0x93aedd), ambGnd: C(0x8a7c56), ambI: 2.28,
+    lightCol: C(0xfff2d6), lightI: 1.66,
+    ambSky: C(0x93aedd), ambGnd: C(0x847a58), ambI: 1.92,
     fog: C(0x2b4890), fogD: 0.00016,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
@@ -132,8 +132,8 @@ const KEYS = [
     gNear: C(0x3c4a28), gFar: C(0x4a5a3a),
     cmul: [1.0, 1.0, 1.0], cadd: [0.0, 0.0, 0.0], cbright: 1.0, silver: 0.35,
     sunTint: C(0xfff4dc), sunDisc: 0.20, sunHalo: 0.10,
-    lightCol: C(0xfff1d2), lightI: 2.08,
-    ambSky: C(0x93aedd), ambGnd: C(0x8a7c56), ambI: 2.34,
+    lightCol: C(0xfff4dc), lightI: 1.70,
+    ambSky: C(0x93aedd), ambGnd: C(0x847a58), ambI: 1.96,
     fog: C(0x29458c), fogD: 0.00015,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
@@ -143,8 +143,8 @@ const KEYS = [
     gNear: C(0x3c4a28), gFar: C(0x4a5a3a),
     cmul: [1.03, 1.00, 0.98], cadd: [0.0, 0.0, 0.0], cbright: 1.0, silver: 0.42,
     sunTint: C(0xffefcc), sunDisc: 0.30, sunHalo: 0.18,
-    lightCol: C(0xffedc6), lightI: 2.00,
-    ambSky: C(0x94add8), ambGnd: C(0x897a53), ambI: 2.28,
+    lightCol: C(0xfff0d0), lightI: 1.64,
+    ambSky: C(0x94add8), ambGnd: C(0x837855), ambI: 1.92,
     fog: C(0x2d4a90), fogD: 0.00017,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
@@ -154,8 +154,8 @@ const KEYS = [
     gNear: C(0x3a4526), gFar: C(0x485436),
     cmul: [1.06, 0.99, 0.92], cadd: [0.010, 0.004, 0.0], cbright: 1.0, silver: 0.50,
     sunTint: C(0xffe2b4), sunDisc: 0.45, sunHalo: 0.35,
-    lightCol: C(0xffe4b2), lightI: 1.74,
-    ambSky: C(0x9aabd2), ambGnd: C(0x877450), ambI: 2.10,
+    lightCol: C(0xffe8be), lightI: 1.44,
+    ambSky: C(0x9aabd2), ambGnd: C(0x817252), ambI: 1.78,
     fog: C(0x3d5090), fogD: 0.00021,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
@@ -165,8 +165,8 @@ const KEYS = [
     gNear: C(0x31311e), gFar: C(0x483f30),
     cmul: [1.20, 0.96, 0.78], cadd: [0.050, 0.015, 0.0], cbright: 1.02, silver: 0.85,
     sunTint: C(0xffc684), sunDisc: 0.90, sunHalo: 0.80,
-    lightCol: C(0xffc684), lightI: 1.22,
-    ambSky: C(0x93a0c4), ambGnd: C(0x7d6a4e), ambI: 1.66,
+    lightCol: C(0xffc684), lightI: 1.02,
+    ambSky: C(0x93a0c4), ambGnd: C(0x7d6a4e), ambI: 1.42,
     fog: C(0x6e6c8c), fogD: 0.00030,
     stars: 0.0, night: 0.0, moonDisc: 0.05, moonTint: C(0xdde3ef),
   },
@@ -176,8 +176,8 @@ const KEYS = [
     gNear: C(0x241f17), gFar: C(0x3a3026),
     cmul: [1.34, 0.86, 0.60], cadd: [0.100, 0.025, 0.0], cbright: 1.0, silver: 1.0,
     sunTint: C(0xff9a52), sunDisc: 1.0, sunHalo: 1.0,
-    lightCol: C(0xff9450), lightI: 0.74,
-    ambSky: C(0x8390ab), ambGnd: C(0x6f5d4a), ambI: 1.36,
+    lightCol: C(0xff9450), lightI: 0.62,
+    ambSky: C(0x8390ab), ambGnd: C(0x6f5d4a), ambI: 1.16,
     fog: C(0x7a6178), fogD: 0.00042,
     stars: 0.08, night: 0.12, moonDisc: 0.25, moonTint: C(0xdde3ef),
   },
@@ -425,68 +425,89 @@ function blurWrap(src, N, radius) {
  */
 function bakeCloudSheet(N, rng) {
   const hWarp = makeHash(rng);
-  const hBase = makeHash(rng);
-  const hBill = makeHash(rng);
-  const hLobe = makeHash(rng);
+  const hMask = makeHash(rng);
+  const hBig = makeHash(rng);
+  const hMid = makeHash(rng);
+  const hFine = makeHash(rng);
+  const hGrain = makeHash(rng);
 
   const shape = new Float32Array(N * N);
   const inv = 1 / N;
+
+  // Cells per tile for the three blob scales. At a 4 km layer-A repeat these
+  // are 400 m / 210 m / 118 m puffs, which the softened projection shows at
+  // roughly 12° / 6° / 3.5° across at 25° above the horizon — one big form,
+  // its lobes, and the buds on the lobes.
+  const G_BIG = 10;
+  const G_MID = 19;
+  const G_FINE = 34;
 
   for (let y = 0; y < N; y++) {
     const v = y * inv;
     const row = y * N;
     for (let x = 0; x < N; x++) {
       const u = x * inv;
-      // A low-frequency domain warp is what turns fBm blobs into cloud forms
-      // with bays and overhangs rather than round lumps on a grid. Keep it
-      // gentle: a heavy warp shears a cumulus into a comma.
-      const wx = u + 0.038 * fbmP(hWarp, u, v, 3, 2, 0.5);
-      const wy = v + 0.038 * fbmP(hWarp, u + 0.37, v - 0.19, 3, 2, 0.5);
+      // A gentle domain warp keeps the blob grid from ever being legible as a
+      // grid. Heavier than this and it shears the puffs into commas.
+      const wx = u + 0.026 * fbmP(hWarp, u, v, 3, 2, 0.5);
+      const wy = v + 0.026 * fbmP(hWarp, u + 0.37, v - 0.19, 3, 2, 0.5);
 
-      // Base mass. Only three octaves at a hard gain roll-off: the silhouette
-      // has to stay a smooth, convex island. Extra octaves here are exactly
-      // what turns cumulus into cirrus fluff.
-      const base = fbmP(hBase, wx, wy, 6, 3, 0.42) * 0.5 + 0.5;
+      // Three metaball scales stacked. `big` is the mass, `mid` the lobes it
+      // buds, `fine` the crumbs on the lobes' shoulders.
+      const big = blobsP(hBig, wx, wy, G_BIG, 0.52, 1.02);
+      const mid = blobsP(hMid, wx, wy, G_MID, 0.42, 0.86);
+      const fine = blobsP(hFine, wx, wy, G_FINE, 0.36, 0.72);
 
-      // Two billow (|fBm| ridge) fields at different scales. Billow noise is
-      // the one primitive that produces genuinely *rounded* lobes rather than
-      // blobs, and stacking two gives the cauliflower reading of a real
-      // cumulus: big lobes with smaller lobes budding off them.
-      const lobeBig = 1 - Math.abs(fbmP(hLobe, wx, wy, 9, 2, 0.48));
-      const lobeSm = 1 - Math.abs(fbmP(hBill, wx, wy, 17, 2, 0.50));
+      // Where clouds are allowed at all. §2.4: MM6's sky is 35–40% cloud with
+      // real blue lanes through it, so the mask has to genuinely clear out.
+      const mask = fbmP(hMask, wx, wy, 3, 2, 0.5) * 0.5 + 0.5;
+      const gate = 0.20 + 1.05 * smoothstep(0.28, 0.74, mask);
 
-      // The lobes only bite where there is already mass, so clear sky stays
-      // clear and the puffs grow bumps instead of the sky growing veils.
-      const inside = smoothstep(0.34, 0.80, base);
-      let s = base + inside * (0.30 * (lobeBig - 0.45) + 0.13 * (lobeSm - 0.45));
-
-      // A convex bias: push the interior up harder than the rim so a mass
-      // reads as domed. This is what puts a bright crown on every puff once
-      // the gradient below is lit.
-      s += 0.16 * inside * inside;
+      let s = (big * 1.0 + mid * 0.52 + fine * 0.20) * gate;
+      // A whisper of grain so the interiors are not glassy under the relief
+      // lighting; too little to touch the silhouette.
+      s += 0.035 * fbmP(hGrain, wx, wy, 26, 2, 0.5);
       shape[row + x] = s;
     }
   }
 
-  // Normalise. A tighter spread than a Gaussian's gives the field more
-  // contrast, which in turn gives each puff a crisper outline against the
-  // flat blue — MM6's clouds have edges, not falloffs.
-  let mean = 0;
-  for (let i = 0; i < shape.length; i++) mean += shape[i];
-  mean /= shape.length;
-  let varsum = 0;
+  // Normalise on percentiles, not on mean/σ. A metaball field is strongly
+  // skewed — most of the tile is empty sky — and a Gaussian fit would put the
+  // whole cloud population into the top few percent of the byte range.
+  const BINS = 512;
+  let rawLo = Infinity;
+  let rawHi = -Infinity;
   for (let i = 0; i < shape.length; i++) {
-    const d = shape[i] - mean;
-    varsum += d * d;
+    if (shape[i] < rawLo) rawLo = shape[i];
+    if (shape[i] > rawHi) rawHi = shape[i];
   }
-  const sd = Math.sqrt(varsum / shape.length) || 1e-4;
+  const rawSpan = rawHi - rawLo || 1e-4;
+  let hist = new Float64Array(BINS);
   for (let i = 0; i < shape.length; i++) {
-    shape[i] = clamp(0.5 + (shape[i] - mean) / (2.7 * sd), 0, 1);
+    hist[Math.min(BINS - 1, ((shape[i] - rawLo) / rawSpan * BINS) | 0)]++;
+  }
+  const pct = (target) => {
+    let acc = 0;
+    const want = target * shape.length;
+    for (let b = 0; b < BINS; b++) {
+      const next = acc + hist[b];
+      if (next >= want) {
+        const f = hist[b] > 0 ? (want - acc) / hist[b] : 0;
+        return rawLo + ((b + f) / BINS) * rawSpan;
+      }
+      acc = next;
+    }
+    return rawHi;
+  };
+  const vLo = pct(0.06);
+  const vHi = pct(0.996);
+  const vSpan = vHi - vLo || 1e-4;
+  for (let i = 0; i < shape.length; i++) {
+    shape[i] = clamp((shape[i] - vLo) / vSpan, 0, 1);
   }
 
   // CDF of the normalised field, so coverage can be asked for by name.
-  const BINS = 512;
-  const hist = new Float64Array(BINS);
+  hist = new Float64Array(BINS);
   for (let i = 0; i < shape.length; i++) {
     hist[Math.min(BINS - 1, (shape[i] * BINS) | 0)]++;
   }
@@ -512,7 +533,7 @@ function bakeCloudSheet(N, rng) {
   // out looking like crumpled foil; MM6's clouds are broadly shaded masses
   // whose fine detail lives in the silhouette, not in the lighting. The radius
   // is set so one lobe carries one broad light-to-dark sweep.
-  const relief = blurWrap(shape, N, Math.max(3, Math.round(N / 42)));
+  const relief = blurWrap(shape, N, Math.max(3, Math.round(N / 58)));
 
   // Gradient, with an adaptive encode scale so `uBump` behaves at any size.
   let gsum = 0;
@@ -686,6 +707,7 @@ export class SkySystem extends System {
 
     // One evaluation now so the very first rendered frame is already correct.
     this._evaluate(ctx, ctx.state.worldTime);
+    try { this._patchFogUniforms(ctx); } catch { /* nothing here is load-bearing */ }
     this._lastWorldTime = ctx.state.worldTime;
     this._ready = true;
   }
@@ -816,7 +838,7 @@ export class SkySystem extends System {
   _buildLights(ctx) {
     const shadows = ctx.config?.shadows !== false;
 
-    const key = new THREE.DirectionalLight(0xfff1d2, 2.08);
+    const key = new THREE.DirectionalLight(0xfff4dc, 1.70);
     key.name = 'sky-key';
     key.castShadow = shadows;
     if (shadows) {
@@ -836,12 +858,12 @@ export class SkySystem extends System {
     this.keyLight = key;
     this._keyTarget = target;
 
-    const fill = new THREE.HemisphereLight(0x93aedd, 0x8a7c56, 2.34);
+    const fill = new THREE.HemisphereLight(0x93aedd, 0x847a58, 1.96);
     fill.name = 'sky-fill';
     ctx.scene.add(fill);
     this.fillLight = fill;
 
-    const floor = new THREE.AmbientLight(0x8e8f8c, 0.52);
+    const floor = new THREE.AmbientLight(0x8e8f8c, 0.43);
     floor.name = 'sky-floor';
     ctx.scene.add(floor);
     this.floorLight = floor;
@@ -861,6 +883,39 @@ export class SkySystem extends System {
     }
   }
 
+  /**
+   * Compatibility shim for hand-written `ShaderMaterial`s that opt into fog.
+   *
+   * three refreshes fog by writing straight into `material.uniforms.fogColor`
+   * / `.fogDensity`. A built-in material always has those; a ShaderMaterial
+   * only has them if its author merged `UniformsLib.fog`, and if it declares
+   * `fog: true` without them the renderer throws on *every* draw call and the
+   * frame never completes. Since this system is the one that installs
+   * `scene.fog`, it is also the one that has to make that safe — so any such
+   * material gets the missing uniforms filled in here rather than in a file
+   * this system does not own. Adding them is inert for a shader that never
+   * reads them and correct for one that does.
+   */
+  _patchFogUniforms(ctx) {
+    const fog = ctx.scene?.fog;
+    if (!fog) return;
+    ctx.scene.traverse((o) => {
+      const m = o.material;
+      if (!m) return;
+      const list = Array.isArray(m) ? m : [m];
+      for (const mat of list) {
+        if (!mat?.isShaderMaterial || mat.fog !== true) continue;
+        const u = mat.uniforms;
+        if (!u || u.fogColor) continue;
+        u.fogColor = { value: new THREE.Color().copy(this.fogColor) };
+        u.fogDensity = { value: this.fogDensity };
+        u.fogNear = { value: 1 };
+        u.fogFar = { value: 2000 };
+        mat.needsUpdate = true;
+      }
+    });
+  }
+
   // ── frame ───────────────────────────────────────────────────────────────
 
   update(dt, ctx) {
@@ -875,6 +930,12 @@ export class SkySystem extends System {
     if (this._flash > 0) this._flash = Math.max(0, this._flash - dt * 3.4);
 
     this._evaluate(ctx, ctx.state.worldTime);
+    // Systems build meshes asynchronously, so re-sweep periodically for
+    // fog-hungry ShaderMaterials that appeared after boot. Cheap: a scene
+    // traverse three times a second, and each material is patched once.
+    if ((this._frames & 15) === 0) {
+      try { this._patchFogUniforms(ctx); } catch { /* never fatal */ }
+    }
     this._frames++;
   }
 

@@ -116,15 +116,66 @@ export class TownSystem extends System {
    * terrain mesh itself carry the town's paving.
    */
   _buildGround(ctx, lib) {
-    const geom = new THREE.CircleGeometry(TOWN.radius, 64);
-    geom.rotateX(-Math.PI / 2);
-    const mat = lib.get('cobblestone', { repeat: TOWN.radius / 2.4 });
+    // A plain CircleGeometry gives the town a perfect circular hem, which reads
+    // as obviously machine-made from any distance. Instead: perturb the outer
+    // radius with angular noise, and carry a per-vertex alpha that fades the
+    // paving out into the grass so there is no hard edge at all.
+    const RINGS = 10;
+    const SEGS = 128;
+    const R = TOWN.radius;
+
+    const wobble = (a) =>
+      1 +
+      0.055 * Math.sin(a * 3.0 + 0.7) +
+      0.038 * Math.sin(a * 5.0 - 1.9) +
+      0.026 * Math.sin(a * 8.0 + 2.6);
+
+    const verts = [];
+    const uvs = [];
+    const cols = [];
+    const idx = [];
+
+    for (let ring = 0; ring <= RINGS; ring++) {
+      const t = ring / RINGS;
+      for (let s = 0; s <= SEGS; s++) {
+        const a = (s / SEGS) * Math.PI * 2;
+        const rr = R * t * wobble(a);
+        const x = Math.sin(a) * rr;
+        const z = Math.cos(a) * rr;
+        verts.push(x, 0, z);
+        uvs.push(x / 2.4, z / 2.4);
+        // Opaque across the paved centre, feathering over the outer 28%.
+        const alpha = 1 - smoothstep(0.72, 1.0, t);
+        cols.push(1, 1, 1, alpha);
+      }
+    }
+    for (let ring = 0; ring < RINGS; ring++) {
+      for (let s = 0; s < SEGS; s++) {
+        const a = ring * (SEGS + 1) + s;
+        const b = a + SEGS + 1;
+        idx.push(a, b, a + 1, a + 1, b, b + 1);
+      }
+    }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geom.setAttribute('color', new THREE.Float32BufferAttribute(cols, 4));
+    geom.setIndex(idx);
+    geom.computeVertexNormals();
+
+    const mat = lib.get('cobblestone', { repeat: 1 });
+    mat.vertexColors = true;
+    mat.transparent = true;
+    mat.depthWrite = false;
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = -2;
     mat.polygonOffsetUnits = -2;
+
     const mesh = new THREE.Mesh(geom, mat);
     mesh.position.set(TOWN.x, this.baseY + 0.04, TOWN.z);
     mesh.receiveShadow = true;
+    mesh.renderOrder = -1;
     this.group.add(mesh);
   }
 
@@ -448,4 +499,10 @@ function mergeSimple(parts) {
   geom.computeBoundingSphere();
   for (const p of parts) p.dispose();
   return geom;
+}
+
+/** Hermite smoothstep, matching the GLSL builtin. */
+function smoothstep(a, b, x) {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
 }

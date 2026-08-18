@@ -28,7 +28,7 @@ function parseArgs(argv) {
   const opts = {
     width: 1600, height: 900, out: 'shots', shots: [], list: false,
     time: null, weather: null, hud: null, settleMs: 4000, timeoutMs: 240000,
-    quality: 'ultra', keep: false, params: '',
+    quality: 'ultra', keep: false, params: '', shotTimeoutMs: 180000,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -132,7 +132,7 @@ async function main() {
     if (m.type() === 'error') consoleErrors.push(text);
     else if (m.type() === 'warning') consoleWarnings.push(text);
   });
-  page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
+  page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}\n${(e.stack ?? '').split('\n').slice(1, 5).join('\n')}`));
 
   const report = { ok: false, shots: [], errors: consoleErrors, warnings: consoleWarnings, stats: null };
 
@@ -181,7 +181,7 @@ async function main() {
           await page.waitForTimeout(600);
 
           const file = path.join(outDir, `${name}.png`);
-          await page.screenshot({ path: file, type: 'png' });
+          await page.screenshot({ path: file, type: 'png', timeout: opts.shotTimeoutMs, animations: 'disabled' });
           const stats = await page.evaluate(() => window.__CAPTURE.stats());
           report.shots.push({ name, file: path.relative(ROOT, file), ms: Date.now() - t0, stats });
           console.log(`ok (${Date.now() - t0}ms, ${stats.fps}fps, ${stats.drawCalls} draws)`);

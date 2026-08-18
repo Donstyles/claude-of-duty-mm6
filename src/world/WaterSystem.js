@@ -103,8 +103,17 @@ export class WaterSystem extends System {
     };
     this._uniforms = uniforms;
 
-    return new THREE.ShaderMaterial({
+    // `fog: true` makes three inject the fog chunks AND refresh fog uniforms
+    // every frame. A raw ShaderMaterial does not get those uniform slots for
+    // free, so they must be merged in or refreshFogUniforms throws on every
+    // single draw.
+    const merged = Object.assign(
+      THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
       uniforms,
+    );
+
+    return new THREE.ShaderMaterial({
+      uniforms: merged,
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
