@@ -445,6 +445,47 @@ export class BVH {
     return false;
   }
 
+  /**
+   * Count triangles crossed along a ray — the parity test for "is this point
+   * inside a closed mesh". Every hit is counted, not just the nearest.
+   */
+  countCrossings(ox, oy, oz, dx, dy, dz, maxDist) {
+    if (this.triCount === 0) return 0;
+    const invx = 1 / dx;
+    const invy = 1 / dy;
+    const invz = 1 / dz;
+    const stack = this._stack7 ??= new Int32Array(96);
+    let sp = 0;
+    stack[sp++] = 0;
+    const nodeBounds = this.nodeBounds;
+    const nodeData = this.nodeData;
+    const pos = this.positions;
+    let count = 0;
+    while (sp > 0) {
+      const ni = stack[--sp];
+      const nb = ni * 6;
+      if (rayAABB(ox, oy, oz, invx, invy, invz,
+        nodeBounds[nb], nodeBounds[nb + 1], nodeBounds[nb + 2],
+        nodeBounds[nb + 3], nodeBounds[nb + 4], nodeBounds[nb + 5], maxDist) < 0) continue;
+      const nd = ni * 3;
+      const c = nodeData[nd + 2];
+      if (c > 0) {
+        const start = nodeData[nd];
+        for (let i = 0; i < c; i++) {
+          const o = (start + i) * 9;
+          if (rayTriangle(ox, oy, oz, dx, dy, dz,
+            pos[o], pos[o + 1], pos[o + 2],
+            pos[o + 3], pos[o + 4], pos[o + 5],
+            pos[o + 6], pos[o + 7], pos[o + 8], maxDist) >= 0) count++;
+        }
+      } else if (sp + 2 < stack.length) {
+        stack[sp++] = nodeData[nd];
+        stack[sp++] = nodeData[nd + 1];
+      }
+    }
+    return count;
+  }
+
   /** Append every sphere contact into `contacts`. Returns the number added. */
   sphereContacts(cx, cy, cz, r, contacts, object = null) {
     if (this.triCount === 0) return 0;

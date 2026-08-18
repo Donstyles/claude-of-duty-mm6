@@ -49,7 +49,8 @@ export class UITextures {
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(w));
       canvas.height = Math.max(1, Math.round(h));
-      const g = canvas.getContext('2d');
+      // Every texture ends with a per-pixel grain pass, so tell the browser.
+      const g = canvas.getContext('2d', { willReadFrequently: true });
       if (g) {
         draw(g, canvas.width, canvas.height, this.rngFor(key));
         url = canvas.toDataURL('image/png');
@@ -105,13 +106,6 @@ export class UITextures {
         g.restore();
       }
     }
-  }
-
-  static blurred(g, px, fn) {
-    const prev = g.filter;
-    g.filter = `blur(${px}px)`;
-    fn(g);
-    g.filter = prev || 'none';
   }
 
   /** A soft painterly dab — the workhorse of the portrait shading passes. */
@@ -370,15 +364,13 @@ export class UITextures {
       UITextures.wrap(g, w, h, (c) => {
         for (let i = 0; i < 26; i++) {
           const x = rng.range(0, w), y = rng.range(0, h), r = rng.range(40, 150);
-          const grd = c.createRadialGradient(x, y, 0, x, y, r);
           const tint = rng.chance(0.5) ? '#d3c093' : '#f5ecd4';
-          grd.addColorStop(0, tint.replace(')', '')); // placeholder, overwritten below
+          const grd = c.createRadialGradient(x, y, 0, x, y, r);
+          grd.addColorStop(0, tint);
+          grd.addColorStop(1, 'rgba(0,0,0,0)');
           c.save();
           c.globalAlpha = rng.range(0.05, 0.16);
-          const grd2 = c.createRadialGradient(x, y, 0, x, y, r);
-          grd2.addColorStop(0, tint);
-          grd2.addColorStop(1, 'rgba(0,0,0,0)');
-          c.fillStyle = grd2;
+          c.fillStyle = grd;
           c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
           c.restore();
         }
@@ -955,33 +947,73 @@ export class UITextures {
       p.lineTo(cx + 26, 150);
       p.closePath();
 
-      const fill = g.createLinearGradient(0, 0, 0, h);
-      fill.addColorStop(0, '#3a2d1c');
-      fill.addColorStop(0.5, '#241a10');
-      fill.addColorStop(1, '#140e07');
+      // A sepia mannequin engraved on the page rather than a black cut-out —
+      // this sits on parchment, so it has to read as ink and wash.
+      const fill = g.createLinearGradient(0, 0, w, h);
+      fill.addColorStop(0, '#8a7048');
+      fill.addColorStop(0.45, '#6a5232');
+      fill.addColorStop(1, '#453320');
       g.fillStyle = fill;
       g.fill(body);
       g.fill(p);
 
-      // Rim light down the right side.
       g.save();
-      g.clip(p);
-      const rim = g.createLinearGradient(cx, 0, w, 0);
-      rim.addColorStop(0, 'rgba(216,178,92,0)');
-      rim.addColorStop(0.8, 'rgba(216,178,92,0.14)');
-      rim.addColorStop(1, 'rgba(240,214,150,0.32)');
-      g.fillStyle = rim;
+      const region = new Path2D();
+      region.addPath(p);
+      region.addPath(body);
+      g.clip(region);
+
+      // Modelling: light down the centre, shade at the silhouette.
+      const model = g.createLinearGradient(cx - 150, 0, cx + 170, 0);
+      model.addColorStop(0, 'rgba(30,18,8,0.55)');
+      model.addColorStop(0.38, 'rgba(255,236,190,0.18)');
+      model.addColorStop(0.62, 'rgba(255,236,190,0.10)');
+      model.addColorStop(1, 'rgba(30,18,8,0.6)');
+      g.fillStyle = model;
       g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 300; i++) {
-        g.globalAlpha = rng.range(0.02, 0.09);
-        g.fillStyle = rng.chance(0.5) ? '#6d5734' : '#000';
-        g.beginPath(); g.ellipse(rng.range(0, w), rng.range(0, h), rng.range(2, 14), rng.range(1, 5), rng.range(0, TAU), 0, TAU); g.fill();
+
+      // Engraver's hatching.
+      g.globalAlpha = 0.10;
+      g.strokeStyle = '#2a1c0c';
+      g.lineWidth = 1.2;
+      for (let d = -h; d < w + h; d += 7) {
+        g.beginPath();
+        g.moveTo(d, 0);
+        g.lineTo(d + h, h);
+        g.stroke();
       }
-      g.restore();
       g.globalAlpha = 1;
 
-      g.lineWidth = 2.2;
-      g.strokeStyle = 'rgba(214,178,96,0.42)';
+      // Anatomy contours so the slots have something to relate to.
+      g.strokeStyle = 'rgba(40,26,12,0.45)';
+      g.lineWidth = 2;
+      const contour = (fn) => { g.beginPath(); fn(); g.stroke(); };
+      contour(() => { g.moveTo(cx - 96, 268); g.quadraticCurveTo(cx, 300, cx + 96, 268); });   // collar
+      contour(() => { g.moveTo(cx - 86, 392); g.quadraticCurveTo(cx, 372, cx + 86, 392); });   // ribs
+      contour(() => { g.moveTo(cx - 82, 470); g.quadraticCurveTo(cx, 500, cx + 82, 470); });   // waist
+      contour(() => { g.moveTo(cx - 78, 520); g.lineTo(cx + 78, 520); });                       // hips
+      contour(() => { g.moveTo(cx - 150, 400); g.lineTo(cx - 112, 400); });                     // elbows
+      contour(() => { g.moveTo(cx + 112, 400); g.lineTo(cx + 150, 400); });
+      contour(() => { g.moveTo(cx - 84, 660); g.lineTo(cx - 18, 660); });                       // knees
+      contour(() => { g.moveTo(cx + 18, 660); g.lineTo(cx + 84, 660); });
+
+      for (let i = 0; i < 220; i++) {
+        g.globalAlpha = rng.range(0.02, 0.08);
+        g.fillStyle = rng.chance(0.5) ? '#c9ab74' : '#2a1c0c';
+        g.beginPath();
+        g.ellipse(rng.range(0, w), rng.range(0, h), rng.range(3, 16), rng.range(2, 6), rng.range(0, TAU), 0, TAU);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+      g.restore();
+
+      // Ink outline, then a warm rim on the lit side.
+      g.lineWidth = 3;
+      g.strokeStyle = 'rgba(46,30,14,0.75)';
+      g.stroke(p);
+      g.stroke(body);
+      g.lineWidth = 1.4;
+      g.strokeStyle = 'rgba(246,226,168,0.35)';
       g.stroke(p);
       g.stroke(body);
     });
@@ -1044,30 +1076,21 @@ export class UITextures {
 // ── portrait painting ───────────────────────────────────────────────────────
 
 const SKIN_TONES = [
-  { base: '#f0cba6', shadow: '#a9744d', deep: '#6d4127', light: '#ffe9cf' },
-  { base: '#e5b territory', shadow: '', deep: '', light: '' }, // replaced below
-];
-// The literal above would be a bug waiting to happen — build the real table here.
-SKIN_TONES.length = 0;
-SKIN_TONES.push(
   { base: '#f2d0ac', shadow: '#b07c53', deep: '#6f4529', light: '#fff0da' },
   { base: '#e3b489', shadow: '#9c6a42', deep: '#5e3a20', light: '#f9dcbd' },
   { base: '#c98f63', shadow: '#824f2c', deep: '#4a2916', light: '#e9bf94' },
   { base: '#a3653f', shadow: '#63371c', deep: '#361a0c', light: '#c98d5f' },
-  { base: '#79452a', shadow: '#472314', deep: '#26120a', light: '#a266421' .slice(0, 7) },
-);
-SKIN_TONES[4].light = '#a26642';
+  { base: '#79452a', shadow: '#472314', deep: '#26120a', light: '#a26642' },
+];
 
 const HAIR_COLOURS = [
   { base: '#2b1c10', light: '#5c3f22', dark: '#120b05' },   // black-brown
   { base: '#5a3a1c', light: '#996b34', dark: '#2a1a0a' },   // chestnut
-  { base: '#8a6026', light: '#d3a martial'.slice(0, 7), dark: '#4a3210' }, // fixed below
-  { base: '#b08a3c', light: '#efd храм'.slice(0, 7), dark: '#6a4c14' },
+  { base: '#8a6026', light: '#d3a45a', dark: '#4a3210' },   // dark blond
+  { base: '#b08a3c', light: '#efd79a', dark: '#6a4c14' },   // flaxen
   { base: '#8d3f1c', light: '#d2743a', dark: '#4c1f0b' },   // auburn
   { base: '#9aa0a6', light: '#e2e6ea', dark: '#5a6068' },   // grey
 ];
-HAIR_COLOURS[2].light = '#d3a45a';
-HAIR_COLOURS[3].light = '#efd79a';
 
 const EYE_COLOURS = ['#5b7f4e', '#3f6f9c', '#6b4a2a', '#4f6b74', '#7a5b8f'];
 
@@ -1084,7 +1107,7 @@ const CLASS_LOOK = {
   battle_mage: { armour: 'leather', helm: 0.1, palette: '#6a5638', trim: '#8a5ea8' },
   warrior_mage: { armour: 'chain', helm: 0.15, palette: '#7c7f86', trim: '#8a5ea8' },
   master_archer: { armour: 'chain', helm: 0.15, palette: '#868a91', trim: '#3f5c33' },
-  druid: { armour: 'robe', helm: 0, palette: '#4a5a35', trim: '#a8handle'.slice(0, 7) },
+  druid: { armour: 'robe', helm: 0, palette: '#4a5a35', trim: '#a8934a' },
   great_druid: { armour: 'robe', helm: 0, palette: '#3f5230', trim: '#c9a94a' },
   arch_druid: { armour: 'robe', helm: 0, palette: '#37492a', trim: '#e0c463' },
   cleric: { armour: 'robe', helm: 0, palette: '#d8cdb4', trim: '#c9a94a' },
@@ -1129,531 +1152,805 @@ function resolvePortraitLook(spec, rng) {
   };
 }
 
+/**
+ * The portrait painter.
+ *
+ * Layered the way an oil sketch is built: ground, neck, armour, the head mass,
+ * form shadow and reflected light, then features, then hair over the top, then a
+ * rim light, a warm glaze and canvas tooth. Softness comes from blurred dabs
+ * rather than from hard vector shapes — that is the whole difference between a
+ * painted portrait and a piece of clip art.
+ */
 function paintPortrait(g, w, h, cfg, rng) {
-  const cx = w / 2;
-  const headY = h * 0.40;
-  const headRX = w * 0.215;
-  const headRY = h * 0.20;
+  const cx = w * 0.5;
+  const cy = h * 0.385;
+  const rx = w * 0.222;
+  const ry = h * 0.188;
+  const geo = {
+    cx, cy, rx, ry,
+    browY: cy - ry * 0.30,
+    eyeY: cy - ry * 0.02,
+    noseY: cy + ry * 0.40,
+    mouthY: cy + ry * 0.66,
+    chinY: cy + ry * 1.06,
+    neckTop: cy + ry * 0.74,
+    shoulderY: h * 0.715,
+  };
 
-  // ── ground: a dim studio backdrop with a warm halo behind the head ────────
+  paintBackdrop(g, w, h, cfg, rng, geo);
+  paintNeck(g, w, h, cfg, geo);
+  paintShoulders(g, w, h, cfg, rng, geo);
+
+  const face = facePath(cfg, geo);
+  paintFaceMass(g, cfg, rng, geo, face);
+  paintEars(g, cfg, geo);
+  paintEyes(g, cfg, geo);
+  paintNose(g, cfg, geo);
+  paintMouth(g, cfg, geo);
+  if (cfg.beard) paintBeard(g, cfg, rng, geo, face);
+  if (cfg.helm) paintHelm(g, cfg, rng, geo);
+  else paintHair(g, w, h, cfg, rng, geo);
+  paintFinish(g, w, h, cfg, rng, geo);
+}
+
+/** Studio backdrop: a dim wall with a warm halo behind the sitter. */
+function paintBackdrop(g, w, h, cfg, rng, geo) {
   const bg = g.createLinearGradient(0, 0, 0, h);
-  bg.addColorStop(0, '#241a12');
-  bg.addColorStop(0.55, '#160f09');
-  bg.addColorStop(1, '#0b0705');
+  bg.addColorStop(0, '#2a1e14');
+  bg.addColorStop(0.5, '#181009');
+  bg.addColorStop(1, '#0a0704');
   g.fillStyle = bg;
   g.fillRect(0, 0, w, h);
-  const halo = g.createRadialGradient(cx - w * 0.06, headY - h * 0.05, 10, cx, headY, w * 0.62);
-  halo.addColorStop(0, 'rgba(148,110,62,0.42)');
-  halo.addColorStop(0.5, 'rgba(90,64,34,0.16)');
+
+  const halo = g.createRadialGradient(geo.cx - w * 0.07, geo.cy - h * 0.04, 8, geo.cx, geo.cy, w * 0.66);
+  halo.addColorStop(0, 'rgba(162,120,66,0.46)');
+  halo.addColorStop(0.45, 'rgba(96,68,36,0.20)');
   halo.addColorStop(1, 'rgba(0,0,0,0)');
   g.fillStyle = halo;
   g.fillRect(0, 0, w, h);
-  for (let i = 0; i < 60; i++) {
-    UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(20, 90), rng.range(8, 40),
-      rng.range(0, TAU), rng.chance(0.5) ? '#3a2a1a' : '#0a0705', rng.range(0.04, 0.12), 10);
+
+  // Broken colour in the ground so it is not a clean gradient.
+  for (let i = 0; i < 70; i++) {
+    UITextures.dab(g, rng.range(0, w), rng.range(0, h * 0.9),
+      rng.range(24, 96), rng.range(10, 44), rng.range(0, TAU),
+      rng.chance(0.5) ? '#4a3320' : '#0b0704', rng.range(0.04, 0.13), 12);
   }
+}
 
-  // ── shoulders and armour ─────────────────────────────────────────────────
-  paintShoulders(g, w, h, cfg, rng, cx, headY, headRX);
+function facePath(cfg, geo) {
+  const { cx, cy, rx, ry } = geo;
+  const jaw = cfg.gender === 'f' ? 0.60 : 0.74;
+  const p = new Path2D();
+  p.moveTo(cx - rx, cy - ry * 0.10);
+  p.bezierCurveTo(cx - rx * 1.05, cy - ry * 1.14, cx + rx * 1.05, cy - ry * 1.14, cx + rx, cy - ry * 0.10);
+  p.bezierCurveTo(cx + rx * 0.98, cy + ry * 0.42, cx + rx * (jaw + 0.14), cy + ry * 0.84, cx + rx * jaw * 0.60, cy + ry * 0.99);
+  p.quadraticCurveTo(cx, cy + ry * 1.12, cx - rx * jaw * 0.60, cy + ry * 0.99);
+  p.bezierCurveTo(cx - rx * (jaw + 0.14), cy + ry * 0.84, cx - rx * 0.98, cy + ry * 0.42, cx - rx, cy - ry * 0.10);
+  p.closePath();
+  return p;
+}
 
-  // ── neck ─────────────────────────────────────────────────────────────────
-  const neckTop = headY + headRY * 0.6;
-  const neckW = headRX * 0.62;
+/** Neck first, so the shoulders and the jaw both overlap it. */
+function paintNeck(g, w, h, cfg, geo) {
+  const { cx, ry, rx, neckTop } = geo;
+  const top = neckTop - ry * 0.25;
+  const bottom = geo.shoulderY + h * 0.06;
+  const halfTop = rx * 0.46;
+  const halfBottom = rx * 0.62;
+
+  const p = new Path2D();
+  p.moveTo(cx - halfTop, top);
+  p.bezierCurveTo(cx - halfTop, top + ry * 0.5, cx - halfBottom, bottom - ry * 0.4, cx - halfBottom, bottom);
+  p.lineTo(cx + halfBottom, bottom);
+  p.bezierCurveTo(cx + halfBottom, bottom - ry * 0.4, cx + halfTop, top + ry * 0.5, cx + halfTop, top);
+  p.closePath();
+
   g.save();
+  g.fillStyle = cfg.skin.shadow;
+  g.fill(p);
+  g.clip(p);
+  // Light wraps the front-left of the throat; the jaw casts a hard shadow.
+  UITextures.dab(g, cx - halfTop * 0.35, (top + bottom) * 0.52, halfTop * 0.9, (bottom - top) * 0.5, 0, cfg.skin.base, 0.55, 16);
+  UITextures.dab(g, cx, top + ry * 0.16, halfTop * 1.5, ry * 0.34, 0, cfg.skin.deep, 0.85, 14);
+  UITextures.dab(g, cx + halfTop * 0.9, (top + bottom) * 0.55, halfTop * 0.55, (bottom - top) * 0.55, 0, cfg.skin.deep, 0.5, 16);
+  // Sternocleidomastoid: one soft line keeps it from reading as a tube.
+  g.globalAlpha = 0.22;
+  g.strokeStyle = cfg.skin.deep;
+  g.lineWidth = 4;
+  g.filter = 'blur(4px)';
   g.beginPath();
-  g.moveTo(cx - neckW, neckTop);
-  g.lineTo(cx - neckW * 1.06, h * 0.74);
-  g.lineTo(cx + neckW * 1.06, h * 0.74);
-  g.lineTo(cx + neckW, neckTop);
-  g.closePath();
-  g.fillStyle = cfg.skin.base;
-  g.fill();
-  // shadow cast by the jaw
-  UITextures.dab(g, cx, neckTop + headRY * 0.18, neckW * 1.25, headRY * 0.32, 0, cfg.skin.deep, 0.55, 14);
-  UITextures.dab(g, cx + neckW * 0.7, neckTop + headRY * 0.5, neckW * 0.4, headRY * 0.5, 0, cfg.skin.shadow, 0.4, 12);
+  g.moveTo(cx - halfTop * 0.5, top + ry * 0.3);
+  g.quadraticCurveTo(cx - halfTop * 0.2, (top + bottom) * 0.6, cx - halfBottom * 0.35, bottom);
+  g.stroke();
+  g.filter = 'none';
+  g.globalAlpha = 1;
   g.restore();
 
-  // ── head mass ────────────────────────────────────────────────────────────
-  const face = new Path2D();
-  const jawW = cfg.gender === 'f' ? 0.80 : 0.88;
-  face.moveTo(cx - headRX, headY - headRY * 0.15);
-  face.bezierCurveTo(cx - headRX * 1.02, headY - headRY * 1.05, cx + headRX * 1.02, headY - headRY * 1.05, cx + headRX, headY - headRY * 0.15);
-  face.bezierCurveTo(cx + headRX * 0.99, headY + headRY * 0.42, cx + headRX * jawW * 0.72, headY + headRY * 0.95, cx, headY + headRY * 1.08);
-  face.bezierCurveTo(cx - headRX * jawW * 0.72, headY + headRY * 0.95, cx - headRX * 0.99, headY + headRY * 0.42, cx - headRX, headY - headRY * 0.15);
-  face.closePath();
+  // Feather the throat's silhouette so it does not read as a cut shape.
+  g.save();
+  g.strokeStyle = 'rgba(38,20,8,0.45)';
+  g.lineWidth = 4;
+  g.filter = 'blur(4px)';
+  g.stroke(p);
+  g.restore();
+}
 
+function paintShoulders(g, w, h, cfg, rng, geo) {
+  const top = geo.shoulderY;
+  const cx = geo.cx;
+  const metal = cfg.metal;
+
+  const shoulder = new Path2D();
+  shoulder.moveTo(-12, h + 12);
+  shoulder.lineTo(-12, h * 0.96);
+  shoulder.bezierCurveTo(w * 0.10, top + h * 0.02, w * 0.30, top - h * 0.035, cx, top - h * 0.03);
+  shoulder.bezierCurveTo(w * 0.70, top - h * 0.035, w * 0.90, top + h * 0.02, w + 12, h * 0.96);
+  shoulder.lineTo(w + 12, h + 12);
+  shoulder.closePath();
+
+  g.save();
+  g.fillStyle = '#000';
+  g.fill(shoulder);
+  g.clip(shoulder);
+
+  const base = g.createLinearGradient(0, top - h * 0.06, 0, h);
+  if (cfg.armour === 'bare') {
+    base.addColorStop(0, cfg.skin.base);
+    base.addColorStop(0.55, cfg.skin.shadow);
+    base.addColorStop(1, cfg.skin.deep);
+  } else {
+    base.addColorStop(0, shade(metal, cfg.armour === 'robe' ? 26 : 46));
+    base.addColorStop(0.45, metal);
+    base.addColorStop(1, shade(metal, -62));
+  }
+  g.fillStyle = base;
+  g.fillRect(0, top - h * 0.1, w, h);
+
+  if (cfg.armour === 'plate') paintPlate(g, w, h, cfg, rng, geo, top);
+  else if (cfg.armour === 'chain') paintChain(g, w, h, cfg, geo, top);
+  else paintCloth(g, w, h, cfg, rng, geo, top);
+
+  // The head and jaw drop a shadow onto the chest — this is what seats the
+  // portrait in space rather than leaving a floating head.
+  UITextures.dab(g, cx, top + h * 0.012, geo.rx * 1.35, h * 0.05, 0, '#000', 0.55, 20);
+  UITextures.grain(g, w, h, rng, 12);
+  g.restore();
+}
+
+function paintPlate(g, w, h, cfg, rng, geo, top) {
+  const metal = cfg.metal;
+  const cx = geo.cx;
+  for (const side of [-1, 1]) {
+    const px = cx + side * w * 0.31;
+    const py = h * 0.845;
+    const dome = g.createRadialGradient(px - side * w * 0.06, py - h * 0.06, 6, px, py, w * 0.22);
+    dome.addColorStop(0, shade(metal, 86));
+    dome.addColorStop(0.35, shade(metal, 20));
+    dome.addColorStop(0.75, shade(metal, -34));
+    dome.addColorStop(1, shade(metal, -80));
+    g.fillStyle = dome;
+    g.beginPath();
+    g.ellipse(px, py, w * 0.215, h * 0.145, side * 0.22, 0, TAU);
+    g.fill();
+    // Lames: three curved bands across the pauldron.
+    for (let i = 0; i < 3; i++) {
+      g.strokeStyle = `rgba(0,0,0,${0.28 + i * 0.06})`;
+      g.lineWidth = 3;
+      g.beginPath();
+      g.ellipse(px, py + h * 0.02 * i, w * 0.2 - i * 5, h * 0.13 - i * 4, side * 0.22, Math.PI * 1.02, Math.PI * 1.98);
+      g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,0.14)';
+      g.lineWidth = 1.4;
+      g.stroke();
+    }
+    g.strokeStyle = cfg.trim;
+    g.lineWidth = 4;
+    g.globalAlpha = 0.85;
+    g.beginPath();
+    g.ellipse(px, py, w * 0.215, h * 0.145, side * 0.22, Math.PI * 1.03, Math.PI * 1.97);
+    g.stroke();
+    g.globalAlpha = 1;
+  }
+
+  // Gorget: stacked rings around the throat.
+  for (let i = 0; i < 3; i++) {
+    const yy = top + h * 0.012 + i * h * 0.026;
+    const rr = geo.rx * (0.86 + i * 0.2);
+    g.strokeStyle = shade(metal, 40 - i * 26);
+    g.lineWidth = 9 - i * 1.5;
+    g.beginPath();
+    g.ellipse(cx, yy, rr, h * 0.045 + i * 5, 0, Math.PI * 0.02, Math.PI * 0.98);
+    g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,0.55)';
+    g.lineWidth = 2;
+    g.stroke();
+  }
+  g.strokeStyle = cfg.trim;
+  g.lineWidth = 3;
+  g.beginPath();
+  g.ellipse(cx, top + h * 0.07, geo.rx * 1.3, h * 0.055, 0, Math.PI * 0.04, Math.PI * 0.96);
+  g.stroke();
+
+  // Rivets and scuffs.
+  for (let i = 0; i < 14; i++) {
+    const x = rng.range(w * 0.08, w * 0.92);
+    const y = rng.range(top + h * 0.02, h * 0.98);
+    const rr = rng.range(2.5, 4.5);
+    const dome = g.createRadialGradient(x - 1.5, y - 1.5, 0.5, x, y, rr);
+    dome.addColorStop(0, '#fff3cc'); dome.addColorStop(0.5, '#c39a45'); dome.addColorStop(1, '#4a3208');
+    g.fillStyle = dome;
+    g.beginPath(); g.arc(x, y, rr, 0, TAU); g.fill();
+  }
+  for (let i = 0; i < 50; i++) {
+    g.globalAlpha = rng.range(0.03, 0.13);
+    g.strokeStyle = rng.chance(0.5) ? '#ffffff' : '#000000';
+    g.lineWidth = rng.range(0.5, 1.5);
+    const x = rng.range(0, w), y = rng.range(top, h);
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + rng.range(-22, 22), y + rng.range(-8, 8)); g.stroke();
+  }
+  g.globalAlpha = 1;
+}
+
+function paintChain(g, w, h, cfg, geo, top) {
+  for (let y = top - 8; y < h; y += 7) {
+    for (let x = -8; x < w + 8; x += 7) {
+      const off = (Math.round(y / 7) % 2) * 3.5;
+      g.strokeStyle = 'rgba(214,224,236,0.16)';
+      g.lineWidth = 1.1;
+      g.beginPath(); g.arc(x + off, y, 2.7, 0, TAU); g.stroke();
+      g.strokeStyle = 'rgba(0,0,0,0.24)';
+      g.beginPath(); g.arc(x + off, y + 1.3, 2.7, 0.25, Math.PI - 0.25); g.stroke();
+    }
+  }
+  g.strokeStyle = cfg.trim;
+  g.lineWidth = 6;
+  g.globalAlpha = 0.8;
+  g.beginPath();
+  g.ellipse(geo.cx, top + h * 0.05, geo.rx * 1.15, h * 0.05, 0, Math.PI * 0.05, Math.PI * 0.95);
+  g.stroke();
+  g.globalAlpha = 1;
+}
+
+function paintCloth(g, w, h, cfg, rng, geo, top) {
+  const metal = cfg.metal;
+  // Folds: long soft strokes falling off the shoulders.
+  for (let i = 0; i < 30; i++) {
+    const x0 = rng.range(-10, w + 10);
+    g.globalAlpha = rng.range(0.06, 0.24);
+    g.strokeStyle = rng.chance(0.5) ? shade(metal, 52) : shade(metal, -60);
+    g.lineWidth = rng.range(4, 16);
+    g.filter = 'blur(4px)';
+    g.beginPath();
+    g.moveTo(x0, top - 6);
+    g.quadraticCurveTo(x0 + rng.range(-26, 26), (top + h) * 0.5, x0 + rng.range(-46, 46), h + 12);
+    g.stroke();
+    g.filter = 'none';
+  }
+  g.globalAlpha = 1;
+
+  // V-neck opening with an embroidered trim.
+  const vx = geo.rx * 1.05;
+  const vy = top + h * 0.005;
+  const collar = new Path2D();
+  collar.moveTo(geo.cx - vx, vy);
+  collar.quadraticCurveTo(geo.cx - vx * 0.5, vy + h * 0.085, geo.cx, vy + h * 0.115);
+  collar.quadraticCurveTo(geo.cx + vx * 0.5, vy + h * 0.085, geo.cx + vx, vy);
+  g.strokeStyle = 'rgba(0,0,0,0.45)';
+  g.lineWidth = 12;
+  g.stroke(collar);
+  g.strokeStyle = cfg.trim;
+  g.lineWidth = 7;
+  g.stroke(collar);
+  g.strokeStyle = 'rgba(255,246,214,0.45)';
+  g.lineWidth = 2;
+  g.stroke(collar);
+
+  // Under-collar shadow so the cloth reads as layered.
+  UITextures.dab(g, geo.cx, vy + h * 0.055, vx * 0.8, h * 0.05, 0, '#000', 0.35, 16);
+}
+
+/** The head mass: base tone, form shadow, reflected light, planes, scumble. */
+function paintFaceMass(g, cfg, rng, geo, face) {
+  const { cx, cy, rx, ry } = geo;
   g.save();
   g.fillStyle = cfg.skin.base;
   g.fill(face);
   g.clip(face);
 
-  // Form shadow: key light from the upper left.
+  // Key light from the upper left; everything else falls away from it.
   const form = g.createRadialGradient(
-    cx - headRX * 0.45, headY - headRY * 0.5, headRX * 0.15,
-    cx + headRX * 0.15, headY + headRY * 0.2, headRX * 1.55,
+    cx - rx * 0.40, cy - ry * 0.52, rx * 0.10,
+    cx + rx * 0.10, cy + ry * 0.28, rx * 1.75,
   );
   form.addColorStop(0, cfg.skin.light);
-  form.addColorStop(0.35, cfg.skin.base);
-  form.addColorStop(0.72, cfg.skin.shadow);
+  form.addColorStop(0.30, cfg.skin.base);
+  form.addColorStop(0.66, cfg.skin.shadow);
   form.addColorStop(1, cfg.skin.deep);
-  g.globalAlpha = 0.92;
   g.fillStyle = form;
-  g.fillRect(cx - headRX * 1.2, headY - headRY * 1.3, headRX * 2.4, headRY * 2.6);
+  g.globalAlpha = 0.95;
+  g.fillRect(cx - rx * 1.4, cy - ry * 1.4, rx * 2.8, ry * 2.8);
+
+  // A second, directional pass: without it the head reads as a flat cut-out.
+  const side = g.createLinearGradient(cx - rx, cy - ry, cx + rx * 1.1, cy + ry * 0.6);
+  side.addColorStop(0, 'rgba(255,244,224,0.22)');
+  side.addColorStop(0.42, 'rgba(0,0,0,0)');
+  side.addColorStop(1, 'rgba(52,26,10,0.42)');
   g.globalAlpha = 1;
+  g.fillStyle = side;
+  g.fillRect(cx - rx * 1.4, cy - ry * 1.4, rx * 2.8, ry * 2.8);
 
-  // Reflected light on the shadow side keeps the head from going flat.
-  UITextures.dab(g, cx + headRX * 0.86, headY + headRY * 0.35, headRX * 0.18, headRY * 0.42, -0.2, cfg.skin.light, 0.22, 14);
+  // Core shadow down the shadow side, then bounce light beyond it.
+  UITextures.dab(g, cx + rx * 0.80, cy + ry * 0.10, rx * 0.42, ry * 0.86, -0.08, cfg.skin.deep, 0.50, 26);
+  UITextures.dab(g, cx + rx * 0.99, cy + ry * 0.18, rx * 0.16, ry * 0.60, -0.12, cfg.skin.light, 0.30, 16);
 
-  // Temple / cheekbone / jaw planes.
-  UITextures.dab(g, cx - headRX * 0.62, headY - headRY * 0.18, headRX * 0.3, headRY * 0.34, 0.4, cfg.skin.shadow, 0.25, 16);
-  UITextures.dab(g, cx + headRX * 0.58, headY - headRY * 0.16, headRX * 0.3, headRY * 0.36, -0.4, cfg.skin.shadow, 0.3, 16);
-  UITextures.dab(g, cx, headY + headRY * 0.86, headRX * 0.5, headRY * 0.2, 0, cfg.skin.shadow, 0.32, 16);
-  // Cheek warmth.
-  UITextures.dab(g, cx - headRX * 0.5, headY + headRY * 0.22, headRX * 0.3, headRY * 0.2, 0, '#c25a44', cfg.undead ? 0.05 : 0.2, 16);
-  UITextures.dab(g, cx + headRX * 0.5, headY + headRY * 0.24, headRX * 0.28, headRY * 0.19, 0, '#c25a44', cfg.undead ? 0.05 : 0.17, 16);
-  // Forehead highlight and nose-bridge light.
-  UITextures.dab(g, cx - headRX * 0.2, headY - headRY * 0.62, headRX * 0.42, headRY * 0.22, -0.15, cfg.skin.light, 0.4, 14);
-  UITextures.dab(g, cx - headRX * 0.05, headY + headRY * 0.02, headRX * 0.1, headRY * 0.3, 0.05, cfg.skin.light, 0.3, 8);
+  // Planes: temples, cheekbones, jaw and the shadow under the cheek.
+  UITextures.dab(g, cx - rx * 0.70, cy - ry * 0.36, rx * 0.28, ry * 0.30, 0.35, cfg.skin.shadow, 0.30, 20);
+  UITextures.dab(g, cx + rx * 0.68, cy - ry * 0.36, rx * 0.28, ry * 0.30, -0.35, cfg.skin.shadow, 0.36, 20);
+  UITextures.dab(g, cx - rx * 0.58, cy + ry * 0.44, rx * 0.30, ry * 0.20, 0.22, cfg.skin.shadow, 0.26, 18);
+  UITextures.dab(g, cx + rx * 0.58, cy + ry * 0.44, rx * 0.30, ry * 0.20, -0.22, cfg.skin.shadow, 0.32, 18);
+  UITextures.dab(g, cx, cy + ry * 0.95, rx * 0.52, ry * 0.20, 0, cfg.skin.shadow, 0.34, 18);
 
-  // Brow ridge shadow.
-  UITextures.dab(g, cx - headRX * 0.42, headY - headRY * 0.24, headRX * 0.3, headRY * 0.1, 0.12, cfg.skin.shadow, 0.35, 7);
-  UITextures.dab(g, cx + headRX * 0.42, headY - headRY * 0.24, headRX * 0.3, headRY * 0.1, -0.12, cfg.skin.shadow, 0.4, 7);
+  // Highlights: forehead, cheekbones, chin.
+  UITextures.dab(g, cx - rx * 0.22, cy - ry * 0.66, rx * 0.46, ry * 0.24, -0.12, cfg.skin.light, 0.46, 18);
+  UITextures.dab(g, cx - rx * 0.48, cy + ry * 0.16, rx * 0.24, ry * 0.16, -0.2, cfg.skin.light, 0.34, 12);
+  UITextures.dab(g, cx + rx * 0.42, cy + ry * 0.16, rx * 0.22, ry * 0.14, 0.2, cfg.skin.light, 0.22, 12);
+  UITextures.dab(g, cx, cy + ry * 0.86, rx * 0.20, ry * 0.11, 0, cfg.skin.light, 0.34, 10);
 
-  // Scumble: broken colour so the skin reads as paint, not as a gradient.
-  for (let i = 0; i < 130; i++) {
-    const a = rng.range(0, TAU), r = rng.range(0, 1) ** 0.6;
-    const x = cx + Math.cos(a) * r * headRX * 1.05;
-    const y = headY + Math.sin(a) * r * headRY * 1.05;
+  // Warmth in the cheeks, ears and nose — flesh is never one hue.
+  const blush = cfg.undead ? 0.05 : 0.22;
+  UITextures.dab(g, cx - rx * 0.52, cy + ry * 0.26, rx * 0.30, ry * 0.20, 0, '#c25a44', blush, 18);
+  UITextures.dab(g, cx + rx * 0.52, cy + ry * 0.28, rx * 0.28, ry * 0.19, 0, '#c25a44', blush * 0.85, 18);
+  UITextures.dab(g, cx, cy + ry * 0.40, rx * 0.16, ry * 0.12, 0, '#bd6a4a', blush * 0.7, 12);
+
+  // Brow ridge shadow, which is what makes eyes sit in a skull.
+  UITextures.dab(g, cx - rx * 0.40, geo.browY + ry * 0.06, rx * 0.36, ry * 0.11, 0.10, cfg.skin.shadow, 0.34, 9);
+  UITextures.dab(g, cx + rx * 0.40, geo.browY + ry * 0.06, rx * 0.36, ry * 0.11, -0.10, cfg.skin.shadow, 0.40, 9);
+
+  // Scumble: broken colour so the skin is paint, not a gradient.
+  for (let i = 0; i < 150; i++) {
+    const a = rng.range(0, TAU);
+    const r = rng.range(0, 1) ** 0.55;
+    const x = cx + Math.cos(a) * r * rx * 1.02;
+    const y = cy + Math.sin(a) * r * ry * 1.02;
     const tint = rng.chance(0.5) ? cfg.skin.light : cfg.skin.shadow;
-    UITextures.dab(g, x, y, rng.range(3, 13), rng.range(2, 8), rng.range(0, TAU), tint, rng.range(0.02, 0.07), 3);
+    UITextures.dab(g, x, y, rng.range(4, 15), rng.range(3, 9), rng.range(0, TAU), tint, rng.range(0.02, 0.06), 4);
   }
   g.restore();
 
-  // ── ears ─────────────────────────────────────────────────────────────────
-  for (const side of [-1, 1]) {
-    const ex = cx + side * headRX * 0.98;
-    const ey = headY + headRY * 0.12;
-    UITextures.dab(g, ex, ey, headRX * 0.12, headRY * 0.2, side * 0.15, cfg.skin.base, 1, 1);
-    UITextures.dab(g, ex + side * headRX * 0.02, ey + headRY * 0.02, headRX * 0.06, headRY * 0.1, 0, cfg.skin.shadow, 0.5, 3);
-  }
+  // Feather the silhouette: a soft dark line hugging the outline.
+  g.save();
+  g.strokeStyle = 'rgba(40,22,10,0.5)';
+  g.lineWidth = 3;
+  g.filter = 'blur(3px)';
+  g.stroke(face);
+  g.filter = 'none';
+  g.restore();
+}
 
-  // ── eyes ─────────────────────────────────────────────────────────────────
-  const eyeY = headY - headRY * 0.06;
-  const eyeDX = headRX * 0.40;
-  const eyeRX = headRX * 0.20;
-  const eyeRY = headRY * 0.105;
+function paintEars(g, cfg, geo) {
+  const { cx, cy, rx, ry } = geo;
   for (const side of [-1, 1]) {
-    const ex = cx + side * eyeDX;
-    // socket
-    UITextures.dab(g, ex, eyeY - eyeRY * 0.4, eyeRX * 1.5, eyeRY * 2.2, 0, cfg.skin.shadow, 0.42, 9);
-    // sclera
+    const ex = cx + side * rx * 0.97;
+    const ey = cy + ry * 0.20;
+    // Ears sit behind the jaw plane, so they live mostly in shadow.
+    UITextures.dab(g, ex, ey, rx * 0.115, ry * 0.19, side * 0.16, cfg.skin.shadow, 0.95, 3);
+    UITextures.dab(g, ex + side * rx * 0.02, ey + ry * 0.02, rx * 0.06, ry * 0.10, 0, cfg.skin.deep, 0.5, 4);
+    UITextures.dab(g, ex - side * rx * 0.045, ey - ry * 0.06, rx * 0.045, ry * 0.07, 0, cfg.skin.base, 0.5, 3);
+  }
+}
+
+function paintEyes(g, cfg, geo) {
+  const { cx, rx, ry, eyeY, browY } = geo;
+  const dx = rx * 0.42;
+  const ew = rx * 0.235;
+  const eh = ew * (cfg.gender === 'f' ? 0.50 : 0.46);
+
+  for (const side of [-1, 1]) {
+    const ex = cx + side * dx;
+
+    // Socket.
+    UITextures.dab(g, ex, eyeY - eh * 0.5, ew * 1.5, eh * 2.3, 0, cfg.skin.shadow, 0.40, 10);
+    UITextures.dab(g, ex, eyeY + eh * 1.5, ew * 1.2, eh * 0.9, 0, cfg.skin.shadow, 0.22, 8);
+
+    // Almond opening.
+    const eye = new Path2D();
+    eye.moveTo(ex - ew, eyeY + eh * 0.12);
+    eye.quadraticCurveTo(ex - ew * 0.35, eyeY - eh * 1.28, ex + ew * 0.55, eyeY - eh * 0.42);
+    eye.quadraticCurveTo(ex + ew * 0.95, eyeY - eh * 0.12, ex + ew, eyeY + eh * 0.10);
+    eye.quadraticCurveTo(ex + ew * 0.30, eyeY + eh * 1.15, ex - ew * 0.55, eyeY + eh * 0.62);
+    eye.closePath();
+
     g.save();
-    g.beginPath();
-    g.ellipse(ex, eyeY, eyeRX, eyeRY, 0, 0, TAU);
-    g.clip();
-    g.fillStyle = cfg.undead ? '#d8dcc8' : '#efe6d6';
-    g.fillRect(ex - eyeRX, eyeY - eyeRY, eyeRX * 2, eyeRY * 2);
-    UITextures.dab(g, ex, eyeY - eyeRY * 0.8, eyeRX, eyeRY * 0.9, 0, '#8a6a52', 0.55, 4);
-    // iris
-    const irisR = eyeRY * 1.02;
-    const iris = g.createRadialGradient(ex - irisR * 0.25, eyeY - irisR * 0.25, irisR * 0.1, ex, eyeY, irisR);
-    iris.addColorStop(0, mixHex(cfg.eye.slice(0, 7), '#ffffff', 0.45));
-    iris.addColorStop(0.55, cfg.eye);
-    iris.addColorStop(1, '#150d06');
+    g.clip(eye);
+    g.fillStyle = cfg.undead ? '#cdd2c0' : '#e9dfcd';
+    g.fillRect(ex - ew * 1.2, eyeY - eh * 2, ew * 2.4, eh * 4);
+    // The sclera is never white: shade it from the lid down.
+    UITextures.dab(g, ex, eyeY - eh * 1.1, ew * 1.2, eh * 1.1, 0, '#8a6a50', 0.5, 5);
+    UITextures.dab(g, ex, eyeY + eh * 1.0, ew * 1.2, eh * 0.7, 0, '#a08a6a', 0.3, 5);
+
+    const irisR = eh * 1.18;
+    const iris = g.createRadialGradient(ex - irisR * 0.28, eyeY - irisR * 0.30, irisR * 0.12, ex, eyeY, irisR);
+    iris.addColorStop(0, mixHex(cfg.eye, '#ffffff', 0.5));
+    iris.addColorStop(0.5, cfg.eye);
+    iris.addColorStop(0.86, mixHex(cfg.eye, '#000000', 0.55));
+    iris.addColorStop(1, '#120c06');
     g.fillStyle = cfg.undead ? '#8fd8e8' : iris;
     g.beginPath(); g.arc(ex, eyeY, irisR, 0, TAU); g.fill();
-    g.fillStyle = '#0a0705';
-    g.beginPath(); g.arc(ex, eyeY, irisR * 0.42, 0, TAU); g.fill();
-    // catchlight
-    UITextures.dab(g, ex - irisR * 0.38, eyeY - irisR * 0.4, irisR * 0.24, irisR * 0.19, -0.5, '#ffffff', 0.92, 0.6);
-    UITextures.dab(g, ex + irisR * 0.3, eyeY + irisR * 0.35, irisR * 0.18, irisR * 0.1, 0.4, '#ffffff', 0.3, 1.5);
+    // Limbal ring and pupil.
+    g.strokeStyle = 'rgba(18,10,4,0.6)';
+    g.lineWidth = Math.max(1, irisR * 0.16);
+    g.beginPath(); g.arc(ex, eyeY, irisR * 0.94, 0, TAU); g.stroke();
+    g.fillStyle = '#0a0604';
+    g.beginPath(); g.arc(ex, eyeY, irisR * 0.44, 0, TAU); g.fill();
+    // Upper lid shadow across the eyeball.
+    UITextures.dab(g, ex, eyeY - eh * 1.15, ew * 1.3, eh * 0.95, 0, '#3a2412', 0.5, 4);
+    // Catchlight, and the bounce on the far side.
+    UITextures.dab(g, ex - irisR * 0.36, eyeY - irisR * 0.38, irisR * 0.26, irisR * 0.20, -0.5, '#ffffff', 0.95, 0.8);
+    UITextures.dab(g, ex + irisR * 0.34, eyeY + irisR * 0.34, irisR * 0.18, irisR * 0.11, 0.4, '#ffffff', 0.28, 1.6);
     g.restore();
-    // lids
-    g.strokeStyle = 'rgba(38,22,12,0.85)';
-    g.lineWidth = Math.max(1.6, eyeRY * 0.42);
-    g.beginPath();
-    g.ellipse(ex, eyeY, eyeRX, eyeRY, 0, Math.PI * 1.02, Math.PI * 1.98);
-    g.stroke();
-    g.strokeStyle = 'rgba(60,38,22,0.4)';
-    g.lineWidth = Math.max(1, eyeRY * 0.22);
-    g.beginPath();
-    g.ellipse(ex, eyeY, eyeRX * 0.96, eyeRY, 0, Math.PI * 0.06, Math.PI * 0.94);
-    g.stroke();
-    // brow
-    g.strokeStyle = cfg.hair.dark;
-    g.lineWidth = headRY * (cfg.gender === 'f' ? 0.045 : 0.075);
+
+    // Lash line, heavier at the outer corner.
+    g.save();
+    g.strokeStyle = 'rgba(34,18,8,0.9)';
+    g.lineWidth = Math.max(1.7, eh * 0.5);
     g.lineCap = 'round';
     g.beginPath();
-    g.moveTo(ex - side * eyeRX * 1.25, eyeY - eyeRY * 2.6 + (cfg.gender === 'f' ? -1 : 1));
-    g.quadraticCurveTo(ex, eyeY - eyeRY * (cfg.gender === 'f' ? 3.7 : 3.4), ex + side * eyeRX * 1.2, eyeY - eyeRY * 2.2);
+    g.moveTo(ex - ew, eyeY + eh * 0.12);
+    g.quadraticCurveTo(ex - ew * 0.35, eyeY - eh * 1.3, ex + ew * 0.55, eyeY - eh * 0.44);
+    g.quadraticCurveTo(ex + ew * 0.92, eyeY - eh * 0.14, ex + ew, eyeY + eh * 0.10);
     g.stroke();
-  }
+    // Lower lid: a light edge, not a line.
+    g.strokeStyle = 'rgba(255,236,206,0.35)';
+    g.lineWidth = Math.max(1, eh * 0.22);
+    g.beginPath();
+    g.moveTo(ex - ew * 0.8, eyeY + eh * 0.5);
+    g.quadraticCurveTo(ex + ew * 0.25, eyeY + eh * 1.22, ex + ew * 0.95, eyeY + eh * 0.2);
+    g.stroke();
+    g.restore();
 
-  // ── nose ─────────────────────────────────────────────────────────────────
-  const noseY = headY + headRY * 0.34;
-  UITextures.dab(g, cx + headRX * 0.1, noseY - headRY * 0.1, headRX * 0.09, headRY * 0.26, 0.06, cfg.skin.shadow, 0.4, 6);
-  UITextures.dab(g, cx, noseY + headRY * 0.04, headRX * 0.13, headRY * 0.07, 0, cfg.skin.shadow, 0.45, 5);
-  UITextures.dab(g, cx - headRX * 0.03, noseY - headRY * 0.02, headRX * 0.07, headRY * 0.09, 0, cfg.skin.light, 0.5, 4);
-  for (const side of [-1, 1]) {
-    UITextures.dab(g, cx + side * headRX * 0.1, noseY + headRY * 0.05, headRX * 0.028, headRY * 0.022, 0, cfg.skin.deep, 0.7, 1.5);
-  }
-
-  // ── mouth ────────────────────────────────────────────────────────────────
-  const mouthY = headY + headRY * 0.62;
-  const mouthW = headRX * (cfg.gender === 'f' ? 0.34 : 0.38);
-  g.save();
-  UITextures.dab(g, cx, mouthY + headRY * 0.11, mouthW * 1.2, headRY * 0.09, 0, cfg.skin.shadow, 0.35, 8);
-  // lower lip
-  UITextures.dab(g, cx, mouthY + headRY * 0.055, mouthW * 0.86, headRY * 0.06,
-    0, cfg.undead ? '#8d8577' : mixHex('#c0705c', cfg.skin.base, 0.35), 0.6, 3);
-  // upper lip
-  UITextures.dab(g, cx, mouthY - headRY * 0.03, mouthW * 0.92, headRY * 0.05,
-    0, cfg.undead ? '#6f6a5e' : mixHex('#9d4d40', cfg.skin.shadow, 0.3), 0.55, 3);
-  // lip line
-  g.strokeStyle = 'rgba(70,32,20,0.75)';
-  g.lineWidth = Math.max(1.4, headRY * 0.022);
-  g.lineCap = 'round';
-  g.beginPath();
-  g.moveTo(cx - mouthW, mouthY + headRY * 0.012);
-  g.quadraticCurveTo(cx - mouthW * 0.4, mouthY - headRY * 0.028, cx, mouthY + headRY * 0.006);
-  g.quadraticCurveTo(cx + mouthW * 0.4, mouthY - headRY * 0.028, cx + mouthW, mouthY + headRY * 0.012);
-  g.stroke();
-  UITextures.dab(g, cx - mouthW * 0.2, mouthY + headRY * 0.05, mouthW * 0.25, headRY * 0.018, -0.1, '#ffffff', 0.22, 2);
-  g.restore();
-
-  // Chin and philtrum.
-  UITextures.dab(g, cx, mouthY + headRY * 0.2, headRX * 0.2, headRY * 0.09, 0, cfg.skin.light, 0.22, 8);
-
-  // ── beard / stubble ──────────────────────────────────────────────────────
-  if (cfg.beard) {
+    // Brow: two tapered strokes following the ridge.
     g.save();
-    g.clip(face);
-    const bY = headY + headRY * 0.55;
-    const alpha = cfg.beard === 1 ? 0.32 : 0.85;
-    UITextures.dab(g, cx, bY + headRY * 0.28, headRX * 0.72, headRY * 0.42, 0, cfg.hair.base, alpha * 0.75, cfg.beard === 1 ? 8 : 5);
-    UITextures.dab(g, cx, mouthY - headRY * 0.09, mouthW * 1.3, headRY * 0.07, 0, cfg.hair.base, alpha * 0.8, 4);
-    for (let i = 0; i < (cfg.beard === 1 ? 220 : 420); i++) {
-      const x = cx + rng.range(-headRX * 0.85, headRX * 0.85);
-      const y = bY + rng.range(-headRY * 0.15, headRY * 0.55);
-      g.globalAlpha = rng.range(0.1, 0.5) * alpha;
-      g.strokeStyle = rng.chance(0.35) ? cfg.hair.light : cfg.hair.dark;
-      g.lineWidth = rng.range(0.6, 1.8);
-      g.beginPath();
-      g.moveTo(x, y);
-      g.lineTo(x + rng.range(-2, 2), y + rng.range(4, 14));
-      g.stroke();
-    }
-    g.globalAlpha = 1;
+    g.strokeStyle = cfg.hair.dark;
+    g.lineCap = 'round';
+    const bw = cfg.gender === 'f' ? ry * 0.050 : ry * 0.082;
+    g.lineWidth = bw;
+    g.globalAlpha = 0.92;
+    g.beginPath();
+    g.moveTo(ex - side * ew * 1.30, browY + ry * 0.045);
+    g.quadraticCurveTo(ex - side * ew * 0.1, browY - ry * 0.075, ex + side * ew * 1.15, browY + ry * 0.02);
+    g.stroke();
+    g.globalAlpha = 0.35;
+    g.lineWidth = bw * 0.5;
+    g.strokeStyle = cfg.hair.light;
+    g.stroke();
     g.restore();
   }
 
-  // ── hair or helm ─────────────────────────────────────────────────────────
-  if (cfg.helm) paintHelm(g, w, h, cfg, rng, cx, headY, headRX, headRY);
-  else paintHair(g, w, h, cfg, rng, cx, headY, headRX, headRY);
+  // Bridge of the nose sits between the eyes and catches light.
+  UITextures.dab(g, cx, geo.browY + ry * 0.18, rx * 0.09, ry * 0.22, 0, cfg.skin.light, 0.22, 8);
+}
 
-  // ── rim light along the right silhouette ─────────────────────────────────
+function paintNose(g, cfg, geo) {
+  const { cx, rx, ry, noseY } = geo;
+  // Shadow down the right side of the bridge.
+  UITextures.dab(g, cx + rx * 0.11, noseY - ry * 0.16, rx * 0.075, ry * 0.30, 0.05, cfg.skin.shadow, 0.42, 7);
+  // Underside of the tip.
+  UITextures.dab(g, cx, noseY + ry * 0.055, rx * 0.15, ry * 0.055, 0, cfg.skin.shadow, 0.5, 6);
+  // Ball of the nose.
+  UITextures.dab(g, cx - rx * 0.01, noseY - ry * 0.01, rx * 0.085, ry * 0.075, 0, cfg.skin.light, 0.45, 5);
+  // Wings and nostrils.
+  for (const side of [-1, 1]) {
+    UITextures.dab(g, cx + side * rx * 0.115, noseY + ry * 0.015, rx * 0.055, ry * 0.045, 0, cfg.skin.shadow, 0.4, 4);
+    UITextures.dab(g, cx + side * rx * 0.085, noseY + ry * 0.045, rx * 0.030, ry * 0.020, side * 0.4, cfg.skin.deep, 0.75, 1.6);
+  }
+  // Philtrum.
+  UITextures.dab(g, cx, noseY + ry * 0.13, rx * 0.045, ry * 0.055, 0, cfg.skin.shadow, 0.22, 4);
+}
+
+function paintMouth(g, cfg, geo) {
+  const { cx, rx, ry, mouthY } = geo;
+  const mw = rx * (cfg.gender === 'f' ? 0.34 : 0.39);
+  const lip = cfg.undead ? '#8d8577' : mixHex('#b8604c', cfg.skin.base, 0.32);
+  const lipDark = cfg.undead ? '#665f54' : mixHex('#8e4034', cfg.skin.shadow, 0.28);
+
+  // Shadow under the lower lip and above the chin.
+  UITextures.dab(g, cx, mouthY + ry * 0.115, mw * 1.15, ry * 0.055, 0, cfg.skin.shadow, 0.38, 8);
+  // Upper lip, in shadow; lower lip, catching light.
+  UITextures.dab(g, cx, mouthY - ry * 0.028, mw * 0.95, ry * 0.048, 0, lipDark, 0.62, 3.5);
+  UITextures.dab(g, cx, mouthY + ry * 0.052, mw * 0.86, ry * 0.055, 0, lip, 0.66, 3.5);
+  UITextures.dab(g, cx - mw * 0.18, mouthY + ry * 0.045, mw * 0.28, ry * 0.018, -0.08, '#ffffff', 0.24, 2.5);
+
+  // The line between the lips — the one hard edge a mouth needs.
   g.save();
-  g.globalCompositeOperation = 'lighter';
-  g.strokeStyle = 'rgba(255,214,140,0.30)';
-  g.lineWidth = 5;
-  g.filter = 'blur(4px)';
+  g.strokeStyle = 'rgba(70,30,18,0.8)';
+  g.lineWidth = Math.max(1.5, ry * 0.020);
+  g.lineCap = 'round';
   g.beginPath();
-  g.ellipse(cx, headY, headRX * 1.0, headRY * 1.04, 0, -Math.PI * 0.42, Math.PI * 0.45);
+  g.moveTo(cx - mw, mouthY + ry * 0.014);
+  g.quadraticCurveTo(cx - mw * 0.42, mouthY - ry * 0.030, cx, mouthY + ry * 0.006);
+  g.quadraticCurveTo(cx + mw * 0.42, mouthY - ry * 0.030, cx + mw, mouthY + ry * 0.014);
   g.stroke();
   g.restore();
-
-  // ── glaze, vignette and canvas tooth ─────────────────────────────────────
-  const glaze = g.createLinearGradient(0, 0, w * 0.6, h);
-  glaze.addColorStop(0, 'rgba(255,206,132,0.10)');
-  glaze.addColorStop(0.5, 'rgba(120,80,40,0.0)');
-  glaze.addColorStop(1, 'rgba(20,10,4,0.22)');
-  g.fillStyle = glaze;
-  g.fillRect(0, 0, w, h);
-  const vig = g.createRadialGradient(cx, h * 0.42, w * 0.2, cx, h * 0.5, w * 0.78);
-  vig.addColorStop(0, 'rgba(0,0,0,0)');
-  vig.addColorStop(0.65, 'rgba(0,0,0,0.22)');
-  vig.addColorStop(1, 'rgba(0,0,0,0.72)');
-  g.fillStyle = vig;
-  g.fillRect(0, 0, w, h);
-  UITextures.grain(g, w, h, rng, 13);
+  // Corners pull in, which reads as a mouth rather than a smear.
+  for (const side of [-1, 1]) {
+    UITextures.dab(g, cx + side * mw * 1.02, mouthY + ry * 0.020, rx * 0.030, ry * 0.024, 0, cfg.skin.deep, 0.4, 3);
+  }
 }
 
-function paintShoulders(g, w, h, cfg, rng, cx, headY, headRX) {
-  const top = h * 0.70;
-  const shoulder = new Path2D();
-  shoulder.moveTo(-10, h + 10);
-  shoulder.lineTo(-10, h * 0.92);
-  shoulder.bezierCurveTo(w * 0.14, top - h * 0.02, w * 0.32, top - h * 0.06, cx, top - h * 0.055);
-  shoulder.bezierCurveTo(w * 0.68, top - h * 0.06, w * 0.86, top - h * 0.02, w + 10, h * 0.92);
-  shoulder.lineTo(w + 10, h + 10);
-  shoulder.closePath();
-
+function paintBeard(g, cfg, rng, geo, face) {
+  const { cx, ry, rx, mouthY } = geo;
   g.save();
-  g.fill(shoulder);
-  g.clip(shoulder);
-
-  const metal = cfg.metal;
-  const base = g.createLinearGradient(0, top - h * 0.08, 0, h);
-  if (cfg.armour === 'plate' || cfg.armour === 'chain') {
-    base.addColorStop(0, shade(metal, 34));
-    base.addColorStop(0.4, metal);
-    base.addColorStop(1, shade(metal, -60));
-  } else if (cfg.armour === 'robe') {
-    base.addColorStop(0, shade(metal, 26));
-    base.addColorStop(0.5, metal);
-    base.addColorStop(1, shade(metal, -44));
-  } else if (cfg.armour === 'bare') {
-    base.addColorStop(0, cfg.skin.base);
-    base.addColorStop(0.6, cfg.skin.shadow);
-    base.addColorStop(1, cfg.skin.deep);
-  } else {
-    base.addColorStop(0, shade(metal, 30));
-    base.addColorStop(0.5, metal);
-    base.addColorStop(1, shade(metal, -50));
+  g.clip(face);
+  const heavy = cfg.beard === 2;
+  const alpha = heavy ? 0.9 : 0.34;
+  const bY = geo.cy + ry * 0.62;
+  UITextures.dab(g, cx, bY + ry * 0.3, rx * 0.76, ry * 0.44, 0, cfg.hair.base, alpha * 0.8, heavy ? 6 : 10);
+  UITextures.dab(g, cx, mouthY - ry * 0.085, rx * 0.30, ry * 0.055, 0, cfg.hair.base, alpha * 0.85, 5);
+  for (const side of [-1, 1]) {
+    UITextures.dab(g, cx + side * rx * 0.72, geo.cy + ry * 0.30, rx * 0.20, ry * 0.42, 0, cfg.hair.base, alpha * 0.6, 8);
   }
-  g.fillStyle = base;
-  g.fillRect(0, top - h * 0.1, w, h);
-
-  if (cfg.armour === 'plate') {
-    // Pauldron domes with a lit top edge.
-    for (const side of [-1, 1]) {
-      const px = cx + side * w * 0.30;
-      const py = h * 0.80;
-      const dome = g.createRadialGradient(px - side * w * 0.05, py - h * 0.05, 6, px, py, w * 0.2);
-      dome.addColorStop(0, shade(metal, 70));
-      dome.addColorStop(0.55, metal);
-      dome.addColorStop(1, shade(metal, -70));
-      g.fillStyle = dome;
-      g.beginPath(); g.ellipse(px, py, w * 0.19, h * 0.13, side * 0.2, 0, TAU); g.fill();
-      g.strokeStyle = cfg.trim;
-      g.lineWidth = 3;
-      g.globalAlpha = 0.8;
-      g.beginPath(); g.ellipse(px, py, w * 0.19, h * 0.13, side * 0.2, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
-      g.globalAlpha = 1;
-    }
-    // Gorget rings around the neck.
-    for (let i = 0; i < 3; i++) {
-      g.strokeStyle = i === 0 ? cfg.trim : shade(metal, -20 - i * 10);
-      g.lineWidth = 5 - i;
-      g.beginPath();
-      g.ellipse(cx, top + h * 0.02 + i * 9, headRX * (0.9 + i * 0.12), h * 0.035 + i * 3, 0, Math.PI * 1.02, Math.PI * 1.98, true);
-      g.stroke();
-    }
-  } else if (cfg.armour === 'chain') {
-    for (let y = top - 6; y < h; y += 7) {
-      for (let x = -6; x < w; x += 7) {
-        const off = (Math.round(y / 7) % 2) * 3.5;
-        g.strokeStyle = 'rgba(210,220,232,0.13)';
-        g.lineWidth = 1.1;
-        g.beginPath(); g.arc(x + off, y, 2.6, 0, TAU); g.stroke();
-        g.strokeStyle = 'rgba(0,0,0,0.2)';
-        g.beginPath(); g.arc(x + off, y + 1.2, 2.6, 0.2, Math.PI - 0.2); g.stroke();
-      }
-    }
-  } else if (cfg.armour === 'robe' || cfg.armour === 'leather') {
-    // Cloth folds: long soft strokes running off the shoulders.
-    for (let i = 0; i < 26; i++) {
-      const x0 = rng.range(0, w);
-      g.globalAlpha = rng.range(0.06, 0.22);
-      g.strokeStyle = rng.chance(0.5) ? shade(metal, 45) : shade(metal, -55);
-      g.lineWidth = rng.range(3, 12);
-      g.filter = 'blur(3px)';
-      g.beginPath();
-      g.moveTo(x0, top);
-      g.quadraticCurveTo(x0 + rng.range(-30, 30), (top + h) / 2, x0 + rng.range(-50, 50), h + 10);
-      g.stroke();
-      g.filter = 'none';
-    }
-    g.globalAlpha = 1;
-    // Collar trim.
-    g.strokeStyle = cfg.trim;
-    g.lineWidth = 7;
-    g.globalAlpha = 0.85;
+  const strands = heavy ? 460 : 240;
+  for (let i = 0; i < strands; i++) {
+    const x = cx + rng.range(-rx * 0.88, rx * 0.88);
+    const y = bY + rng.range(-ry * 0.28, ry * 0.5);
+    g.globalAlpha = rng.range(0.1, 0.5) * alpha;
+    g.strokeStyle = rng.chance(0.35) ? cfg.hair.light : cfg.hair.dark;
+    g.lineWidth = rng.range(0.6, 1.9);
     g.beginPath();
-    g.moveTo(cx - headRX * 1.5, h);
-    g.quadraticCurveTo(cx - headRX * 0.75, top + h * 0.02, cx, top + h * 0.06);
-    g.quadraticCurveTo(cx + headRX * 0.75, top + h * 0.02, cx + headRX * 1.5, h);
+    g.moveTo(x, y);
+    g.lineTo(x + rng.range(-2.5, 2.5), y + rng.range(4, 15));
     g.stroke();
-    g.strokeStyle = 'rgba(255,244,205,0.4)';
-    g.lineWidth = 2;
-    g.stroke();
-    g.globalAlpha = 1;
   }
-
-  // Ambient occlusion where the neck meets the collar.
-  UITextures.dab(g, cx, top + h * 0.01, headRX * 1.3, h * 0.05, 0, '#000', 0.5, 16);
-  UITextures.grain(g, w, h, rng, 12);
+  g.globalAlpha = 1;
   g.restore();
 }
 
-function paintHair(g, w, h, cfg, rng, cx, headY, headRX, headRY) {
-  const style = cfg.hairStyle;
+/** Hair: a feathered mass, a volume gradient, strand strokes and a sheen. */
+function paintHair(g, w, h, cfg, rng, geo) {
+  const { cx, cy, rx, ry } = geo;
+  const style = cfg.hairStyle % 4;
+  const drop = style === 0 ? cy + ry * 0.06
+    : style === 1 ? cy + ry * 0.55
+      : style === 2 ? cy + ry * 1.75
+        : cy + ry * 1.05;
+  const flare = style >= 2 ? 1.30 : 1.16;
+
   const mass = new Path2D();
-  if (style <= 1) {
-    // Short, swept.
-    mass.moveTo(cx - headRX * 1.06, headY + headRY * 0.1);
-    mass.bezierCurveTo(cx - headRX * 1.18, headY - headRY * 1.2, cx + headRX * 1.18, headY - headRY * 1.2, cx + headRX * 1.06, headY + headRY * 0.05);
-    mass.bezierCurveTo(cx + headRX * 0.92, headY - headRY * 0.42, cx + headRX * 0.2, headY - headRY * 0.66, cx - headRX * 0.5, headY - headRY * 0.5);
-    mass.bezierCurveTo(cx - headRX * 0.85, headY - headRY * 0.42, cx - headRX * 0.98, headY - headRY * 0.2, cx - headRX * 1.06, headY + headRY * 0.1);
-    mass.closePath();
-  } else if (style === 2) {
-    // Long, falling behind the shoulders.
-    mass.moveTo(cx - headRX * 1.24, headY + headRY * 1.5);
-    mass.bezierCurveTo(cx - headRX * 1.42, headY - headRY * 0.6, cx - headRX * 1.24, headY - headRY * 1.32, cx, headY - headRY * 1.3);
-    mass.bezierCurveTo(cx + headRX * 1.24, headY - headRY * 1.32, cx + headRX * 1.42, headY - headRY * 0.6, cx + headRX * 1.24, headY + headRY * 1.5);
-    mass.bezierCurveTo(cx + headRX * 1.0, headY + headRY * 0.6, cx + headRX * 0.98, headY - headRY * 0.5, cx, headY - headRY * 0.62);
-    mass.bezierCurveTo(cx - headRX * 0.98, headY - headRY * 0.5, cx - headRX * 1.0, headY + headRY * 0.6, cx - headRX * 1.24, headY + headRY * 1.5);
-    mass.closePath();
-  } else {
-    // Braided / bound back with a fringe.
-    mass.moveTo(cx - headRX * 1.14, headY + headRY * 0.7);
-    mass.bezierCurveTo(cx - headRX * 1.3, headY - headRY * 1.1, cx + headRX * 1.3, headY - headRY * 1.1, cx + headRX * 1.14, headY + headRY * 0.7);
-    mass.bezierCurveTo(cx + headRX * 0.98, headY - headRY * 0.1, cx + headRX * 0.72, headY - headRY * 0.62, cx + headRX * 0.1, headY - headRY * 0.52);
-    mass.bezierCurveTo(cx - headRX * 0.6, headY - headRY * 0.44, cx - headRX * 0.96, headY - headRY * 0.1, cx - headRX * 1.14, headY + headRY * 0.7);
-    mass.closePath();
-  }
+  mass.moveTo(cx - rx * flare, drop);
+  mass.bezierCurveTo(cx - rx * (flare + 0.12), cy - ry * 0.80, cx - rx * 0.92, cy - ry * 1.42, cx, cy - ry * 1.34);
+  mass.bezierCurveTo(cx + rx * 0.92, cy - ry * 1.42, cx + rx * (flare + 0.12), cy - ry * 0.80, cx + rx * flare, drop);
+  // Inner edge: the opening the face shows through.
+  mass.bezierCurveTo(cx + rx * 1.00, cy + ry * 0.12, cx + rx * 0.98, cy - ry * 0.46, cx + rx * 0.40, cy - ry * 0.64);
+  mass.bezierCurveTo(cx - rx * 0.40, cy - ry * 0.74, cx - rx * 0.98, cy - ry * 0.46, cx - rx * 1.00, cy + ry * 0.12);
+  mass.closePath();
+
+  // Feathered under-layer so the silhouette is not a cut-out.
+  g.save();
+  g.filter = 'blur(7px)';
+  g.fillStyle = cfg.hair.dark;
+  g.globalAlpha = 0.9;
+  g.fill(mass);
+  g.restore();
 
   g.save();
   g.fillStyle = cfg.hair.base;
   g.fill(mass);
   g.clip(mass);
-  // Volume.
-  const vol = g.createRadialGradient(cx - headRX * 0.5, headY - headRY * 0.9, headRX * 0.1, cx, headY - headRY * 0.2, headRX * 1.7);
+
+  const vol = g.createRadialGradient(cx - rx * 0.45, cy - ry * 1.0, rx * 0.12, cx, cy - ry * 0.2, rx * 1.9);
   vol.addColorStop(0, cfg.hair.light);
-  vol.addColorStop(0.4, cfg.hair.base);
+  vol.addColorStop(0.34, cfg.hair.base);
   vol.addColorStop(1, cfg.hair.dark);
-  g.globalAlpha = 0.9;
+  g.globalAlpha = 0.94;
   g.fillStyle = vol;
-  g.fillRect(cx - headRX * 1.6, headY - headRY * 2, headRX * 3.2, headRY * 4);
+  g.fillRect(cx - rx * 2, cy - ry * 2.2, rx * 4, ry * 4.6);
   g.globalAlpha = 1;
-  // Strand pass: hundreds of flowing strokes give the painted look.
+
+  // Strands follow the flow: down and outward from the crown.
   g.lineCap = 'round';
-  for (let i = 0; i < 420; i++) {
-    const a = rng.range(Math.PI * 0.95, Math.PI * 2.05);
-    const r0 = headRX * rng.range(0.4, 1.25);
+  for (let i = 0; i < 520; i++) {
+    const a = rng.range(Math.PI * 0.92, Math.PI * 2.08);
+    const r0 = rx * rng.range(0.3, 1.3);
     const x0 = cx + Math.cos(a) * r0;
-    const y0 = headY + Math.sin(a) * r0 * (headRY / headRX);
-    const len = rng.range(headRY * 0.25, headRY * 1.5);
-    const drift = rng.range(-0.5, 0.5);
-    g.globalAlpha = rng.range(0.06, 0.35);
-    g.strokeStyle = rng.chance(0.4) ? cfg.hair.light : cfg.hair.dark;
-    g.lineWidth = rng.range(0.7, 2.6);
+    const y0 = cy + Math.sin(a) * r0 * (ry / rx);
+    const len = rng.range(ry * 0.3, ry * 1.7);
+    const drift = rng.range(-0.55, 0.55) + Math.sign(x0 - cx) * 0.25;
+    g.globalAlpha = rng.range(0.05, 0.32);
+    g.strokeStyle = rng.chance(0.42) ? cfg.hair.light : cfg.hair.dark;
+    g.lineWidth = rng.range(0.7, 2.4);
     g.beginPath();
     g.moveTo(x0, y0);
-    g.quadraticCurveTo(x0 + drift * 20, y0 + len * 0.55, x0 + drift * 42, y0 + len);
+    g.quadraticCurveTo(x0 + drift * 22, y0 + len * 0.55, x0 + drift * 46, y0 + len);
     g.stroke();
   }
   g.globalAlpha = 1;
-  // Specular sheen band.
-  UITextures.dab(g, cx - headRX * 0.28, headY - headRY * 0.86, headRX * 0.55, headRY * 0.16, -0.25, cfg.hair.light, 0.4, 10);
+
+  // Sheen band across the crown, and a dark root shadow at the parting.
+  UITextures.dab(g, cx - rx * 0.30, cy - ry * 0.92, rx * 0.58, ry * 0.16, -0.22, cfg.hair.light, 0.42, 11);
+  UITextures.dab(g, cx + rx * 0.42, cy - ry * 0.72, rx * 0.30, ry * 0.12, 0.3, cfg.hair.light, 0.22, 10);
+  UITextures.dab(g, cx, cy - ry * 1.20, rx * 0.5, ry * 0.16, 0, cfg.hair.dark, 0.45, 12);
+  // The underside of the fall is always darker than the crown.
+  if (style >= 1) {
+    UITextures.dab(g, cx - rx * 0.95, drop - ry * 0.25, rx * 0.34, ry * 0.5, 0, cfg.hair.dark, 0.45, 14);
+    UITextures.dab(g, cx + rx * 0.95, drop - ry * 0.25, rx * 0.34, ry * 0.5, 0, cfg.hair.dark, 0.45, 14);
+  }
   g.restore();
 
-  // A few flyaway strands outside the mass so the silhouette is not a hard edge.
+  // A fringe sweeping across the forehead breaks the hairline.
   g.save();
-  for (let i = 0; i < 40; i++) {
-    const a = rng.range(Math.PI, TAU);
-    const x0 = cx + Math.cos(a) * headRX * 1.05;
-    const y0 = headY + Math.sin(a) * headRY * 1.05;
-    g.globalAlpha = rng.range(0.06, 0.22);
+  for (let i = 0; i < 90; i++) {
+    const t = rng.next();
+    const x0 = cx + (t - 0.5) * rx * 1.9;
+    const y0 = cy - ry * (0.70 + rng.range(0, 0.2));
+    g.globalAlpha = rng.range(0.08, 0.4);
+    g.strokeStyle = rng.chance(0.45) ? cfg.hair.light : cfg.hair.dark;
+    g.lineWidth = rng.range(0.8, 2.6);
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(x0, y0);
+    g.quadraticCurveTo(x0 + rng.range(-10, 26), y0 + ry * 0.14, x0 + rng.range(6, 42), y0 + ry * rng.range(0.16, 0.34));
+    g.stroke();
+  }
+  g.restore();
+  g.globalAlpha = 1;
+
+  // Hair shadow cast onto the forehead and the temples.
+  UITextures.dab(g, cx, cy - ry * 0.60, rx * 0.86, ry * 0.13, 0, '#2a170a', 0.32, 10);
+
+  // Flyaway strands outside the silhouette.
+  g.save();
+  for (let i = 0; i < 60; i++) {
+    const a = rng.range(Math.PI * 0.9, Math.PI * 2.1);
+    const x0 = cx + Math.cos(a) * rx * 1.06;
+    const y0 = cy + Math.sin(a) * ry * 1.06;
+    g.globalAlpha = rng.range(0.05, 0.24);
     g.strokeStyle = cfg.hair.base;
     g.lineWidth = rng.range(0.6, 1.6);
     g.beginPath();
     g.moveTo(x0, y0);
-    g.quadraticCurveTo(x0 + rng.range(-12, 12), y0 + rng.range(-6, 16), x0 + rng.range(-22, 22), y0 + rng.range(6, 30));
+    g.quadraticCurveTo(x0 + rng.range(-14, 14), y0 + rng.range(-8, 18), x0 + rng.range(-26, 26), y0 + rng.range(8, 36));
     g.stroke();
   }
   g.restore();
   g.globalAlpha = 1;
 }
 
-function paintHelm(g, w, h, cfg, rng, cx, headY, headRX, headRY) {
+/** A nasal helm with cheek guards — the Ironfist pattern. */
+function paintHelm(g, cfg, rng, geo) {
+  const { cx, cy, rx, ry } = geo;
   const metal = cfg.metal;
   g.save();
-  // Skull of the helm.
+
   const helm = new Path2D();
-  helm.moveTo(cx - headRX * 1.12, headY + headRY * 0.35);
-  helm.bezierCurveTo(cx - headRX * 1.24, headY - headRY * 1.35, cx + headRX * 1.24, headY - headRY * 1.35, cx + headRX * 1.12, headY + headRY * 0.35);
-  helm.lineTo(cx + headRX * 1.02, headY + headRY * 0.35);
-  helm.bezierCurveTo(cx + headRX * 1.02, headY - headRY * 0.25, cx + headRX * 0.9, headY - headRY * 0.42, cx + headRX * 0.62, headY - headRY * 0.42);
-  helm.lineTo(cx - headRX * 0.62, headY - headRY * 0.42);
-  helm.bezierCurveTo(cx - headRX * 0.9, headY - headRY * 0.42, cx - headRX * 1.02, headY - headRY * 0.25, cx - headRX * 1.02, headY + headRY * 0.35);
+  helm.moveTo(cx - rx * 1.14, cy + ry * 0.24);
+  helm.bezierCurveTo(cx - rx * 1.24, cy - ry * 1.30, cx + rx * 1.24, cy - ry * 1.30, cx + rx * 1.14, cy + ry * 0.24);
+  helm.lineTo(cx + rx * 1.02, cy + ry * 0.24);
+  helm.bezierCurveTo(cx + rx * 1.04, cy - ry * 0.30, cx + rx * 0.92, cy - ry * 0.50, cx + rx * 0.60, cy - ry * 0.52);
+  helm.lineTo(cx - rx * 0.60, cy - ry * 0.52);
+  helm.bezierCurveTo(cx - rx * 0.92, cy - ry * 0.50, cx - rx * 1.04, cy - ry * 0.30, cx - rx * 1.02, cy + ry * 0.24);
   helm.closePath();
-  const grd = g.createLinearGradient(cx - headRX, headY - headRY * 1.3, cx + headRX, headY + headRY * 0.4);
-  grd.addColorStop(0, shade(metal, 78));
-  grd.addColorStop(0.28, shade(metal, 18));
-  grd.addColorStop(0.55, shade(metal, -34));
-  grd.addColorStop(0.78, shade(metal, 30));
-  grd.addColorStop(1, shade(metal, -70));
+
+  const grd = g.createLinearGradient(cx - rx, cy - ry * 1.3, cx + rx * 1.1, cy + ry * 0.3);
+  grd.addColorStop(0, shade(metal, 92));
+  grd.addColorStop(0.22, shade(metal, 26));
+  grd.addColorStop(0.52, shade(metal, -38));
+  grd.addColorStop(0.76, shade(metal, 34));
+  grd.addColorStop(1, shade(metal, -78));
   g.fillStyle = grd;
   g.fill(helm);
 
-  // Cheek guards.
+  // Cheek guards hang from the brow band, clear of the face.
   for (const side of [-1, 1]) {
-    g.beginPath();
-    g.moveTo(cx + side * headRX * 1.02, headY - headRY * 0.2);
-    g.quadraticCurveTo(cx + side * headRX * 1.16, headY + headRY * 0.5, cx + side * headRX * 0.86, headY + headRY * 0.86);
-    g.quadraticCurveTo(cx + side * headRX * 0.7, headY + headRY * 0.4, cx + side * headRX * 0.74, headY - headRY * 0.2);
-    g.closePath();
+    const guard = new Path2D();
+    guard.moveTo(cx + side * rx * 1.02, cy - ry * 0.30);
+    guard.quadraticCurveTo(cx + side * rx * 1.18, cy + ry * 0.36, cx + side * rx * 0.94, cy + ry * 0.70);
+    guard.quadraticCurveTo(cx + side * rx * 0.84, cy + ry * 0.30, cx + side * rx * 0.86, cy - ry * 0.28);
+    guard.closePath();
     g.fillStyle = grd;
-    g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.5)';
+    g.fill(guard);
+    g.strokeStyle = 'rgba(0,0,0,0.55)';
     g.lineWidth = 2;
-    g.stroke();
+    g.stroke(guard);
+    UITextures.dab(g, cx + side * rx * 0.98, cy + ry * 0.1, rx * 0.06, ry * 0.3, 0, '#ffffff', 0.16, 5);
   }
 
   // Nasal bar.
   g.fillStyle = grd;
   g.beginPath();
-  g.moveTo(cx - headRX * 0.09, headY - headRY * 0.42);
-  g.lineTo(cx + headRX * 0.09, headY - headRY * 0.42);
-  g.lineTo(cx + headRX * 0.07, headY + headRY * 0.34);
-  g.lineTo(cx - headRX * 0.07, headY + headRY * 0.34);
+  g.moveTo(cx - rx * 0.075, cy - ry * 0.52);
+  g.lineTo(cx + rx * 0.075, cy - ry * 0.52);
+  g.lineTo(cx + rx * 0.055, cy + ry * 0.20);
+  g.quadraticCurveTo(cx, cy + ry * 0.26, cx - rx * 0.055, cy + ry * 0.20);
   g.closePath();
   g.fill();
-  g.strokeStyle = 'rgba(0,0,0,0.55)';
-  g.lineWidth = 1.6;
+  g.strokeStyle = 'rgba(0,0,0,0.6)';
+  g.lineWidth = 1.5;
   g.stroke();
+  UITextures.dab(g, cx - rx * 0.02, cy - ry * 0.1, rx * 0.02, ry * 0.3, 0, '#ffffff', 0.3, 2);
 
-  // Gold brow band and crest.
+  // Brow band and crest in the class trim colour.
   g.strokeStyle = cfg.trim;
-  g.lineWidth = 7;
+  g.lineWidth = 8;
   g.beginPath();
-  g.moveTo(cx - headRX * 1.05, headY - headRY * 0.36);
-  g.quadraticCurveTo(cx, headY - headRY * 0.62, cx + headRX * 1.05, headY - headRY * 0.36);
+  g.moveTo(cx - rx * 1.08, cy - ry * 0.44);
+  g.quadraticCurveTo(cx, cy - ry * 0.72, cx + rx * 1.08, cy - ry * 0.44);
   g.stroke();
-  g.strokeStyle = 'rgba(255,246,210,0.55)';
+  g.strokeStyle = 'rgba(255,246,214,0.55)';
   g.lineWidth = 2;
   g.stroke();
-  g.strokeStyle = cfg.trim;
-  g.lineWidth = 6;
-  g.beginPath();
-  g.moveTo(cx, headY - headRY * 1.34);
-  g.lineTo(cx, headY - headRY * 0.5);
-  g.stroke();
+  // Low crest fin along the top of the skull, not a spike.
+  const crest = new Path2D();
+  crest.moveTo(cx - rx * 0.46, cy - ry * 0.82);
+  crest.quadraticCurveTo(cx, cy - ry * 1.10, cx + rx * 0.46, cy - ry * 0.82);
+  crest.quadraticCurveTo(cx, cy - ry * 0.90, cx - rx * 0.46, cy - ry * 0.82);
+  crest.closePath();
+  g.fillStyle = cfg.trim;
+  g.fill(crest);
+  g.strokeStyle = 'rgba(0,0,0,0.5)';
+  g.lineWidth = 2;
+  g.stroke(crest);
+  UITextures.dab(g, cx - rx * 0.14, cy - ry * 0.96, rx * 0.20, ry * 0.035, -0.10, '#fff8dc', 0.5, 3);
 
-  // Highlights, rivets and scuffs.
-  UITextures.dab(g, cx - headRX * 0.42, headY - headRY * 0.95, headRX * 0.34, headRY * 0.2, -0.3, '#ffffff', 0.28, 8);
-  for (let i = 0; i < 8; i++) {
-    const a = Math.PI + (i / 7) * Math.PI;
-    const x = cx + Math.cos(a) * headRX * 1.06;
-    const y = headY + Math.sin(a) * headRY * 1.06;
+  // Specular sweep, rivets and scuffs.
+  UITextures.dab(g, cx - rx * 0.44, cy - ry * 0.98, rx * 0.36, ry * 0.20, -0.28, '#ffffff', 0.30, 9);
+  UITextures.dab(g, cx + rx * 0.62, cy - ry * 0.86, rx * 0.16, ry * 0.30, 0.5, '#ffffff', 0.14, 8);
+  for (let i = 0; i < 9; i++) {
+    const a = Math.PI + (i / 8) * Math.PI;
+    const x = cx + Math.cos(a) * rx * 1.07;
+    const y = cy + Math.sin(a) * ry * 1.02;
     const rr = 4;
     const dome = g.createRadialGradient(x - 1.5, y - 1.5, 0.5, x, y, rr);
     dome.addColorStop(0, '#fff2c8'); dome.addColorStop(0.5, '#c49a48'); dome.addColorStop(1, '#4c3308');
     g.fillStyle = dome;
     g.beginPath(); g.arc(x, y, rr, 0, TAU); g.fill();
   }
-  for (let i = 0; i < 60; i++) {
-    g.globalAlpha = rng.range(0.04, 0.16);
+  for (let i = 0; i < 70; i++) {
+    g.globalAlpha = rng.range(0.03, 0.15);
     g.strokeStyle = rng.chance(0.5) ? '#ffffff' : '#000000';
     g.lineWidth = rng.range(0.5, 1.4);
-    const x = cx + rng.range(-headRX, headRX), y = headY + rng.range(-headRY * 1.3, headRY * 0.3);
-    g.beginPath(); g.moveTo(x, y); g.lineTo(x + rng.range(-14, 14), y + rng.range(-6, 6)); g.stroke();
+    const x = cx + rng.range(-rx, rx), y = cy + rng.range(-ry * 1.25, ry * 0.2);
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + rng.range(-16, 16), y + rng.range(-6, 6)); g.stroke();
   }
   g.globalAlpha = 1;
-  // Shadow the helm casts over the brow.
-  UITextures.dab(g, cx, headY - headRY * 0.3, headRX * 0.95, headRY * 0.14, 0, '#000', 0.45, 10);
   g.restore();
+
+  // The helm shadows the brow.
+  UITextures.dab(g, cx, cy - ry * 0.44, rx * 0.92, ry * 0.14, 0, '#000', 0.45, 10);
+}
+
+/** Rim light, glaze, vignette and canvas tooth. */
+function paintFinish(g, w, h, cfg, rng, geo) {
+  const { cx, cy, rx, ry } = geo;
+
+  g.save();
+  g.globalCompositeOperation = 'lighter';
+  g.strokeStyle = 'rgba(255,208,132,0.26)';
+  g.lineWidth = 6;
+  g.filter = 'blur(5px)';
+  g.beginPath();
+  g.ellipse(cx, cy, rx * 1.01, ry * 1.03, 0, -Math.PI * 0.44, Math.PI * 0.42);
+  g.stroke();
+  g.beginPath();
+  g.moveTo(w * 0.78, h * 0.86);
+  g.quadraticCurveTo(w * 0.90, h * 0.80, w * 0.98, h);
+  g.stroke();
+  g.restore();
+
+  const glaze = g.createLinearGradient(0, 0, w * 0.55, h);
+  glaze.addColorStop(0, 'rgba(255,206,132,0.11)');
+  glaze.addColorStop(0.5, 'rgba(120,80,40,0)');
+  glaze.addColorStop(1, 'rgba(18,9,3,0.26)');
+  g.fillStyle = glaze;
+  g.fillRect(0, 0, w, h);
+
+  const vig = g.createRadialGradient(cx, h * 0.42, w * 0.22, cx, h * 0.5, w * 0.80);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(0.62, 'rgba(0,0,0,0.20)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.74)');
+  g.fillStyle = vig;
+  g.fillRect(0, 0, w, h);
+
+  UITextures.grain(g, w, h, rng, 12);
 }
 
 export default UITextures;

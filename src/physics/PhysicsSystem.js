@@ -253,10 +253,18 @@ export class PhysicsSystem extends System {
 
     this._ctx = null;
     this._candidates = [];
+    this._triggerCandidates = [];
     this._contacts = new ContactSet(96);
     this._probeContacts = new ContactSet(16);
     this._hit = new RayHit();
     this._scratchHit = new RayHit();
+    /**
+     * Strictly for narrowphase sub-queries. Kept separate from `_scratchHit`
+     * because callers such as `groundProbe` and `lineOfSight` pass that one in
+     * as their output record — sharing it would let a later miss wipe an
+     * earlier hit's fields out from under them.
+     */
+    this._subHit = new RayHit();
     this._controllers = [];
     this._triggerActors = new Map();
     this._warned = new Set();
@@ -615,7 +623,7 @@ export class PhysicsSystem extends System {
         a[0], a[1], a[2], a[3], a[4], a[5], best) < 0) continue;
 
       if (rec.type === 'mesh') {
-        const sub = this._scratchHit.reset();
+        const sub = this._subHit.reset();
         if (rec.bvh.raycast(ox, oy, oz, dx, dy, dz, best, sub) && sub.distance < best) {
           best = sub.distance;
           found = true;
@@ -699,8 +707,7 @@ export class PhysicsSystem extends System {
     const h0 = this.terrainHeightAt(ox, oz);
     if (!Number.isFinite(h0)) return -1;
     let prevT = 0;
-    let prevDiff = oy - h0;
-    if (prevDiff <= 0) return 0;    // already underground
+    if (oy - h0 <= 0) return 0;     // already underground
 
     // Sample density: fine enough that a 1 m rock ridge is not stepped over.
     const step = Math.max(0.4, Math.min(4, maxDist / 192));
@@ -709,7 +716,7 @@ export class PhysicsSystem extends System {
       const y = oy + dy * tt;
       const z = oz + dz * tt;
       const h = this.terrainHeightAt(x, z);
-      if (!Number.isFinite(h)) { prevT = tt; prevDiff = 1; continue; }
+      if (!Number.isFinite(h)) { prevT = tt; continue; }
       const diff = y - h;
       if (diff <= 0) {
         // Bisect for a clean surface point.
@@ -723,7 +730,6 @@ export class PhysicsSystem extends System {
         return hi;
       }
       prevT = tt;
-      prevDiff = diff;
     }
     return -1;
   }
@@ -899,21 +905,25 @@ export class PhysicsSystem extends System {
     const pos = new THREE.Vector3(from.x, from.y, from.z);
     const normal = new THREE.Vector3(0, 1, 0);
     let hitObject = null;
+    let deepest = 0;
 
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const dz = to.z - from.z;
-    const dist = Math.hypot(dx, dy, dz);
+    // Remaining displacement, shortened and turned as it slides along contacts.
+    let rx = to.x - from.x;
+    let ry = to.y - from.y;
+    let rz = to.z - from.z;
+    const dist = Math.hypot(rx, ry, rz);
     const maxStep = Math.max(radius * 0.5, 0.05);
     const steps = Math.max(1, Math.min(64, Math.ceil(dist / maxStep)));
-    const inv = 1 / steps;
-
+    const half = Math.max(height - radius * 2, 0);
     const contacts = this._contacts;
+
     for (let s = 0; s < steps; s++) {
-      pos.x += dx * inv; pos.y += dy * inv; pos.z += dz * inv;
+      const share = 1 / (steps - s);
+      pos.x += rx * share; pos.y += ry * share; pos.z += rz * share;
+      rx -= rx * share; ry -= ry * share; rz -= rz * share;
+
       for (let iter = 0; iter < 4; iter++) {
         contacts.reset();
-        const half = Math.max(height - radius * 2, 0);
         const n = this.capsuleContacts(
           pos.x, pos.y + radius, pos.z,
           pos.x, pos.y + radius + half, pos.z,
@@ -929,7 +939,16 @@ export class PhysicsSystem extends System {
           const d = contacts.depth[i] - (px * nx + py * ny + pz * nz);
           if (d <= 0) continue;
           px += nx * d; py += ny * d; pz += nz * d;
-          if (ny > normal.y) { normal.set(nx, ny, nz); hitObject = contacts.object[i]; }
+          if (contacts.depth[i] >= deepest) {
+            deepest = contacts.depth[i];
+            normal.set(nx, ny, nz);
+            hitObject = contacts.object[i];
+          }
+          // Blocked motion slides along the surface instead of grinding into
+          // it at full speed — without this a long sweep pushes its way
+          // sideways around whatever it hits.
+          const rn = rx * nx + ry * ny + rz * nz;
+          if (rn < 0) { rx -= nx * rn; ry -= ny * rn; rz -= nz * rn; }
         }
         if (px === 0 && py === 0 && pz === 0) break;
         pos.x += px; pos.y += py; pos.z += pz;
@@ -938,6 +957,41 @@ export class PhysicsSystem extends System {
 
     const grounded = this.groundProbe(pos.x, pos.y, pos.z, radius, 0.25, mask) !== null;
     return { position: pos, grounded, normal, hitObject };
+  }
+
+  /**
+   * Is this point inside a closed solid? Triangle-soup collision cannot answer
+   * this from contacts alone — a capsule floating in the middle of a large box
+   * touches nothing — so this counts ray crossings instead. Used for spawn and
+   * teleport recovery, never per-frame.
+   */
+  isInsideSolid(x, y, z, mask = MASK_SOLID) {
+    if ((mask & LAYERS.TERRAIN) && this.terrainEnabled) {
+      const h = this.terrainHeightAt(x, z);
+      if (Number.isFinite(h) && y < h) return true;
+    }
+    // A deliberately skew direction: axis-aligned rays graze the shared edges
+    // of axis-aligned level geometry and double-count.
+    const dx = 0.13385;
+    const dy = 0.98639;
+    const dz = 0.09477;
+    const cands = this.hash.queryRay(x, y, z, dx, dy, dz, 1e4, mask, this._candidates);
+    for (let i = 0; i < cands.length; i++) {
+      const rec = cands[i];
+      const a = rec.aabb;
+      if (x < a[0] || x > a[3] || y < a[1] || y > a[4] || z < a[2] || z > a[5]) continue;
+      if (rec.type === 'mesh') {
+        const span = (a[4] - y) / dy + 1;
+        if (rec.bvh.countCrossings(x, y, z, dx, dy, dz, span) % 2 === 1) return true;
+      } else if (rec.type === 'box') {
+        if (rec.obb.containsPoint(x, y, z)) return true;
+      } else {
+        closestPointOnSegment(rec.a[0], rec.a[1], rec.a[2], rec.b[0], rec.b[1], rec.b[2], x, y, z, _norm);
+        const ex = x - _norm[0]; const ey = y - _norm[1]; const ez = z - _norm[2];
+        if (ex * ex + ey * ey + ez * ez < rec.radius * rec.radius) return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -996,16 +1050,16 @@ export class PhysicsSystem extends System {
     let remaining = Math.max(0, dt);
     let guard = 0;
     while (remaining > 1e-6 && guard++ < 16) {
-      if (gravity) vel.y += gravity * remaining;
       const speed = vel.length();
-      if (speed < 1e-6) break;
+      if (speed < 1e-6 && !gravity) break;
       const maxStep = Math.max(radius * 0.9, 0.05);
-      const stepDt = Math.min(remaining, maxStep / speed);
+      const stepDt = speed > 1e-6 ? Math.min(remaining, maxStep / speed) : remaining;
+      if (gravity) vel.y += gravity * stepDt;
       const dx = vel.x * stepDt;
       const dy = vel.y * stepDt;
       const dz = vel.z * stepDt;
 
-      const hit = this._sweepSphere(pos.x, pos.y, pos.z, dx, dy, dz, radius, mask, ignore);
+      const hit = this.sweepSphere(pos.x, pos.y, pos.z, dx, dy, dz, radius, mask, ignore);
       if (hit) {
         const t = Math.max(0, hit.distance - 1e-3);
         pos.x += dx * t; pos.y += dy * t; pos.z += dz * t;
@@ -1033,8 +1087,12 @@ export class PhysicsSystem extends System {
     return result;
   }
 
-  /** Swept sphere against the world; returns the reused RayHit or null. */
-  _sweepSphere(ox, oy, oz, dx, dy, dz, radius, mask, ignore = null) {
+  /**
+   * Swept sphere against the world. Returns the *reused* RayHit (copy anything
+   * you need out of it before the next call) or null. `hit.distance` is the
+   * fraction of the displacement, in [0,1].
+   */
+  sweepSphere(ox, oy, oz, dx, dy, dz, radius, mask, ignore = null) {
     const minx = Math.min(ox, ox + dx) - radius;
     const miny = Math.min(oy, oy + dy) - radius;
     const minz = Math.min(oz, oz + dz) - radius;
@@ -1051,7 +1109,7 @@ export class PhysicsSystem extends System {
       const rec = cands[i];
       if (rec.object === ignore) continue;
       if (rec.type === 'mesh') {
-        const sub = this._scratchHit.reset();
+        const sub = this._subHit.reset();
         sub.distance = hit.distance;
         if (rec.bvh.sweepSphere(ox, oy, oz, dx, dy, dz, radius, sub) && sub.distance <= hit.distance) {
           hit.distance = sub.distance;
@@ -1206,7 +1264,7 @@ export class PhysicsSystem extends System {
   _testActorAgainstTriggers(key, position, ctx) {
     const cands = this.triggerHash.queryAABB(
       position.x, position.y, position.z,
-      position.x, position.y, position.z, LAYERS.TRIGGER, this._candidates,
+      position.x, position.y, position.z, LAYERS.TRIGGER, this._triggerCandidates,
     );
     // Entering: candidates the actor is inside of.
     for (let i = 0; i < cands.length; i++) {

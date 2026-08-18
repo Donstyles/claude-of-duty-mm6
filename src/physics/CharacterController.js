@@ -46,6 +46,9 @@ export class CharacterController {
     this.maxSlope = opts.maxSlope ?? (45 * Math.PI) / 180;
     this.skinWidth = opts.skinWidth ?? 0.02;
     this.mask = opts.mask ?? physics?.defaultSolidMask ?? FALLBACK_SOLID_MASK;
+    /** Sweeps skip the heightfield; see `_sweepFraction`. */
+    const terrainBit = physics?.LAYERS?.TERRAIN ?? (1 << 1);
+    this.sweepMask = this.mask & ~terrainBit;
     /** Object3D this controller owns, so it never collides with itself. */
     this.ignoreObject = opts.ignoreObject ?? null;
 
@@ -92,7 +95,9 @@ export class CharacterController {
     this.lastLandingSpeed = 0;
 
     this._yOffset = 0;
-    this.smoothingTau = opts.smoothingTau ?? 0.055;
+    this._yOffsetVel = 0;
+    /** Spring rate of the visual-Y follower; ~4/omega seconds to settle. */
+    this.smoothingOmega = opts.smoothingOmega ?? 14;
     this.maxSmoothOffset = opts.maxSmoothOffset ?? 0.55;
     this._timeSinceGrounded = 1e3;
     this._jumpBuffer = 0;
@@ -101,6 +106,9 @@ export class CharacterController {
     this._initialised = false;
     this._contacts = new ContactSet(64);
     this._ceiling = false;
+    this._snx = 0; this._sny = 0; this._snz = 0; this._snObject = null;
+    /** Velocity invented by projection against *walkable* planes this tick. */
+    this._projVX = 0; this._projVY = 0; this._projVZ = 0;
 
     this._cosMaxSlope = Math.cos(this.maxSlope);
 
@@ -155,6 +163,7 @@ export class CharacterController {
   /** Hard reset after a teleport — no smoothing lag across the jump cut. */
   warp(position) {
     this._yOffset = 0;
+    this._yOffsetVel = 0;
     this.smoothedY = position?.y ?? this.smoothedY;
     this.grounded = false;
     this._timeSinceGrounded = 1e3;
@@ -195,6 +204,7 @@ export class CharacterController {
     this.hitWall = false;
     this.sliding = false;
     this._ceiling = false;
+    this._projVX = 0; this._projVY = 0; this._projVZ = 0;
 
     /* ── 1. water state ── */
     this._updateWaterState(position);
@@ -262,6 +272,18 @@ export class CharacterController {
       }
     }
 
+    /* ── 5.5 undo the ski jump ──
+     * Sliding along a plane removes the velocity component into it, which on an
+     * uphill face converts forward speed into *upward* speed. Left alone, a
+     * character walking briskly up a 25° hill launches at the crest and the
+     * ground snap below refuses to fire because it is "moving up". Only the
+     * upward velocity the projection itself invented is removed — a deliberate
+     * jump or a knockback impulse survives untouched. */
+    if (this._projVY > 1e-4 && !this.isFlying && !this._jumpedThisFrame
+        && (this.grounded || wasGrounded)) {
+      velocity.y -= Math.min(this._projVY, Math.max(0, velocity.y));
+    }
+
     /* ── 6. ground snap ── */
     if (!this.isFlying && !this.isSwimming && !this._jumpedThisFrame
         && !this.grounded && wasGrounded && velocity.y <= 0.5) {
@@ -282,7 +304,11 @@ export class CharacterController {
       }
     }
 
-    /* ── 8. steep slopes: slide instead of standing ── */
+    /* ── 8. steep slopes: slide instead of standing ──
+     * A steep face only counts as a slide when nothing walkable is holding the
+     * character up. Standing on a ledge with a cliff at your shoulder is not
+     * sliding, and treating it as such would nudge you off the ledge. */
+    this.sliding = this.sliding && !this.grounded;
     if (this.sliding && !this.isFlying && !this.isSwimming) {
       // Push along the downhill tangent of the steepest contact.
       _slide.set(this.wallNormal.x, 0, this.wallNormal.z);
@@ -303,14 +329,29 @@ export class CharacterController {
         landed = true;
         this.lastLandingSpeed = fallSpeed;
       }
-      if (velocity.y < 0) velocity.y = 0;
+      // Standing on a walkable slope must not drift downhill. Gravity feeds a
+      // little velocity into the surface every tick and the slide projection
+      // turns it into a downhill component; over a couple of seconds that is
+      // the difference between "standing on a hillside" and "slowly skating
+      // off it". Removing exactly what the projection invented leaves the
+      // caller's own input velocity untouched — walking uphill keeps full
+      // speed, and genuinely steep faces are excluded above so they still
+      // slide.
+      if (!this.sliding && !this._jumpedThisFrame && !this.isSwimming) {
+        velocity.x -= this._projVX;
+        velocity.z -= this._projVZ;
+        velocity.y = 0;
+      } else if (velocity.y < 0) {
+        velocity.y = 0;
+      }
     }
     if (this._ceiling && velocity.y > 0) velocity.y = 0;
 
-    // Visual Y follows the physical Y with an exponential spring so step-ups
-    // and snaps read as motion rather than a cut.
-    this._yOffset *= Math.exp(-dt / Math.max(1e-4, this.smoothingTau));
-    if (Math.abs(this._yOffset) < 1e-4) this._yOffset = 0;
+    // Visual Y trails the physical Y through a critically damped spring. An
+    // exponential decay would be simpler but its velocity peaks on the very
+    // first frame — exactly the hop this is here to remove. The spring eases in
+    // and out, so a 0.4 m step reads as a stride rather than a jump cut.
+    this._relaxVisual(dt);
     this.smoothedY = position.y + this._yOffset;
 
     return this._fillResult(position, velocity, landed, landed ? this.lastLandingSpeed : 0);
@@ -373,19 +414,122 @@ export class CharacterController {
     }
   }
 
-  /** Substepped move: never travel more than half a radius between resolves. */
+  /** Substepped move: never travel more than a radius between resolves. */
   _integrate(position, velocity, dt) {
     const speed = velocity.length();
     const travel = speed * dt;
-    const maxStep = Math.max(this.radius * 0.5, 0.02);
+    const maxStep = Math.max(this.radius * 0.9, 0.02);
     const steps = Math.max(1, Math.min(32, Math.ceil(travel / maxStep)));
     const subDt = dt / steps;
     for (let s = 0; s < steps; s++) {
-      position.x += velocity.x * subDt;
-      position.y += velocity.y * subDt;
-      position.z += velocity.z * subDt;
+      this._moveSwept(position, velocity, subDt);
       this._depenetrate(position, velocity, this.iterations, true);
     }
+  }
+
+  /**
+   * Collide-and-slide for one substep, using continuous sweeps rather than
+   * "move then push out".
+   *
+   * The push-out-only approach has a nasty failure mode on thin geometry: once
+   * the capsule centre lands on the far side of a 10 cm wall, *both* of that
+   * wall's faces report a contact normal pointing forwards, and the character
+   * gets helpfully ejected through it. Sweeping stops the capsule at the
+   * surface, so the centre never crosses. Depenetration then runs as a safety
+   * net for anything the sweep's sphere decomposition missed.
+   */
+  _moveSwept(position, velocity, subDt) {
+    let rx = velocity.x * subDt;
+    let ry = velocity.y * subDt;
+    let rz = velocity.z * subDt;
+
+    for (let it = 0; it < 3; it++) {
+      const len = Math.hypot(rx, ry, rz);
+      if (len < 1e-7) return;
+      const t = this._sweepFraction(position, rx, ry, rz);
+      if (t >= 1) {
+        position.x += rx; position.y += ry; position.z += rz;
+        return;
+      }
+      const back = Math.max(0, t - Math.min(t, 0.004 / len));
+      position.x += rx * back;
+      position.y += ry * back;
+      position.z += rz * back;
+
+      const nx = this._snx;
+      const ny = this._sny;
+      const nz = this._snz;
+      if (ny >= this._cosMaxSlope) {
+        this.grounded = true;
+        this.groundNormal.set(nx, ny, nz);
+        this.groundObject = this._snObject;
+      } else if (ny < -0.25) {
+        this._ceiling = true;
+      } else {
+        this.hitWall = true;
+        this.wallNormal.set(nx, ny, nz);
+        if (ny > 0.05) this.sliding = true;
+      }
+
+      // Project both the leftover displacement and the velocity onto the plane.
+      const rest = 1 - back;
+      rx *= rest; ry *= rest; rz *= rest;
+      const dn = rx * nx + ry * ny + rz * nz;
+      if (dn < 0) { rx -= nx * dn; ry -= ny * dn; rz -= nz * dn; }
+      const vn = velocity.x * nx + velocity.y * ny + velocity.z * nz;
+      if (vn < 0) {
+        velocity.x -= nx * vn;
+        velocity.y -= ny * vn;
+        velocity.z -= nz * vn;
+        if (ny >= this._cosMaxSlope) {
+          this._projVX -= nx * vn;
+          this._projVY -= ny * vn;
+          this._projVZ -= nz * vn;
+        }
+      }
+    }
+  }
+
+  /**
+   * Earliest time of impact for the capsule moving by (dx,dy,dz), approximated
+   * as a stack of spheres along the capsule axis. Terrain is deliberately
+   * excluded — a heightfield cannot be tunnelled through horizontally, and
+   * marching it per sweep would make uphill walking sticky.
+   *
+   * Writes the hit normal into `_snx/_sny/_snz`. Returns 1 when unobstructed.
+   */
+  _sweepFraction(position, dx, dy, dz) {
+    const phys = this.physics;
+    if (!phys?.sweepSphere) return 1;
+    // Slightly under the depenetration radius, so a capsule resting against a
+    // wall has real clearance and does not report an immediate t = 0.
+    const r = Math.max(0.02, this.radius - this.skinWidth * 0.75);
+    const half = Math.max(this.height - this.radius * 2, 0);
+    const n = 1 + Math.ceil(half / Math.max(r * 1.2, 0.05));
+    let best = 1;
+    this._snx = 0; this._sny = 0; this._snz = 0; this._snObject = null;
+    /** Velocity invented by projection against *walkable* planes this tick. */
+    this._projVX = 0; this._projVY = 0; this._projVZ = 0;
+
+    for (let i = 0; i < n; i++) {
+      const f = n === 1 ? 0 : i / (n - 1);
+      const y = position.y + this.radius + half * f;
+      const hit = phys.sweepSphere(
+        position.x, y, position.z, dx, dy, dz, r, this.sweepMask, this.ignoreObject,
+      );
+      if (!hit) continue;
+      if (hit.distance <= 1e-5) {
+        // Already touching. Only block if the motion drives into the surface;
+        // otherwise let depenetration sort it out rather than freezing.
+        if (dx * hit.nx + dy * hit.ny + dz * hit.nz >= 0) continue;
+      }
+      if (hit.distance < best) {
+        best = hit.distance;
+        this._snx = hit.nx; this._sny = hit.ny; this._snz = hit.nz;
+        this._snObject = hit.object;
+      }
+    }
+    return best;
   }
 
   /**
@@ -429,12 +573,22 @@ export class CharacterController {
         let d = contacts.depth[i] - (px * nx + py * ny + pz * nz);
         if (d <= 1e-6) continue;
         if (d > this.maxDepenetration) d = this.maxDepenetration;
-        px += nx * d; py += ny * d; pz += nz * d;
+        const walkable = ny >= this._cosMaxSlope;
+        if (classify && walkable) {
+          // Resolve ground penetration straight up rather than along the face
+          // normal. Pushing along the normal on a 30° hillside adds a sideways
+          // component every tick, and since gravity re-penetrates every tick,
+          // a character left standing still slowly skates downhill. A vertical
+          // push of d/ny cancels exactly the same penetration with no drift.
+          py += d / ny;
+        } else {
+          px += nx * d; py += ny * d; pz += nz * d;
+        }
         any = true;
         resolved++;
 
         if (classify) {
-          if (ny >= this._cosMaxSlope) {
+          if (walkable) {
             this.grounded = true;
             if (ny > bestGroundY) {
               bestGroundY = ny;
@@ -462,6 +616,11 @@ export class CharacterController {
             velocity.x -= nx * vn;
             velocity.y -= ny * vn;
             velocity.z -= nz * vn;
+            if (classify && ny >= this._cosMaxSlope) {
+              this._projVX -= nx * vn;
+              this._projVY -= ny * vn;
+              this._projVZ -= nz * vn;
+            }
           }
         }
       }
@@ -475,39 +634,62 @@ export class CharacterController {
   }
 
   /**
-   * Lift → advance → drop. Accepts only if the drop lands on walkable ground
-   * no more than `stepHeight` above where we started, which is what keeps a
-   * character from scaling a wall by repeatedly nudging into it.
+   * Lift → advance → drop, the Quake stair-climb in modern dress.
+   *
+   * The subtlety: a capsule blocked by a ledge stops a full radius short of it,
+   * so the first frame's advance at the raised height lands *before* the ledge
+   * and the drop finds the original floor again. That still counts as success —
+   * it is how the character closes the last 30 cm — as long as the landing is
+   * walkable and no more than `stepHeight` above where it started. A wall
+   * taller than the lift blocks the raised advance instead, so nothing here
+   * lets a character nudge its way up a cliff.
    */
   _tryStepUp(position, velocity, blockedX, blockedZ) {
     const startY = position.y;
     const startX = position.x;
     const startZ = position.z;
-    _probe.set(position.x, position.y + this.stepHeight, position.z);
+    const ceilingY = startY + this.stepHeight;
+    _probe.set(position.x, ceilingY, position.z);
 
-    // Headroom: if lifting is itself blocked, there is nothing to step onto.
+    // Headroom: if the lift itself is squeezed, there is nothing to step onto.
     this._depenetrate(_probe, null, 2, false);
     if (_probe.y < startY + this.stepHeight * 0.6) return false;
+    if (_probe.y > ceilingY + 0.02) return false;   // pushed above the allowance
+    if (Math.abs(_probe.x - startX) > 0.05 || Math.abs(_probe.z - startZ) > 0.05) return false;
+    _probe.y = ceilingY;
 
-    _probe.x += blockedX;
-    _probe.z += blockedZ;
-    this._depenetrate(_probe, null, 3, false);
-
+    // Advance at the raised height. This has to cover at least a radius: the
+    // capsule stops a full radius short of the ledge it is trying to mount, so
+    // a probe that only replays the frame's blocked displacement would land in
+    // front of the step every time and never find it. The advance is *swept*,
+    // which is what stops a sprinter from vaulting a thin wall — against
+    // anything taller than the lift the sweep stops dead and the attempt is
+    // rejected below.
     const wantLen = Math.hypot(blockedX, blockedZ);
-    const gotLen = Math.hypot(_probe.x - startX, _probe.z - startZ);
-    if (gotLen < wantLen * 0.35) return false;   // still walled in up there
+    if (wantLen < 1e-5) return false;
+    const reach = Math.max(wantLen, this.radius * 1.15 + this.skinWidth);
+    const sx = (blockedX / wantLen) * reach;
+    const sz = (blockedZ / wantLen) * reach;
+    const t = this._sweepFraction(_probe, sx, 0, sz);
+    const advance = Math.max(0, t - Math.min(t, 0.004 / reach));
+    _probe.x += sx * advance;
+    _probe.z += sz * advance;
+    this._depenetrate(_probe, null, 2, false);
 
-    const drop = this.stepHeight + this.skinWidth * 4;
+    const gotLen = Math.hypot(_probe.x - startX, _probe.z - startZ);
+    if (gotLen < reach * 0.5) return false;         // still walled in up there
+
+    const drop = this.stepHeight + this.snapDistance;
     const probe = this.physics?.groundProbe?.(
       _probe.x, _probe.y, _probe.z, this.radius, drop, this.mask,
     );
     if (!probe) return false;
     if (probe.ny < this._cosMaxSlope) return false;
     const newY = probe.y + this.skinWidth;
-    if (newY <= startY + 0.01) return false;                       // not a step up
-    if (newY > startY + this.stepHeight + 0.02) return false;      // too tall
+    if (newY > startY + this.stepHeight + 0.02) return false;   // too tall to mount
+    if (newY < startY - this.snapDistance) return false;        // a drop, not a step
 
-    // Commit, then make sure the new pose is actually free.
+    // Commit, then confirm the new pose is actually free.
     _tmp.set(_probe.x, newY, _probe.z);
     this._depenetrate(_tmp, null, 2, false);
     if (_tmp.y > startY + this.stepHeight + 0.1) return false;
@@ -517,7 +699,7 @@ export class CharacterController {
     this.grounded = true;
     this.groundNormal.set(probe.nx, probe.ny, probe.nz);
     this.groundObject = probe.object;
-    this.steppedUp = true;
+    this.steppedUp = _tmp.y > startY + 0.01;
     this.hitWall = false;
     if (velocity.y < 0) velocity.y = 0;
     return true;
@@ -547,12 +729,37 @@ export class CharacterController {
    * instantly. The offset is clamped: a 3 m drop should be felt, not smoothed.
    */
   _shiftVisual(oldY, newY) {
-    this._yOffset += oldY - newY;
+    const d = oldY - newY;
+    if (Math.abs(d) < 1e-5) return;
+    this._yOffset += d;
     if (this._yOffset > this.maxSmoothOffset) this._yOffset = this.maxSmoothOffset;
     else if (this._yOffset < -this.maxSmoothOffset) this._yOffset = -this.maxSmoothOffset;
   }
 
-  /** True when the capsule at `position` overlaps anything solid. */
+  /** Drive the visual offset back to zero with a critically damped spring. */
+  _relaxVisual(dt) {
+    if (this._yOffset === 0 && this._yOffsetVel === 0) return;
+    const w = this.smoothingOmega;
+    // Sub-step so a long frame cannot make the spring ring or explode.
+    let remaining = dt;
+    while (remaining > 1e-6) {
+      const h = Math.min(remaining, 1 / 120);
+      remaining -= h;
+      const a = -w * w * this._yOffset - 2 * w * this._yOffsetVel;
+      this._yOffsetVel += a * h;
+      this._yOffset += this._yOffsetVel * h;
+    }
+    if (Math.abs(this._yOffset) < 5e-4 && Math.abs(this._yOffsetVel) < 5e-3) {
+      this._yOffset = 0;
+      this._yOffsetVel = 0;
+    }
+  }
+
+  /**
+   * True when the capsule at `position` overlaps anything solid — including
+   * the case of being entirely *inside* a closed volume, which surface contacts
+   * alone cannot see.
+   */
   overlapsWorld(position) {
     const phys = this.physics;
     if (!phys?.capsuleContacts) return false;
@@ -560,11 +767,12 @@ export class CharacterController {
     contacts.reset();
     const half = Math.max(this.height - this.radius * 2, 0);
     const ay = position.y + this.radius;
-    return phys.capsuleContacts(
+    if (phys.capsuleContacts(
       position.x, ay, position.z,
       position.x, ay + half, position.z,
       this.radius, this.mask, contacts, this.ignoreObject,
-    ) > 0;
+    ) > 0) return true;
+    return phys.isInsideSolid?.(position.x, ay + half * 0.5, position.z, this.mask) ?? false;
   }
 
   /**
