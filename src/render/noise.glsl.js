@@ -482,6 +482,40 @@ float tFbm3(vec3 p, vec3 freq, int octaves) {
   return sum / max(norm, 1e-5);
 }
 
+/**
+ * Anisotropic noise laid along an arbitrary *integer* direction pair.
+ *
+ * The vectors a and b are the across- and along-fibre axes. Because they are
+ * integer vectors and the frequencies are integers, shifting uv by one whole
+ * tile shifts the lattice coordinate by an exact multiple of the hash period,
+ * so the result still tiles seamlessly — which a plain rot2() before the noise
+ * does not. That is the point: it lets grass, straw and drag marks lie at 27°
+ * or 45° instead of only along u and v, and mixing several such directions at a
+ * fine selection scale is what breaks up the "combed in one direction" look
+ * without resorting to a low-frequency flow field (whose swirls are visible as
+ * wallpaper the moment the texture is tiled across a hillside).
+ *
+ * length(a) scales the across-fibre wavelength: with a = (1,1) the effective
+ * frequency is length(a) * freq.x, so diagonal fields want a lower freq.x.
+ */
+float tAniso(vec2 uv, vec2 a, vec2 b, vec2 freq) {
+  vec2 p = vec2(dot(a, uv) * freq.x, dot(b, uv) * freq.y);
+  return pPerlin2(p, freq) * 0.5 + 0.5;
+}
+
+float tAnisoFbm(vec2 uv, vec2 a, vec2 b, vec2 freq, int octaves) {
+  float amp = 0.5, sum = 0.0, norm = 0.0;
+  vec2 f = freq;
+  for (int i = 0; i < 6; i++) {
+    if (i >= octaves) break;
+    sum += amp * pPerlin2(vec2(dot(a, uv) * f.x, dot(b, uv) * f.y), f);
+    norm += amp;
+    f *= 2.0;
+    amp *= 0.5;
+  }
+  return sum / max(norm, 1e-5) * 0.5 + 0.5;
+}
+
 /** Periodic warp field — offsets uv while preserving the unit-square period. */
 vec2 tWarpField(vec2 uv, vec2 freq, int octaves) {
   return vec2(tFbm(uv + vec2(0.13, 0.71), freq, octaves, 2.0, 0.5),

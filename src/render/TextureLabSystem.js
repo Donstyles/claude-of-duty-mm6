@@ -52,7 +52,21 @@ const GROUP_TITLES = {
   organic: 'ORGANIC',
 };
 
-const CLOSEUP_PICKS = ['cobblestone', 'granite-block', 'gold', 'bark-oak'];
+const CLOSEUP_PICKS = ['grass', 'dirt', 'rock', 'sand'];
+
+/**
+ * The four materials the terrain splat actually uses, with the world scale the
+ * terrain samples them at. The tiling stage lays each one on a long plane at a
+ * grazing angle — the one viewing condition under which a repeat is obvious —
+ * so that "does this read as wallpaper from a hilltop?" can be answered here
+ * rather than by re-shooting the landscape.
+ */
+const TILING_PICKS = [
+  { name: 'grass', metres: 5.5 },
+  { name: 'dirt', metres: 6.5 },
+  { name: 'rock', metres: 9.0 },
+  { name: 'sand', metres: 4.5 },
+];
 
 export class TextureLabSystem extends System {
   static id = 'textureLab';
@@ -113,9 +127,49 @@ export class TextureLabSystem extends System {
       labelScale: 1.7,
     }));
 
+    this._buildTilingStage(new THREE.Vector3(-190, 0, 0));
     this._buildProjectionProbe();
     this._registerShots(ctx);
     this._ready = true;
+  }
+
+  /**
+   * Four ground planes, 22 m long, each wearing one terrain layer at the exact
+   * world scale the terrain uses, seen from eye height. A tiling artefact that
+   * is invisible on a 1.3 m tile in the grid stage is unmissable here.
+   */
+  _buildTilingStage(origin) {
+    const picks = TILING_PICKS.filter((p) => this.lib.has(p.name));
+    if (!picks.length) return;
+
+    const group = new THREE.Group();
+    group.position.copy(origin);
+    group.name = 'lab-tiling';
+    this.root.add(group);
+
+    const LEN = 24;
+    const WIDTH = 5.4;
+    const geo = new THREE.PlaneGeometry(WIDTH, LEN, 1, 1);
+    this._disposables.push(geo);
+
+    for (let i = 0; i < picks.length; i++) {
+      const { name, metres } = picks[i];
+      // repeat = plane size / metres-per-tile, so one texture tile really does
+      // cover `metres` of the plane, exactly as it does on the terrain.
+      const mat = this.lib.get(name, { repeat: [WIDTH / metres, LEN / metres] });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set((i - (picks.length - 1) / 2) * (WIDTH + 0.55), 0, -LEN / 2 + 2.0);
+      group.add(mesh);
+
+      // Upright at the far end of the lane: flat on the ground the label
+      // either covers the material or swallows the frame in perspective.
+      const label = this._makeLabel(`${name}  ${metres} m`, 2.6);
+      label.position.set(mesh.position.x, 1.5, -LEN / 2 - 6.0);
+      group.add(label);
+    }
+
+    this._tilingStage = { group, origin, count: picks.length, width: WIDTH, length: LEN };
   }
 
   /**
@@ -317,12 +371,41 @@ export class TextureLabSystem extends System {
     shotFor('architecture', 'Material lab: masonry, timber, roofing and plaster.');
     shotFor('metal', 'Material lab: iron, rust, bronze, gold, mail and gilding.');
     shotFor('organic', 'Material lab: bark, foliage, hide, cloth, bone, parchment.');
-    shotFor('closeup', 'Material lab: four hero materials at reading distance.');
+    shotFor('closeup', 'Material lab: the four terrain layers at reading distance.');
+
+    const tl = this._tilingStage;
+    if (tl) {
+      capture.registerShot('lab-tiling', {
+        description:
+          'Material lab: the four terrain layers laid flat at their true world '
+          + 'scale, seen from eye height — the test for visible tiling.',
+        camera: {
+          position: [tl.origin.x, tl.origin.y + 3.0, tl.origin.z + 6.5],
+          yaw: 0,
+          pitch: -14,
+          fov: 74,
+        },
+        apply: (c) => {
+          c.state.paused = false;
+          c.scene.background = new THREE.Color(0x07080a);
+          c.scene.fog = null;
+        },
+      });
+    }
   }
 
   /* ── lifecycle ─────────────────────────────────────────────────────────── */
 
-  update(dt, ctx) {
+  update(dt, ctx) { this._claimScene(ctx); }
+
+  /**
+   * Run again after every other system's update. Systems that toggle their own
+   * visibility later in the frame — water was drawing a full-screen blue veil
+   * over the whole lab — would otherwise come back after `update` has passed.
+   */
+  lateUpdate(dt, ctx) { this._claimScene(ctx); }
+
+  _claimScene(ctx) {
     if (!this.active || !this.root) return;
     // Other systems may have populated the scene; the lab owns the frame while
     // it is on, so anything that is not ours is hidden rather than removed.

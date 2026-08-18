@@ -331,7 +331,10 @@ export class WeatherSystem extends System {
       desat: p.desat,
       fogMul: p.fogMul,
       lightMul: p.lightMul,
-      opacityB: lerp(1, 0.35, p.cover),
+      // The upper deck has to get *stronger* with cover, not weaker: under a
+      // storm it is the layer doing the work. The sky owns the actual curve;
+      // this is only a trim, so it stays monotone with cover.
+      opacityB: lerp(0.85, 1.0, p.cover),
     });
   }
 

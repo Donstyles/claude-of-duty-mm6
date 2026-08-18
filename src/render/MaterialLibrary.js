@@ -133,51 +133,97 @@ void main() {
 
 /* ══════════════════════════════ GROUND ═══════════════════════════════════ */
 
+/**
+ * Ground is the hardest group in the catalogue, for one reason: the terrain
+ * samples it at a fixed world scale (grass 5.5 m per tile, dirt 6.5 m, rock
+ * 9 m, sand 4.5 m), so *anything* legible that is bigger than roughly half a
+ * metre repeats every few paces and the hillside reads as wallpaper. Every
+ * material below therefore obeys three rules:
+ *
+ *   1. No structural frequency below ~10 carries real amplitude. Large-scale
+ *      variation is the terrain's job — it has a macro vertex tint for exactly
+ *      this — not the tile's.
+ *   2. No low-frequency domain warp. A warp at frequency 3–6 dragged across a
+ *      periodic field is what produced the fingerprint ridges on sand and the
+ *      diagonal hatch on grass; directionality now comes from `tAnisoFbm`,
+ *      which lays fibres at an angle without a flow field.
+ *   3. No voronoi crack network at tile scale. A crack net at frequency 4 over
+ *      a 9 m tile is the reptile-skin / dried-mud look, and it was the single
+ *      most damaging artefact in the outdoor frame.
+ *
+ * Colour is anchored on REFERENCE.md §4.2, which is sampled from the real game:
+ * grass is a warm olive-khaki (`#395129`), earth a dark red-leaning brown
+ * (`#523021`), paving an olive-grey (`#4F4E3F`). Albedo sits above those
+ * numbers because the values in the reference are *lit* pixels, but the hue
+ * relationships — grass greener than it is yellow, earth red rather than tan —
+ * are reproduced exactly.
+ */
+
 const GROUND = {
   'grass': {
     group: 'ground', hero: true, detail: true,
-    normalStrength: 0.035, ao: { radius: 0.03, amplitude: 0.5 },
+    normalStrength: 0.030, ao: { radius: 0.028, amplitude: 0.45 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Grass has to survive three viewing distances at once, so it is built
-        // at three scales: metre-wide sward patches, hand-sized tufts, and the
-        // blades themselves. Drop any one and it fails at that distance —
-        // blades alone mip down to flat felt, patches alone read as camouflage.
-        float sward = tFbm01(uv, 4.0, 4);
-        vec4 tuft = tCells(tWarp(uv, vec2(6.0), 0.05, 3), 14.0, 0.9);
-        float crown = 1.0 - smoothstep(0.02, 0.42, tuft.z);
-        float bladeA = smoothstep(0.30, 0.78, fibres(uv,        vec2(56.0, 13.0), 5.0, 0.06, 3));
-        float bladeB = smoothstep(0.32, 0.80, fibres(uv + 0.37, vec2(38.0, 17.0), 4.0, 0.07, 3));
-        float bladeC = smoothstep(0.34, 0.82, fibres(uv + 0.71, vec2(88.0, 11.0), 6.0, 0.05, 2));
-        float blades = max(max(bladeA, bladeB * 0.9), bladeC * 0.75);
-        float bare = smoothstep(0.20, 0.44, sward);
-        float h = 0.14 + crown * 0.20 + blades * 0.52 + sward * 0.10 + tValue(uv, 90.0) * 0.03;
-        h = mix(h * 0.42, h, bare);
-        float litter = smoothstep(0.88, 1.0, tFbm01(uv + 0.77, 26.0, 3));
-        return vec3(clamp(h, 0.0, 1.0), fract(tuft.y + bladeB * 0.5),
-                    clamp(bare - litter * 0.4, 0.0, 1.0));
+        // Four blade fields, each laid along a different integer direction so
+        // that all four still tile. Which one wins is decided by a ~25 cm clump
+        // mask: the sward changes its lie every hand's breadth, the way real
+        // grass does, instead of swirling over a metre.
+        float b0 = tAnisoFbm(uv,        vec2(1.0,  0.0), vec2(0.0,  1.0), vec2(120.0, 24.0), 2);
+        float b1 = tAnisoFbm(uv + 0.31, vec2(1.0,  1.0), vec2(1.0, -1.0), vec2( 86.0, 17.0), 2);
+        float b2 = tAnisoFbm(uv + 0.67, vec2(1.0, -1.0), vec2(1.0,  1.0), vec2( 86.0, 17.0), 2);
+        float b3 = tAnisoFbm(uv + 0.13, vec2(2.0,  1.0), vec2(1.0, -2.0), vec2( 68.0, 14.0), 2);
+
+        float sel = tValue(uv, 21.0) * 0.62 + tValue(uv + 0.44, 39.0) * 0.38;
+        vec4 w = pow(max(vec4(0.0),
+                    1.0 - abs(vec4(sel) - vec4(0.12, 0.38, 0.62, 0.88)) * 4.0), vec4(3.0)) + 0.05;
+        float blades = dot(vec4(b0, b1, b2, b3), w) / dot(w, vec4(1.0));
+        blades = smoothstep(0.28, 0.78, blades);
+
+        // Thinning is deliberately fine-grained and low-contrast. A bare patch
+        // wider than half a metre is a repeat you can pick out from a hilltop.
+        float sward = tFbm01(uv, 14.0, 3);
+        float cover = smoothstep(0.26, 0.60, sward);
+        float seed = smoothstep(0.93, 1.0, tValue(uv + 0.50, 84.0));
+        float chaff = smoothstep(0.88, 1.0, tValue(uv + 0.17, 132.0));
+
+        float h = 0.18 + blades * 0.48 + seed * 0.12 + chaff * 0.05
+                + tValue(uv, 168.0) * 0.05;
+        h = mix(h * 0.52, h, 0.32 + cover * 0.68);
+        float id = fract(tValue(uv, 27.0) * 1.7 + sel * 2.6);
+        return vec3(clamp(h, 0.0, 1.0), id, cover);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 deep  = col8( 48,  62,  32);
-        vec3 mid   = col8(111, 122,  58);
-        vec3 sun   = col8(146, 148,  74);
-        vec3 dry   = col8(172, 152,  84);
-        vec3 soil  = col8( 84,  66,  46);
-        // Per-strand tone: neighbouring blades are never the same green.
-        float strand = tValue(uv, vec2(60.0, 15.0));
-        vec3 blade = mix(deep, mid, smoothstep(0.08, 0.48, m.h));
-        blade = mix(blade, sun, smoothstep(0.40, 0.90, m.h) * (0.35 + strand * 0.65));
-        blade = mix(blade, dry, smoothstep(0.66, 1.0, strand) * 0.42);
-        // Tuft-scale tone drift: no two clumps are quite the same green.
-        blade = hueShift(blade, (m.id - 0.5) * 0.12);
-        blade *= 0.86 + m.id * 0.28;
-        vec3 c = mix(soil, blade, smoothstep(0.04, 0.30, m.mask * 0.5 + m.h * 0.7));
-        // Dead straw flecks and the odd pale seed head.
-        float straw = smoothstep(0.90, 1.0, tValue(uv, 150.0));
-        c = mix(c, col8(178, 160, 104), straw * 0.5);
-        c *= 0.86 + 0.28 * m.ao;
-        Surf s = surf(c, mix(0.72, 0.94, tFbm01(uv, 22.0, 3)), 0.0);
-        s.ao = mix(0.55, 1.0, m.aoFar);
+        // Warm olive-khaki, greener than it is yellow — MM6's grass reads
+        // #395129 / #3F552E lit, never a lawn green and never olive drab.
+        vec3 deep  = col8( 56,  78,  54);   // the shade down between the blades
+        vec3 body  = col8(100, 136,  86);   // the mass of the sward
+        vec3 sun   = col8(148, 176, 110);   // lit blade tips
+        vec3 straw = col8(176, 162, 102);   // last year's dead stalks
+        vec3 soil  = col8(112,  82,  54);   // warm earth showing through
+
+        float tone = tValue(uv, 46.0);
+        vec3 c = mix(deep, body, smoothstep(0.06, 0.50, m.h));
+        c = mix(c, sun, smoothstep(0.44, 0.92, m.h) * (0.40 + tone * 0.60));
+        c = mix(c, straw, smoothstep(0.68, 1.0, m.id) * 0.38);
+        // Bare earth only under a genuinely thin patch.
+        c = mix(soil, c, smoothstep(0.02, 0.34, m.mask * 0.55 + m.h * 0.75));
+        // Clump-scale tone drift. High frequency only, and gentle: this is the
+        // knob that reads as tiling the instant it gets big or slow.
+        c *= 0.91 + 0.18 * m.id;
+        c = hueShift(c, (m.id - 0.5) * 0.07);
+        // Half-metre tonal drift: enough that the sward is never one flat
+        // green, small and gentle enough that it cannot become a repeat.
+        float drift = tFbm01(uv + 0.61, 9.0, 3);
+        c *= 0.92 + 0.17 * drift;
+        c = hueShift(c, (drift - 0.5) * 0.10);
+        c = mix(c, straw, smoothstep(0.76, 1.0, drift) * 0.16);
+        // Occlusion is already carried by the ORM map; a second helping in the
+        // albedo is what makes a sunny field read as overcast.
+        c *= 0.94 + 0.10 * m.ao;
+
+        Surf s = surf(c, mix(0.80, 0.95, tFbm01(uv, 34.0, 2)), 0.0);
+        s.ao = mix(0.80, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -185,35 +231,45 @@ const GROUND = {
 
   'dry-grass': {
     group: 'ground', detail: true,
-    normalStrength: 0.035, ao: { radius: 0.03, amplitude: 0.5 },
+    normalStrength: 0.030, ao: { radius: 0.028, amplitude: 0.45 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Wind-laid straw: longer, flatter stalks than living grass, lying in
-        // two directions that swap over across the field.
-        float lay = tFbm01(uv, 5.0, 4);
-        float a = smoothstep(0.30, 0.80, fibres(uv,        vec2(46.0, 10.0), 4.0, 0.08, 3));
-        float b = smoothstep(0.30, 0.80, fibres(uv + 0.63, vec2(14.0, 52.0), 4.0, 0.08, 3));
-        float blades = mix(a, b, smoothstep(0.34, 0.66, lay));
-        float wisp = smoothstep(0.45, 0.9, fibres(uv + 0.21, vec2(80.0, 9.0), 5.0, 0.05, 2));
-        float cover = smoothstep(0.14, 0.42, tFbm01(uv + 0.29, 5.0, 4));
-        float h = 0.12 + blades * 0.54 + wisp * 0.16 + lay * 0.08;
-        h = mix(h * 0.45, h, cover);
-        h += tValue(uv, 110.0) * 0.05;
-        return vec3(clamp(h, 0.0, 1.0), fract(blades * 3.1 + lay), cover);
+        // Wind-laid straw: flatter and longer than living grass, combed mostly
+        // one way with cross-laid patches. Two directions, not a warp field —
+        // the old flow warp is what printed fingerprint ridges over this tile.
+        float b0 = tAnisoFbm(uv,        vec2(1.0,  0.0), vec2(0.0,  1.0), vec2( 96.0, 15.0), 2);
+        float b1 = tAnisoFbm(uv + 0.53, vec2(1.0,  1.0), vec2(1.0, -1.0), vec2( 70.0, 11.0), 2);
+        float b2 = tAnisoFbm(uv + 0.29, vec2(1.0, -2.0), vec2(2.0,  1.0), vec2( 58.0, 10.0), 2);
+
+        float sel = tValue(uv, 17.0) * 0.65 + tValue(uv + 0.71, 33.0) * 0.35;
+        vec3 w = pow(max(vec3(0.0),
+                   1.0 - abs(vec3(sel) - vec3(0.16, 0.50, 0.84)) * 3.2), vec3(3.0)) + 0.06;
+        float stalks = dot(vec3(b0, b1, b2), w) / dot(w, vec3(1.0));
+        stalks = smoothstep(0.30, 0.80, stalks);
+
+        // Stubble and thatch under the standing straw.
+        float thatch = tFbm01(uv + 0.19, 52.0, 3);
+        float cover = smoothstep(0.24, 0.58, tFbm01(uv + 0.83, 12.0, 3));
+        float h = 0.14 + stalks * 0.50 + thatch * 0.12 + tValue(uv, 150.0) * 0.05;
+        h = mix(h * 0.48, h, 0.30 + cover * 0.70);
+        float id = fract(tValue(uv, 31.0) * 2.1 + sel * 1.9);
+        return vec3(clamp(h, 0.0, 1.0), id, cover);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 straw = col8(176, 156,  96);
-        vec3 pale  = col8(206, 188, 130);
-        vec3 rot   = col8(122, 104,  58);
-        vec3 soil  = col8(112,  92,  62);
-        float tone = tValue(uv, vec2(50.0, 12.0));
-        vec3 c = mix(rot, straw, smoothstep(0.10, 0.6, m.h));
-        c = mix(c, pale, smoothstep(0.45, 0.95, m.h) * (0.3 + tone * 0.7));
-        c = mix(c, col8(96, 104, 56), smoothstep(0.75, 0.95, tFbm01(uv + 0.51, 4.0, 4)) * 0.35);
-        c = mix(soil, c, smoothstep(0.05, 0.38, m.mask));
-        c *= 0.85 + 0.3 * m.ao;
-        Surf s = surf(c, mix(0.78, 0.95, tone), 0.0);
-        s.ao = mix(0.6, 1.0, m.aoFar);
+        vec3 rot   = col8(104,  88,  50);
+        vec3 straw = col8(162, 142,  82);
+        vec3 pale  = col8(196, 176, 114);
+        vec3 green = col8( 96, 108,  56);   // the odd stalk still alive
+        vec3 soil  = col8(102,  76,  50);
+        float tone = tValue(uv, 42.0);
+        vec3 c = mix(rot, straw, smoothstep(0.08, 0.56, m.h));
+        c = mix(c, pale, smoothstep(0.50, 0.96, m.h) * (0.32 + tone * 0.68));
+        c = mix(c, green, smoothstep(0.80, 1.0, m.id) * 0.42);
+        c = mix(soil, c, smoothstep(0.02, 0.32, m.mask * 0.6 + m.h * 0.7));
+        c *= 0.90 + 0.20 * m.id;
+        c *= 0.94 + 0.10 * m.ao;
+        Surf s = surf(c, mix(0.82, 0.96, tone), 0.0);
+        s.ao = mix(0.80, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -221,41 +277,58 @@ const GROUND = {
 
   'dirt': {
     group: 'ground', hero: true, detail: true,
-    normalStrength: 0.045, ao: { radius: 0.025, amplitude: 0.45 },
+    normalStrength: 0.038, ao: { radius: 0.026, amplitude: 0.34 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Clods: soft lumps of turned earth at two scales.
-        float clod = tFbm01(tWarp(uv, vec2(6.0), 0.06, 3), 9.0, 5);
-        float clod2 = tFbm01(uv + 0.19, 26.0, 4);
-        // Embedded stones, the small ones far more common than the large.
-        vec3 big = tWorley(uv, 18.0, 0.95);
-        vec3 small = tWorley(uv + 0.53, 46.0, 1.0);
-        float stoneBig = smoothstep(0.34, 0.06, big.x) * step(0.72, big.z);
-        float stoneSm  = smoothstep(0.30, 0.05, small.x) * step(0.60, small.z);
-        float stones = max(stoneBig, stoneSm * 0.6);
-        float grain = tValue(uv, 180.0) * 0.06 + tGrain(uv, 320.0) * 0.03;
-        // Clods are lumps, not a smooth swell: bias the fBm toward its peaks.
-        clod = pow(clod, 1.5);
-        float h = 0.26 + clod * 0.36 + clod2 * 0.16 + stones * 0.30 + grain;
-        return vec3(clamp(h, 0.0, 1.0), max(big.z * stoneBig, small.z * stoneSm), stones);
+        // Beaten earth is not a noise wash — MM6's dirt is visibly cobbly — but
+        // it is emphatically not a crack network either. Cell *border* distance
+        // draws straight polygon edges, and straight dark edges at ground scale
+        // are exactly what reads as dried mud or reptile skin. These clods are
+        // round F1 domes with a wide, soft falloff, so what lies between them is
+        // a shallow grit-filled hollow rather than a drawn line.
+        vec3 w1 = tWorley(uv + 0.11, 20.0, 1.0);   // ~33 cm on a 6.5 m tile
+        vec3 w2 = tWorley(uv + 0.53, 37.0, 1.0);   // ~18 cm
+        vec3 w3 = tWorley(uv + 0.87, 71.0, 1.0);   // ~9 cm
+        float d1 = smoothstep(0.66, 0.10, w1.x) * (0.62 + w1.z * 0.38);
+        float d2 = smoothstep(0.62, 0.08, w2.x) * (0.50 + w2.z * 0.35);
+        float d3 = smoothstep(0.58, 0.06, w3.x) * (0.34 + w3.z * 0.30);
+        float clod = max(max(d1, d2 * 0.92), d3 * 0.80);
+
+        vec3 grit = tWorley(uv + 0.61, 132.0, 1.0);
+        float pebble = smoothstep(0.30, 0.04, grit.x) * step(0.80, grit.z);
+
+        // Traffic drags beaten earth into fine near-horizontal streaks of
+        // lighter ochre — called out explicitly in the reference.
+        float drag = tAnisoFbm(uv, vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(44.0, 11.0), 2);
+
+        float h = 0.22 + clod * 0.40 + drag * 0.12 + pebble * 0.14
+                + tValue(uv, 190.0) * 0.06;
+        float id = fract(w1.z * 0.55 + w2.z * 0.31 + w3.z * 0.14);
+        return vec3(clamp(h, 0.0, 1.0), id, clamp(pebble, 0.0, 1.0));
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 dry   = col8(122,  98,  68);
-        vec3 pale  = col8(154, 130,  96);
-        vec3 damp  = col8( 76,  58,  40);
-        vec3 stoneA = col8(148, 140, 128);
-        vec3 stoneB = col8(120, 104,  86);
-        float wet = tFbm01(uv + 0.83, 5.0, 4);
-        vec3 c = mix(damp, dry, smoothstep(0.2, 0.8, m.h));
-        c = mix(c, pale, smoothstep(0.55, 1.0, m.h) * 0.55);
-        c = mix(c, damp, smoothstep(0.62, 0.9, wet) * 0.45);
-        vec3 stone = mix(stoneA, stoneB, m.id);
-        stone = speckle3(uv, stone, stone * 1.2, stone * 0.7, 220.0);
-        c = mix(c, stone, smoothstep(0.10, 0.45, m.mask));
-        c *= 0.8 + 0.32 * m.ao;
-        float rough = mix(0.98, 0.72, m.mask) - smoothstep(0.6, 0.9, wet) * 0.12;
+        // #523021 lit: a dark, red-leaning brown. Never tan, never sandy.
+        vec3 damp  = col8( 74,  48,  35);
+        vec3 body  = col8(110,  74,  52);
+        vec3 lit   = col8(146, 106,  76);
+        vec3 ochre = col8(166, 130,  88);
+        vec3 stone = col8(136, 120, 102);
+
+        float drift = tFbm01(uv + 0.83, 18.0, 3);
+        // Tone is carried per clod, not by the joint: the moment the gaps
+        // between clods are the darkest thing in the texture it reads cracked.
+        vec3 c = mix(body, lit, smoothstep(0.30, 0.95, m.id));
+        c = mix(c, damp, smoothstep(0.34, 0.0, m.id) * 0.8);
+        c = mix(c, mix(damp, body, 0.5), smoothstep(0.44, 0.10, m.h) * 0.55);
+        // The ochre streaking rides the drag marks, not the clods.
+        c = mix(c, ochre, smoothstep(0.62, 0.95, drift) * 0.30);
+        c = mix(c, damp, smoothstep(0.68, 0.96, tFbm01(uv + 0.21, 21.0, 3)) * 0.26);
+        vec3 peb = speckle3(uv, stone, stone * 1.18, stone * 0.66, 240.0);
+        c = mix(c, peb, smoothstep(0.18, 0.62, m.mask) * 0.75);
+        c *= 0.95 + 0.09 * m.ao;
+        float rough = mix(0.97, 0.80, m.mask);
         Surf s = surf(c, rough, 0.0);
-        s.ao = mix(0.5, 1.0, m.aoFar);
+        s.ao = mix(0.82, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -263,31 +336,46 @@ const GROUND = {
 
   'mud': {
     group: 'ground', detail: true,
-    normalStrength: 0.05, ao: { radius: 0.03, amplitude: 0.5 },
+    normalStrength: 0.055, ao: { radius: 0.026, amplitude: 0.55 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Churned ruts and hollows, with drying cracks on the high ground.
-        vec2 w = tWarp(uv, vec2(4.0), 0.09, 4);
-        float base = tFbm01(w, 7.0, 5);
-        float ruts = 1.0 - abs(tPerlin(uv, vec2(3.0, 9.0)));
-        float crack = tCracks(uv + 0.37, 14.0, 0.09, 0.9);
-        float dryland = smoothstep(0.45, 0.8, base);
-        float h = 0.22 + base * 0.5 + ruts * 0.12 - crack * 0.16 * dryland;
-        h += tValue(uv, 120.0) * 0.04;
-        float puddle = smoothstep(0.34, 0.16, base);
-        return vec3(clamp(h, 0.0, 1.0), tGrain(uv, 20.0), puddle);
+        // Churned ground: overlapping boot and hoof dishes pressed into a soft
+        // surface, a drying crust on whatever stands proud, and standing water
+        // in the deepest print.
+        // Prints are sparse — one dish here and there, not a honeycomb. A dense
+        // voronoi of dimples reads as a sponge, which is what this was.
+        vec3 print = tWorley(tWarp(uv, vec2(24.0), 0.010, 2), 11.0, 1.0);
+        float dish = smoothstep(0.52, 0.16, print.x) * step(0.76, print.z);
+        vec3 print2 = tWorley(uv + 0.44, 23.0, 1.0);
+        float dish2 = smoothstep(0.40, 0.12, print2.x) * step(0.86, print2.z);
+
+        float lumps = tFbm01(uv, 19.0, 4);
+        // Wheels and feet smear the surface into long ridges before it dries.
+        float smear = tAnisoFbm(uv, vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(26.0, 7.0), 3);
+        float rim = smoothstep(0.28, 0.50, print.x) * smoothstep(0.72, 0.50, print.x)
+                  * step(0.72, print.z);
+        // Crust cracks are fine and live only on the dried high ground.
+        float crust = smoothstep(0.56, 0.88, lumps);
+        float crack = tCracks(uv + 0.37, 44.0, 0.04, 0.9) * crust;
+
+        float h = 0.28 + lumps * 0.28 + smear * 0.22 + rim * 0.09
+                - dish * 0.15 - dish2 * 0.07 - crack * 0.08
+                + tValue(uv, 150.0) * 0.05;
+        float wet = clamp(dish * 0.85 + dish2 * 0.3 - crust * 0.55, 0.0, 1.0);
+        return vec3(clamp(h, 0.0, 1.0), fract(print.z * 3.1 + lumps), wet);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 wet   = col8( 46,  36,  27);
-        vec3 mid   = col8( 88,  70,  52);
-        vec3 dryc  = col8(126, 104,  78);
-        float film = smoothstep(0.2, 0.75, m.mask);
-        vec3 c = mix(mid, dryc, smoothstep(0.45, 0.95, m.h));
-        c = mix(c, wet, film);
-        c *= 0.78 + 0.34 * m.ao;
-        float rough = mix(0.9, 0.18, film) - smoothstep(0.5, 1.0, m.h) * 0.05;
+        vec3 soaked = col8( 52,  38,  28);
+        vec3 body   = col8( 92,  68,  48);
+        vec3 dried  = col8(140, 112,  82);
+        vec3 grit   = col8(118, 104,  88);
+        vec3 c = mix(body, dried, smoothstep(0.42, 0.92, m.h));
+        c = mix(c, soaked, m.mask * 0.85);
+        c = mix(c, grit, smoothstep(0.90, 1.0, tValue(uv, 210.0)) * 0.4);
+        c *= 0.82 + 0.32 * m.ao;
+        float rough = mix(0.94, 0.16, m.mask) - smoothstep(0.6, 1.0, m.h) * 0.04;
         Surf s = surf(c, clamp(rough, 0.12, 0.96), 0.0);
-        s.ao = mix(0.5, 1.0, m.aoFar);
+        s.ao = mix(0.48, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -295,31 +383,54 @@ const GROUND = {
 
   'sand': {
     group: 'ground', detail: true,
-    normalStrength: 0.03, ao: { radius: 0.03, amplitude: 0.35 },
+    normalStrength: 0.026, ao: { radius: 0.03, amplitude: 0.32 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Wind ripples: a periodic wave whose phase is dragged by a flow field.
-        vec2 w = tWarp(uv, vec2(3.0), 0.10, 3);
-        float ripple = sin((w.y * 26.0 + tFbm(uv, vec2(4.0), 3) * 3.0) * PI2) * 0.5 + 0.5;
-        ripple = pow(ripple, 1.6);
-        float dune = tFbm01(uv, 4.0, 4);
-        float grit = tValue(uv, 220.0) * 0.06 + tGrain(uv, 420.0) * 0.04;
-        float shells = smoothstep(0.965, 1.0, tValue(uv + 0.21, 90.0));
-        float h = 0.3 + dune * 0.28 + ripple * 0.22 * (0.5 + dune * 0.5) + grit + shells * 0.1;
-        return vec3(clamp(h, 0.0, 1.0), tGrain(uv, 30.0), shells);
+        // No sine ripple. A periodic wave whose phase is dragged by a
+        // low-frequency warp is exactly the brain-coral / fingerprint artefact
+        // this material used to show; the ripples are anisotropic noise now.
+        float swell = tFbm01(uv, 12.0, 3);
+        // Ripples are sharp-crested and shallow-troughed, which is what makes a
+        // beach read as sand rather than as a smooth dune of nothing.
+        // Strongly anisotropic and handed over sharply. Two crossed fields
+        // blended half-and-half over a wide band is an isotropic field again,
+        // and an isotropic field pushed through a narrow contrast curve is the
+        // fingerprint maze this material used to print across the beach.
+        float rA = tAnisoFbm(uv,        vec2(0.0, 1.0), vec2(1.0,  0.0), vec2(86.0, 9.0), 2);
+        float rB = tAnisoFbm(uv + 0.29, vec2(1.0, 2.0), vec2(2.0, -1.0), vec2(62.0, 7.0), 2);
+        float ripple = mix(rA, rB, smoothstep(0.44, 0.56, swell));
+        ripple = smoothstep(0.26, 0.80, ripple);
+
+        // Coarse grains sit proud of the fines; both are needed or the surface
+        // mips down to a blank wash within a couple of metres.
+        vec3 coarse = tWorley(uv + 0.37, 150.0, 1.0);
+        float grains = smoothstep(0.40, 0.02, coarse.x) * (0.4 + coarse.z * 0.6);
+        float grit = tValue(uv, 240.0) * 0.55 + tGrain(uv, 420.0) * 0.45;
+        float shell = smoothstep(0.968, 1.0, tValue(uv + 0.21, 140.0));
+        float track = smoothstep(0.88, 1.0, tFbm01(uv + 0.66, 46.0, 3));
+
+        float h = 0.30 + swell * 0.08 + ripple * 0.24 + grains * 0.18 + grit * 0.12
+                + shell * 0.09 - track * 0.07;
+        return vec3(clamp(h, 0.0, 1.0), fract(coarse.z * 2.3 + swell), shell);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 lightc = col8(214, 196, 152);
-        vec3 midc   = col8(190, 168, 122);
-        vec3 shade  = col8(150, 128,  90);
-        vec3 c = mix(shade, midc, smoothstep(0.15, 0.6, m.h));
-        c = mix(c, lightc, smoothstep(0.55, 1.0, m.h));
-        c = mix(c, col8(168, 142, 104), tFbm01(uv, 6.0, 4) * 0.3);
-        c = mix(c, col8(232, 226, 212), m.mask * 0.7);
-        c *= 0.88 + 0.22 * m.ao;
-        float sparkle = smoothstep(0.93, 1.0, tGrain(uv, 512.0));
-        Surf s = surf(c, mix(0.86, 0.42, sparkle), 0.0);
-        s.ao = mix(0.72, 1.0, m.aoFar);
+        // Warm ochre beach sand, not bleached white — a white beach would be
+        // the brightest thing in an MM6 frame, and nothing outdoors is.
+        vec3 shade = col8(140, 118,  84);
+        vec3 body  = col8(178, 154, 112);
+        vec3 lit   = col8(204, 184, 142);
+        vec3 wet   = col8(120,  98,  72);
+        vec3 c = mix(shade, body, smoothstep(0.18, 0.62, m.h));
+        c = mix(c, lit, smoothstep(0.56, 1.0, m.h) * 0.9);
+        c = mix(c, wet, smoothstep(0.66, 0.95, tFbm01(uv + 0.47, 15.0, 3)) * 0.30);
+        // Individual coarse grains: quartz pale, a few dark and a few rusty.
+        c = mix(c, lit * 1.12, smoothstep(0.72, 1.0, m.id) * 0.5);
+        c = mix(c, col8(112,  86,  58), smoothstep(0.22, 0.0, m.id) * 0.45);
+        c = mix(c, col8(226, 216, 196), m.mask * 0.65);
+        c *= 0.95 + 0.09 * m.ao;
+        float sparkle = smoothstep(0.94, 1.0, tGrain(uv, 512.0));
+        Surf s = surf(c, mix(0.88, 0.48, sparkle), 0.0);
+        s.ao = mix(0.88, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -327,36 +438,37 @@ const GROUND = {
 
   'gravel': {
     group: 'ground', detail: true,
-    normalStrength: 0.06, ao: { radius: 0.02, amplitude: 0.6 },
+    normalStrength: 0.058, ao: { radius: 0.02, amplitude: 0.6 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Two packings of stones, the fine one filling the gaps of the coarse.
-        vec4 a = tCells(tWarp(uv, vec2(8.0), 0.02, 3), 16.0, 0.95);
-        vec4 b = tCells(uv + 0.41, 34.0, 1.0);
-        float domeA = smoothstep(0.0, 0.16, a.x);
-        float domeB = smoothstep(0.0, 0.13, b.x);
-        float stoneA = pow(domeA, 0.5) * (0.55 + a.w * 0.45);
-        float stoneB = pow(domeB, 0.55) * (0.35 + b.w * 0.3);
-        float h = max(stoneA, stoneB * 0.75);
-        h += tValue(uv, 200.0) * 0.05 * step(0.05, h);
-        float which = step(stoneB * 0.75, stoneA);
-        return vec3(clamp(h * 0.9 + 0.05, 0.0, 1.0), mix(b.y, a.y, which), which);
+        // Two packings of stones, the fine one filling the gaps of the coarse,
+        // bedded into a dusty matrix rather than floating on black.
+        vec4 a = tCells(uv,        18.0, 0.95);
+        vec4 b = tCells(uv + 0.41, 38.0, 1.0);
+        float domeA = pow(smoothstep(0.0, 0.145, a.x), 0.5)  * (0.55 + a.w * 0.45);
+        float domeB = pow(smoothstep(0.0, 0.120, b.x), 0.55) * (0.36 + b.w * 0.32);
+        float h = max(domeA, domeB * 0.82);
+        float dust = tFbm01(uv + 0.7, 60.0, 3);
+        h = max(h, dust * 0.20);
+        h += tValue(uv, 200.0) * 0.05;
+        float which = step(domeB * 0.82, domeA);
+        return vec3(clamp(h * 0.9 + 0.06, 0.0, 1.0), mix(b.y, a.y, which), which);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 grey  = col8(150, 146, 138);
-        vec3 dark  = col8( 92,  90,  88);
-        vec3 warm  = col8(140, 118,  92);
-        vec3 pale  = col8(190, 186, 176);
+        vec3 grey  = col8(146, 140, 128);
+        vec3 dark  = col8( 88,  84,  78);
+        vec3 warm  = col8(148, 122,  92);
+        vec3 pale  = col8(186, 178, 162);
         float t = m.id;
-        vec3 stone = mix(dark, grey, smoothstep(0.1, 0.6, t));
-        stone = mix(stone, warm, smoothstep(0.55, 0.85, t));
+        vec3 stone = mix(dark, grey, smoothstep(0.10, 0.55, t));
+        stone = mix(stone, warm, smoothstep(0.50, 0.84, t));
         stone = mix(stone, pale, smoothstep(0.86, 1.0, t));
-        stone = mix(stone, stone * 1.08, tValue(uv, 240.0) * 0.5);
-        vec3 dirt = col8(84, 70, 54);
-        vec3 c = mix(dirt, stone, smoothstep(0.08, 0.32, m.h));
-        c *= 0.72 + 0.4 * m.ao;
-        Surf s = surf(c, mix(0.95, 0.62, smoothstep(0.3, 0.9, m.h)) - t * 0.08, 0.0);
-        s.ao = mix(0.4, 1.0, m.aoFar);
+        stone = speckle3(uv, stone, stone * 1.12, stone * 0.78, 260.0);
+        vec3 dirtc = col8(96, 74, 54);
+        vec3 c = mix(dirtc, stone, smoothstep(0.06, 0.30, m.h));
+        c *= 0.76 + 0.36 * m.ao;
+        Surf s = surf(c, mix(0.95, 0.66, smoothstep(0.3, 0.9, m.h)) - t * 0.06, 0.0);
+        s.ao = mix(0.44, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -364,41 +476,61 @@ const GROUND = {
 
   'rock': {
     group: 'ground', hero: true, detail: true,
-    normalStrength: 0.07, ao: { radius: 0.025, amplitude: 0.6 },
+    normalStrength: 0.050, ao: { radius: 0.028, amplitude: 0.38 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Ridged multifractal gives crests and smooth erosion valleys.
-        float ridge = tRidged(tWarp(uv, vec2(3.0), 0.05, 3), vec2(4.0), 6, 2.0, 0.62, 1.0);
-        // Conchoidal flaking: broad shallow facets where slabs have spalled off.
-        vec4 facets = tCells(tWarp(uv + 0.13, vec2(4.0), 0.04, 3), 6.0, 0.85);
-        float facet = smoothstep(0.0, 0.22, facets.x);
-        float fine = tRidged(uv + 0.31, vec2(18.0), 4, 2.0, 0.5, 1.0);
-        // Fracture network cutting across the mass.
-        // A few real fractures, not a mud-crack net: thin, sparse, and only
-        // where the rock is already stressed by a ridge crest.
-        float frac = tCracks(uv + 0.11, 4.0, 0.035, 0.8) * smoothstep(0.35, 0.75, ridge);
-        float frac2 = tCracks(uv + 0.67, 9.0, 0.022, 0.95) * 0.6;
-        float pit = smoothstep(0.72, 1.0, tValue(uv, 130.0));
-        float h = 0.18 + ridge * 0.46 + facet * 0.22 + fine * 0.18
-                - frac * 0.20 - frac2 * 0.07 - pit * 0.05;
-        return vec3(clamp(h, 0.0, 1.0), fract(facets.y + tFbm01(uv, 5.0, 3) * 0.4),
-                    max(frac, frac2 * 0.6));
+        // This is the layer the terrain splat puts on every steep slope, so it
+        // is what a hillside is made of — and in MM6 a hillside is eroded brown
+        // earth studded with broken stone, not a grey crag.
+        //
+        // The old version drew a voronoi fracture net at frequency 4 over a 9 m
+        // tile: 2 m polygons with hard dark edges, i.e. the cracked reptile-skin
+        // foreground that dominated the vista shot. There is no crack network
+        // here at all. Stones are round F1 domes with a wide falloff, so the
+        // ground between them is a soft hollow rather than a drawn line.
+        vec3 w1 = tWorley(uv + 0.07, 11.0, 1.0);   // ~82 cm boulders on a 9 m tile
+        vec3 w2 = tWorley(uv + 0.43, 27.0, 1.0);   // ~33 cm
+        vec3 w3 = tWorley(uv + 0.81, 55.0, 1.0);   // ~16 cm
+        float f1 = smoothstep(0.74, 0.10, w1.x) * (0.62 + w1.z * 0.38);
+        float f2 = smoothstep(0.64, 0.10, w2.x) * (0.44 + w2.z * 0.38);
+        float f3 = smoothstep(0.60, 0.08, w3.x) * (0.28 + w3.z * 0.28);
+        float blocks = max(max(f1, f2 * 0.90), f3 * 0.76);
+
+        // Rain scours the loose earth downslope in fine runnels.
+        float runnel = tAnisoFbm(uv, vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(52.0, 13.0), 3);
+        float rubble = tFbm01(uv + 0.17, 96.0, 3);
+
+        float h = 0.16 + blocks * 0.46 + runnel * 0.14 + rubble * 0.12
+                + tValue(uv, 210.0) * 0.06;
+        float id = fract(w1.z * 0.58 + w2.z * 0.29 + w3.z * 0.13);
+        // Mask = how much of the surface is loose earth rather than stone face.
+        float earth = clamp(1.0 - blocks * 1.4, 0.0, 1.0);
+        return vec3(clamp(h, 0.0, 1.0), id, earth);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 base = speckle3(uv, col8(140, 133, 120), col8(168, 160, 146), col8(96, 92, 86), 150.0);
-        vec3 darkc = col8( 78,  74,  68);
-        vec3 warm  = col8(146, 128, 104);
-        vec3 c = mix(darkc, base, smoothstep(0.10, 0.55, m.h));
-        // Each spalled facet is a slightly different stone tone.
-        c = mix(c, warm, smoothstep(0.45, 0.95, m.id) * 0.45);
-        c = mix(c, base * 1.22, smoothstep(0.45, 0.05, m.id) * 0.45);
-        // Lichen prefers the sheltered, north-facing hollows.
-        float lichen = colonise(uv, 10.0, max(-m.curv, 0.0), 0.10);
-        c = mix(c, col8(154, 158, 122), lichen * 0.45 * (1.0 - m.mask));
-        c = mix(c, darkc * 0.7, m.mask * 0.7);
-        c *= 0.74 + 0.38 * m.ao;
-        Surf s = surf(c, mix(0.62, 0.92, tFbm01(uv, 30.0, 3)) + lichen * 0.06, 0.0);
-        s.ao = mix(0.42, 1.0, m.aoFar);
+        // Warm brown-grey. Sampled off the eroded cliff in Screenshot 35 this
+        // reads #543926 / #623C29 — a red-brown, not the pale grey it was.
+        vec3 shadow = col8( 96,  74,  56);
+        vec3 stone  = col8(132, 112,  90);
+        vec3 lit    = col8(166, 144, 116);
+        vec3 iron   = col8(144,  96,  58);
+        vec3 earth  = col8(122,  84,  58);
+
+        vec3 face = speckle3(uv, stone, stone * 1.14, stone * 0.74, 200.0);
+        face = mix(face, lit, smoothstep(0.58, 1.0, m.id) * 0.42);
+        face = mix(face, shadow, smoothstep(0.38, 0.0, m.id) * 0.50);
+        // Iron staining runs in beds, which is what makes a slope read brown
+        // from fifty metres while still reading as stone up close. Kept at a
+        // frequency small enough that the staining cannot become a landmark.
+        face = mix(face, iron, smoothstep(0.42, 0.86, tFbm01(uv + 0.29, 19.0, 3)) * 0.50);
+
+        vec3 c = mix(mix(shadow, face, 0.55), face, smoothstep(0.14, 0.62, m.h));
+        c = mix(c, earth, smoothstep(0.15, 0.75, m.mask) * 0.9);
+        float lichen = colonise(uv, 22.0, max(-m.curv, 0.0), 0.07);
+        c = mix(c, col8(140, 144, 100), lichen * 0.30 * (1.0 - m.mask));
+        c *= 0.94 + 0.10 * m.ao;
+        Surf s = surf(c, mix(0.70, 0.95, m.mask) + lichen * 0.05, 0.0);
+        s.ao = mix(0.80, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -406,48 +538,53 @@ const GROUND = {
 
   'cliff': {
     group: 'ground', hero: true, detail: true, triplanar: true,
-    normalStrength: 0.09, ao: { radius: 0.03, amplitude: 0.7 },
+    normalStrength: 0.085, ao: { radius: 0.028, amplitude: 0.7 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Sedimentary strata: hard bands stand proud, soft bands recede.
-        // Bedding planes: a handful of thick courses, each a different hardness,
-        // wandering slightly so they never look like a ruled grid.
-        float bendy = uv.y + tFbm(uv, vec2(3.0, 1.0), 4) * 0.05;
-        float band = bendy * 5.0;
+        // Sedimentary strata: hard beds stand proud, soft beds recede. The old
+        // version added a voronoi fracture net on top, which turned the whole
+        // face into scales; the breaks are now blocky spalls along the beds.
+        float bendy = uv.y + tFbm(uv, vec2(3.0, 1.0), 3) * 0.035;
+        float band = bendy * 7.0;
         float bandId = floor(band);
         float bandF = fract(band);
         float hard = hash11(bandId * 1.37 + 4.1);
-        float shelf = smoothstep(0.0, 0.09, bandF) * smoothstep(1.0, 0.91, bandF);
-        float strata = mix(0.2, 1.0, hard) * shelf;
-        // Thin sub-laminations inside each course.
-        float lam = abs(tPerlin(uv, vec2(4.0, 40.0))) * 0.5;
-        // Vertical erosion channels and a few blocky fractures.
-        float chan = tRidged(uv, vec2(7.0, 2.0), 4, 2.0, 0.5, 1.0);
-        float frac = tCracks(uv + 0.23, vec2(4.0, 3.0), 0.05, 0.8);
-        float rough_ = tRidged(uv + 0.51, vec2(16.0), 4, 2.0, 0.5, 1.0);
-        float h = 0.16 + strata * 0.46 + lam * 0.10 * shelf + chan * 0.16 + rough_ * 0.12 - frac * 0.18;
-        return vec3(clamp(h, 0.0, 1.0), hash11(bandId * 3.7), frac);
+        float shelf = smoothstep(0.0, 0.10, bandF) * smoothstep(1.0, 0.90, bandF);
+        float strata = mix(0.25, 1.0, hard) * shelf;
+
+        // Blocks spalling off the face, keyed to the bed they sit in.
+        vec4 sp = tCells(uv * vec2(1.0, 1.0) + vec2(bandId * 0.37, 0.0), vec2(9.0, 14.0), 0.85);
+        float spall = pow(smoothstep(0.0, 0.12, sp.x), 0.6) * (0.4 + sp.w * 0.6);
+
+        float lam = abs(tPerlin(uv, vec2(6.0, 54.0))) * 0.5;
+        float chan = tRidged(uv, vec2(11.0, 3.0), 4, 2.0, 0.5, 1.0);
+        float grit = tFbm01(uv + 0.51, 74.0, 3);
+
+        float h = 0.14 + strata * 0.40 + spall * 0.20 + lam * 0.10 * shelf
+                + chan * 0.12 + grit * 0.10;
+        return vec3(clamp(h, 0.0, 1.0), hash11(bandId * 3.7), sp.y);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 pale  = col8(162, 150, 130);
-        vec3 midc  = col8(126, 114,  98);
-        vec3 darkc = col8( 88,  80,  70);
-        vec3 iron  = col8(140, 106,  70);
-        // Each bed keeps its own colour, so the banding reads at distance.
+        vec3 pale  = col8(158, 144, 122);
+        vec3 midc  = col8(120, 106,  88);
+        vec3 darkc = col8( 74,  64,  52);
+        vec3 iron  = col8(136,  92,  54);
         vec3 bed = mix(midc, pale, m.id);
-        bed = mix(bed, iron, smoothstep(0.55, 1.0, m.id) * 0.55);
-        bed = mix(bed, darkc, smoothstep(0.35, 0.0, m.id) * 0.7);
+        bed = mix(bed, iron, smoothstep(0.52, 1.0, m.id) * 0.6);
+        bed = mix(bed, darkc, smoothstep(0.34, 0.0, m.id) * 0.7);
+        bed = speckle3(uv, bed, bed * 1.14, bed * 0.76, 210.0);
+        // Each spalled block keeps its own tone so the face is not one wash.
+        bed *= 0.88 + 0.24 * m.mask;
+
         vec3 c = mix(darkc, bed, smoothstep(0.05, 0.45, m.h));
-        c = mix(c, bed * 1.18, smoothstep(0.5, 0.95, m.h) * 0.6);
-        // Rain streaks bleed downward off every ledge.
-        float wash = streaks(uv, 40.0, 14.0);
-        c = mix(c, c * 0.72, smoothstep(0.45, 0.85, wash) * 0.5);
-        c = mix(c, darkc * 0.65, m.mask * 0.8);
-        float lichen = colonise(uv + 0.4, 9.0, max(-m.curv, 0.0), 0.12);
-        c = mix(c, col8(132, 142, 104), lichen * 0.45);
-        c *= 0.72 + 0.4 * m.ao;
-        Surf s = surf(c, mix(0.66, 0.94, tFbm01(uv, 26.0, 3)), 0.0);
-        s.ao = mix(0.38, 1.0, m.aoFar);
+        c = mix(c, bed * 1.16, smoothstep(0.5, 0.95, m.h) * 0.55);
+        float wash = streaks(uv, 48.0, 16.0);
+        c = mix(c, c * 0.76, smoothstep(0.48, 0.88, wash) * 0.45);
+        float lichen = colonise(uv + 0.4, 18.0, max(-m.curv, 0.0), 0.09);
+        c = mix(c, col8(124, 130,  92), lichen * 0.36);
+        c *= 0.76 + 0.36 * m.ao;
+        Surf s = surf(c, mix(0.68, 0.94, tFbm01(uv, 40.0, 3)), 0.0);
+        s.ao = mix(0.42, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -455,27 +592,46 @@ const GROUND = {
 
   'snow': {
     group: 'ground', detail: true,
-    normalStrength: 0.03, ao: { radius: 0.035, amplitude: 0.3 },
+    normalStrength: 0.034, ao: { radius: 0.03, amplitude: 0.38 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        float drift = tFbm01(tWarp(uv, vec2(3.0), 0.08, 3), 5.0, 5);
-        float sastrugi = tRidged(uv, vec2(9.0, 3.0), 4, 2.0, 0.5, 1.0);
-        float crust = tValue(uv, 140.0) * 0.05 + tGrain(uv, 300.0) * 0.03;
-        float print = smoothstep(0.82, 1.0, tFbm01(uv + 0.61, 16.0, 3));
-        float h = 0.35 + drift * 0.38 + sastrugi * 0.22 + crust - print * 0.12;
-        return vec3(clamp(h, 0.0, 1.0), tGrain(uv, 26.0), print);
+        // Snow is not a smooth white sphere: it is a granular crust carved by
+        // wind into sastrugi, dimpled where it has thawed and refrozen, and
+        // broken open where something walked over it.
+        float drift = tFbm01(uv, 11.0, 3);
+        float sastA = tAnisoFbm(uv,        vec2(0.0, 1.0), vec2(1.0,  0.0), vec2(38.0, 9.0), 3);
+        float sastB = tAnisoFbm(uv + 0.37, vec2(1.0, 1.0), vec2(1.0, -1.0), vec2(28.0, 7.0), 3);
+        float sast = mix(sastA, sastB, smoothstep(0.35, 0.65, drift));
+        sast = pow(sast, 1.3);
+
+        vec3 gran = tWorley(uv + 0.19, 120.0, 1.0);
+        float grain = smoothstep(0.42, 0.0, gran.x) * (0.4 + gran.z * 0.6);
+        vec3 cup = tWorley(uv + 0.63, 30.0, 1.0);
+        float melt = smoothstep(0.44, 0.10, cup.x) * step(0.62, cup.z);
+        float crust = smoothstep(0.86, 1.0, tValue(uv + 0.51, 66.0));
+
+        float h = 0.34 + drift * 0.12 + sast * 0.30 + grain * 0.12
+                - melt * 0.14 + crust * 0.06 + tValue(uv, 240.0) * 0.04;
+        return vec3(clamp(h, 0.0, 1.0), fract(gran.z * 2.7 + drift), clamp(melt + crust * 0.4, 0.0, 1.0));
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 white = col8(238, 242, 250);
-        vec3 blue  = col8(178, 196, 224);
-        vec3 grey  = col8(206, 212, 224);
-        vec3 c = mix(blue, white, smoothstep(0.2, 0.75, m.h));
-        c = mix(c, grey, (1.0 - m.aoFar) * 0.5);
-        c = mix(c, blue, m.mask * 0.5);
-        c *= 0.9 + 0.16 * m.ao;
+        // Snow lit by a warm sun over a blue sky: the crests take the sun, the
+        // hollows take the sky. Nothing here is pure white.
+        vec3 lit   = col8(232, 234, 232);
+        vec3 crust = col8(214, 216, 218);
+        vec3 hollow = col8(164, 182, 208);
+        vec3 deep  = col8(132, 154, 186);
+        vec3 c = mix(deep, hollow, smoothstep(0.10, 0.42, m.h));
+        c = mix(c, crust, smoothstep(0.36, 0.72, m.h));
+        c = mix(c, lit, smoothstep(0.64, 0.98, m.h) * 0.9);
+        c = mix(c, hollow, (1.0 - m.aoFar) * 0.55);
+        c = mix(c, deep, m.mask * 0.35);
+        // A little grit and old ice keeps it from being a flat white field.
+        c = mix(c, col8(178, 176, 172), smoothstep(0.965, 1.0, tValue(uv, 180.0)) * 0.5);
+        c *= 0.92 + 0.14 * m.ao;
         float sparkle = smoothstep(0.955, 1.0, tGrain(uv, 640.0));
-        Surf s = surf(c, mix(0.72, 0.22, sparkle) - m.mask * 0.1, 0.0);
-        s.ao = mix(0.7, 1.0, m.aoFar);
+        Surf s = surf(c, mix(0.74, 0.18, sparkle) - m.mask * 0.14, 0.0);
+        s.ao = mix(0.72, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -483,7 +639,7 @@ const GROUND = {
 
   'forest-floor': {
     group: 'ground', hero: true, detail: true,
-    normalStrength: 0.05, ao: { radius: 0.025, amplitude: 0.55 },
+    normalStrength: 0.048, ao: { radius: 0.024, amplitude: 0.55 },
     glsl: /* glsl */ `
       // One layer of scattered, rotated leaves. Rotation happens in cell-local
       // space, so the lattice — and therefore the tiling — is untouched.
@@ -510,39 +666,40 @@ const GROUND = {
         return best;
       }
       vec3 mStruct(vec2 uv) {
+        // Leaves sized for a 2 m repeat: ~12 cm blades, not the dinner plates
+        // the old frequencies produced, which read as camouflage.
         float id1, id2, id3;
-        float l1 = leafLayer(uv, 5.0, 0.0, id1);
-        float l2 = leafLayer(uv, 8.0, 3.7, id2);
-        float l3 = leafLayer(uv, 12.0, 8.3, id3);
-        float humus = tFbm01(uv, 10.0, 5) * 0.28;
-        float twig = smoothstep(0.09, 0.0, tCells(uv + 0.9, vec2(5.0, 16.0), 1.0).x) * 0.25;
+        float l1 = leafLayer(uv,  9.0, 0.0, id1);
+        float l2 = leafLayer(uv, 15.0, 3.7, id2);
+        float l3 = leafLayer(uv, 23.0, 8.3, id3);
+        float humus = tFbm01(uv, 26.0, 4) * 0.26;
+        float twig = smoothstep(0.07, 0.0, tCells(uv + 0.9, vec2(9.0, 30.0), 1.0).x) * 0.24;
         float h = humus;
         float id = 0.0;
-        if (l3 > 0.0) { h = max(h, 0.30 + l3 * 0.30); id = id3; }
-        if (l2 > 0.0) { h = max(h, 0.38 + l2 * 0.34); id = id2; }
-        if (l1 > 0.0) { h = max(h, 0.46 + l1 * 0.38); id = id1; }
+        if (l3 > 0.0) { h = max(h, 0.30 + l3 * 0.28); id = id3; }
+        if (l2 > 0.0) { h = max(h, 0.38 + l2 * 0.32); id = id2; }
+        if (l1 > 0.0) { h = max(h, 0.46 + l1 * 0.36); id = id1; }
         h = max(h, twig + 0.34);
         float leafMask = clamp(max(max(l1, l2), l3) * 2.2, 0.0, 1.0);
-        return vec3(clamp(h + tValue(uv, 160.0) * 0.04, 0.0, 1.0), id, leafMask);
+        return vec3(clamp(h + tValue(uv, 190.0) * 0.04, 0.0, 1.0), id, leafMask);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 humus = col8( 54,  42,  30);
-        vec3 leafA = col8(128,  98,  58);
-        vec3 leafB = col8( 96,  70,  42);
-        vec3 leafC = col8(150, 126,  84);
-        vec3 leafD = col8( 96,  84,  54);
+        vec3 humus = col8( 58,  42,  28);
+        vec3 leafA = col8(138, 100,  54);
+        vec3 leafB = col8( 98,  66,  38);
+        vec3 leafC = col8(164, 132,  80);
+        vec3 leafD = col8(104,  86,  48);
         vec3 leaf = mix(leafB, leafA, smoothstep(0.15, 0.6, m.id));
         leaf = mix(leaf, leafC, smoothstep(0.62, 0.9, m.id));
         leaf = mix(leaf, leafD, smoothstep(0.9, 1.0, m.id));
-        leaf *= 0.82 + 0.35 * tFbm01(uv, 40.0, 3);
-        // A leaf is darker at its edge where it has curled and dried.
-        leaf *= 0.75 + 0.4 * smoothstep(0.35, 0.85, m.h);
+        leaf *= 0.84 + 0.32 * tFbm01(uv, 56.0, 3);
+        leaf *= 0.76 + 0.4 * smoothstep(0.35, 0.85, m.h);
         vec3 c = mix(humus, leaf, smoothstep(0.15, 0.7, m.mask));
-        float moss = colonise(uv + 0.3, 10.0, max(-m.curv, 0.0), 0.14) * (1.0 - m.mask * 0.7);
-        c = mix(c, col8(76, 96, 46), moss * 0.7);
-        c *= 0.76 + 0.36 * m.ao;
-        Surf s = surf(c, mix(0.92, 0.78, m.mask), 0.0);
-        s.ao = mix(0.45, 1.0, m.aoFar);
+        float moss = colonise(uv + 0.3, 20.0, max(-m.curv, 0.0), 0.11) * (1.0 - m.mask * 0.7);
+        c = mix(c, col8(84, 100, 46), moss * 0.65);
+        c *= 0.80 + 0.32 * m.ao;
+        Surf s = surf(c, mix(0.93, 0.80, m.mask), 0.0);
+        s.ao = mix(0.50, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -550,37 +707,48 @@ const GROUND = {
 
   'cobblestone': {
     group: 'ground', hero: true, detail: true,
-    normalStrength: 0.075, ao: { radius: 0.022, amplitude: 0.7 },
+    normalStrength: 0.052, ao: { radius: 0.024, amplitude: 0.38 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        vec2 w = tWarp(uv, vec2(6.0), 0.028, 3);
-        vec4 c = tCells(w, 8.0, 0.82);
-        float dome = smoothstep(0.0, 0.15, c.x);
-        float top = pow(dome, 0.42);
-        float wear = tFbm01(uv, 60.0, 3);
-        float grit = tFbm01(uv + 0.7, 24.0, 4);
-        float h = top * (0.62 + c.w * 0.30) + wear * 0.05 * top + grit * 0.10 * (1.0 - top);
-        return vec3(clamp(h + 0.06, 0.0, 1.0), c.y, 1.0 - top);
+        // MM6's plaza is not cobbles: it is irregular polygonal flagstone laid
+        // in 0.65–0.70 m slabs with generous near-black joints. At the town's
+        // 2.4 m repeat that is four slabs across the tile.
+        vec2 w = tWarp(uv, vec2(9.0), 0.020, 3);
+        vec4 c = tCells(w, 4.0, 0.86);
+        float joint = smoothstep(0.014, 0.052, c.x);
+        // Slabs are flat on top with a worn, rounded arris, not domed cobbles.
+        float top = pow(joint, 0.32);
+        float wear = tFbm01(uv, 70.0, 3);
+        float chip = smoothstep(0.72, 1.0, tFbm01(uv + c.y, 34.0, 3)) * step(0.72, c.w);
+        float grit = tFbm01(uv + 0.7, 46.0, 4);
+        float h = top * (0.60 + c.w * 0.16) + wear * 0.05 * top
+                + grit * 0.10 * (1.0 - top) - chip * 0.06 * top;
+        return vec3(clamp(h + 0.08, 0.0, 1.0), c.y, 1.0 - top);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 grey  = col8(128, 124, 118);
-        vec3 blue  = col8( 98, 102, 108);
-        vec3 warm  = col8(134, 116,  94);
-        vec3 dark  = col8( 74,  72,  70);
+        // Olive-grey, greener and lighter than the dirt beside it: #4F4E3F
+        // median, #525142 most common, stone tops to #7B7670.
+        vec3 slabA = col8(118, 116, 100);
+        vec3 slabB = col8( 96,  96,  84);
+        vec3 slabC = col8(138, 134, 122);
+        vec3 slabD = col8(104, 100,  82);
         float t = m.id;
-        vec3 stone = mix(blue, grey, smoothstep(0.05, 0.5, t));
-        stone = mix(stone, warm, smoothstep(0.5, 0.85, t));
-        stone = mix(stone, dark, smoothstep(0.88, 1.0, t));
-        stone = speckle3(uv, stone, stone * 1.16, stone * 0.78, 190.0);
-        vec3 joint = col8(72, 64, 52);
-        float moss = colonise(uv, 11.0, m.mask, 0.16) * m.mask;
-        vec3 c = mix(stone, joint, smoothstep(0.25, 0.8, m.mask));
-        c = mix(c, col8(70, 88, 44), moss * 0.75);
-        c *= 0.72 + 0.4 * m.ao;
-        // Cartwheel-polished crowns read as smoother than the joints.
-        float polish = smoothstep(0.55, 0.95, m.h) * (0.35 + t * 0.4);
-        Surf s = surf(c, clamp(mix(0.92, 0.42, polish) + moss * 0.15, 0.2, 0.98), 0.0);
-        s.ao = mix(0.34, 1.0, m.aoFar);
+        vec3 stone = mix(slabB, slabA, smoothstep(0.06, 0.50, t));
+        stone = mix(stone, slabC, smoothstep(0.52, 0.86, t));
+        stone = mix(stone, slabD, smoothstep(0.88, 1.0, t));
+        stone = speckle3(uv, stone, stone * 1.12, stone * 0.80, 220.0);
+        stone *= 0.90 + 0.20 * tFbm01(uv, 24.0, 3);
+        // MM6's joints bottom out at #292418, not at black. Between the joint
+        // colour, the cavity AO and the ambient term it is easy to stack three
+        // helpings of darkness into one 4 cm line and crush it.
+        vec3 joint = col8(88, 82, 60);
+        float moss = colonise(uv, 16.0, m.mask, 0.13) * m.mask;
+        vec3 c = mix(stone, joint, smoothstep(0.22, 0.78, m.mask));
+        c = mix(c, col8(74, 88, 48), moss * 0.65);
+        c *= 0.95 + 0.08 * m.ao;
+        float polish = smoothstep(0.55, 0.95, m.h) * (0.30 + t * 0.35);
+        Surf s = surf(c, clamp(mix(0.92, 0.52, polish) + moss * 0.12, 0.22, 0.98), 0.0);
+        s.ao = mix(0.78, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -588,40 +756,49 @@ const GROUND = {
 
   'dungeon-floor': {
     group: 'ground', hero: true, detail: true,
-    normalStrength: 0.06, ao: { radius: 0.025, amplitude: 0.65 },
+    normalStrength: 0.058, ao: { radius: 0.024, amplitude: 0.68 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        vec2 count = vec2(3.0, 3.0);
-        vec2 jit = tWarpField(uv, vec2(8.0), 3) * 0.014;
-        vec4 br = tBrick(uv + jit, count, 0.34);
-        float edge = latticeEdge(br.xy, count);
-        float joint = smoothstep(0.005, 0.018, edge);
-        // Worn hollow in the middle of each slab, deeper on the well-trodden ones.
-        vec2 lc = br.xy - 0.5;
-        float hollow = (1.0 - dot(lc, lc) * 3.2) * (0.25 + br.w * 0.5);
-        float pit = tFbm01(uv, 70.0, 4);
-        float crack = tCracks(uv + 0.44, 9.0, 0.06, 0.9) * step(0.6, br.z);
-        float h = 0.30 + joint * (0.42 + br.z * 0.12) - hollow * 0.06 * joint
-                + pit * 0.05 - crack * 0.12;
-        return vec3(clamp(h, 0.0, 1.0), br.z, 1.0 - joint);
+        // Irregular slabs, not a tidy grid: a dungeon floor that reads as a
+        // machine-cut checkerboard is the surest way to look like CG grey.
+        vec2 w = tWarp(uv, vec2(11.0), 0.014, 3);
+        vec4 c = tCells(w, vec2(3.0, 3.0), 0.72);
+        float bite = tFbm01(uv, 52.0, 3) * 0.008;
+        float joint = smoothstep(0.016, 0.056, c.x - bite);
+        // Centuries of feet wear a hollow into the middle of every slab.
+        float hollow = smoothstep(0.30, 0.5, c.x) * (0.3 + c.w * 0.6);
+        float chip = smoothstep(0.74, 1.0, tFbm01(uv + c.y, 30.0, 3)) * step(0.66, c.w);
+        float rubble = tFbm01(uv + 0.44, 66.0, 4);
+        float pit = smoothstep(0.80, 1.0, tValue(uv + 0.3, 150.0));
+        float h = 0.26 + joint * (0.44 + c.y * 0.10) - hollow * 0.07
+                + rubble * 0.09 * (1.0 - joint) - chip * 0.09 - pit * 0.05;
+        return vec3(clamp(h, 0.0, 1.0), c.y, 1.0 - joint);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 slabA = col8(112, 108, 100);
-        vec3 slabB = col8( 86,  84,  80);
-        vec3 slabC = col8(126, 120, 108);
-        vec3 slab = mix(slabB, slabA, smoothstep(0.1, 0.6, m.id));
-        slab = mix(slab, slabC, smoothstep(0.7, 1.0, m.id));
-        slab = speckle3(uv, slab, slab * 1.14, slab * 0.8, 170.0);
-        vec3 grime = col8(44, 40, 34);
-        float dust = dustMask(uv, 14.0);
-        vec3 c = mix(slab, slab * 0.86, dust * 0.4);
-        c = mix(c, grime, smoothstep(0.3, 0.9, m.mask));
-        // Damp seeping along the joints.
-        float damp = colonise(uv + 0.55, 7.0, m.mask, 0.1);
-        c = mix(c, col8(58, 62, 52), damp * m.mask * 0.6);
-        c *= 0.68 + 0.44 * m.ao;
-        Surf s = surf(c, mix(0.86, 0.55, smoothstep(0.5, 1.0, m.h)) - damp * 0.2, 0.0);
-        s.ao = mix(0.3, 1.0, m.aoFar);
+        // Warm-grey flagstone gone filthy: still stone, never a clean CG grey.
+        vec3 slabA = col8(104,  98,  86);
+        vec3 slabB = col8( 78,  74,  66);
+        vec3 slabC = col8(122, 114,  98);
+        vec3 slab = mix(slabB, slabA, smoothstep(0.08, 0.58, m.id));
+        slab = mix(slab, slabC, smoothstep(0.68, 1.0, m.id));
+        slab = speckle3(uv, slab, slab * 1.16, slab * 0.72, 230.0);
+        slab *= 0.84 + 0.30 * m.id;
+
+        vec3 grime = col8(38, 32, 26);
+        vec3 soot  = col8(46, 42, 40);
+        float dust = dustMask(uv, 30.0);
+        float trod = tFbm01(uv + 0.9, 13.0, 3);
+        vec3 c = mix(slab, slab * 0.80, dust * 0.45);
+        // Grime banks up against the joints and in the corners of the slabs.
+        c = mix(c, grime, smoothstep(0.24, 0.86, m.mask));
+        c = mix(c, soot, smoothstep(0.62, 0.95, trod) * 0.30);
+        float damp = colonise(uv + 0.55, 14.0, m.mask, 0.09);
+        c = mix(c, col8(56, 60, 48), damp * m.mask * 0.55);
+        // Sand and mortar dust scuffed across the middle of the floor.
+        c = mix(c, col8(126, 116,  96), smoothstep(0.90, 1.0, tValue(uv, 190.0)) * 0.35);
+        c *= 0.82 + 0.26 * m.ao;
+        Surf s = surf(c, clamp(mix(0.88, 0.58, smoothstep(0.45, 1.0, m.h)) - damp * 0.22, 0.2, 0.98), 0.0);
+        s.ao = mix(0.44, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -629,28 +806,29 @@ const GROUND = {
 
   'swamp-mud': {
     group: 'ground', detail: true,
-    normalStrength: 0.04, ao: { radius: 0.03, amplitude: 0.45 },
+    normalStrength: 0.040, ao: { radius: 0.028, amplitude: 0.45 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        float base = tFbm01(tWarp(uv, vec2(4.0), 0.1, 4), 8.0, 5);
-        float bubbles = smoothstep(0.30, 0.02, tWorley(uv + 0.3, 26.0, 1.0).x);
-        float weed = fibres(uv, vec2(80.0, 12.0), 5.0, 0.08, 3);
-        float h = 0.25 + base * 0.42 + weed * 0.12 - bubbles * 0.14;
-        float scum = smoothstep(0.4, 0.75, tFbm01(uv + 0.66, 6.0, 5));
-        return vec3(clamp(h, 0.0, 1.0), tGrain(uv, 18.0), scum);
+        float base = tFbm01(uv, 18.0, 4);
+        float bubbles = smoothstep(0.28, 0.02, tWorley(uv + 0.3, 44.0, 1.0).x);
+        float weed = tAnisoFbm(uv, vec2(1.0, 1.0), vec2(1.0, -1.0), vec2(72.0, 14.0), 2);
+        float h = 0.26 + base * 0.36 + weed * 0.14 - bubbles * 0.14
+                + tValue(uv, 160.0) * 0.04;
+        float scum = smoothstep(0.42, 0.76, tFbm01(uv + 0.66, 15.0, 4));
+        return vec3(clamp(h, 0.0, 1.0), tGrain(uv, 26.0), scum);
       }
       Surf mShade(vec2 uv, MSample m) {
-        vec3 muck  = col8( 44,  38,  28);
-        vec3 brown = col8( 74,  64,  44);
-        vec3 algae = col8( 78,  96,  46);
-        vec3 slime = col8( 52,  70,  40);
-        vec3 c = mix(muck, brown, smoothstep(0.25, 0.85, m.h));
-        c = mix(c, algae, m.mask * 0.75);
-        c = mix(c, slime, tFbm01(uv, 14.0, 4) * m.mask * 0.5);
-        c *= 0.7 + 0.4 * m.ao;
+        vec3 muck  = col8( 46,  38,  26);
+        vec3 brown = col8( 84,  70,  46);
+        vec3 algae = col8( 92, 108,  48);
+        vec3 slime = col8( 58,  76,  40);
+        vec3 c = mix(muck, brown, smoothstep(0.22, 0.82, m.h));
+        c = mix(c, algae, m.mask * 0.72);
+        c = mix(c, slime, tFbm01(uv, 30.0, 3) * m.mask * 0.5);
+        c *= 0.74 + 0.38 * m.ao;
         float wet = 1.0 - smoothstep(0.3, 0.7, m.h);
-        Surf s = surf(c, clamp(mix(0.72, 0.14, wet) - m.mask * 0.1, 0.1, 0.95), 0.0);
-        s.ao = mix(0.42, 1.0, m.aoFar);
+        Surf s = surf(c, clamp(mix(0.74, 0.14, wet) - m.mask * 0.1, 0.1, 0.95), 0.0);
+        s.ao = mix(0.44, 1.0, m.aoFar);
         return s;
       }
     `,
