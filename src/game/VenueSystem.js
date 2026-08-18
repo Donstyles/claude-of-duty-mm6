@@ -104,7 +104,7 @@ export class VenueSystem extends System {
     }
 
     const venue = best ? getVenue(best.venue) : null;
-    if (venue?.id === this.nearby?.id) return;
+    if (venue?.id === this.nearby?.id) { this._pollInteract(ctx); return; }
 
     this.nearby = venue;
     // The reticle is how MM6 tells you a door is a door, so say what it opens
@@ -112,6 +112,17 @@ export class VenueSystem extends System {
     ctx.events.emit('ui:reticle', venue
       ? { mode: 'door', hint: `${venue.name} — ${VENUE_KINDS[venue.kind].label}` }
       : { mode: 'default', hint: '' });
+    this._pollInteract(ctx);
+  }
+
+  /**
+   * The interact key, checked every frame rather than bound once, because the
+   * input layer suppresses actions while a panel is up and we want that: the
+   * key that opens a door must not also work from inside the shop it opened.
+   */
+  _pollInteract(ctx) {
+    if (!this.nearby) return;
+    if (ctx.input?.actionPressed('interact')) this.enterNearby();
   }
 
   /** Walk in. Returns false if the id is unknown. */

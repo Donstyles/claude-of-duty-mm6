@@ -110,7 +110,7 @@ export class UISystem extends System {
 
     this._syncParty(true);
     this.hud.setGold(this.gold, this.food);
-    this.hud.log('Welcome to New Sorpigal.', 'info');
+    this.hud.log('Welcome to Millhaven.', 'info');
 
     this._wireEvents(ctx);
     this._registerShots(ctx);
@@ -631,7 +631,11 @@ export class UISystem extends System {
   // ── actions the panels call ───────────────────────────────────────────────
 
   spendSkillPoint(index, skillId) {
-    const c = this._chars[index];
+    // Spend from whichever character the sheet is actually showing: with a live
+    // party that is the party's own object, and only an empty one falls back to
+    // the sample that stood in for it.
+    const live = this._vm[index]?.source;
+    const c = live?.skills?.[skillId] ? live : this._chars[index];
     const held = c?.skills?.[skillId];
     if (!c || !held) return false;
     const cost = held.level + 1;
