@@ -18,11 +18,19 @@ Read it fully before writing a line.
    `src/core/Input.js`, `src/core/CaptureSystem.js`, `src/main.js`,
    `src/manifest.js`, `vite.config.js`, `index.html`, or `tools/`.
    These are the spine. If one genuinely blocks you, report it instead.
-3. **No new npm dependencies.** `three` only. Everything else — textures,
-   meshes, audio, fonts — is generated procedurally in code. This is deliberate:
-   the repo must be self-contained and offline-reproducible.
-4. **No external asset URLs.** No CDN images, no fetched models, no web fonts.
-   Network is unavailable at runtime.
+3. **No new npm dependencies.** `three` only.
+4. **Procedural for the world; baked plates for 2D illustration.** Terrain,
+   architecture, vegetation, materials, meshes and audio are all generated in
+   code — they must tile, carry LODs, and rebuild identically from a seed, and
+   generated assets satisfy none of that. Hand-painted 2D art is the opposite
+   case: procedural canvas painting got portraits' structure right but plateaued
+   well short of a painted human face, so illustration plates are generated once
+   at build time by `tools/genart.mjs` into `public/art/` and committed.
+5. **Nothing is fetched at runtime.** The browser has no network. Generated art
+   is committed as files and loaded like any other asset; the game never calls a
+   generator. Credentials for build-time generation live at
+   `~/.config/meshy/env`, outside this repository, and must never enter it —
+   `.githooks/pre-commit` blocks any commit that carries one.
 5. **Your module must not throw on init.** A missing dependency degrades
    gracefully (`ctx.get('x')?.method?.()`), it never breaks the boot.
 6. **Verify with a real build** before you report done:

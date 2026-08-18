@@ -2319,11 +2319,28 @@ export class UITextures {
    * for others, exactly as MM6's bitmaps do.
    */
   portrait(spec = {}) {
+    // Prefer the painted plate. Procedural canvas work got the structure right
+    // -- proportion, value range, crisp accents -- but plateaued well short of
+    // a painted human face, and against the reference bar that was the one
+    // axis still clearly losing. These are generated once at build time into
+    // public/art and committed; nothing is fetched at runtime.
+    const plate = PORTRAIT_PLATES.pick(spec);
+    if (plate) return plate;
+
+    // Fallback: the procedural painter, so the UI still works with the art
+    // directory absent (a fresh clone before `node tools/genart.mjs`).
     const key = `portrait-${spec.key ?? spec.classId ?? 'x'}-${spec.gender ?? 'm'}`;
     return this._make(key, 384, 448, (g, w, h, rng) => {
       const cfg = resolvePortraitLook(spec, rng);
       paintPortrait(g, w, h, cfg, rng);
     });
+  }
+
+  /** The painted gravestone that replaces a dead character's portrait. */
+  tombstonePlate() {
+    return PORTRAIT_PLATES.has('tombstone')
+      ? `${PORTRAIT_PLATES.base}tombstone.jpg`
+      : null;
   }
 
   // ── CSS variable installation ─────────────────────────────────────────────
@@ -2950,6 +2967,56 @@ const FIGURE_LOOK = {
  * blood-warm at the cheeks, nose and ears, cooler at the temples and jaw.
  * Flat one-temperature skin is what makes a face look like plastic.
  */
+/**
+ * The generated portrait plates.
+ *
+ * `available` is a static list rather than a directory scan because the browser
+ * cannot enumerate a folder; it must match what tools/art-manifest.js produces.
+ * Selection is deterministic — the same character always draws the same face,
+ * which matters because a party whose portraits reshuffle between sessions
+ * would be worse than no portraits at all.
+ */
+const PORTRAIT_PLATES = {
+  base: 'art/portraits/',
+  available: new Set([
+    'm-knight', 'm-paladin', 'm-archer', 'm-cleric', 'm-sorcerer',
+    'm-druid', 'm-rogue', 'm-elder',
+    'f-knight', 'f-paladin', 'f-archer', 'f-cleric', 'f-sorceress',
+    'f-druid', 'f-rogue', 'f-elder',
+    'tombstone',
+  ]),
+
+  has(name) { return this.available.has(name); },
+
+  /** Which plate suits this character, by class first and then by build. */
+  pick(spec = {}) {
+    const sex = (spec.gender ?? spec.sex ?? 'm') === 'f' ? 'f' : 'm';
+
+    // Promoted classes share their base class's face.
+    const BASE = {
+      knight: 'knight', cavalier: 'knight', champion: 'knight', black_knight: 'knight',
+      paladin: 'paladin', crusader: 'paladin', hero: 'paladin', villain: 'paladin',
+      archer: 'archer', battle_mage: 'archer', warrior_mage: 'archer', master_archer: 'archer',
+      cleric: 'cleric', priest: 'cleric', priest_of_light: 'cleric', priest_of_dark: 'cleric',
+      sorcerer: 'sorcerer', wizard: 'sorcerer', archmage: 'sorcerer', lich: 'sorcerer',
+      druid: 'druid', great_druid: 'druid', arch_druid: 'druid',
+    };
+    const role = BASE[spec.classId] ?? 'rogue';
+    const want = sex === 'f' && role === 'sorcerer' ? 'f-sorceress' : `${sex}-${role}`;
+
+    if (this.has(want)) return `${this.base}${want}.jpg`;
+
+    // No plate for that exact role: fall back within the same sex, chosen by a
+    // stable hash of the character's key so it never changes between sessions.
+    const pool = [...this.available].filter((n) => n.startsWith(`${sex}-`));
+    if (!pool.length) return null;
+    const seed = String(spec.key ?? spec.classId ?? 'x');
+    let hsh = 0;
+    for (let i = 0; i < seed.length; i++) hsh = (hsh * 31 + seed.charCodeAt(i)) >>> 0;
+    return `${this.base}${pool[hsh % pool.length]}.jpg`;
+  },
+};
+
 const SKIN_TONES = [
   { base: '#d9a887', shadow: '#9d6f57', deep: '#4e3125', light: '#f4dcc4', warm: '#c98a70', cool: '#a9998f' },
   { base: '#cfa17e', shadow: '#93674e', deep: '#472c20', light: '#eed3b6', warm: '#c07f66', cool: '#a09287' },
