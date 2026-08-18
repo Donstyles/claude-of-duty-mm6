@@ -122,8 +122,10 @@ export class UISystem extends System {
       this._boundEvents.push([name, fn]);
     };
 
-    on('ui:forcePanel', ({ id } = {}) => {
-      if (id) this.openPanel(id); else this.closePanel();
+    // `opts` is forwarded because this is how a venue opens its own screen:
+    // the shop panel serves five different shops and has to be told which.
+    on('ui:forcePanel', ({ id, opts } = {}) => {
+      if (id) this.openPanel(id, opts ?? {}); else this.closePanel();
     });
     on('ui:log', ({ text, kind } = {}) => this.log(text, kind));
     on('ui:toast', ({ text, kind } = {}) => this.toast(text, kind));

@@ -33,6 +33,7 @@ export const SYSTEM_MANIFEST = [
   { path: './game/SpellSystem.js', export: 'SpellSystem' },
   { path: './game/LootSystem.js', export: 'LootSystem' },
   { path: './game/NPCSystem.js', export: 'NPCSystem' },
+  { path: './game/VenueSystem.js', export: 'VenueSystem' },
   { path: './game/QuestSystem.js', export: 'QuestSystem' },
 
   // ── Presentation ─────────────────────────────────────────────────────────
