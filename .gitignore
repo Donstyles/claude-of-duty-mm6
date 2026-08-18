@@ -17,3 +17,8 @@ tools/.env
 # Generated-art raws: large, regenerable, and derived plates are committed instead.
 public/art/**/*.png
 !public/art/**/*.plate.png
+
+# Reference screenshots of the game being studied. Kept locally for the art
+# review loop; never distributed, because they are somebody else's copyright.
+reference/
+!reference/NOTES-extra.md
