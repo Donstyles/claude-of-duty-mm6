@@ -44,7 +44,7 @@ def pack_spells(size=176, feather=0.05):
     """Key the paper out to alpha, then shrink."""
     out, suspect = 0, []
     for src in sorted(glob.glob(os.path.join(ROOT, 'spells', '*.png'))):
-        if src.endswith('.plate.png'):
+        if src.endswith('.plate.png') or os.path.basename(src).startswith('cover_'):
             continue
         a = np.asarray(Image.open(src).convert('RGB'), dtype=np.float32)
         h, w, _ = a.shape
@@ -116,9 +116,37 @@ def _vignette(h, w, feather):
     return np.clip((1.0 - d) / feather, 0.0, 1.0)
 
 
+def pack_flat(sub, size, quality=86, only=None):
+    """Downscale a folder of opaque plates to JPEG at a fixed width.
+
+    Used for the venue interiors and the spellbook's school covers, both of
+    which are full-bleed paintings with no transparency — JPEG at twice the
+    size they are drawn is indistinguishable and a tenth of the bytes.
+    """
+    out = 0
+    for src in sorted(glob.glob(os.path.join(ROOT, sub, '*.png'))):
+        base = os.path.basename(src)[:-4]
+        if only and not base.startswith(only):
+            continue
+        if not only and base.startswith('cover_'):
+            continue
+        im = Image.open(src).convert('RGB')
+        w, h = im.size
+        im = im.resize((size, max(1, round(size * h / w))), Image.LANCZOS)
+        im.save(os.path.join(ROOT, sub, base + '.jpg'), 'JPEG',
+                quality=quality, optimize=True, subsampling=1)
+        out += 1
+    return out
+
+
 if __name__ == '__main__':
     p = pack_portraits()
     s, suspect = pack_spells()
-    print(f'[artpack] {p} portraits, {s} spell plates')
+    i = pack_flat('interiors', 960)
+    # The school covers sit in the same folder as the spell plates but are
+    # opaque framed paintings rather than matted cut-outs, so they take the
+    # flat treatment; pack_spells skips them by prefix for the same reason.
+    c = pack_flat('spells', 448, only='cover_')
+    print(f'[artpack] {p} portraits, {s} spell plates, {c} school covers, {i} interiors')
     for name, cover in suspect:
         print(f'  ?  {name}: matte kept {cover:.0%} of the frame - check it')

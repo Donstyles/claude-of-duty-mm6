@@ -25,6 +25,13 @@ import {
 import { icon, paintedIcon, itemMaterial } from '../Icons.js';
 import { MAGIC_SCHOOLS, ATTRIBUTES, ATTRIBUTE_LABEL, MASTERY_LABEL, masteryRank } from '../../game/data/Skills.js';
 import { spellsForSchool } from '../../game/data/Spells.js';
+import { VENUES } from '../../game/data/Venues.js';
+
+/**
+ * venue id -> venue kind, so a panel can find its room from the id the venue
+ * handed it without importing the whole catalogue's helpers.
+ */
+const VENUE_INTERIOR = new Map(Object.values(VENUES).map((v) => [v.id, v.kind]));
 const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 // ── base ────────────────────────────────────────────────────────────────────
@@ -93,6 +100,7 @@ export class Panel {
     this.el.classList.add('is-open');
     this.sideEl?.classList.add('is-open');
     this.ui.hud?.setSidebarMode(this.constructor.coversSidebar ? 'cover' : 'map');
+    this._applyInterior(opts);
     try { this.onOpen(opts); } catch (err) { console.error('[ui] panel open failed:', err); }
     try { this.refresh(); } catch (err) { console.error('[ui] panel refresh failed:', err); }
     requestAnimationFrame(() => this.el?.focus?.({ preventScroll: true }));
@@ -105,6 +113,32 @@ export class Panel {
     this.sideEl?.classList.remove('is-open');
     this.ui.hud?.setSidebarMode('map');
     try { this.onClose(); } catch (err) { console.error('[ui] panel close failed:', err); }
+  }
+
+  /**
+   * Paint the room behind the screen.
+   *
+   * Walking into a shop in MM6 does not put a flat panel over the world: the
+   * viewport fills with a painting of the room — the forge with its anvil and
+   * fire, the apothecary with its shelf of bottles — and the interface sits on
+   * top of that. Since `.mm-panel` occupies exactly the viewport rectangle,
+   * the backdrop is just this element's background, and every venue screen
+   * gets it without doing anything: the venue tells us its kind when it opens
+   * the panel.
+   *
+   * A missing plate is not an error. The panel keeps its own surface material
+   * and simply reads as a panel, which is what it did before these existed.
+   */
+  _applyInterior(opts) {
+    const kind = opts?.interior ?? this.constructor.interior
+      ?? (opts?.venue ? VENUE_INTERIOR.get(opts.venue) : null);
+    if (!kind) {
+      this.el.style.backgroundImage = '';
+      this.el.classList.remove('has-interior');
+      return;
+    }
+    this.el.style.backgroundImage = `url("/art/interiors/${kind}.jpg")`;
+    this.el.classList.add('has-interior');
   }
 
   _onKeyDown(e) {

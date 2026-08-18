@@ -36,6 +36,14 @@ Read it fully before writing a line.
 7. **Verify with a real build** before you report done:
    `npx vite build` must succeed, and `node tools/shoot.mjs <your-shot>` must
    produce a PNG with no console errors.
+8. **Every proper noun in shipped content comes from `CANON.md`.** The game is
+   an homage to Might & Magic VI's *form* — first-person party RPG, blobber
+   movement, nine schools, guild-and-errand structure. It owns none of its
+   *content*. Mechanics and genre furniture are shared vocabulary; place names,
+   people, gods, factions, artifacts and coined spell names are not. If you
+   need a name `CANON.md` does not supply, coin one from the language notes in
+   its §1. Developer documentation may name the reference — `REFERENCE.md` is
+   exactly that. User-visible strings may not.
 
 ---
 
@@ -123,12 +131,25 @@ worlds across runs. (Per-frame cosmetic jitter is fine.)
 | `spells` | `game/SpellSystem.js` | 9 schools, casting, effects, buffs |
 | `loot` | `game/LootSystem.js` | items, inventory, equipment, treasure, shops |
 | `npc` | `game/NPCSystem.js` | townsfolk, dialogue, hirelings, services |
+| `venue` | `game/VenueSystem.js` | which building the party is standing in, and which screen its door opens |
+| `travel` | `game/TravelSystem.js` | coach and packet-ship legs, fares, ambushes |
 | `quests` | `game/QuestSystem.js` | quest state, journal, awards |
 | `particles` | `render/ParticleSystem.js` | GPU particle pools, VFX |
 | `postfx` | `render/PostFXSystem.js` | full post pipeline; sets `engine.renderPipeline` |
 | `audio` | `audio/AudioSystem.js` | procedural music and SFX |
-| `ui` | `ui/UISystem.js` | HUD and every panel |
+| `ui` | `ui/UISystem.js` | HUD and the panel registry |
 | `save` | `game/SaveSystem.js` | serialise/restore, main menu, game flow |
+
+Screens are one module per file under `ui/panels/`, each with its own
+stylesheet beside it, registered in `ui/panels/index.js`. That split exists so
+several screens can be worked on at once; **the registry and the base class are
+shared, so leave them alone unless a screen is genuinely yours to add.**
+
+Walking into a building is `VenueSystem`'s job and nothing else's. It matches
+the party's position against the town's doors, then asks the interface for a
+screen over the event bus (`ui:forcePanel`) — the world never imports a panel
+and a panel never imports the world. The venue's `context` is handed to the
+screen as its open options, which is how one shop screen serves five shops.
 
 ---
 

@@ -109,8 +109,87 @@ export function spellPlates(SPELLS) {
   }));
 }
 
+/**
+ * School cover paintings.
+ *
+ * The real spellbook's first cell is not a spell: it is a large gilt-framed
+ * illustration of the school itself, in the same hand as the miniatures but
+ * grander. Without it the page reads as a grid of twelve equal things, which
+ * is precisely the flat, catalogue look a remake falls into.
+ *
+ * Landscape rather than square, because the frame is wider than it is tall.
+ */
+const COVER_STYLE =
+  'A framed illustration on the title page of a 1998 fantasy RPG spellbook: ' +
+  'watercolour and gouache over ink, rich saturated pigment, loose confident ' +
+  'brushwork, a single allegorical subject filling the frame against a simple ' +
+  'ground, no text, no lettering, no border decoration.';
+
+const COVERS = {
+  fire: 'A salamander coiled in the heart of a hearth fire, its scales lit from within, embers rising.',
+  air: 'A robed figure standing on the back of a thunderhead, arms open, lightning breaking below them.',
+  water: 'A woman pouring an endless jar into a grey sea, the water rising in a slow spiral around her.',
+  earth: 'An enormous stone hand breaking up out of a green hillside, turf still hanging from the fingers.',
+  spirit: 'A hooded figure carrying a lantern between standing stones at dusk, pale shapes waiting beyond them.',
+  mind: 'A human head in profile rendered as clear glass, a second smaller face turning inside it.',
+  body: 'A runner mid-stride, green vine winding up the length of one leg and arm, wounds closing as they pass.',
+  light: 'A gold sun-disc cresting a mountain ridge, rays cutting through cloud onto a valley far below.',
+  dark: 'A raven on a bare skull in a black hollow, one eye lit, moths drawn to the light of it.',
+};
+
+export const SPELL_COVERS = Object.entries(COVERS).map(([school, subject]) => ({
+  id: `spells/cover_${school}`,
+  prompt: `${subject} ${COVER_STYLE}`,
+  aspect: '4:3',
+}));
+
+/**
+ * Venue interiors.
+ *
+ * Walking into a shop in MM6 does not show you a flat panel: the viewport fills
+ * with a pre-rendered painting of the *room* — the smith's forge with its
+ * anvil, tool wall, chimney hood and fire, and the smith himself standing
+ * behind a counter looking at you. The interface furniture sits over that.
+ * Without it a shop is a menu; with it a shop is a place, and the difference is
+ * most of why the game feels inhabited.
+ *
+ * One plate per venue kind, at the viewport's 4:3. Deliberately empty of
+ * people where the keeper is drawn separately, and deliberately lit from a
+ * practical source in the scene so the room reads as three-dimensional.
+ */
+const INTERIOR_STYLE =
+  'A 1998 pre-rendered CRPG interior background: 3D-rendered painterly still, ' +
+  'single-point perspective looking into the room from the doorway, warm ' +
+  'practical light from a fire or lamp within the scene, deep shadow in the ' +
+  'corners, heavy period materials, dense believable clutter of the trade, ' +
+  'no people, no text, no lettering, no user interface, no border.';
+
+const INTERIORS = {
+  weaponsmith: 'A blacksmith\'s forge: stone hearth with a hooded iron chimney over a live fire, anvil on a block, quenching trough, tongs and hammers hung on a plank wall, a heavy timber counter across the foreground.',
+  armourer: 'An armourer\'s workshop: mail shirts and breastplates on wooden stands, a leather-topped bench with rivets and shears, a barrel of helms, oil lamp on a beam.',
+  magicshop: 'A magician\'s shop: a wall of small drawered cabinets, glass cases of wands and rolled scrolls, a brass orrery on a stand, candles, a ledger open on a dark counter.',
+  alchemist: 'An apothecary: shelves of glass bottles in ranked colours, bunches of drying herbs hung from the beams, a copper still bubbling, mortar and pestle on a stained bench.',
+  generalstore: 'A village general store: sacks of grain, coils of rope, barrels, lanterns and tin ware on shelves, a plank counter with brass scales.',
+  bank: 'A counting house: an iron-bound strongbox behind a heavy grille, ledgers stacked on a mahogany desk, a brass lamp, coin scales, dark panelled walls.',
+  temple: 'A small stone chapel: a hanging brass lamp burning above a plain altar, candles in a rack, worn flagstones, coloured light through a narrow window.',
+  tavern: 'A tavern common room: a long bar with tankards and casks behind it, a fire in a wide hearth, benches and a scarred table, low smoky beams.',
+  trainer: 'A training hall: a sand floor, straw practice dummies, racked wooden swords and shields, a gallery of benches, dusty light from high windows.',
+  guild: 'A guild hall: a long reading table under a tall shelf of chained books, a lectern, a cold stone hearth, banners hung from the roof beams.',
+  coachstop: 'A coaching inn office: a departures board chalked on slate, harness and a coaching horn on the wall, a bench by the window, a stove.',
+  dock: 'A harbour office: charts pinned to the wall, a brass telescope on a stand, coils of rope and a lantern, a window onto masts and grey water.',
+  house: 'The front room of a modest cottage: a fire in a small grate, a table with a loaf and a jug, a settle, herbs drying, a shuttered window.',
+};
+
+export const VENUE_INTERIORS = Object.entries(INTERIORS).map(([kind, subject]) => ({
+  id: `interiors/${kind}`,
+  prompt: `${subject} ${INTERIOR_STYLE}`,
+  aspect: '4:3',
+}));
+
 import { SPELLS } from '../src/game/data/Spells.js';
 
 export const SPELL_ART = spellPlates(SPELLS);
 
-export const ALL = [...PORTRAITS, ...MISC, ...SPELL_ART];
+export const ALL = [
+  ...PORTRAITS, ...MISC, ...SPELL_ART, ...SPELL_COVERS, ...VENUE_INTERIORS,
+];

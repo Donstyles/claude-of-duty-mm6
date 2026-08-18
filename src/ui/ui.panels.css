@@ -656,6 +656,15 @@
 }
 .mm-panel.is-open { display: block; }
 
+/* A venue screen paints the room itself into the viewport rectangle; the
+   surface material underneath still shows wherever the plate does not reach,
+   which is what keeps a missing plate from reading as a hole. */
+.mm-panel.has-interior {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
 /* The sidebar's upper block, replaced by the character sheet, the inventory
    and the shop dialogues. The food/gold row and the four ovals always remain. */
 .mm-panel-side {
