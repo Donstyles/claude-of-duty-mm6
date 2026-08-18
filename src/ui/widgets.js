@@ -58,6 +58,68 @@ export function setChildren(parent, ...kids) {
 
 export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
+/**
+ * Native MM6 pixels → CSS length.
+ *
+ * Every measurement in the interface is quoted from REFERENCE.md in the game's
+ * own 640×480 coordinates; `--u` is the size of one of those pixels on the
+ * current display, so `nu(113)` is a character cell at any resolution.
+ */
+export function nu(v) {
+  return `calc(var(--u) * ${v})`;
+}
+
+/**
+ * A gold oval button. The sidebar's are tall (28×60 native, aspect 1 : 2.14);
+ * a panel's are wide (58×30, aspect 1.95 : 1). They are never the same shape.
+ */
+export function goldOval({ glyph, label, tall = false, textures, onClick, tip, className = '' }) {
+  const b = el('button', {
+    className: `mm-oval ${tall ? 'is-tall' : 'is-wide'} ${className}`.trim(),
+    type: 'button',
+    'aria-label': label ?? glyph,
+    style: {
+      backgroundImage: textures
+        ? `url("${tall ? textures.tallOval(glyph) : textures.wideOval(glyph)}")`
+        : undefined,
+    },
+  });
+  if (onClick) b.addEventListener('click', onClick);
+  if (tip) tooltip.attach(b, tip);
+  return b;
+}
+
+/**
+ * An engraved sub-panel: MM6's panel interiors carry the *identical* stone as
+ * the surround, framed by a 1px inset bevel — near-black along the top and
+ * left, pale along the bottom and right. No fill change, no thick border.
+ */
+export function engraved(className = '', ...kids) {
+  return el('div', { className: `mm-engraved ${className}`.trim() }, ...kids);
+}
+
+/** The same bevel with its polarity flipped: a raised plaque (rest screen). */
+export function raised(className = '', ...kids) {
+  return el('div', { className: `mm-raised ${className}`.trim() }, ...kids);
+}
+
+/**
+ * A label/value row. Hierarchy in MM6 is position and colour only — never
+ * weight — so both halves use the same face at the same size.
+ */
+export function labelRow(label, value, opts = {}) {
+  const { tone = '', tip, onClick, className = '' } = opts;
+  const row = el('div', { className: `mm-row ${className}`.trim() },
+    el('span', { className: 'mm-row-label', text: label }),
+    el('span', { className: `mm-row-value ${tone}`.trim(), text: String(value) }));
+  if (tip) tooltip.attach(row, tip);
+  if (onClick) {
+    row.classList.add('is-clickable');
+    row.addEventListener('click', onClick);
+  }
+  return row;
+}
+
 /** Thousands-separated integer, for gold and experience readouts. */
 export function fmt(n) {
   const v = Math.round(Number(n) || 0);

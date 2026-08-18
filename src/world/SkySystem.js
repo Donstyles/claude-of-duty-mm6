@@ -32,6 +32,9 @@ import { System } from '../core/Engine.js';
 import { SKY_VERT, SKY_FRAG } from './sky.shader.js';
 import { WORLD_SIZE } from './TerrainGen.js';
 
+/** Ground-lighting gain, calibrated against MM6's sunlit grass value. */
+const DAYLIGHT_GAIN = 1.95;
+
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
 
@@ -1073,14 +1076,19 @@ export class SkySystem extends System {
       srgbToLinear(p.lightCol[0]), srgbToLinear(p.lightCol[1]), srgbToLinear(p.lightCol[2]),
       THREE.LinearSRGBColorSpace,
     );
-    this.sunIntensity = p.lightI * w.lightMul;
+    // Measured against the reference: sunlit grass was landing near #3C5027
+    // where MM6's is #6f7a3a, i.e. about half as bright. The sky is a shader
+    // that ignores scene lights, so lifting the rig brightens the GROUND only
+    // and leaves the measured sky blue untouched -- exposure would have moved
+    // both and blown the sky out.
+    this.sunIntensity = p.lightI * w.lightMul * DAYLIGHT_GAIN;
     this.ambientColor.setRGB(
       srgbToLinear(p.ambSky[0]), srgbToLinear(p.ambSky[1]), srgbToLinear(p.ambSky[2]),
       THREE.LinearSRGBColorSpace,
     );
     // Overcast raises the fill and kills the key — that is what makes a grey
     // day read as a grey day rather than a dimmer sunny one.
-    this.ambientIntensity = p.ambI * lerp(1, 1.18, desat) * lerp(1, 0.55, clamp(1 - w.lightMul, 0, 1) * 0.4);
+    this.ambientIntensity = DAYLIGHT_GAIN * p.ambI * lerp(1, 1.18, desat) * lerp(1, 0.55, clamp(1 - w.lightMul, 0, 1) * 0.4);
 
     if (this._ownsLighting && this.keyLight) {
       this.keyLight.color.copy(this.sunColor);

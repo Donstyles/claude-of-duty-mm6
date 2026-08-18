@@ -1,15 +1,24 @@
 /**
- * Procedural UI art.
+ * Procedural UI art for the Might & Magic VI chrome.
  *
- * Everything the interface is made of is painted here on a 2D canvas and handed
- * out as a PNG data URL: carved oak, hammered brass, aged parchment, riveted
- * iron, gem buttons, the compass rose and the character portraits. Nothing is
- * fetched, nothing is a CSS box-shadow pretending to be a bevel — each surface
- * gets a real gradient pass, a grain pass, a bevel pass and an edge-wear pass so
- * it reads as painted rather than generated.
+ * Every surface the interface is built from is painted here on a 2D canvas and
+ * handed out as a PNG data URL. Nothing is fetched and nothing is a CSS
+ * box-shadow pretending to be stone: each material gets a ground pass, a mottle
+ * pass, a vein/grain pass and an edge pass so it reads as scanned rock rather
+ * than as a gradient.
  *
- * Textures are cached by key and generated once at init; the CSS layer reaches
- * them through custom properties installed by `installVars`.
+ * The palette is sampled from the real game (see REFERENCE.md §3, §4):
+ *
+ *   bottom bar      polished white-pearl marble   #B5AEAD / #ADA6A5 / #9C928C
+ *   right sidebar   warmer grey marble            #A5968C / #ADA29C
+ *   panels          carved dark slate granite     #4A494A / #424142 / #393C39
+ *   party creation  dark green serpentine         #1E2B22 / #2C3D2E
+ *   rest screen     terracotta marble             #AD7963 / #B5826B
+ *   backpack        dark mottled brown leather    #210800 / #291000
+ *   shop board      figured walnut planks         #8A4A1E / #522810
+ *
+ * Textures are cached by key, generated once, and reached from CSS through the
+ * custom properties installed by `installVars`.
  */
 
 import { RNG, hashSeed } from '../core/RNG.js';
@@ -31,6 +40,30 @@ function shade(hex, amt) {
   return `rgb(${r},${g},${b})`;
 }
 
+function rgba(hex, a) {
+  return `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+}
+
+// Sampled anchors, kept in one place so a panel and its texture cannot drift.
+export const MM6 = Object.freeze({
+  marble: ['#BDB2AD', '#B5AEAD', '#ADA6A5', '#ADA29C', '#9C928C', '#A5968C', '#948A84'],
+  marbleVein: ['#736D6B', '#635952', '#5A5552'],
+  marbleCrack: '#212021',
+  marbleOchre: '#E79273',
+  granite: ['#4A494A', '#424142', '#393C39', '#525152', '#424542', '#2A2A2A', '#6B6C68'],
+  graniteDark: '#0F1210',
+  graniteLight: '#C4C0C4',
+  gold: '#FFFF9C',
+  goldDeep: '#E7CF21',
+  azure: '#109AEF',
+  raised: '#00FE00',
+  lowered: '#FF0000',
+  brass: ['#EBE2A7', '#C3B37A', '#BBA069', '#A98E57', '#7A6031', '#302410'],
+  collar: ['#E8DFA0', '#DBBC80', '#B3A36F', '#A08649', '#7B5918'],
+  hp: ['#003000', '#006207', '#00B208', '#00EF0F', '#008809'],
+  sp: ['#0A1745', '#182C84', '#274CD3', '#798AE6', '#1F3CA4'],
+});
+
 export class UITextures {
   constructor(seedTag = 'ui-art') {
     this.baseSeed = hashSeed(String(seedTag));
@@ -49,7 +82,6 @@ export class UITextures {
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(w));
       canvas.height = Math.max(1, Math.round(h));
-      // Every texture ends with a per-pixel grain pass, so tell the browser.
       const g = canvas.getContext('2d', { willReadFrequently: true });
       if (g) {
         draw(g, canvas.width, canvas.height, this.rngFor(key));
@@ -69,19 +101,6 @@ export class UITextures {
 
   // ── shared painting helpers ───────────────────────────────────────────────
 
-  static goldGradient(g, x0, y0, x1, y1, warm = 0) {
-    const grd = g.createLinearGradient(x0, y0, x1, y1);
-    grd.addColorStop(0.00, warm ? '#513509' : '#5c3f11');
-    grd.addColorStop(0.14, '#a97f2e');
-    grd.addColorStop(0.30, '#f6e2a8');
-    grd.addColorStop(0.44, '#d8b25c');
-    grd.addColorStop(0.62, '#8b6321');
-    grd.addColorStop(0.78, '#e6cc86');
-    grd.addColorStop(0.92, '#7c561b');
-    grd.addColorStop(1.00, '#412c0b');
-    return grd;
-  }
-
   /** Per-pixel monochrome grain — the pass that kills the "CSS gradient" look. */
   static grain(g, w, h, rng, amount = 12, alpha = 1) {
     try {
@@ -93,22 +112,10 @@ export class UITextures {
         d[i] += n; d[i + 1] += n; d[i + 2] += n;
       }
       g.putImageData(img, 0, 0);
-    } catch { /* tainted canvas cannot happen here, but never break the UI */ }
+    } catch { /* never break the UI over a grain pass */ }
   }
 
-  /** Run `fn` nine times on a torus so strokes wrap seamlessly across the tile. */
-  static wrap(g, w, h, fn) {
-    for (let oy = -1; oy <= 1; oy++) {
-      for (let ox = -1; ox <= 1; ox++) {
-        g.save();
-        g.translate(ox * w, oy * h);
-        fn(g);
-        g.restore();
-      }
-    }
-  }
-
-  /** A soft painterly dab — the workhorse of the portrait shading passes. */
+  /** A soft painterly dab — the workhorse of every shading pass. */
   static dab(g, x, y, rx, ry, rot, colour, alpha, blur = 0) {
     g.save();
     if (blur) g.filter = `blur(${blur}px)`;
@@ -120,913 +127,1970 @@ export class UITextures {
     g.restore();
   }
 
-  // ── wood ──────────────────────────────────────────────────────────────────
+  /** Run `fn` nine times on a torus so strokes wrap seamlessly across a tile. */
+  static wrap(g, w, h, fn) {
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        g.save();
+        g.translate(ox * w, oy * h);
+        fn(g);
+        g.restore();
+      }
+    }
+  }
 
   /**
-   * Carved dark oak: warped grain lines, two knots, cut chamfers and edge wear.
-   * Tiles horizontally along the HUD bar without an obvious repeat.
+   * A branching hairline crack. MM6's marble is scanned photography, and the
+   * sharp near-black cracks that run *across* cell boundaries are the single
+   * detail that stops a painted marble reading as plastic.
    */
-  static paintOak(g, w, h, rng, opts = {}) {
-    const dark = opts.dark ?? '#1d1309';
-    const light = opts.light ?? '#5c4126';
+  static crack(g, rng, x, y, angle, length, width, colour, depth = 2) {
+    let cx = x, cy = y, a = angle;
+    const step = Math.max(4, length / 14);
+    g.save();
+    g.strokeStyle = colour;
+    g.lineWidth = width;
+    g.lineCap = 'round';
+    g.globalAlpha = rng.range(0.45, 0.9);
+    g.beginPath();
+    g.moveTo(cx, cy);
+    let travelled = 0;
+    const branches = [];
+    while (travelled < length) {
+      a += rng.range(-0.34, 0.34);
+      cx += Math.cos(a) * step;
+      cy += Math.sin(a) * step;
+      g.lineTo(cx, cy);
+      travelled += step;
+      if (depth > 0 && rng.chance(0.16)) {
+        branches.push([cx, cy, a + rng.range(-1.1, 1.1), (length - travelled) * rng.range(0.3, 0.7)]);
+      }
+    }
+    g.stroke();
+    g.restore();
+    for (const [bx, by, ba, bl] of branches) {
+      UITextures.crack(g, rng, bx, by, ba, bl, width * 0.7, colour, depth - 1);
+    }
+  }
+
+  /** Cabochon brass shading used by every gold button in the game. */
+  static brassFace(g, x, y, w, h, rng) {
+    const grd = g.createLinearGradient(x, y, x, y + h);
+    grd.addColorStop(0.00, '#4A3A18');
+    grd.addColorStop(0.06, '#8C7440');
+    grd.addColorStop(0.22, '#C3B37A');
+    grd.addColorStop(0.34, '#EBE2A7');
+    grd.addColorStop(0.50, '#BBA069');
+    grd.addColorStop(0.70, '#A98E57');
+    grd.addColorStop(0.88, '#7A6031');
+    grd.addColorStop(1.00, '#302410');
+    g.fillStyle = grd;
+    g.beginPath();
+    g.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, TAU);
+    g.fill();
+
+    // Specular peak sits at ~35% across, ~30% down: a cabochon, not a sphere.
+    UITextures.dab(g, x + w * 0.35, y + h * 0.27, w * 0.30, h * 0.13, -0.35, '#F6F0CE', 0.75, w * 0.10);
+    // Warm bounce light near the bottom.
+    UITextures.dab(g, x + w * 0.52, y + h * 0.86, w * 0.34, h * 0.07, 0, '#D8BE7A', 0.45, w * 0.12);
+    // Rim.
+    g.save();
+    g.lineWidth = Math.max(1, w * 0.035);
+    g.strokeStyle = 'rgba(38,26,10,0.85)';
+    g.beginPath();
+    g.ellipse(x + w / 2, y + h / 2, w / 2 - g.lineWidth * 0.5, h / 2 - g.lineWidth * 0.5, 0, 0, TAU);
+    g.stroke();
+    g.restore();
+    if (rng) {
+      for (let i = 0; i < 24; i++) {
+        UITextures.dab(g, x + rng.range(w * 0.1, w * 0.9), y + rng.range(h * 0.1, h * 0.9),
+          rng.range(1, 5), rng.range(0.6, 2), rng.range(0, TAU),
+          rng.chance(0.5) ? '#FFF6D0' : '#3A2C12', rng.range(0.03, 0.10), 1.2);
+      }
+    }
+  }
+
+  /** Near-black embossed glyph: MM6 cuts its icons into the brass. */
+  static emboss(g, drawGlyph) {
+    g.save();
+    g.translate(0, 1.4);
+    g.fillStyle = 'rgba(255,240,190,0.42)';
+    g.strokeStyle = 'rgba(255,240,190,0.42)';
+    drawGlyph(g);
+    g.restore();
+    g.save();
+    g.fillStyle = '#241A0E';
+    g.strokeStyle = '#241A0E';
+    drawGlyph(g);
+    g.restore();
+  }
+
+  // ══ stone surfaces ════════════════════════════════════════════════════════
+
+  /**
+   * Polished white-pearl marble — the bottom bar.
+   * Painted as one wide slab rather than a tile so the veining and the cracks
+   * run continuously across the four character cells, exactly as in the game.
+   */
+  static paintMarble(g, w, h, rng, opts = {}) {
+    const pal = opts.palette ?? MM6.marble;
+    const veins = opts.veins ?? MM6.marbleVein;
+    const crackCol = opts.crack ?? MM6.marbleCrack;
+
     const base = g.createLinearGradient(0, 0, 0, h);
-    base.addColorStop(0, mixHex('#2f2013', '#4a3320', 0.35));
-    base.addColorStop(0.45, '#31220f');
-    base.addColorStop(1, '#1b1208');
+    base.addColorStop(0, pal[0]);
+    base.addColorStop(0.35, pal[1]);
+    base.addColorStop(0.75, pal[3] ?? pal[1]);
+    base.addColorStop(1, pal[4] ?? pal[2]);
     g.fillStyle = base;
     g.fillRect(0, 0, w, h);
 
-    // Grain: long warped lines with per-line phase so nothing looks combed.
-    const lines = Math.round(h * 0.55);
-    for (let i = 0; i < lines; i++) {
-      const y0 = rng.range(-8, h + 8);
-      const amp = rng.range(1.5, 7);
-      const freq = rng.range(0.004, 0.02);
-      const phase = rng.range(0, TAU);
-      const bright = rng.next();
-      g.strokeStyle = bright > 0.62
-        ? mixHex(light, '#8a6537', rng.next()) : mixHex(dark, '#0e0904', rng.next());
-      g.globalAlpha = rng.range(0.05, 0.24);
-      g.lineWidth = rng.range(0.6, 2.4);
-      g.beginPath();
-      for (let x = -4; x <= w + 4; x += 6) {
-        const y = y0 + Math.sin(x * freq + phase) * amp + Math.sin(x * freq * 3.1 + phase * 2) * amp * 0.3;
-        if (x === -4) g.moveTo(x, y); else g.lineTo(x, y);
-      }
-      g.stroke();
-    }
-    g.globalAlpha = 1;
-
-    // Knots — concentric rings pinched around a dark core.
-    const knots = opts.knots ?? 2;
-    for (let k = 0; k < knots; k++) {
-      const kx = rng.range(w * 0.12, w * 0.88);
-      const ky = rng.range(h * 0.2, h * 0.8);
-      const rx = rng.range(h * 0.06, h * 0.13);
-      const ry = rx * rng.range(0.45, 0.75);
-      for (let r = 8; r > 0; r--) {
-        g.strokeStyle = r % 2 ? 'rgba(20,12,5,0.5)' : 'rgba(120,86,48,0.28)';
-        g.lineWidth = 1.2;
-        g.beginPath();
-        g.ellipse(kx, ky, rx * (r / 8), ry * (r / 8), rng.range(-0.3, 0.3), 0, TAU);
-        g.stroke();
-      }
-      UITextures.dab(g, kx, ky, rx * 0.3, ry * 0.3, 0, '#100a04', 0.8, 2);
+    // Broad cloudy mottle.
+    const clouds = Math.round((w * h) / 5200);
+    for (let i = 0; i < clouds; i++) {
+      const c = pal[rng.int(0, pal.length - 1)];
+      UITextures.dab(g, rng.range(0, w), rng.range(0, h),
+        rng.range(h * 0.12, h * 0.7), rng.range(h * 0.05, h * 0.32),
+        rng.range(-0.5, 0.5), c, rng.range(0.10, 0.30), rng.range(8, 26));
     }
 
-    // Carved chamfer along the top and bottom edge.
-    const top = g.createLinearGradient(0, 0, 0, h * 0.16);
-    top.addColorStop(0, 'rgba(150,112,64,0.42)');
-    top.addColorStop(1, 'rgba(150,112,64,0)');
-    g.fillStyle = top;
-    g.fillRect(0, 0, w, h * 0.16);
-    const bot = g.createLinearGradient(0, h, 0, h * 0.8);
-    bot.addColorStop(0, 'rgba(0,0,0,0.6)');
-    bot.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = bot;
-    g.fillRect(0, h * 0.8, w, h * 0.2);
-
-    UITextures.grain(g, w, h, rng, 16);
-  }
-
-  oakTile() {
-    return this._make('oak-tile', 512, 256, (g, w, h, rng) => {
-      UITextures.paintOak(g, w, h, rng, { knots: 2 });
-    });
-  }
-
-  // ── frames ────────────────────────────────────────────────────────────────
-
-  /** Brass filigree corner: a scrolled acanthus rosette with a domed rivet. */
-  static paintCorner(g, size, rng) {
-    const s = size;
-    g.save();
-    // Backing plate
-    g.beginPath();
-    g.moveTo(0, 0); g.lineTo(s, 0); g.lineTo(s * 0.72, s * 0.28); g.lineTo(s * 0.28, s * 0.72);
-    g.lineTo(0, s); g.closePath();
-    g.fillStyle = UITextures.goldGradient(g, 0, 0, s, s);
-    g.fill();
-
-    // Scrollwork: two opposed spirals plus a leaf.
-    g.lineCap = 'round';
-    for (const dir of [1, -1]) {
+    // Soft diagonal veining — long, low-contrast, roughly parallel.
+    const veinCount = Math.round(w / 34) + 6;
+    for (let i = 0; i < veinCount; i++) {
+      const x0 = rng.range(-w * 0.2, w * 1.1);
+      const y0 = rng.range(-h * 0.3, h * 1.2);
+      const ang = rng.range(-0.85, -0.35) + (rng.chance(0.25) ? Math.PI * 0.5 : 0);
+      const len = rng.range(h * 0.7, h * 3.2);
       g.save();
-      if (dir < 0) { g.translate(s, 0); g.scale(-1, 1); g.rotate(0); }
-      g.strokeStyle = 'rgba(255,235,175,0.85)';
-      g.lineWidth = s * 0.045;
+      g.globalAlpha = rng.range(0.08, 0.24);
+      g.strokeStyle = veins[rng.int(0, veins.length - 1)];
+      g.lineWidth = rng.range(1.5, 7);
+      g.filter = `blur(${rng.range(1.4, 4).toFixed(2)}px)`;
       g.beginPath();
-      for (let t = 0; t < 3.4; t += 0.12) {
-        const r = s * 0.09 + t * s * 0.055;
-        const a = t * 1.55 + 0.6;
-        const x = s * 0.46 + Math.cos(a) * r * 0.72;
-        const y = s * 0.46 + Math.sin(a) * r * 0.72;
-        if (t === 0) g.moveTo(x, y); else g.lineTo(x, y);
-      }
-      g.stroke();
-      g.strokeStyle = 'rgba(60,38,8,0.55)';
-      g.lineWidth = s * 0.02;
+      g.moveTo(x0, y0);
+      g.bezierCurveTo(
+        x0 + Math.cos(ang) * len * 0.35 + rng.range(-24, 24), y0 + Math.sin(ang) * len * 0.35,
+        x0 + Math.cos(ang) * len * 0.7 + rng.range(-24, 24), y0 + Math.sin(ang) * len * 0.7,
+        x0 + Math.cos(ang) * len, y0 + Math.sin(ang) * len,
+      );
       g.stroke();
       g.restore();
     }
 
-    // Domed rivet at the corner point.
-    const rx = s * 0.2, ry = s * 0.2, rr = s * 0.11;
-    const dome = g.createRadialGradient(rx - rr * 0.35, ry - rr * 0.4, rr * 0.1, rx, ry, rr);
-    dome.addColorStop(0, '#fff3c8');
-    dome.addColorStop(0.45, '#d8ae57');
-    dome.addColorStop(0.85, '#7d5717');
-    dome.addColorStop(1, '#33220a');
-    g.fillStyle = dome;
-    g.beginPath(); g.arc(rx, ry, rr, 0, TAU); g.fill();
-
-    // Wear: scratches and tarnish blotches.
-    for (let i = 0; i < 24; i++) {
-      g.globalAlpha = rng.range(0.05, 0.22);
-      g.strokeStyle = rng.chance(0.5) ? '#fff6d0' : '#2a1c06';
-      g.lineWidth = rng.range(0.5, 1.6);
-      const x = rng.range(0, s), y = rng.range(0, s);
-      g.beginPath(); g.moveTo(x, y);
-      g.lineTo(x + rng.range(-s * 0.15, s * 0.15), y + rng.range(-s * 0.15, s * 0.15));
-      g.stroke();
-    }
-    g.globalAlpha = 1;
-    g.restore();
-  }
-
-  /**
-   * The master 9-slice frame: oak band, double gold beading, periodic rivets and
-   * filigree corners. The centre is left transparent so it can be laid over any
-   * background with `border-image`.
-   */
-  _frame(key, size, border, opts) {
-    return this._make(key, size, size, (g, w, h, rng) => {
-      const b = border;
-      // Oak band across the whole square, then punch out the middle.
-      const oak = document.createElement('canvas');
-      oak.width = size; oak.height = size;
-      UITextures.paintOak(oak.getContext('2d'), size, size, this.rngFor(`${key}-oak`), { knots: 3 });
-      g.drawImage(oak, 0, 0);
-
-      if (opts.metal === 'iron') {
-        g.globalCompositeOperation = 'source-atop';
-        const ir = g.createLinearGradient(0, 0, 0, h);
-        ir.addColorStop(0, 'rgba(96,102,110,0.92)');
-        ir.addColorStop(0.5, 'rgba(52,57,64,0.94)');
-        ir.addColorStop(1, 'rgba(28,31,36,0.95)');
-        g.fillStyle = ir;
-        g.fillRect(0, 0, w, h);
-        g.globalCompositeOperation = 'source-over';
-      }
-
-      // Outer bevel: dark lip then gold beading.
-      const beadOuter = opts.beadOuter ?? 7;
-      g.strokeStyle = '#0b0702';
-      g.lineWidth = 4;
-      g.strokeRect(2, 2, w - 4, h - 4);
-
-      const drawBead = (inset, thick) => {
+    // A warm ochre vein or two: the one colour note in the party bar.
+    if (opts.ochre !== false) {
+      for (let i = 0; i < Math.max(1, Math.round(w / 900)); i++) {
         g.save();
-        g.lineWidth = thick;
-        g.strokeStyle = UITextures.goldGradient(g, inset, inset, w - inset, h - inset);
-        g.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
-        // highlight on the top/left of the bead, shadow bottom/right
-        g.lineWidth = Math.max(1, thick * 0.32);
-        g.strokeStyle = 'rgba(255,244,200,0.6)';
+        g.globalAlpha = 0.16;
+        g.strokeStyle = MM6.marbleOchre;
+        g.lineWidth = rng.range(2, 5);
+        g.filter = 'blur(2.6px)';
+        const x0 = rng.range(0, w), y0 = rng.range(0, h);
         g.beginPath();
-        g.moveTo(inset, h - inset); g.lineTo(inset, inset); g.lineTo(w - inset, inset);
-        g.stroke();
-        g.strokeStyle = 'rgba(30,18,4,0.7)';
-        g.beginPath();
-        g.moveTo(w - inset, inset); g.lineTo(w - inset, h - inset); g.lineTo(inset, h - inset);
+        g.moveTo(x0, y0);
+        g.quadraticCurveTo(x0 + rng.range(-90, 90), y0 + rng.range(-40, 40), x0 + rng.range(-200, 200), y0 + rng.range(-70, 70));
         g.stroke();
         g.restore();
-      };
-      drawBead(beadOuter, opts.beadThick ?? 6);
-      drawBead(b - (opts.beadInner ?? 8), (opts.beadThick ?? 6) * 0.8);
-
-      // Rivets along each edge, periodic so `border-image-repeat: round` tiles.
-      const period = opts.rivetPeriod ?? (size - border * 2) / 4;
-      const rr = opts.rivetR ?? 4.4;
-      const rivet = (x, y) => {
-        const grd = g.createRadialGradient(x - rr * 0.4, y - rr * 0.45, rr * 0.1, x, y, rr);
-        grd.addColorStop(0, '#ffeeb4');
-        grd.addColorStop(0.4, '#c99f4d');
-        grd.addColorStop(0.85, '#6b4712');
-        grd.addColorStop(1, 'rgba(20,12,3,0.85)');
-        g.fillStyle = grd;
-        g.beginPath(); g.arc(x, y, rr, 0, TAU); g.fill();
-        g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 1;
-        g.beginPath(); g.arc(x, y, rr, 0, TAU); g.stroke();
-      };
-      const mid = b * 0.5;
-      for (let i = 0; i < 4; i++) {
-        const t = border + period * (i + 0.5);
-        rivet(t, mid); rivet(t, size - mid);
-        rivet(mid, t); rivet(size - mid, t);
       }
+    }
 
-      // Filigree corners.
-      const cs = b * 1.5;
-      const corner = document.createElement('canvas');
-      corner.width = cs; corner.height = cs;
-      UITextures.paintCorner(corner.getContext('2d'), cs, this.rngFor(`${key}-corner`));
-      g.drawImage(corner, 0, 0);
-      g.save(); g.translate(size, 0); g.scale(-1, 1); g.drawImage(corner, 0, 0); g.restore();
-      g.save(); g.translate(0, size); g.scale(1, -1); g.drawImage(corner, 0, 0); g.restore();
-      g.save(); g.translate(size, size); g.scale(-1, -1); g.drawImage(corner, 0, 0); g.restore();
+    // Sharp branching cracks.
+    const cracks = Math.max(2, Math.round(w / 260));
+    for (let i = 0; i < cracks; i++) {
+      UITextures.crack(g, rng, rng.range(0, w), rng.range(0, h), rng.range(0, TAU),
+        rng.range(h * 0.6, h * 2.2), rng.range(0.7, 1.6), crackCol, 2);
+    }
 
-      // Inner shadow so content sits *inside* the frame.
-      const inner = g.createLinearGradient(0, b - 10, 0, b + 8);
-      inner.addColorStop(0, 'rgba(0,0,0,0)');
-      inner.addColorStop(1, 'rgba(0,0,0,0.6)');
-      g.fillStyle = inner;
-      g.fillRect(b - 10, b - 10, size - (b - 10) * 2, 18);
+    UITextures.grain(g, w, h, rng, opts.grain ?? 9);
+  }
 
-      // Punch the centre out.
-      g.clearRect(b, b, size - b * 2, size - b * 2);
+  marbleBar() {
+    return this._make('marble-bar', 1400, 300, (g, w, h, rng) => {
+      UITextures.paintMarble(g, w, h, rng);
+      // A light top rail and a dark under-edge: the slab is a raised block.
+      const top = g.createLinearGradient(0, 0, 0, h * 0.05);
+      top.addColorStop(0, 'rgba(255,252,246,0.55)');
+      top.addColorStop(1, 'rgba(255,252,246,0)');
+      g.fillStyle = top;
+      g.fillRect(0, 0, w, h * 0.05);
+      const bot = g.createLinearGradient(0, h * 0.93, 0, h);
+      bot.addColorStop(0, 'rgba(20,18,18,0)');
+      bot.addColorStop(1, 'rgba(20,18,18,0.55)');
+      g.fillStyle = bot;
+      g.fillRect(0, h * 0.93, w, h * 0.07);
     });
   }
 
-  frameOak() { return this._frame('frame-oak', 384, 64, { beadOuter: 8, beadInner: 9, beadThick: 7, rivetR: 5 }); }
-  frameGold() { return this._frame('frame-gold', 256, 40, { beadOuter: 5, beadInner: 6, beadThick: 4.5, rivetR: 3.4 }); }
-  frameIron() { return this._frame('frame-iron', 256, 36, { metal: 'iron', beadOuter: 5, beadInner: 6, beadThick: 4, rivetR: 3.6 }); }
+  /** The right sidebar field: the same rock, a shade warmer and darker. */
+  marbleSidebar() {
+    return this._make('marble-side', 320, 1100, (g, w, h, rng) => {
+      UITextures.paintMarble(g, w, h, rng, {
+        palette: ['#B5ACA5', '#ADA29C', '#A5968C', '#A59A94', '#9C928C', '#B0A69C'],
+        grain: 8,
+      });
+    });
+  }
 
-  // ── parchment ─────────────────────────────────────────────────────────────
+  /** Warm terracotta/salmon marble — the rest and wait screen only. */
+  marbleRest() {
+    return this._make('marble-rest', 900, 700, (g, w, h, rng) => {
+      UITextures.paintMarble(g, w, h, rng, {
+        palette: ['#B5826B', '#AD7963', '#AD755A', '#AD7152', '#A56B52', '#BD8A73'],
+        veins: ['#D6B5A5', '#E0C4B0', '#8C5A42'],
+        crack: '#4A2418',
+        ochre: false,
+        grain: 10,
+      });
+    });
+  }
 
-  /** Seamless aged parchment: pulp blotches, linen fibres, foxing speckle. */
-  parchmentTile() {
-    return this._make('parchment', 512, 512, (g, w, h, rng) => {
-      g.fillStyle = '#e9dcbc';
+  /**
+   * Carved dark slate granite — every full-screen panel.
+   * Neutral with a slight olive cast, fine photographic noise, dark cracks and
+   * pale mineral streaks. Sub-panels are cut *into* this, never filled over it.
+   */
+  static paintGranite(g, w, h, rng, opts = {}) {
+    const pal = opts.palette ?? MM6.granite;
+    g.fillStyle = pal[0];
+    g.fillRect(0, 0, w, h);
+
+    const blobs = Math.round((w * h) / 2600);
+    for (let i = 0; i < blobs; i++) {
+      const c = pal[rng.int(0, pal.length - 1)];
+      UITextures.dab(g, rng.range(0, w), rng.range(0, h),
+        rng.range(10, 96), rng.range(8, 54), rng.range(0, TAU),
+        c, rng.range(0.14, 0.42), rng.range(3, 16));
+    }
+
+    // Pale mineral streaks, running one way like a bedding plane.
+    for (let i = 0; i < Math.round(w / 12); i++) {
+      const x0 = rng.range(-40, w);
+      const y0 = rng.range(0, h);
+      g.save();
+      g.globalAlpha = rng.range(0.05, 0.20);
+      g.strokeStyle = rng.chance(0.5) ? (opts.streak ?? '#8B8C86') : (opts.streakDark ?? '#22221F');
+      g.lineWidth = rng.range(1, 6);
+      g.filter = `blur(${rng.range(1, 3.4).toFixed(2)}px)`;
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.quadraticCurveTo(x0 + rng.range(30, 140), y0 + rng.range(-22, 22), x0 + rng.range(80, 300), y0 + rng.range(-40, 40));
+      g.stroke();
+      g.restore();
+    }
+
+    // Cracks and pits.
+    for (let i = 0; i < Math.max(3, Math.round((w * h) / 42000)); i++) {
+      UITextures.crack(g, rng, rng.range(0, w), rng.range(0, h), rng.range(0, TAU),
+        rng.range(h * 0.2, h * 0.8), rng.range(0.8, 2), opts.crack ?? '#17181A', 2);
+    }
+    for (let i = 0; i < Math.round((w * h) / 1400); i++) {
+      UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(0.6, 2.6), rng.range(0.6, 2.2),
+        0, rng.chance(0.5) ? '#1D1E1C' : '#7A7B76', rng.range(0.10, 0.34), 0.6);
+    }
+    UITextures.grain(g, w, h, rng, opts.grain ?? 18);
+  }
+
+  granite() {
+    return this._make('granite', 1100, 760, (g, w, h, rng) => UITextures.paintGranite(g, w, h, rng));
+  }
+
+  /** Dark green serpentine / verd-antique — the party creation screen. */
+  serpentine() {
+    return this._make('serpentine', 1100, 760, (g, w, h, rng) => {
+      UITextures.paintGranite(g, w, h, rng, {
+        palette: ['#22301F', '#1B2719', '#2C3D2E', '#16211A', '#33452F', '#12190F', '#3C5138'],
+        streak: '#6E8A63',
+        streakDark: '#0A0F0A',
+        crack: '#050805',
+        grain: 16,
+      });
+    });
+  }
+
+  /** The stone niche the full-body figure stands in. */
+  static paintNiche(g, w, h, rng) {
+    g.fillStyle = '#2A2622';
+    g.fillRect(0, 0, w, h);
+    // Rough masonry courses with deep mortar.
+    const course = h / 11;
+    for (let r = 0; r < 12; r++) {
+      const y = r * course;
+      const off = (r % 2) * w * 0.24;
+      for (let c = -1; c < 4; c++) {
+        const x = off + c * w * 0.42;
+        const bw = w * 0.42 - 3;
+        const bh = course - 3;
+        const tone = mixHex('#4A423C', '#2A2622', rng.range(0, 1));
+        g.fillStyle = tone;
+        g.fillRect(x, y, bw, bh);
+        g.fillStyle = 'rgba(255,246,230,0.10)';
+        g.fillRect(x, y, bw, 2);
+        g.fillStyle = 'rgba(0,0,0,0.30)';
+        g.fillRect(x, y + bh - 2, bw, 2);
+        for (let i = 0; i < 12; i++) {
+          UITextures.dab(g, x + rng.range(0, bw), y + rng.range(0, bh), rng.range(2, 12), rng.range(2, 8),
+            rng.range(0, TAU), rng.chance(0.5) ? '#5A5148' : '#1E1A16', rng.range(0.06, 0.2), 2);
+        }
+      }
+    }
+    // Lighter flagstone floor at the bottom.
+    const floorY = h * 0.86;
+    const fl = g.createLinearGradient(0, floorY, 0, h);
+    fl.addColorStop(0, '#4E4740');
+    fl.addColorStop(1, '#6B635A');
+    g.fillStyle = fl;
+    g.fillRect(0, floorY, w, h - floorY);
+    for (let i = 0; i < 8; i++) {
+      g.strokeStyle = 'rgba(0,0,0,0.35)';
+      g.lineWidth = 1.4;
+      g.beginPath();
+      g.moveTo(rng.range(0, w), floorY);
+      g.lineTo(rng.range(-w * 0.3, w * 1.3), h);
+      g.stroke();
+    }
+    // Dark vignette at the top; the key light comes from the front-left.
+    const vig = g.createLinearGradient(0, 0, 0, h * 0.5);
+    vig.addColorStop(0, 'rgba(0,0,0,0.82)');
+    vig.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = vig;
+    g.fillRect(0, 0, w, h * 0.5);
+    const side = g.createLinearGradient(0, 0, w, 0);
+    side.addColorStop(0, 'rgba(0,0,0,0.42)');
+    side.addColorStop(0.4, 'rgba(0,0,0,0)');
+    side.addColorStop(1, 'rgba(0,0,0,0.58)');
+    g.fillStyle = side;
+    g.fillRect(0, 0, w, h);
+    UITextures.grain(g, w, h, rng, 16);
+  }
+
+  // ══ the architectural frame ═══════════════════════════════════════════════
+
+  /**
+   * A polished limestone column shaft.
+   *
+   * Both side columns are brightest at their *screen-outer* edge — symmetric
+   * outward and physically impossible, which is exactly what the game does.
+   * The tile repeats vertically; the striations are vertical so the seam is
+   * invisible.
+   */
+  columnShaft(mode = 'left') {
+    return this._make(`col-${mode}`, 64, 128, (g, w, h, rng) => {
+      const grd = g.createLinearGradient(0, 0, w, 0);
+      if (mode === 'left') {
+        grd.addColorStop(0.00, '#B5AEA5');
+        grd.addColorStop(0.30, '#A29A93');
+        grd.addColorStop(0.68, '#867D7C');
+        grd.addColorStop(0.92, '#6D6466');
+        grd.addColorStop(1.00, '#3A3436');
+      } else if (mode === 'right') {
+        grd.addColorStop(0.00, '#3A3436');
+        grd.addColorStop(0.08, '#6D6466');
+        grd.addColorStop(0.32, '#867D7C');
+        grd.addColorStop(0.70, '#A29A93');
+        grd.addColorStop(1.00, '#B5AEA5');
+      } else {
+        grd.addColorStop(0.00, '#5E5757');
+        grd.addColorStop(0.14, '#8F8681');
+        grd.addColorStop(0.38, '#BDB2AD');
+        grd.addColorStop(0.62, '#A69C97');
+        grd.addColorStop(0.86, '#7E7573');
+        grd.addColorStop(1.00, '#4A4344');
+      }
+      g.fillStyle = grd;
       g.fillRect(0, 0, w, h);
 
-      // Broad pulp mottling.
-      UITextures.wrap(g, w, h, (c) => {
-        for (let i = 0; i < 26; i++) {
-          const x = rng.range(0, w), y = rng.range(0, h), r = rng.range(40, 150);
-          const tint = rng.chance(0.5) ? '#d3c093' : '#f5ecd4';
-          const grd = c.createRadialGradient(x, y, 0, x, y, r);
-          grd.addColorStop(0, tint);
-          grd.addColorStop(1, 'rgba(0,0,0,0)');
-          c.save();
-          c.globalAlpha = rng.range(0.05, 0.16);
-          c.fillStyle = grd;
-          c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
-          c.restore();
+      // Very fine vertical striations — not flutes.
+      for (let i = 0; i < 46; i++) {
+        const x = rng.range(0, w);
+        g.globalAlpha = rng.range(0.03, 0.13);
+        g.strokeStyle = rng.chance(0.5) ? '#FFFFFF' : '#2B2628';
+        g.lineWidth = rng.range(0.5, 1.6);
+        g.beginPath();
+        g.moveTo(x, -2);
+        g.lineTo(x + rng.range(-0.6, 0.6), h + 2);
+        g.stroke();
+      }
+      g.globalAlpha = 1;
+      UITextures.grain(g, w, h, rng, 7);
+    });
+  }
+
+  /** Gold collar band wrapping a shaft; the shading follows the shaft's. */
+  columnCollar(mode = 'left') {
+    return this._make(`collar-${mode}`, 64, 24, (g, w, h) => {
+      const grd = g.createLinearGradient(0, 0, w, 0);
+      const stops = mode === 'left'
+        ? [['#E8DFA0', 0], ['#DBBC80', 0.26], ['#B3A36F', 0.6], ['#8A7038', 0.88], ['#5B4310', 1]]
+        : mode === 'right'
+          ? [['#5B4310', 0], ['#8A7038', 0.12], ['#B3A36F', 0.4], ['#DBBC80', 0.74], ['#E8DFA0', 1]]
+          : [['#7B5918', 0], ['#B3A36F', 0.2], ['#E8DFA0', 0.4], ['#C4AC6C', 0.66], ['#A08649', 0.86], ['#6A4C14', 1]];
+      for (const [c, p] of stops) grd.addColorStop(p, c);
+      g.fillStyle = grd;
+      g.fillRect(0, 0, w, h);
+      // Bead mouldings top and bottom.
+      g.fillStyle = 'rgba(255,248,200,0.55)';
+      g.fillRect(0, 1, w, 1.5);
+      g.fillRect(0, h - 5, w, 1.2);
+      g.fillStyle = 'rgba(40,26,4,0.75)';
+      g.fillRect(0, 0, w, 1);
+      g.fillRect(0, h - 1.5, w, 1.5);
+      g.fillStyle = 'rgba(60,40,8,0.35)';
+      g.fillRect(0, h * 0.45, w, 1.4);
+    });
+  }
+
+  /**
+   * A Corinthian capital: acanthus leaves, volutes and a square abacus, drawn
+   * as dark high-contrast lumps the way the game's scanned photograph reads.
+   */
+  columnCapital() {
+    return this._make('capital', 128, 96, (g, w, h, rng) => {
+      const cx = w / 2;
+      // Abacus.
+      const ab = g.createLinearGradient(0, 0, 0, h * 0.2);
+      ab.addColorStop(0, '#C9C3BC');
+      ab.addColorStop(0.6, '#9B948E');
+      ab.addColorStop(1, '#5C5654');
+      g.fillStyle = ab;
+      g.fillRect(w * 0.02, 0, w * 0.96, h * 0.2);
+      g.fillStyle = 'rgba(255,255,255,0.5)';
+      g.fillRect(w * 0.02, 0, w * 0.96, 2.5);
+
+      // Bell of the capital.
+      const bell = new Path2D();
+      bell.moveTo(w * 0.06, h * 0.2);
+      bell.bezierCurveTo(w * 0.14, h * 0.7, w * 0.24, h * 0.92, w * 0.30, h);
+      bell.lineTo(w * 0.70, h);
+      bell.bezierCurveTo(w * 0.76, h * 0.92, w * 0.86, h * 0.7, w * 0.94, h * 0.2);
+      bell.closePath();
+      const bg = g.createLinearGradient(0, h * 0.2, 0, h);
+      bg.addColorStop(0, '#8A837D');
+      bg.addColorStop(0.5, '#6E6863');
+      bg.addColorStop(1, '#403B39');
+      g.fillStyle = bg;
+      g.fill(bell);
+
+      g.save();
+      g.clip(bell);
+      // Acanthus leaves: two tiers of curled lobes.
+      for (const tier of [0, 1]) {
+        const y = h * (0.42 + tier * 0.3);
+        const n = 5 - tier;
+        for (let i = 0; i < n; i++) {
+          const x = w * (0.5 + ((i - (n - 1) / 2) / n) * 0.78);
+          const lw = w * (0.13 - tier * 0.02);
+          const lh = h * (0.3 - tier * 0.05);
+          const leaf = new Path2D();
+          leaf.moveTo(x, y + lh * 0.5);
+          leaf.bezierCurveTo(x - lw, y + lh * 0.2, x - lw * 0.8, y - lh * 0.6, x, y - lh * 0.5);
+          leaf.bezierCurveTo(x + lw * 0.8, y - lh * 0.6, x + lw, y + lh * 0.2, x, y + lh * 0.5);
+          leaf.closePath();
+          g.fillStyle = mixHex('#B0ACA6', '#6A645F', rng.range(0.1, 0.6));
+          g.fill(leaf);
+          g.strokeStyle = '#101010';
+          g.lineWidth = 1.6;
+          g.stroke(leaf);
+          g.strokeStyle = 'rgba(20,18,16,0.75)';
+          g.lineWidth = 1.2;
+          g.beginPath();
+          g.moveTo(x, y - lh * 0.45);
+          g.lineTo(x, y + lh * 0.45);
+          g.stroke();
         }
+      }
+      // Volutes under the abacus corners.
+      for (const side of [-1, 1]) {
+        const vx = cx + side * w * 0.38;
+        const vy = h * 0.30;
+        g.strokeStyle = '#C0BAB3';
+        g.lineWidth = 3.4;
+        g.beginPath();
+        for (let t = 0; t < TAU * 1.6; t += 0.16) {
+          const r = 2 + t * 2.4;
+          const px = vx + Math.cos(t * side) * r;
+          const py = vy + Math.sin(t * side) * r;
+          if (t === 0) g.moveTo(px, py); else g.lineTo(px, py);
+        }
+        g.stroke();
+        g.strokeStyle = 'rgba(16,16,16,0.85)';
+        g.lineWidth = 1.4;
+        g.stroke();
+      }
+      // Crevice darkening.
+      for (let i = 0; i < 40; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(h * 0.2, h), rng.range(2, 10), rng.range(2, 7),
+          rng.range(0, TAU), rng.chance(0.55) ? '#101010' : '#B0ACA6', rng.range(0.08, 0.3), 2);
+      }
+      g.restore();
+
+      g.strokeStyle = 'rgba(10,10,10,0.7)';
+      g.lineWidth = 1.6;
+      g.stroke(bell);
+      UITextures.grain(g, w, h, rng, 10);
+    });
+  }
+
+  /** Moulded torus/scotia plinth, drawn in front of the bottom bar. */
+  columnBase() {
+    return this._make('col-base', 128, 56, (g, w, h, rng) => {
+      const bands = [
+        [0.00, 0.16, '#B9B2AB', '#7E7773'],
+        [0.16, 0.30, '#948D89', '#57514F'],
+        [0.30, 0.58, '#C6BFB8', '#6E6764'],
+        [0.58, 0.70, '#8B8480', '#4E4846'],
+        [0.70, 1.00, '#CCC5BD', '#655F5C'],
+      ];
+      for (const [a, b, hi, lo] of bands) {
+        const grd = g.createLinearGradient(0, 0, w, 0);
+        grd.addColorStop(0, lo);
+        grd.addColorStop(0.34, hi);
+        grd.addColorStop(0.7, mixHex(hi, lo, 0.5));
+        grd.addColorStop(1, lo);
+        g.fillStyle = grd;
+        const inset = a === 0.30 || a === 0.70 ? 0 : w * 0.05;
+        g.fillRect(inset, h * a, w - inset * 2, h * (b - a));
+        g.fillStyle = 'rgba(0,0,0,0.4)';
+        g.fillRect(inset, h * b - 1.2, w - inset * 2, 1.2);
+      }
+      UITextures.grain(g, w, h, rng, 8);
+    });
+  }
+
+  // ── automap arch ──────────────────────────────────────────────────────────
+
+  /** The Gothic opening shared by the arch frame and the map bitmap's clip. */
+  static archPath(w, h, m = 0) {
+    const p = new Path2D();
+    const x0 = m;
+    const x1 = w - m;
+    const yb = h - m;
+    const yt = m;
+    const cx = w / 2;
+    const ys = h * 0.44;
+    p.moveTo(x0, yb);
+    p.lineTo(x0, ys);
+    p.bezierCurveTo(x0, ys - (ys - yt) * 0.66, cx - (cx - x0) * 0.56, yt + (ys - yt) * 0.02, cx, yt);
+    p.bezierCurveTo(cx + (cx - x0) * 0.56, yt + (ys - yt) * 0.02, x1, ys - (ys - yt) * 0.66, x1, ys);
+    p.lineTo(x1, yb);
+    p.closePath();
+    return p;
+  }
+
+  /**
+   * The carved stone frame around the automap: three concentric rolled
+   * mouldings, a notched keystone with stepped merlons at the top, and a stone
+   * sill along the bottom. The opening is punched clear so the map canvas
+   * underneath shows through.
+   */
+  archFrame(w = 300, h = 284) {
+    return this._make(`arch-${w}x${h}`, w, h, (g, W, H, rng) => {
+      UITextures.paintMarble(g, W, H, rng, {
+        palette: ['#B5ACA5', '#ADA29C', '#A5968C', '#A59A94', '#9C928C'],
+        ochre: false, grain: 7,
       });
 
-      // Linen fibres.
-      UITextures.wrap(g, w, h, (c) => {
-        for (let i = 0; i < 420; i++) {
-          const x = rng.range(0, w), y = rng.range(0, h);
-          const a = rng.range(0, TAU), len = rng.range(6, 34);
-          c.globalAlpha = rng.range(0.04, 0.13);
-          c.strokeStyle = rng.chance(0.45) ? '#b8a475' : '#fbf3dd';
-          c.lineWidth = rng.range(0.5, 1.3);
-          c.beginPath();
-          c.moveTo(x, y);
-          c.quadraticCurveTo(
-            x + Math.cos(a) * len * 0.5 + rng.range(-3, 3),
-            y + Math.sin(a) * len * 0.5 + rng.range(-3, 3),
-            x + Math.cos(a) * len, y + Math.sin(a) * len,
-          );
-          c.stroke();
-        }
-        c.globalAlpha = 1;
-      });
+      const m = Math.round(W * 0.055);
+      const path = UITextures.archPath(W, H - Math.round(H * 0.055), m);
 
-      // Foxing: tiny age spots.
-      UITextures.wrap(g, w, h, (c) => {
-        for (let i = 0; i < 260; i++) {
-          const x = rng.range(0, w), y = rng.range(0, h), r = rng.range(0.5, 2.6);
-          c.globalAlpha = rng.range(0.05, 0.2);
-          c.fillStyle = rng.chance(0.7) ? '#a98f5e' : '#7d6438';
-          c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
-        }
-        c.globalAlpha = 1;
-      });
+      // Merlons flanking the keystone notch at the apex.
+      g.fillStyle = '#B0A69E';
+      const mw = W * 0.09;
+      for (const side of [-1, 1]) {
+        const x = W / 2 + side * W * 0.20 - mw / 2;
+        g.fillRect(x, 0, mw, H * 0.055);
+        g.fillStyle = 'rgba(255,255,255,0.4)';
+        g.fillRect(x, 0, mw, 2);
+        g.fillStyle = 'rgba(0,0,0,0.35)';
+        g.fillRect(x + mw - 2, 0, 2, H * 0.055);
+        g.fillStyle = '#B0A69E';
+      }
 
+      // Concentric rolls, widest first; the narrow ones overwrite the middle.
+      const rolls = [
+        [W * 0.125, '#C7C1BC'],
+        [W * 0.092, '#A49E9A'],
+        [W * 0.062, '#CFC9C4'],
+        [W * 0.034, '#8E8884'],
+        [W * 0.014, '#3C3A38'],
+      ];
+      for (const [lw, col] of rolls) {
+        g.save();
+        g.lineJoin = 'round';
+        g.strokeStyle = col;
+        g.lineWidth = lw;
+        g.stroke(path);
+        g.restore();
+      }
+      // A catch-light along the upper-left of the outermost roll.
+      g.save();
+      g.globalAlpha = 0.5;
+      g.strokeStyle = '#EFEAE4';
+      g.lineWidth = W * 0.012;
+      g.setLineDash([W * 0.34, W * 0.9]);
+      g.stroke(path);
+      g.restore();
+
+      // Punch the opening.
+      g.save();
+      g.globalCompositeOperation = 'destination-out';
+      g.fillStyle = '#000';
+      g.fill(path);
+      g.restore();
+
+      // Stone sill along the bottom.
+      const sillY = H - Math.round(H * 0.055);
+      const sill = g.createLinearGradient(0, sillY, 0, H);
+      sill.addColorStop(0, '#D2CBC4');
+      sill.addColorStop(0.35, '#ADA29C');
+      sill.addColorStop(1, '#736A64');
+      g.fillStyle = sill;
+      g.fillRect(0, sillY, W, H - sillY);
+      g.fillStyle = 'rgba(20,18,18,0.6)';
+      g.fillRect(0, sillY, W, 1.6);
+      UITextures.grain(g, W, H, rng, 7);
+    });
+  }
+
+  /** The compass tape window: brass/parchment with a left-to-right ramp. */
+  compassPlate() {
+    return this._make('compass-plate', 200, 46, (g, w, h, rng) => {
+      const grd = g.createLinearGradient(0, 0, w, 0);
+      grd.addColorStop(0, '#E0DCAE');
+      grd.addColorStop(0.5, '#D6CE97');
+      grd.addColorStop(1, '#C9C087');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = 'rgba(255,255,232,0.75)';
+      g.fillRect(0, 0, w, 2);
+      g.fillStyle = 'rgba(60,50,20,0.7)';
+      g.fillRect(0, h - 2.4, w, 2.4);
+      g.strokeStyle = 'rgba(70,58,24,0.55)';
+      g.lineWidth = 1.4;
+      g.strokeRect(0.8, 0.8, w - 1.6, h - 1.6);
       UITextures.grain(g, w, h, rng, 9);
     });
   }
 
+  // ── stained glass ─────────────────────────────────────────────────────────
+
   /**
-   * Burnt / deckled sheet edge, drawn as a transparent-centre 9-slice so any
-   * panel gets scorched borders without a bespoke texture.
+   * The painted stained-glass window shown in a hireling slot when it is empty.
+   * At 65 native pixels it must read as a muddy jewelled mosaic, not as crisp
+   * tracery — so everything is drawn thick and leaded in near-black.
    */
-  parchmentEdge() {
-    return this._make('parchment-edge', 256, 256, (g, w, h, rng) => {
-      const b = 56;
-      // Scorch: dark irregular gradient hugging the border.
-      const paintSide = (x, y, ww, hh, gx0, gy0, gx1, gy1) => {
-        const grd = g.createLinearGradient(gx0, gy0, gx1, gy1);
-        grd.addColorStop(0, 'rgba(58,34,12,0.72)');
-        grd.addColorStop(0.35, 'rgba(120,84,40,0.30)');
-        grd.addColorStop(1, 'rgba(160,120,60,0)');
-        g.fillStyle = grd;
-        g.fillRect(x, y, ww, hh);
-      };
-      paintSide(0, 0, w, b, 0, 0, 0, b);
-      paintSide(0, h - b, w, b, 0, h, 0, h - b);
-      paintSide(0, 0, b, h, 0, 0, b, 0);
-      paintSide(w - b, 0, b, h, w, 0, w - b, 0);
-
-      // Torn deckle: bite irregular notches out of the very edge.
-      g.globalCompositeOperation = 'destination-out';
-      const bite = (cx, cy) => {
-        g.beginPath();
-        g.arc(cx, cy, rng.range(2, 7), 0, TAU);
-        g.fill();
-      };
-      g.fillStyle = '#000';
-      for (let i = 0; i < 160; i++) {
-        const t = rng.range(0, 1);
-        bite(t * w, rng.range(-2, 5));
-        bite(t * w, h - rng.range(-2, 5));
-        bite(rng.range(-2, 5), t * h);
-        bite(w - rng.range(-2, 5), t * h);
-      }
-      g.globalCompositeOperation = 'source-over';
-
-      // A few scorched flecks just inside the burn.
-      for (let i = 0; i < 90; i++) {
-        const edge = rng.int(0, 3);
-        const d = rng.range(2, b * 0.8);
-        const t = rng.range(0, 1);
-        const x = edge === 0 ? t * w : edge === 1 ? t * w : edge === 2 ? d : w - d;
-        const y = edge === 0 ? d : edge === 1 ? h - d : t * h;
-        g.globalAlpha = rng.range(0.08, 0.35);
-        g.fillStyle = rng.chance(0.6) ? '#3a2109' : '#120a03';
-        g.beginPath(); g.ellipse(x, y, rng.range(1, 5), rng.range(1, 3), rng.range(0, TAU), 0, TAU); g.fill();
-      }
-      g.globalAlpha = 1;
-      g.clearRect(b + 8, b + 8, w - (b + 8) * 2, h - (b + 8) * 2);
-    });
-  }
-
-  // ── metal, cloth, glass ───────────────────────────────────────────────────
-
-  ironTile() {
-    return this._make('iron', 256, 256, (g, w, h, rng) => {
-      const base = g.createLinearGradient(0, 0, w * 0.3, h);
-      base.addColorStop(0, '#4a505a');
-      base.addColorStop(0.5, '#343a43');
-      base.addColorStop(1, '#22262d');
-      g.fillStyle = base;
+  stainedGlass() {
+    return this._make('stained-glass', 132, 150, (g, w, h, rng) => {
+      // Bezel.
+      g.fillStyle = '#424942';
       g.fillRect(0, 0, w, h);
-      // Hammer planish marks.
-      UITextures.wrap(g, w, h, (c) => {
-        for (let i = 0; i < 90; i++) {
-          const x = rng.range(0, w), y = rng.range(0, h), r = rng.range(6, 20);
-          const grd = c.createRadialGradient(x - r * 0.3, y - r * 0.3, 1, x, y, r);
-          grd.addColorStop(0, 'rgba(190,200,214,0.16)');
-          grd.addColorStop(0.6, 'rgba(120,130,145,0.05)');
-          grd.addColorStop(1, 'rgba(10,12,16,0.12)');
-          c.fillStyle = grd;
-          c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
-        }
-        // Scratches.
-        for (let i = 0; i < 70; i++) {
-          const x = rng.range(0, w), y = rng.range(0, h), a = rng.range(0, TAU), len = rng.range(8, 60);
-          c.globalAlpha = rng.range(0.04, 0.14);
-          c.strokeStyle = rng.chance(0.5) ? '#c9d2df' : '#14171c';
-          c.lineWidth = rng.range(0.4, 1.2);
-          c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); c.stroke();
-        }
-        c.globalAlpha = 1;
-      });
-      UITextures.grain(g, w, h, rng, 14);
-    });
-  }
+      const bez = 6;
+      g.fillStyle = 'rgba(0,0,0,0.55)';
+      g.fillRect(0, 0, w, 2); g.fillRect(0, 0, 2, h);
+      g.fillStyle = 'rgba(220,220,210,0.35)';
+      g.fillRect(0, h - 2, w, 2); g.fillRect(w - 2, 0, 2, h);
 
-  clothTile() {
-    return this._make('cloth', 256, 256, (g, w, h, rng) => {
-      g.fillStyle = '#2c2115';
-      g.fillRect(0, 0, w, h);
-      // Woven warp and weft.
-      for (let y = 0; y < h; y += 3) {
-        g.globalAlpha = 0.16 + (y % 6 === 0 ? 0.08 : 0);
-        g.strokeStyle = '#4b3a24';
-        g.lineWidth = 1.6;
-        g.beginPath(); g.moveTo(0, y + 0.5); g.lineTo(w, y + 0.5); g.stroke();
-      }
-      for (let x = 0; x < w; x += 3) {
-        g.globalAlpha = 0.12;
-        g.strokeStyle = '#171008';
-        g.lineWidth = 1.4;
-        g.beginPath(); g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, h); g.stroke();
-      }
-      g.globalAlpha = 1;
-      UITextures.wrap(g, w, h, (c) => {
-        for (let i = 0; i < 40; i++) {
-          const x = rng.range(0, w), y = rng.range(0, h), r = rng.range(20, 70);
-          const grd = c.createRadialGradient(x, y, 0, x, y, r);
-          grd.addColorStop(0, rng.chance(0.5) ? 'rgba(90,68,40,0.25)' : 'rgba(10,7,4,0.3)');
-          grd.addColorStop(1, 'rgba(0,0,0,0)');
-          c.fillStyle = grd;
-          c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
-        }
-      });
-      UITextures.grain(g, w, h, rng, 10);
-    });
-  }
-
-  vignette() {
-    return this._make('vignette', 512, 512, (g, w, h) => {
-      const grd = g.createRadialGradient(w / 2, h / 2, w * 0.24, w / 2, h / 2, w * 0.72);
-      grd.addColorStop(0, 'rgba(0,0,0,0)');
-      grd.addColorStop(0.7, 'rgba(0,0,0,0.28)');
-      grd.addColorStop(1, 'rgba(0,0,0,0.66)');
-      g.fillStyle = grd;
-      g.fillRect(0, 0, w, h);
-    });
-  }
-
-  /** Recessed leather slot for inventory / equipment cells. */
-  slot() {
-    return this._make('slot', 128, 128, (g, w, h, rng) => {
-      const base = g.createLinearGradient(0, 0, 0, h);
-      base.addColorStop(0, '#1b1409');
-      base.addColorStop(0.5, '#241a0e');
-      base.addColorStop(1, '#150f07');
-      g.fillStyle = base;
-      g.fillRect(0, 0, w, h);
-      // Pebbled leather.
-      for (let i = 0; i < 500; i++) {
-        const x = rng.range(0, w), y = rng.range(0, h), r = rng.range(0.8, 3.2);
-        g.globalAlpha = rng.range(0.04, 0.14);
-        g.fillStyle = rng.chance(0.5) ? '#4a3822' : '#0b0703';
-        g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
-      }
-      g.globalAlpha = 1;
-      // Recess: dark top-left, lit bottom-right.
-      const rec = g.createLinearGradient(0, 0, 0, h * 0.55);
-      rec.addColorStop(0, 'rgba(0,0,0,0.7)');
-      rec.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = rec; g.fillRect(0, 0, w, h * 0.55);
-      const lip = g.createLinearGradient(0, h, 0, h * 0.7);
-      lip.addColorStop(0, 'rgba(160,124,66,0.28)');
-      lip.addColorStop(1, 'rgba(160,124,66,0)');
-      g.fillStyle = lip; g.fillRect(0, h * 0.7, w, h * 0.3);
-      // Gold hairline border.
-      g.strokeStyle = 'rgba(190,150,80,0.5)';
-      g.lineWidth = 2;
-      g.strokeRect(1.5, 1.5, w - 3, h - 3);
-      UITextures.grain(g, w, h, rng, 10);
-    });
-  }
-
-  /** A gem button in a claw-set brass bezel. `hue` is degrees. */
-  orb(hue = 12) {
-    return this._make(`orb-${hue}`, 160, 160, (g, w, h, rng) => {
-      const cx = w / 2, cy = h / 2, r = w * 0.36;
-
-      // Bezel ring.
-      const ring = g.createLinearGradient(0, 0, w, h);
-      ring.addColorStop(0, '#6a4a12');
-      ring.addColorStop(0.3, '#e8cd84');
-      ring.addColorStop(0.55, '#a67c2c');
-      ring.addColorStop(0.8, '#f4e3ac');
-      ring.addColorStop(1, '#4a3208');
-      g.strokeStyle = ring;
-      g.lineWidth = w * 0.11;
-      g.beginPath(); g.arc(cx, cy, r + w * 0.055, 0, TAU); g.stroke();
-      g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 2;
-      g.beginPath(); g.arc(cx, cy, r + w * 0.11, 0, TAU); g.stroke();
-
-      // Claws.
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * TAU + 0.4;
-        const x = cx + Math.cos(a) * (r + w * 0.03);
-        const y = cy + Math.sin(a) * (r + w * 0.03);
-        const grd = g.createRadialGradient(x - 2, y - 2, 1, x, y, w * 0.05);
-        grd.addColorStop(0, '#fff0bd'); grd.addColorStop(0.6, '#c39a45'); grd.addColorStop(1, '#5c3f10');
-        g.fillStyle = grd;
-        g.beginPath(); g.ellipse(x, y, w * 0.05, w * 0.035, a, 0, TAU); g.fill();
-      }
-
-      // Gem body: deep colour with facet planes.
-      const light = `hsl(${hue}, 82%, 66%)`;
-      const mid = `hsl(${hue}, 75%, 42%)`;
-      const deep = `hsl(${hue}, 70%, 17%)`;
-      const body = g.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.12, cx, cy, r);
-      body.addColorStop(0, light);
-      body.addColorStop(0.45, mid);
-      body.addColorStop(0.85, deep);
-      body.addColorStop(1, `hsl(${hue}, 60%, 9%)`);
-      g.fillStyle = body;
-      g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
-
-      g.save();
-      g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.clip();
-      for (let i = 0; i < 9; i++) {
-        const a0 = rng.range(0, TAU), spread = rng.range(0.3, 0.9);
-        g.globalAlpha = rng.range(0.05, 0.16);
-        g.fillStyle = rng.chance(0.5) ? '#ffffff' : '#000000';
-        g.beginPath();
-        g.moveTo(cx, cy);
-        g.arc(cx, cy, r * rng.range(0.7, 1.2), a0, a0 + spread);
-        g.closePath(); g.fill();
-      }
-      g.globalAlpha = 1;
-      // Specular highlight and the light bounce off the far wall of the gem.
-      UITextures.dab(g, cx - r * 0.34, cy - r * 0.38, r * 0.28, r * 0.19, -0.7, 'rgba(255,255,255,0.85)', 0.75, 6);
-      UITextures.dab(g, cx + r * 0.3, cy + r * 0.42, r * 0.3, r * 0.14, -0.5, light, 0.45, 8);
-      g.restore();
-
-      // Rim shadow so it seats into the bezel.
-      g.strokeStyle = 'rgba(0,0,0,0.55)';
-      g.lineWidth = 3;
-      g.beginPath(); g.arc(cx, cy, r - 1, 0, TAU); g.stroke();
-    });
-  }
-
-  // ── compass ───────────────────────────────────────────────────────────────
-
-  compassBezel() {
-    return this._make('compass-bezel', 256, 256, (g, w, h, rng) => {
-      const cx = w / 2, cy = h / 2;
-      // Brass ring.
-      const ring = g.createLinearGradient(0, 0, w, h);
-      ring.addColorStop(0, '#3f2b08');
-      ring.addColorStop(0.25, '#d7b264');
-      ring.addColorStop(0.45, '#8b6524');
-      ring.addColorStop(0.62, '#f6e6b4');
-      ring.addColorStop(0.85, '#7b571b');
-      ring.addColorStop(1, '#301f05');
-      g.strokeStyle = ring;
-      g.lineWidth = w * 0.115;
-      g.beginPath(); g.arc(cx, cy, w * 0.425, 0, TAU); g.stroke();
-
-      // Degree ticks engraved on the ring.
-      for (let i = 0; i < 72; i++) {
-        const a = (i / 72) * TAU;
-        const long = i % 9 === 0;
-        const r0 = w * 0.385, r1 = r0 + (long ? w * 0.055 : w * 0.028);
-        g.strokeStyle = long ? 'rgba(24,14,2,0.85)' : 'rgba(24,14,2,0.5)';
-        g.lineWidth = long ? 2.4 : 1.2;
-        g.beginPath();
-        g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
-        g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
-        g.stroke();
-      }
-
-      // Well: the dark dished interior the rose sits in.
-      const well = g.createRadialGradient(cx - w * 0.1, cy - w * 0.12, w * 0.05, cx, cy, w * 0.38);
-      well.addColorStop(0, '#2b2416');
-      well.addColorStop(0.6, '#171208');
-      well.addColorStop(1, '#070502');
-      g.fillStyle = well;
-      g.beginPath(); g.arc(cx, cy, w * 0.375, 0, TAU); g.fill();
-
-      // Wear and tarnish on the ring.
       g.save();
       g.beginPath();
-      g.arc(cx, cy, w * 0.49, 0, TAU);
-      g.arc(cx, cy, w * 0.37, 0, TAU, true);
+      g.rect(bez, bez, w - bez * 2, h - bez * 2);
       g.clip();
-      for (let i = 0; i < 60; i++) {
-        const a = rng.range(0, TAU), r = rng.range(w * 0.37, w * 0.49);
-        g.globalAlpha = rng.range(0.05, 0.2);
-        g.fillStyle = rng.chance(0.5) ? '#fff5d2' : '#1d1204';
-        g.beginPath(); g.ellipse(cx + Math.cos(a) * r, cy + Math.sin(a) * r, rng.range(1, 6), rng.range(1, 3), a, 0, TAU); g.fill();
-      }
-      g.restore();
-      g.globalAlpha = 1;
+      const iw = w - bez * 2;
+      const ih = h - bez * 2;
+      const cx = w / 2;
+      const cy = h / 2;
 
-      // North index mark on the bezel.
-      g.fillStyle = '#e8dcc0';
-      g.beginPath();
-      g.moveTo(cx, cy - w * 0.47);
-      g.lineTo(cx - w * 0.035, cy - w * 0.37);
-      g.lineTo(cx + w * 0.035, cy - w * 0.37);
-      g.closePath();
-      g.fill();
-      g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 1.4; g.stroke();
-    });
-  }
+      // Navy-teal ground.
+      g.fillStyle = '#1E3040';
+      g.fillRect(bez, bez, iw, ih);
 
-  compassRose() {
-    return this._make('compass-rose', 256, 256, (g, w, h, rng) => {
-      const cx = w / 2, cy = h / 2, R = w * 0.34;
-
-      const star = (count, len, wide, fill, stroke) => {
-        for (let i = 0; i < count; i++) {
-          const a = (i / count) * TAU - Math.PI / 2;
-          const tipX = cx + Math.cos(a) * len, tipY = cy + Math.sin(a) * len;
-          const lx = cx + Math.cos(a + Math.PI / 2) * wide, ly = cy + Math.sin(a + Math.PI / 2) * wide;
-          const rx = cx + Math.cos(a - Math.PI / 2) * wide, ry = cy + Math.sin(a - Math.PI / 2) * wide;
-          // Two halves so each point has a lit and a shaded face.
-          g.beginPath(); g.moveTo(tipX, tipY); g.lineTo(lx, ly); g.lineTo(cx, cy); g.closePath();
-          g.fillStyle = fill[0]; g.fill();
-          g.beginPath(); g.moveTo(tipX, tipY); g.lineTo(rx, ry); g.lineTo(cx, cy); g.closePath();
-          g.fillStyle = fill[1]; g.fill();
-          if (stroke) {
-            g.strokeStyle = stroke; g.lineWidth = 1;
-            g.beginPath(); g.moveTo(tipX, tipY); g.lineTo(lx, ly); g.lineTo(cx, cy); g.lineTo(rx, ry); g.closePath(); g.stroke();
-          }
+      // Steel-blue diagonal bands down both sides.
+      for (const side of [-1, 1]) {
+        const bandsX = cx + side * iw * 0.40;
+        for (let i = -3; i < 6; i++) {
+          g.fillStyle = ['#4A7DA5', '#517DA5', '#42618C'][(i + 3) % 3];
+          g.save();
+          g.translate(bandsX, bez + i * ih * 0.2);
+          g.rotate(side * 0.5);
+          g.fillRect(-iw * 0.16, 0, iw * 0.32, ih * 0.13);
+          g.restore();
         }
-      };
-
-      // 16 short points, 8 mid, 4 cardinal.
-      g.save();
-      g.rotate(0);
-      star(16, R * 0.62, R * 0.045, ['rgba(140,116,74,0.85)', 'rgba(70,56,32,0.85)'], 'rgba(0,0,0,0.4)');
-      star(8, R * 0.82, R * 0.07, ['#c8a860', '#6e5322'], 'rgba(0,0,0,0.45)');
-      star(4, R, R * 0.1, ['#f6e3ae', '#8a6526'], 'rgba(20,12,2,0.7)');
-      g.restore();
-
-      // Hub.
-      const hub = g.createRadialGradient(cx - 3, cy - 4, 1, cx, cy, R * 0.14);
-      hub.addColorStop(0, '#fff2c4');
-      hub.addColorStop(0.5, '#c69c46');
-      hub.addColorStop(1, '#4a3208');
-      g.fillStyle = hub;
-      g.beginPath(); g.arc(cx, cy, R * 0.13, 0, TAU); g.fill();
-
-      // Cardinal letters.
-      g.font = `700 ${Math.round(w * 0.11)}px "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif`;
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      const letters = [['N', 0], ['E', 1], ['S', 2], ['W', 3]];
-      for (const [ch, i] of letters) {
-        const a = (i / 4) * TAU - Math.PI / 2;
-        const x = cx + Math.cos(a) * R * 1.2, y = cy + Math.sin(a) * R * 1.2;
-        g.fillStyle = 'rgba(0,0,0,0.75)';
-        g.fillText(ch, x + 1.5, y + 1.5);
-        g.fillStyle = ch === 'N' ? '#f4d98a' : '#d9cba6';
-        g.fillText(ch, x, y);
       }
 
-      // Engraved wear.
-      for (let i = 0; i < 40; i++) {
-        g.globalAlpha = rng.range(0.03, 0.12);
-        g.strokeStyle = rng.chance(0.5) ? '#fff6d8' : '#000';
-        g.lineWidth = rng.range(0.4, 1.1);
-        const a = rng.range(0, TAU), r0 = rng.range(0, R);
+      // Corner diamonds, four different colours.
+      const corners = [
+        [cx, bez + ih * 0.16, '#EFF3F7'],
+        [cx, bez + ih * 0.84, '#EFEFF7'],
+        [bez + iw * 0.17, cy, '#CEBA94'],
+        [bez + iw * 0.83, cy, '#BDC794'],
+      ];
+      for (const [dx, dy, col] of corners) {
+        g.fillStyle = col;
         g.beginPath();
-        g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
-        g.lineTo(cx + Math.cos(a + rng.range(-0.4, 0.4)) * (r0 + rng.range(4, 26)), cy + Math.sin(a + rng.range(-0.4, 0.4)) * (r0 + rng.range(4, 26)));
-        g.stroke();
-      }
-      g.globalAlpha = 1;
-    });
-  }
-
-  // ── cartouche / banner ────────────────────────────────────────────────────
-
-  /** Title cartouche: a leather plaque with curled ends and gold beading. */
-  cartouche() {
-    return this._make('cartouche', 768, 168, (g, w, h, rng) => {
-      const pad = 96;
-      const top = 26, bot = h - 26;
-
-      // Curled ends.
-      const curl = (cx, dir) => {
-        g.save();
-        g.translate(cx, h / 2);
-        g.scale(dir, 1);
-        const grd = g.createLinearGradient(0, -h / 2, 0, h / 2);
-        grd.addColorStop(0, '#6b4a1f');
-        grd.addColorStop(0.4, '#3b2712');
-        grd.addColorStop(1, '#1c1208');
-        g.fillStyle = grd;
-        g.beginPath();
-        g.moveTo(0, -h / 2 + 14);
-        g.quadraticCurveTo(66, -h / 2 + 30, 62, 0);
-        g.quadraticCurveTo(58, h / 2 - 30, 0, h / 2 - 14);
+        g.moveTo(dx, dy - ih * 0.14);
+        g.lineTo(dx + iw * 0.13, dy);
+        g.lineTo(dx, dy + ih * 0.14);
+        g.lineTo(dx - iw * 0.13, dy);
         g.closePath();
         g.fill();
-        g.strokeStyle = 'rgba(216,178,92,0.55)';
-        g.lineWidth = 2.5;
+        g.strokeStyle = '#212421';
+        g.lineWidth = 2.6;
         g.stroke();
-        // Spiral roll.
-        g.strokeStyle = 'rgba(240,214,150,0.5)';
-        g.lineWidth = 2;
+      }
+
+      // Four thick dusty maroon leaded arms radiating in an X.
+      g.strokeStyle = '#735552';
+      g.lineWidth = iw * 0.085;
+      g.lineCap = 'round';
+      for (const [ax, ay] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
         g.beginPath();
-        for (let t = 0; t < 4.4; t += 0.1) {
-          const r = 6 + t * 6.5;
-          const x = 40 + Math.cos(t * 1.8) * r * 0.6;
-          const y = Math.sin(t * 1.8) * r * 0.5;
-          if (t === 0) g.moveTo(x, y); else g.lineTo(x, y);
+        g.moveTo(cx, cy);
+        g.lineTo(cx + ax * iw * 0.44, cy + ay * ih * 0.42);
+        g.stroke();
+        // Scrolled volute at the end.
+        g.save();
+        g.lineWidth = iw * 0.035;
+        g.beginPath();
+        const ex = cx + ax * iw * 0.42;
+        const ey = cy + ay * ih * 0.40;
+        for (let t = 0; t < TAU * 1.2; t += 0.2) {
+          const r = 1.5 + t * 1.6;
+          const px = ex + Math.cos(t) * r * ax;
+          const py = ey + Math.sin(t) * r * ay;
+          if (t === 0) g.moveTo(px, py); else g.lineTo(px, py);
         }
         g.stroke();
         g.restore();
-      };
-      curl(pad - 4, -1);
-      curl(w - pad + 4, 1);
-
-      // Main plaque.
-      g.beginPath();
-      g.moveTo(pad, top);
-      g.lineTo(w - pad, top);
-      g.quadraticCurveTo(w - pad + 22, h / 2, w - pad, bot);
-      g.lineTo(pad, bot);
-      g.quadraticCurveTo(pad - 22, h / 2, pad, top);
-      g.closePath();
-      g.save();
-      g.clip();
-      const leather = g.createLinearGradient(0, top, 0, bot);
-      leather.addColorStop(0, '#4c351c');
-      leather.addColorStop(0.42, '#2c1d0e');
-      leather.addColorStop(1, '#170f06');
-      g.fillStyle = leather;
-      g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 700; i++) {
-        const x = rng.range(pad - 24, w - pad + 24), y = rng.range(top, bot);
-        g.globalAlpha = rng.range(0.03, 0.12);
-        g.fillStyle = rng.chance(0.5) ? '#7b5c33' : '#0a0603';
-        g.beginPath(); g.arc(x, y, rng.range(0.6, 2.6), 0, TAU); g.fill();
       }
-      g.globalAlpha = 1;
-      const gloss = g.createLinearGradient(0, top, 0, top + 40);
-      gloss.addColorStop(0, 'rgba(224,190,124,0.22)');
-      gloss.addColorStop(1, 'rgba(224,190,124,0)');
-      g.fillStyle = gloss;
-      g.fillRect(0, top, w, 40);
+
+      // Central olive-gold medallion on concentric rings.
+      for (const [r, col] of [[iw * 0.20, '#5C5A3E'], [iw * 0.16, '#94825A'], [iw * 0.11, '#949E6B'], [iw * 0.055, '#C6C48C']]) {
+        g.fillStyle = col;
+        g.beginPath();
+        g.arc(cx, cy, r, 0, TAU);
+        g.fill();
+        g.strokeStyle = '#212421';
+        g.lineWidth = 1.8;
+        g.stroke();
+      }
+
+      // Leading: a black lattice over everything.
+      g.strokeStyle = '#212421';
+      g.lineWidth = 2.2;
+      for (let i = 1; i < 4; i++) {
+        g.beginPath();
+        g.moveTo(bez, bez + (ih * i) / 4);
+        g.lineTo(w - bez, bez + (ih * i) / 4);
+        g.stroke();
+      }
+      for (let i = 1; i < 3; i++) {
+        g.beginPath();
+        g.moveTo(bez + (iw * i) / 3, bez);
+        g.lineTo(bez + (iw * i) / 3, h - bez);
+        g.stroke();
+      }
+      // Grime and glass unevenness.
+      for (let i = 0; i < 90; i++) {
+        UITextures.dab(g, rng.range(bez, w - bez), rng.range(bez, h - bez),
+          rng.range(1.5, 9), rng.range(1.5, 7), rng.range(0, TAU),
+          rng.chance(0.5) ? '#000000' : '#FFFFFF', rng.range(0.03, 0.12), 2);
+      }
       g.restore();
+      UITextures.grain(g, w, h, rng, 8);
+    });
+  }
 
-      // Gold beading around the plaque.
-      g.strokeStyle = UITextures.goldGradient(g, pad, top, w - pad, bot);
-      g.lineWidth = 6;
+  // ── the four books on the shelf ───────────────────────────────────────────
+
+  static spineEmblem(g, kind, x, y, w, h) {
+    g.save();
+    g.translate(x, y);
+    g.strokeStyle = '#F0D878';
+    g.lineWidth = Math.max(1.6, w * 0.075);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    const cx = w / 2;
+    const cy = h / 2;
+    if (kind === 'sword') {
       g.beginPath();
-      g.moveTo(pad, top);
-      g.lineTo(w - pad, top);
-      g.quadraticCurveTo(w - pad + 22, h / 2, w - pad, bot);
-      g.lineTo(pad, bot);
-      g.quadraticCurveTo(pad - 22, h / 2, pad, top);
+      g.moveTo(cx + w * 0.16, -h * 0.42 + cy);
+      g.lineTo(cx - w * 0.10, cy + h * 0.22);
+      g.stroke();
+      g.beginPath();
+      g.moveTo(cx - w * 0.30, cy + h * 0.14);
+      g.lineTo(cx + w * 0.16, cy + h * 0.30);
+      g.stroke();
+      g.beginPath();
+      g.moveTo(cx - w * 0.06, cy + h * 0.28);
+      g.lineTo(cx - w * 0.20, cy + h * 0.44);
+      g.stroke();
+    } else if (kind === 'quill') {
+      g.beginPath();
+      g.moveTo(cx - w * 0.18, cy + h * 0.44);
+      g.bezierCurveTo(cx - w * 0.34, cy - h * 0.10, cx - w * 0.02, cy - h * 0.44, cx + w * 0.22, cy - h * 0.42);
+      g.bezierCurveTo(cx + w * 0.20, cy - h * 0.02, cx + w * 0.02, cy + h * 0.30, cx - w * 0.18, cy + h * 0.44);
+      g.stroke();
+      g.lineWidth = Math.max(1, w * 0.045);
+      g.beginPath();
+      g.moveTo(cx - w * 0.14, cy + h * 0.38);
+      g.lineTo(cx + w * 0.16, cy - h * 0.36);
+      g.stroke();
+    } else if (kind === 'globe') {
+      g.beginPath();
+      g.arc(cx, cy, Math.min(w, h) * 0.36, 0, TAU);
+      g.stroke();
+      g.lineWidth = Math.max(1, w * 0.045);
+      for (let i = 1; i < 4; i++) {
+        const rr = Math.min(w, h) * 0.36;
+        g.beginPath();
+        g.ellipse(cx, cy, rr * Math.abs(Math.cos((i / 4) * Math.PI)), rr, 0, 0, TAU);
+        g.stroke();
+        g.beginPath();
+        g.moveTo(cx - rr * Math.sin(Math.acos((i - 2) / 2.4)), cy + ((i - 2) / 2.4) * rr);
+        g.lineTo(cx + rr * Math.sin(Math.acos((i - 2) / 2.4)), cy + ((i - 2) / 2.4) * rr);
+        g.stroke();
+      }
+    } else {
+      // Ornate key with a figure-of-eight bow.
+      g.beginPath();
+      g.arc(cx, cy - h * 0.26, w * 0.15, 0, TAU);
+      g.stroke();
+      g.beginPath();
+      g.arc(cx, cy - h * 0.02, w * 0.11, 0, TAU);
+      g.stroke();
+      g.beginPath();
+      g.moveTo(cx, cy + h * 0.06);
+      g.lineTo(cx, cy + h * 0.44);
+      g.stroke();
+      g.lineWidth = Math.max(1.2, w * 0.055);
+      g.beginPath();
+      g.moveTo(cx, cy + h * 0.30);
+      g.lineTo(cx + w * 0.16, cy + h * 0.30);
+      g.moveTo(cx, cy + h * 0.42);
+      g.lineTo(cx + w * 0.13, cy + h * 0.42);
+      g.stroke();
+    }
+    g.restore();
+  }
+
+  /** The whole shelf recess: black interior, four leather spines, gold art. */
+  bookShelf(w = 276, h = 186) {
+    return this._make(`shelf-${w}x${h}`, w, h, (g, W, H, rng) => {
+      g.fillStyle = '#000000';
+      g.fillRect(0, 0, W, H);
+      const kinds = ['sword', 'quill', 'globe', 'key'];
+      const pad = W * 0.022;
+      const sw = (W - pad * 5) / 4;
+      for (let i = 0; i < 4; i++) {
+        const x = pad + i * (sw + pad);
+        const y = H * 0.015;
+        const sh = H * 0.97;
+        // Pillow-shaded chocolate leather.
+        const grd = g.createLinearGradient(x, 0, x + sw, 0);
+        grd.addColorStop(0, '#241505');
+        grd.addColorStop(0.16, '#422818');
+        grd.addColorStop(0.44, '#5A3A22');
+        grd.addColorStop(0.72, '#392410');
+        grd.addColorStop(1, '#180E04');
+        g.fillStyle = grd;
+        g.fillRect(x, y, sw, sh);
+        const vg = g.createLinearGradient(0, y, 0, y + sh);
+        vg.addColorStop(0, 'rgba(0,0,0,0.55)');
+        vg.addColorStop(0.2, 'rgba(0,0,0,0)');
+        vg.addColorStop(0.85, 'rgba(0,0,0,0)');
+        vg.addColorStop(1, 'rgba(0,0,0,0.6)');
+        g.fillStyle = vg;
+        g.fillRect(x, y, sw, sh);
+        // Mottling.
+        for (let k = 0; k < 70; k++) {
+          UITextures.dab(g, x + rng.range(0, sw), y + rng.range(0, sh),
+            rng.range(1.5, 9), rng.range(1.5, 8), rng.range(0, TAU),
+            rng.chance(0.5) ? '#6A4522' : '#150C03', rng.range(0.05, 0.2), 2);
+        }
+        // Band groups at ~18% and ~85%.
+        for (const frac of [0.18, 0.85]) {
+          const by = y + sh * frac;
+          const bands = [
+            [-9, '#D8B64A', 2.2], [-6, '#CFC7BD', 1.6], [0, '#520000', 7],
+            [6, '#CFC7BD', 1.6], [9, '#D8B64A', 2.2],
+          ];
+          for (const [off, col, th] of bands) {
+            g.fillStyle = col;
+            g.fillRect(x, by + off * (H / 186), sw, th * (H / 186));
+          }
+          g.fillStyle = 'rgba(0,0,0,0.35)';
+          g.fillRect(x, by + 13 * (H / 186), sw, 1.4);
+        }
+        // Gold outline emblem in the middle.
+        g.save();
+        g.globalAlpha = 0.9;
+        g.strokeStyle = '#B8963C';
+        UITextures.spineEmblem(g, kinds[i], x + sw * 0.08 + 1.5, y + sh * 0.34 + 1.5, sw * 0.84, sh * 0.34);
+        g.restore();
+        UITextures.spineEmblem(g, kinds[i], x + sw * 0.08, y + sh * 0.34, sw * 0.84, sh * 0.34);
+      }
+      UITextures.grain(g, W, H, rng, 8);
+    });
+  }
+
+  // ── props ─────────────────────────────────────────────────────────────────
+
+  /** A rendered 3-D glossy red apple sitting on the stone. */
+  apple() {
+    return this._make('apple', 96, 104, (g, w, h, rng) => {
+      const cx = w * 0.48;
+      const cy = h * 0.56;
+      const rx = w * 0.40;
+      const ry = h * 0.36;
+      // Cast shadow on the marble.
+      UITextures.dab(g, cx + w * 0.06, cy + ry * 0.96, rx * 0.95, ry * 0.24, 0, 'rgba(40,30,26,0.45)', 1, 6);
+      // Body.
+      const grd = g.createRadialGradient(cx - rx * 0.38, cy - ry * 0.42, rx * 0.1, cx, cy, rx * 1.45);
+      grd.addColorStop(0, '#F0554E');
+      grd.addColorStop(0.24, '#DE2831');
+      grd.addColorStop(0.6, '#8E1018');
+      grd.addColorStop(0.85, '#6A1818');
+      grd.addColorStop(1, '#4A0408');
+      g.fillStyle = grd;
+      g.beginPath();
+      g.moveTo(cx, cy - ry);
+      g.bezierCurveTo(cx - rx * 1.25, cy - ry * 1.15, cx - rx * 1.18, cy + ry * 0.95, cx, cy + ry);
+      g.bezierCurveTo(cx + rx * 1.18, cy + ry * 0.95, cx + rx * 1.25, cy - ry * 1.15, cx, cy - ry);
       g.closePath();
-      g.stroke();
-      g.strokeStyle = 'rgba(255,244,205,0.5)';
-      g.lineWidth = 1.4;
-      g.stroke();
-      UITextures.grain(g, w, h, rng, 10);
-    });
-  }
-
-  /** Thin gold rule used to divide panel sections. */
-  goldRule() {
-    return this._make('gold-rule', 256, 16, (g, w, h) => {
-      const grd = g.createLinearGradient(0, 0, 0, h);
-      grd.addColorStop(0, 'rgba(0,0,0,0)');
-      grd.addColorStop(0.35, 'rgba(120,88,32,0.8)');
-      grd.addColorStop(0.5, '#f0d68f');
-      grd.addColorStop(0.62, 'rgba(90,64,20,0.9)');
-      grd.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = grd;
-      g.fillRect(0, 0, w, h);
-      // Lozenge at the centre of every repeat.
-      g.fillStyle = '#e6cd8a';
+      g.fill();
+      // Dimple at the stalk.
+      UITextures.dab(g, cx, cy - ry * 0.86, rx * 0.34, ry * 0.16, 0, '#4A0408', 0.7, 4);
+      // Bright specular upper-left, plus a small secondary.
+      UITextures.dab(g, cx - rx * 0.38, cy - ry * 0.40, rx * 0.24, ry * 0.20, -0.5, '#FFE4DA', 0.85, 3);
+      UITextures.dab(g, cx + rx * 0.42, cy + ry * 0.28, rx * 0.12, ry * 0.16, 0.4, '#FF9A8C', 0.30, 4);
+      // Stalk.
+      g.strokeStyle = '#4A3218';
+      g.lineWidth = w * 0.045;
+      g.lineCap = 'round';
       g.beginPath();
-      g.moveTo(w / 2, 2); g.lineTo(w / 2 + 7, h / 2); g.lineTo(w / 2, h - 2); g.lineTo(w / 2 - 7, h / 2);
-      g.closePath(); g.fill();
-      g.strokeStyle = 'rgba(40,24,4,0.8)'; g.lineWidth = 1; g.stroke();
+      g.moveTo(cx, cy - ry * 0.86);
+      g.quadraticCurveTo(cx + rx * 0.10, cy - ry * 1.3, cx + rx * 0.22, cy - ry * 1.45);
+      g.stroke();
+      UITextures.grain(g, w, h, rng, 7);
     });
   }
 
-  /** The spellbook's leather spine, drawn vertically. */
-  bookSpine() {
-    return this._make('book-spine', 128, 512, (g, w, h, rng) => {
-      const grd = g.createLinearGradient(0, 0, w, 0);
-      grd.addColorStop(0, 'rgba(20,12,5,0.0)');
-      grd.addColorStop(0.16, 'rgba(24,15,6,0.75)');
-      grd.addColorStop(0.42, '#3b2812');
-      grd.addColorStop(0.5, '#5a3f1e');
-      grd.addColorStop(0.58, '#33210f');
-      grd.addColorStop(0.84, 'rgba(24,15,6,0.75)');
-      grd.addColorStop(1, 'rgba(20,12,5,0.0)');
-      g.fillStyle = grd;
-      g.fillRect(0, 0, w, h);
-      // Stitching down both sides of the gutter.
-      for (let y = 12; y < h; y += 26) {
-        g.strokeStyle = 'rgba(230,200,140,0.35)';
-        g.lineWidth = 2;
-        g.beginPath(); g.moveTo(w * 0.34, y); g.lineTo(w * 0.34, y + 12); g.stroke();
-        g.beginPath(); g.moveTo(w * 0.66, y); g.lineTo(w * 0.66, y + 12); g.stroke();
+  /** Two rendered stacks of gold coins. */
+  coins() {
+    return this._make('coins', 72, 120, (g, w, h, rng) => {
+      const draw = (x, base, n, r) => {
+        for (let i = 0; i < n; i++) {
+          const y = base - i * (h * 0.052);
+          const grd = g.createLinearGradient(x - r, y, x + r, y);
+          grd.addColorStop(0, '#8C6100');
+          grd.addColorStop(0.3, '#FFD342');
+          grd.addColorStop(0.5, '#FFE78C');
+          grd.addColorStop(0.75, '#FFAE29');
+          grd.addColorStop(1, '#7A5400');
+          g.fillStyle = grd;
+          g.beginPath();
+          g.ellipse(x, y, r, r * 0.34, 0, 0, TAU);
+          g.fill();
+          g.fillStyle = 'rgba(90,62,0,0.55)';
+          g.fillRect(x - r, y, r * 2, h * 0.02);
+          g.strokeStyle = 'rgba(70,48,0,0.6)';
+          g.lineWidth = 1;
+          g.beginPath();
+          g.ellipse(x, y, r, r * 0.34, 0, 0, TAU);
+          g.stroke();
+        }
+      };
+      UITextures.dab(g, w * 0.5, h * 0.94, w * 0.44, h * 0.05, 0, 'rgba(40,32,20,0.5)', 1, 4);
+      draw(w * 0.34, h * 0.90, 6, w * 0.30);
+      draw(w * 0.66, h * 0.94, 4, w * 0.28);
+      UITextures.grain(g, w, h, rng, 8);
+    });
+  }
+
+  /** The gold-rimmed magnifying glass that rests in the equipment niche. */
+  magnifier() {
+    return this._make('magnifier', 88, 132, (g, w, h) => {
+      g.save();
+      g.translate(w * 0.5, h * 0.34);
+      g.rotate(0.5);
+      const r = w * 0.32;
+      const lens = g.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+      lens.addColorStop(0, 'rgba(230,240,250,0.75)');
+      lens.addColorStop(0.6, 'rgba(120,140,160,0.45)');
+      lens.addColorStop(1, 'rgba(40,50,60,0.6)');
+      g.fillStyle = lens;
+      g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+      g.lineWidth = w * 0.10;
+      const rim = g.createLinearGradient(-r, -r, r, r);
+      rim.addColorStop(0, '#F4E2A0');
+      rim.addColorStop(0.5, '#B8923C');
+      rim.addColorStop(1, '#6A4E12');
+      g.strokeStyle = rim;
+      g.beginPath(); g.arc(0, 0, r, 0, TAU); g.stroke();
+      g.restore();
+      // Turned red-brown handle.
+      g.save();
+      g.translate(w * 0.62, h * 0.62);
+      g.rotate(0.5);
+      const hd = g.createLinearGradient(-w * 0.06, 0, w * 0.06, 0);
+      hd.addColorStop(0, '#3A1C0C');
+      hd.addColorStop(0.4, '#8A4A22');
+      hd.addColorStop(1, '#2A1408');
+      g.fillStyle = hd;
+      g.fillRect(-w * 0.065, 0, w * 0.13, h * 0.38);
+      g.fillStyle = '#C9A44A';
+      g.fillRect(-w * 0.075, 0, w * 0.15, h * 0.035);
+      g.fillRect(-w * 0.07, h * 0.34, w * 0.14, h * 0.03);
+      g.restore();
+    });
+  }
+
+  // ── wood, leather and rock (shop + backpack) ──────────────────────────────
+
+  /** Horizontal figured-walnut planks: the shop counter board. */
+  woodPlanks() {
+    return this._make('wood-planks', 512, 210, (g, w, h, rng) => {
+      const pitch = h / 3;
+      for (let i = 0; i < 3; i++) {
+        const y = i * pitch;
+        const grd = g.createLinearGradient(0, y, 0, y + pitch);
+        grd.addColorStop(0, '#140800');
+        grd.addColorStop(0.08, '#6B3A18');
+        grd.addColorStop(0.32, '#8A4A1E');
+        grd.addColorStop(0.6, '#653516');
+        grd.addColorStop(0.94, '#3A1C0C');
+        grd.addColorStop(1, '#140800');
+        g.fillStyle = grd;
+        g.fillRect(0, y, w, pitch);
+        // Figured grain: tight nested arcs, the walnut "flame".
+        for (let k = 0; k < 60; k++) {
+          const cx = rng.range(0, w);
+          const amp = rng.range(pitch * 0.1, pitch * 0.42);
+          g.save();
+          g.globalAlpha = rng.range(0.06, 0.26);
+          g.strokeStyle = rng.chance(0.5) ? '#A5652E' : '#2A1206';
+          g.lineWidth = rng.range(0.7, 2.4);
+          g.beginPath();
+          for (let x = -20; x < w + 20; x += 8) {
+            const d = (x - cx) / (w * 0.16);
+            const yy = y + pitch * 0.5 + Math.cos(d) * amp * Math.exp(-Math.abs(d) * 0.35)
+              + Math.sin(x * 0.05 + cx) * 2;
+            if (x === -20) g.moveTo(x, yy); else g.lineTo(x, yy);
+          }
+          g.stroke();
+          g.restore();
+        }
+        // Seam.
+        g.fillStyle = 'rgba(10,4,0,0.85)';
+        g.fillRect(0, y + pitch - 2.4, w, 2.4);
+        g.fillStyle = 'rgba(200,140,80,0.16)';
+        g.fillRect(0, y, w, 1.6);
       }
       UITextures.grain(g, w, h, rng, 12);
     });
   }
 
-  /** Paper-doll mannequin silhouette for the inventory panel. */
-  paperDoll() {
-    return this._make('paper-doll', 420, 760, (g, w, h, rng) => {
-      const cx = w / 2;
-      const body = new Path2D();
-      // Head
-      body.ellipse(cx, 96, 54, 64, 0, 0, TAU);
-      // Neck + torso + arms + legs as one silhouette
-      const p = new Path2D();
-      p.moveTo(cx - 26, 150);
-      p.lineTo(cx - 30, 178);
-      p.quadraticCurveTo(cx - 120, 196, cx - 138, 250);   // left shoulder
-      p.lineTo(cx - 150, 400);                              // left arm
-      p.quadraticCurveTo(cx - 152, 440, cx - 132, 448);
-      p.lineTo(cx - 112, 400);
-      p.lineTo(cx - 96, 268);
-      p.lineTo(cx - 84, 392);                               // torso left
-      p.quadraticCurveTo(cx - 92, 470, cx - 78, 520);
-      p.lineTo(cx - 84, 660);                               // left leg
-      p.quadraticCurveTo(cx - 86, 700, cx - 66, 712);
-      p.lineTo(cx - 18, 712);
-      p.lineTo(cx - 12, 520);
-      p.lineTo(cx, 470);
-      p.lineTo(cx + 12, 520);
-      p.lineTo(cx + 18, 712);
-      p.lineTo(cx + 66, 712);
-      p.quadraticCurveTo(cx + 86, 700, cx + 84, 660);
-      p.lineTo(cx + 78, 520);
-      p.quadraticCurveTo(cx + 92, 470, cx + 84, 392);
-      p.lineTo(cx + 96, 268);
-      p.lineTo(cx + 112, 400);
-      p.lineTo(cx + 132, 448);
-      p.quadraticCurveTo(cx + 152, 440, cx + 150, 400);
-      p.lineTo(cx + 138, 250);
-      p.quadraticCurveTo(cx + 120, 196, cx + 30, 178);
-      p.lineTo(cx + 26, 150);
-      p.closePath();
-
-      // A sepia mannequin engraved on the page rather than a black cut-out —
-      // this sits on parchment, so it has to read as ink and wash.
-      const fill = g.createLinearGradient(0, 0, w, h);
-      fill.addColorStop(0, '#8a7048');
-      fill.addColorStop(0.45, '#6a5232');
-      fill.addColorStop(1, '#453320');
-      g.fillStyle = fill;
-      g.fill(body);
-      g.fill(p);
-
-      g.save();
-      const region = new Path2D();
-      region.addPath(p);
-      region.addPath(body);
-      g.clip(region);
-
-      // Modelling: light down the centre, shade at the silhouette.
-      const model = g.createLinearGradient(cx - 150, 0, cx + 170, 0);
-      model.addColorStop(0, 'rgba(30,18,8,0.55)');
-      model.addColorStop(0.38, 'rgba(255,236,190,0.18)');
-      model.addColorStop(0.62, 'rgba(255,236,190,0.10)');
-      model.addColorStop(1, 'rgba(30,18,8,0.6)');
-      g.fillStyle = model;
+  /** Vertical rough-sawn timber: the shop's sidebar backing. */
+  woodVertical() {
+    return this._make('wood-vert', 220, 512, (g, w, h, rng) => {
+      const grd = g.createLinearGradient(0, 0, w, 0);
+      grd.addColorStop(0, '#2A1408');
+      grd.addColorStop(0.3, '#4E2A16');
+      grd.addColorStop(0.6, '#3A1E0E');
+      grd.addColorStop(1, '#201006');
+      g.fillStyle = grd;
       g.fillRect(0, 0, w, h);
-
-      // Engraver's hatching.
-      g.globalAlpha = 0.10;
-      g.strokeStyle = '#2a1c0c';
-      g.lineWidth = 1.2;
-      for (let d = -h; d < w + h; d += 7) {
+      for (let i = 0; i < 150; i++) {
+        const x = rng.range(0, w);
+        g.save();
+        g.globalAlpha = rng.range(0.05, 0.3);
+        g.strokeStyle = rng.chance(0.42) ? '#7A4A2C' : '#160A02';
+        g.lineWidth = rng.range(0.6, 3);
         g.beginPath();
-        g.moveTo(d, 0);
-        g.lineTo(d + h, h);
+        for (let y = -10; y < h + 10; y += 12) {
+          const xx = x + Math.sin(y * 0.012 + x) * 4;
+          if (y === -10) g.moveTo(xx, y); else g.lineTo(xx, y);
+        }
         g.stroke();
+        g.restore();
       }
-      g.globalAlpha = 1;
+      UITextures.grain(g, w, h, rng, 12);
+    });
+  }
 
-      // Anatomy contours so the slots have something to relate to.
-      g.strokeStyle = 'rgba(40,26,12,0.45)';
-      g.lineWidth = 2;
-      const contour = (fn) => { g.beginPath(); fn(); g.stroke(); };
-      contour(() => { g.moveTo(cx - 96, 268); g.quadraticCurveTo(cx, 300, cx + 96, 268); });   // collar
-      contour(() => { g.moveTo(cx - 86, 392); g.quadraticCurveTo(cx, 372, cx + 86, 392); });   // ribs
-      contour(() => { g.moveTo(cx - 82, 470); g.quadraticCurveTo(cx, 500, cx + 82, 470); });   // waist
-      contour(() => { g.moveTo(cx - 78, 520); g.lineTo(cx + 78, 520); });                       // hips
-      contour(() => { g.moveTo(cx - 150, 400); g.lineTo(cx - 112, 400); });                     // elbows
-      contour(() => { g.moveTo(cx + 112, 400); g.lineTo(cx + 150, 400); });
-      contour(() => { g.moveTo(cx - 84, 660); g.lineTo(cx - 18, 660); });                       // knees
-      contour(() => { g.moveTo(cx + 18, 660); g.lineTo(cx + 84, 660); });
-
-      for (let i = 0; i < 220; i++) {
-        g.globalAlpha = rng.range(0.02, 0.08);
-        g.fillStyle = rng.chance(0.5) ? '#c9ab74' : '#2a1c0c';
+  /** Dark blue-grey chiselled rock: the margin around the shop board. */
+  chiselRock() {
+    return this._make('chisel-rock', 256, 256, (g, w, h, rng) => {
+      g.fillStyle = '#3A4247';
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 320; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(3, 16), rng.range(2, 10),
+          rng.range(0, TAU), rng.chance(0.5) ? '#4C565C' : '#2A3035', rng.range(0.1, 0.4), 2);
+      }
+      // Chisel strokes.
+      for (let i = 0; i < 140; i++) {
+        g.save();
+        g.globalAlpha = rng.range(0.05, 0.22);
+        g.strokeStyle = rng.chance(0.5) ? '#5E6A70' : '#1C2126';
+        g.lineWidth = rng.range(0.8, 2.4);
+        const x = rng.range(0, w), y = rng.range(0, h);
         g.beginPath();
-        g.ellipse(rng.range(0, w), rng.range(0, h), rng.range(3, 16), rng.range(2, 6), rng.range(0, TAU), 0, TAU);
+        g.moveTo(x, y);
+        g.lineTo(x + rng.range(-16, 16), y + rng.range(-12, 12));
+        g.stroke();
+        g.restore();
+      }
+      UITextures.grain(g, w, h, rng, 12);
+    });
+  }
+
+  /** Dark mottled brown leather/stone: the backpack ground. */
+  packLeather() {
+    return this._make('pack-leather', 384, 384, (g, w, h, rng) => {
+      g.fillStyle = '#210800';
+      g.fillRect(0, 0, w, h);
+      const tones = ['#100400', '#291000', '#180000', '#311400', '#3A1A06'];
+      for (let i = 0; i < 900; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(4, 34), rng.range(3, 22),
+          rng.range(0, TAU), tones[rng.int(0, tones.length - 1)], rng.range(0.06, 0.28), rng.range(2, 9));
+      }
+      for (let i = 0; i < 120; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(1, 5), rng.range(1, 4),
+          rng.range(0, TAU), rng.chance(0.5) ? '#5A2A0C' : '#070200', rng.range(0.1, 0.3), 1);
+      }
+      UITextures.grain(g, w, h, rng, 13);
+    });
+  }
+
+  // ── the book screens ──────────────────────────────────────────────────────
+
+  /** Pale warm grey-beige spellbook paper — not golden parchment. */
+  spellPage() {
+    return this._make('spell-page', 512, 448, (g, w, h, rng) => {
+      const grd = g.createLinearGradient(0, 0, 0, h);
+      grd.addColorStop(0, '#D8CFC3');
+      grd.addColorStop(0.4, '#D2C8BC');
+      grd.addColorStop(1, '#C6BCAF');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 260; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(8, 60), rng.range(6, 34),
+          rng.range(0, TAU), rng.chance(0.5) ? '#E4DCD0' : '#B8AE9F', rng.range(0.04, 0.14), 10);
+      }
+      UITextures.grain(g, w, h, rng, 7);
+    });
+  }
+
+  /** Very dark green cloth binding with a woven tooth. */
+  greenCloth() {
+    return this._make('green-cloth', 256, 256, (g, w, h, rng) => {
+      g.fillStyle = '#152721';
+      g.fillRect(0, 0, w, h);
+      for (let y = 0; y < h; y += 3) {
+        g.fillStyle = y % 6 === 0 ? 'rgba(50,70,60,0.18)' : 'rgba(0,0,0,0.20)';
+        g.fillRect(0, y, w, 1.4);
+      }
+      for (let x = 0; x < w; x += 3) {
+        g.fillStyle = x % 6 === 0 ? 'rgba(45,64,56,0.14)' : 'rgba(0,0,0,0.14)';
+        g.fillRect(x, 0, 1.4, h);
+      }
+      for (let i = 0; i < 200; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(4, 24), rng.range(3, 16),
+          rng.range(0, TAU), rng.chance(0.5) ? '#1F2924' : '#0A140F', rng.range(0.06, 0.2), 5);
+      }
+      UITextures.grain(g, w, h, rng, 8);
+    });
+  }
+
+  /**
+   * Quest-book parchment with the faint sepia engraving of charging horsemen
+   * that fills the lower two-thirds of the real page.
+   */
+  questPage() {
+    return this._make('quest-page', 560, 480, (g, w, h, rng) => {
+      const grd = g.createLinearGradient(0, 0, w * 0.3, h);
+      grd.addColorStop(0, '#C6B69C');
+      grd.addColorStop(0.4, '#BDB29C');
+      grd.addColorStop(0.75, '#B5AE94');
+      grd.addColorStop(1, '#A59E8C');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, w, h);
+      // Soft diagonal fold shading.
+      for (let i = 0; i < 5; i++) {
+        g.save();
+        g.globalAlpha = 0.08;
+        g.fillStyle = i % 2 ? '#FFFFFF' : '#5A5040';
+        g.filter = 'blur(24px)';
+        g.translate(w * 0.5, h * 0.5);
+        g.rotate(-0.5);
+        g.fillRect(-w, -h * 0.5 + i * h * 0.22, w * 2, h * 0.1);
+        g.restore();
+      }
+      // Ghost engraving: charging horsemen, at 8-12% contrast.
+      g.save();
+      g.globalAlpha = 0.11;
+      g.strokeStyle = '#4A3A26';
+      g.lineWidth = 1.6;
+      const baseY = h * 0.74;
+      for (let k = 0; k < 5; k++) {
+        const x = w * (0.10 + k * 0.20) + rng.range(-14, 14);
+        const s = h * (0.16 + rng.range(0, 0.05));
+        // Horse body.
+        g.beginPath();
+        g.ellipse(x, baseY, s * 0.62, s * 0.30, -0.08, 0, TAU);
+        g.stroke();
+        // Legs, in a gallop.
+        for (const [lx, ly, ang] of [[-0.42, 0.28, 1.0], [-0.2, 0.3, 1.5], [0.3, 0.28, 2.2], [0.5, 0.26, 2.6]]) {
+          g.beginPath();
+          g.moveTo(x + s * lx, baseY + s * ly);
+          g.lineTo(x + s * lx + Math.cos(ang) * s * 0.5, baseY + s * ly + Math.sin(ang) * s * 0.5);
+          g.stroke();
+        }
+        // Neck and head.
+        g.beginPath();
+        g.moveTo(x + s * 0.5, baseY - s * 0.16);
+        g.quadraticCurveTo(x + s * 0.9, baseY - s * 0.7, x + s * 1.05, baseY - s * 0.86);
+        g.stroke();
+        // Rider with a lance.
+        g.beginPath();
+        g.arc(x - s * 0.05, baseY - s * 0.62, s * 0.12, 0, TAU);
+        g.stroke();
+        g.beginPath();
+        g.moveTo(x - s * 0.05, baseY - s * 0.5);
+        g.lineTo(x - s * 0.05, baseY - s * 0.2);
+        g.moveTo(x - s * 0.35, baseY - s * 0.9);
+        g.lineTo(x + s * 0.85, baseY - s * 0.30);
+        g.stroke();
+        // Hatching for the ground.
+        for (let i = 0; i < 12; i++) {
+          g.beginPath();
+          const hx = x + rng.range(-s, s);
+          g.moveTo(hx, baseY + s * 0.6);
+          g.lineTo(hx + rng.range(-8, 8), baseY + s * 0.9);
+          g.stroke();
+        }
+      }
+      g.restore();
+      // Foxing and fibre.
+      for (let i = 0; i < 220; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(2, 22), rng.range(2, 12),
+          rng.range(0, TAU), rng.chance(0.5) ? '#8C7A5C' : '#D6CCB4', rng.range(0.03, 0.12), 5);
+      }
+      UITextures.grain(g, w, h, rng, 8);
+    });
+  }
+
+  /**
+   * A spell icon: an unframed ragged watercolour vignette floating on the page
+   * over its own soft grey elliptical smudge. Icons are miniature scenes.
+   */
+  spellVignette(school, index) {
+    return this._make(`spell-${school}-${index}`, 180, 120, (g, w, h, rng) => {
+      const cx = w / 2;
+      const cy = h * 0.46;
+      const P = SPELL_PALETTE[school] ?? SPELL_PALETTE.fire;
+
+      // Ragged watercolour body: overlapping blurred blooms.
+      for (let i = 0; i < 40; i++) {
+        const a = rng.range(0, TAU);
+        const r = rng.range(0, 1) ** 0.6;
+        UITextures.dab(g,
+          cx + Math.cos(a) * r * w * 0.34,
+          cy + Math.sin(a) * r * h * 0.34,
+          rng.range(8, 34), rng.range(6, 24), rng.range(0, TAU),
+          P[rng.int(0, P.length - 1)], rng.range(0.10, 0.34), rng.range(3, 10));
+      }
+      // A readable subject: a simple silhouette scene, per school.
+      g.save();
+      g.globalAlpha = 0.9;
+      const dark = P[P.length - 1];
+      g.fillStyle = dark;
+      g.strokeStyle = dark;
+      g.lineWidth = 3;
+      g.lineCap = 'round';
+      if (school === 'fire') {
+        g.beginPath();
+        g.moveTo(cx, cy - h * 0.3);
+        g.bezierCurveTo(cx + w * 0.16, cy, cx + w * 0.07, cy + h * 0.3, cx, cy + h * 0.3);
+        g.bezierCurveTo(cx - w * 0.09, cy + h * 0.3, cx - w * 0.16, cy, cx, cy - h * 0.3);
+        g.fill();
+      } else if (school === 'water') {
+        g.beginPath();
+        g.moveTo(cx, cy - h * 0.32);
+        g.bezierCurveTo(cx + w * 0.14, cy, cx + w * 0.1, cy + h * 0.28, cx, cy + h * 0.28);
+        g.bezierCurveTo(cx - w * 0.1, cy + h * 0.28, cx - w * 0.14, cy, cx, cy - h * 0.32);
+        g.fill();
+      } else if (school === 'air') {
+        for (let i = 0; i < 3; i++) {
+          g.beginPath();
+          g.moveTo(cx - w * 0.26, cy + (i - 1) * h * 0.16);
+          g.quadraticCurveTo(cx, cy + (i - 1) * h * 0.16 - h * 0.12, cx + w * 0.26, cy + (i - 1) * h * 0.16);
+          g.stroke();
+        }
+      } else if (school === 'earth') {
+        g.beginPath();
+        g.moveTo(cx - w * 0.26, cy + h * 0.26);
+        g.lineTo(cx - w * 0.08, cy - h * 0.28);
+        g.lineTo(cx + w * 0.10, cy + h * 0.04);
+        g.lineTo(cx + w * 0.26, cy + h * 0.26);
+        g.closePath();
+        g.fill();
+      } else if (school === 'light' || school === 'spirit') {
+        g.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * TAU;
+          g.moveTo(cx, cy);
+          g.lineTo(cx + Math.cos(a) * w * 0.28, cy + Math.sin(a) * h * 0.28);
+        }
+        g.stroke();
+        g.beginPath(); g.arc(cx, cy, w * 0.09, 0, TAU); g.fill();
+      } else if (school === 'dark') {
+        g.beginPath(); g.arc(cx, cy, w * 0.16, 0, TAU); g.fill();
+        g.globalAlpha = 0.5;
+        g.beginPath(); g.arc(cx, cy, w * 0.24, 0, TAU); g.stroke();
+      } else {
+        // A robed figure — mind and body schools act on people.
+        g.beginPath();
+        g.arc(cx, cy - h * 0.22, w * 0.06, 0, TAU);
+        g.fill();
+        g.beginPath();
+        g.moveTo(cx, cy - h * 0.14);
+        g.lineTo(cx - w * 0.12, cy + h * 0.3);
+        g.lineTo(cx + w * 0.12, cy + h * 0.3);
+        g.closePath();
         g.fill();
       }
-      g.globalAlpha = 1;
+      g.restore();
+      // Ragged edge: erase the outer boundary irregularly.
+      g.save();
+      g.globalCompositeOperation = 'destination-out';
+      for (let i = 0; i < 60; i++) {
+        const a = rng.range(0, TAU);
+        UITextures.dab(g, cx + Math.cos(a) * w * rng.range(0.34, 0.5),
+          cy + Math.sin(a) * h * rng.range(0.34, 0.55),
+          rng.range(8, 26), rng.range(6, 20), rng.range(0, TAU), '#000', rng.range(0.4, 1), 6);
+      }
+      g.restore();
+    });
+  }
+
+  /** The school's illuminated plate: gilt-and-ivory frame, knotwork border. */
+  illuminatedPlate(school) {
+    return this._make(`illum-${school}`, 236, 156, (g, w, h, rng) => {
+      const P = SPELL_PALETTE[school] ?? SPELL_PALETTE.fire;
+      // Ivory ground.
+      g.fillStyle = '#DCD3BE';
+      g.fillRect(0, 0, w, h);
+      // Watercolour that deliberately bleeds outside its own frame.
+      for (let i = 0; i < 90; i++) {
+        const a = rng.range(0, TAU);
+        const r = rng.range(0, 1) ** 0.5;
+        UITextures.dab(g, w / 2 + Math.cos(a) * r * w * 0.46, h / 2 + Math.sin(a) * r * h * 0.46,
+          rng.range(10, 46), rng.range(8, 32), rng.range(0, TAU),
+          P[rng.int(0, P.length - 1)], rng.range(0.12, 0.36), rng.range(4, 14));
+      }
+      // Gilt frame with knotwork.
+      const b = 10;
+      const fr = g.createLinearGradient(0, 0, w, h);
+      fr.addColorStop(0, '#F0DFA2');
+      fr.addColorStop(0.4, '#B8963C');
+      fr.addColorStop(0.7, '#E4CE84');
+      fr.addColorStop(1, '#7A5E1A');
+      g.strokeStyle = fr;
+      g.lineWidth = b;
+      g.strokeRect(b / 2, b / 2, w - b, h - b);
+      g.strokeStyle = 'rgba(60,44,10,0.8)';
+      g.lineWidth = 1.6;
+      g.strokeRect(b, b, w - b * 2, h - b * 2);
+      g.strokeRect(1, 1, w - 2, h - 2);
+      // Knotwork: interlocking arcs along the border.
+      g.strokeStyle = 'rgba(250,238,196,0.55)';
+      g.lineWidth = 1.4;
+      for (let x = b; x < w - b; x += 12) {
+        g.beginPath(); g.arc(x + 6, b / 2, 4.5, Math.PI, 0); g.stroke();
+        g.beginPath(); g.arc(x + 6, h - b / 2, 4.5, 0, Math.PI); g.stroke();
+      }
+      for (let y = b; y < h - b; y += 12) {
+        g.beginPath(); g.arc(b / 2, y + 6, 4.5, Math.PI * 1.5, Math.PI * 0.5); g.stroke();
+        g.beginPath(); g.arc(w - b / 2, y + 6, 4.5, Math.PI * 0.5, Math.PI * 1.5); g.stroke();
+      }
+      UITextures.grain(g, w, h, rng, 8);
+    });
+  }
+
+  /** The photographic landscape plate across the top of the rest screen. */
+  landscapePlate() {
+    return this._make('landscape', 520, 150, (g, w, h, rng) => {
+      const sky = g.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, '#8C9CD6');
+      sky.addColorStop(0.55, '#B4BEDE');
+      sky.addColorStop(1, '#D6DCEA');
+      g.fillStyle = sky;
+      g.fillRect(0, 0, w, h);
+      // Three ridges, back to front, snow-dusted.
+      const ridges = [
+        [h * 0.52, '#6B7492', '#C6CEDE', 0.5],
+        [h * 0.64, '#4E5670', '#E2E8F2', 0.7],
+        [h * 0.78, '#333A50', '#F0F4FA', 0.9],
+      ];
+      for (const [base, rock, snow, amp] of ridges) {
+        g.fillStyle = rock;
+        g.beginPath();
+        g.moveTo(-4, h);
+        let x = -4;
+        let y = base;
+        g.lineTo(x, y);
+        while (x < w + 4) {
+          const step = rng.range(18, 52);
+          x += step;
+          y = base + rng.range(-h * 0.16, h * 0.16) * amp;
+          g.lineTo(x, y);
+        }
+        g.lineTo(w + 4, h);
+        g.closePath();
+        g.fill();
+        // Snow on the upper faces.
+        g.save();
+        g.clip();
+        g.fillStyle = snow;
+        g.globalAlpha = 0.75;
+        for (let i = 0; i < 40; i++) {
+          UITextures.dab(g, rng.range(0, w), base + rng.range(-h * 0.12, h * 0.06),
+            rng.range(6, 26), rng.range(2, 8), rng.range(-0.3, 0.3), snow, rng.range(0.25, 0.7), 3);
+        }
+        g.restore();
+      }
+      // Foreground pine line.
+      g.fillStyle = '#1E2A20';
+      for (let x = -6; x < w + 6; x += 9) {
+        const th = rng.range(h * 0.08, h * 0.2);
+        g.beginPath();
+        g.moveTo(x, h);
+        g.lineTo(x + 4.5, h - th);
+        g.lineTo(x + 9, h);
+        g.closePath();
+        g.fill();
+      }
+      UITextures.grain(g, w, h, rng, 10);
+    });
+  }
+
+  /**
+   * A pre-rendered shop or tavern interior. Entering a shop replaces the
+   * viewport with a static painting: warm, moody, candle-lit, with soft
+   * shadows and real depth of field, mean colour around #272111 and blacks
+   * dominating. It is the one place in MM6 where light behaves richly.
+   */
+  prerendered(kind = 'forge') {
+    return this._make(`interior-${kind}`, 640, 480, (g, w, h, rng) => {
+      const warm = kind === 'temple' ? '#8CA0C6' : '#FFB24A';
+      g.fillStyle = '#0B0805';
+      g.fillRect(0, 0, w, h);
+
+      // Timber ceiling beams in perspective.
+      for (let i = 0; i < 9; i++) {
+        const t = i / 8;
+        const y = h * (0.02 + t * 0.20);
+        const inset = w * 0.5 * t * 0.30;
+        const grd = g.createLinearGradient(0, y, 0, y + h * 0.028);
+        grd.addColorStop(0, '#6A4526');
+        grd.addColorStop(0.5, '#43290F');
+        grd.addColorStop(1, '#1E1206');
+        g.fillStyle = grd;
+        g.fillRect(inset, y, w - inset * 2, h * 0.026);
+      }
+      // Back wall: plank boarding.
+      const wall = g.createLinearGradient(0, h * 0.22, 0, h * 0.78);
+      wall.addColorStop(0, '#2E2114');
+      wall.addColorStop(0.5, '#3A2A18');
+      wall.addColorStop(1, '#1C1409');
+      g.fillStyle = wall;
+      g.fillRect(0, h * 0.20, w, h * 0.58);
+      for (let x = 0; x < w; x += 22) {
+        g.fillStyle = 'rgba(10,6,2,0.55)';
+        g.fillRect(x, h * 0.20, 2.5, h * 0.58);
+        g.fillStyle = 'rgba(150,104,52,0.10)';
+        g.fillRect(x + 3, h * 0.20, 2, h * 0.58);
+      }
+      // Floor: flagstones falling away.
+      const floor = g.createLinearGradient(0, h * 0.72, 0, h);
+      floor.addColorStop(0, '#332618');
+      floor.addColorStop(1, '#100B06');
+      g.fillStyle = floor;
+      g.fillRect(0, h * 0.72, w, h * 0.28);
+      for (let i = 0; i < 10; i++) {
+        g.strokeStyle = 'rgba(90,68,42,0.25)';
+        g.lineWidth = 1.6;
+        g.beginPath();
+        g.moveTo(w * 0.5 + (i - 5) * w * 0.05, h * 0.72);
+        g.lineTo(w * 0.5 + (i - 5) * w * 0.26, h);
+        g.stroke();
+      }
+
+      // A hearth, a counter and hanging tools: shapes, not detail.
+      if (kind !== 'temple') {
+        const hx = w * 0.44;
+        const hy = h * 0.62;
+        g.fillStyle = '#1A1410';
+        g.fillRect(hx - w * 0.14, h * 0.30, w * 0.28, h * 0.36);
+        const fire = g.createRadialGradient(hx, hy, 4, hx, hy, w * 0.20);
+        fire.addColorStop(0, '#FFF0B4');
+        fire.addColorStop(0.2, warm);
+        fire.addColorStop(0.5, '#B4460A');
+        fire.addColorStop(1, 'rgba(60,20,0,0)');
+        g.fillStyle = fire;
+        g.beginPath();
+        g.ellipse(hx, hy, w * 0.13, h * 0.12, 0, 0, TAU);
+        g.fill();
+        for (let i = 0; i < 40; i++) {
+          UITextures.dab(g, hx + rng.range(-w * 0.07, w * 0.07), hy + rng.range(-h * 0.08, h * 0.03),
+            rng.range(3, 12), rng.range(5, 22), 0, rng.chance(0.5) ? '#FFD46A' : '#F07A16', rng.range(0.2, 0.6), 5);
+        }
+        // Counter.
+        const cg = g.createLinearGradient(0, h * 0.66, 0, h * 0.92);
+        cg.addColorStop(0, '#6A4526');
+        cg.addColorStop(1, '#2A1A0C');
+        g.fillStyle = cg;
+        g.fillRect(w * 0.62, h * 0.62, w * 0.36, h * 0.30);
+        g.fillStyle = 'rgba(255,190,110,0.20)';
+        g.fillRect(w * 0.62, h * 0.62, w * 0.36, 4);
+        // Tools on the left wall.
+        for (let i = 0; i < 7; i++) {
+          const x = w * (0.06 + i * 0.035);
+          g.strokeStyle = 'rgba(180,170,160,0.35)';
+          g.lineWidth = 2.4;
+          g.beginPath();
+          g.moveTo(x, h * 0.30);
+          g.lineTo(x + rng.range(-4, 4), h * rng.range(0.40, 0.50));
+          g.stroke();
+        }
+      }
+
+      // Global warm key from the fire, and a heavy vignette.
+      const key = g.createRadialGradient(w * 0.44, h * 0.6, w * 0.05, w * 0.44, h * 0.6, w * 0.75);
+      key.addColorStop(0, 'rgba(255,180,90,0.34)');
+      key.addColorStop(0.5, 'rgba(180,110,40,0.12)');
+      key.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = key;
+      g.fillRect(0, 0, w, h);
+      const vig = g.createRadialGradient(w * 0.5, h * 0.55, w * 0.20, w * 0.5, h * 0.55, w * 0.78);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,0,0,0.86)');
+      g.fillStyle = vig;
+      g.fillRect(0, 0, w, h);
+      // Soft depth of field on the far wall.
+      UITextures.grain(g, w, h, rng, 11);
+    });
+  }
+
+  /** A rendered wooden hourglass with brass fittings and white sand. */
+  hourglass() {
+    return this._make('hourglass', 140, 220, (g, w, h) => {
+      const cx = w / 2;
+      const wood = (y0, y1) => {
+        const grd = g.createLinearGradient(0, 0, w, 0);
+        grd.addColorStop(0, '#2E1808');
+        grd.addColorStop(0.35, '#8A5228');
+        grd.addColorStop(0.6, '#5E3216');
+        grd.addColorStop(1, '#241206');
+        g.fillStyle = grd;
+        g.fillRect(w * 0.06, y0, w * 0.88, y1 - y0);
+        g.fillStyle = 'rgba(255,220,170,0.25)';
+        g.fillRect(w * 0.06, y0, w * 0.88, 2);
+        g.fillStyle = 'rgba(0,0,0,0.5)';
+        g.fillRect(w * 0.06, y1 - 2.4, w * 0.88, 2.4);
+      };
+      wood(h * 0.02, h * 0.11);
+      wood(h * 0.89, h * 0.98);
+      // Posts.
+      for (const side of [-1, 1]) {
+        g.fillStyle = '#5E3216';
+        g.fillRect(cx + side * w * 0.36 - w * 0.03, h * 0.10, w * 0.06, h * 0.80);
+      }
+      // Glass.
+      g.save();
+      g.beginPath();
+      g.moveTo(cx - w * 0.28, h * 0.13);
+      g.quadraticCurveTo(cx - w * 0.05, h * 0.48, cx - w * 0.05, h * 0.50);
+      g.quadraticCurveTo(cx - w * 0.05, h * 0.52, cx - w * 0.28, h * 0.87);
+      g.lineTo(cx + w * 0.28, h * 0.87);
+      g.quadraticCurveTo(cx + w * 0.05, h * 0.52, cx + w * 0.05, h * 0.50);
+      g.quadraticCurveTo(cx + w * 0.05, h * 0.48, cx + w * 0.28, h * 0.13);
+      g.closePath();
+      g.fillStyle = 'rgba(190,210,220,0.25)';
+      g.fill();
+      g.clip();
+      // Sand: a heap in the bottom bulb and a thin falling stream.
+      g.fillStyle = '#EFEADC';
+      g.beginPath();
+      g.moveTo(cx - w * 0.26, h * 0.87);
+      g.lineTo(cx + w * 0.26, h * 0.87);
+      g.lineTo(cx + w * 0.12, h * 0.72);
+      g.quadraticCurveTo(cx, h * 0.66, cx - w * 0.12, h * 0.72);
+      g.closePath();
+      g.fill();
+      g.fillRect(cx - w * 0.012, h * 0.50, w * 0.024, h * 0.24);
+      g.fillStyle = 'rgba(239,234,220,0.55)';
+      g.beginPath();
+      g.moveTo(cx - w * 0.24, h * 0.16);
+      g.lineTo(cx + w * 0.24, h * 0.16);
+      g.lineTo(cx + w * 0.05, h * 0.46);
+      g.lineTo(cx - w * 0.05, h * 0.46);
+      g.closePath();
+      g.fill();
+      g.restore();
+      g.strokeStyle = 'rgba(240,250,255,0.5)';
+      g.lineWidth = 1.6;
+      g.beginPath();
+      g.moveTo(cx - w * 0.22, h * 0.16);
+      g.quadraticCurveTo(cx - w * 0.04, h * 0.48, cx - w * 0.22, h * 0.84);
+      g.stroke();
+      // Brass collars.
+      for (const y of [h * 0.115, h * 0.875]) {
+        const grd = g.createLinearGradient(0, y, 0, y + h * 0.03);
+        grd.addColorStop(0, '#F0DFA2');
+        grd.addColorStop(0.5, '#B8963C');
+        grd.addColorStop(1, '#6A4E12');
+        g.fillStyle = grd;
+        g.fillRect(cx - w * 0.32, y, w * 0.64, h * 0.03);
+      }
+    });
+  }
+
+  /** An animated-looking flame sprite for the party-creation braziers. */
+  torch() {
+    return this._make('torch', 96, 180, (g, w, h, rng) => {
+      // Brazier bowl.
+      const bowl = g.createLinearGradient(0, h * 0.72, 0, h);
+      bowl.addColorStop(0, '#6A6058');
+      bowl.addColorStop(0.4, '#3E3730');
+      bowl.addColorStop(1, '#1A1613');
+      g.fillStyle = bowl;
+      g.beginPath();
+      g.moveTo(w * 0.16, h * 0.74);
+      g.lineTo(w * 0.84, h * 0.74);
+      g.lineTo(w * 0.66, h * 0.98);
+      g.lineTo(w * 0.34, h * 0.98);
+      g.closePath();
+      g.fill();
+      // Flame: stacked blurred tongues, hot core.
+      const cx = w / 2;
+      for (const [ry, col, a] of [[0.46, '#B42A08', 0.55], [0.36, '#E8720E', 0.65], [0.24, '#F4B12A', 0.75], [0.13, '#FFF0B4', 0.9]]) {
+        g.save();
+        g.globalAlpha = a;
+        g.fillStyle = col;
+        g.filter = 'blur(4px)';
+        g.beginPath();
+        g.moveTo(cx, h * (0.74 - ry * 1.5));
+        g.bezierCurveTo(cx + w * ry * 0.9, h * 0.5, cx + w * ry * 0.6, h * 0.74, cx, h * 0.75);
+        g.bezierCurveTo(cx - w * ry * 0.6, h * 0.74, cx - w * ry * 0.9, h * 0.5, cx, h * (0.74 - ry * 1.5));
+        g.closePath();
+        g.fill();
+        g.restore();
+      }
+      for (let i = 0; i < 26; i++) {
+        UITextures.dab(g, cx + rng.range(-w * 0.2, w * 0.2), rng.range(h * 0.08, h * 0.66),
+          rng.range(1.5, 4), rng.range(1.5, 5), 0, '#FFD46A', rng.range(0.2, 0.6), 2);
+      }
+    });
+  }
+
+  /** A painted strip of blue sky with cumulus — party-creation column heads. */
+  skyStrip() {
+    return this._make('sky-strip', 320, 80, (g, w, h, rng) => {
+      const sky = g.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, '#5E7FC6');
+      sky.addColorStop(1, '#9BB0DE');
+      g.fillStyle = sky;
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 40; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(h * 0.2, h * 0.9),
+          rng.range(14, 52), rng.range(6, 20), 0,
+          rng.chance(0.6) ? '#E7DFD6' : '#CECFCE', rng.range(0.25, 0.7), 6);
+      }
+      UITextures.grain(g, w, h, rng, 7);
+    });
+  }
+
+  /** A class emblem: painted, with highlight and shadow, not a flat icon. */
+  classEmblem(classId) {
+    return this._make(`emblem-${classId}`, 96, 96, (g, w, h) => {
+      const cx = w / 2;
+      const cy = h / 2;
+      const gold = g.createLinearGradient(0, 0, w, h);
+      gold.addColorStop(0, '#F4E2A0');
+      gold.addColorStop(0.45, '#C9A44A');
+      gold.addColorStop(0.7, '#E8D89A');
+      gold.addColorStop(1, '#6A4E12');
+      const kind = EMBLEM_FOR[classId] ?? 'shield';
+      if (kind === 'shield') {
+        g.fillStyle = '#2B4E8C';
+        g.beginPath();
+        g.moveTo(cx - w * 0.3, cy - h * 0.34);
+        g.lineTo(cx + w * 0.3, cy - h * 0.34);
+        g.lineTo(cx + w * 0.3, cy + h * 0.06);
+        g.quadraticCurveTo(cx, cy + h * 0.42, cx - w * 0.3, cy + h * 0.06);
+        g.closePath();
+        g.fill();
+        g.strokeStyle = gold;
+        g.lineWidth = 5;
+        g.stroke();
+        // White dragon: a simple wyvern silhouette.
+        g.fillStyle = '#EFF0EE';
+        g.beginPath();
+        g.moveTo(cx - w * 0.16, cy + h * 0.12);
+        g.quadraticCurveTo(cx - w * 0.02, cy - h * 0.02, cx + w * 0.06, cy - h * 0.2);
+        g.quadraticCurveTo(cx + w * 0.18, cy - h * 0.04, cx + w * 0.16, cy + h * 0.14);
+        g.quadraticCurveTo(cx, cy + h * 0.2, cx - w * 0.16, cy + h * 0.12);
+        g.closePath();
+        g.fill();
+      } else if (kind === 'bow') {
+        g.strokeStyle = gold;
+        g.lineWidth = 7;
+        g.beginPath();
+        g.arc(cx + w * 0.12, cy, w * 0.32, Math.PI * 0.62, Math.PI * 1.38);
+        g.stroke();
+        g.lineWidth = 2.4;
+        g.beginPath();
+        g.moveTo(cx - w * 0.06, cy - h * 0.30);
+        g.lineTo(cx - w * 0.06, cy + h * 0.30);
+        g.stroke();
+      } else if (kind === 'ankh') {
+        g.strokeStyle = gold;
+        g.lineWidth = 8;
+        g.beginPath();
+        g.arc(cx, cy - h * 0.2, w * 0.15, 0, TAU);
+        g.stroke();
+        g.beginPath();
+        g.moveTo(cx, cy - h * 0.04);
+        g.lineTo(cx, cy + h * 0.36);
+        g.moveTo(cx - w * 0.22, cy + h * 0.06);
+        g.lineTo(cx + w * 0.22, cy + h * 0.06);
+        g.stroke();
+      } else if (kind === 'tree') {
+        g.fillStyle = '#2E5A26';
+        g.beginPath();
+        g.ellipse(cx, cy - h * 0.10, w * 0.32, h * 0.26, 0, 0, TAU);
+        g.fill();
+        g.fillStyle = '#4A8038';
+        g.beginPath();
+        g.ellipse(cx - w * 0.08, cy - h * 0.18, w * 0.18, h * 0.14, 0, 0, TAU);
+        g.fill();
+        g.strokeStyle = '#4A3218';
+        g.lineWidth = 7;
+        g.beginPath();
+        g.moveTo(cx, cy + h * 0.06);
+        g.lineTo(cx, cy + h * 0.36);
+        g.stroke();
+      } else {
+        g.fillStyle = gold;
+        g.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const a = -Math.PI / 2 + (i / 10) * TAU;
+          const r = i % 2 ? w * 0.14 : w * 0.34;
+          const px = cx + Math.cos(a) * r;
+          const py = cy + Math.sin(a) * r;
+          if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+        }
+        g.closePath();
+        g.fill();
+      }
+    });
+  }
+
+  // ── party bar furniture ───────────────────────────────────────────────────
+
+  /**
+   * The bevelled stone torus a portrait sits in. The active character's ring is
+   * pale gold and every other one is grey stone — the only selection indicator
+   * MM6 has.
+   */
+  portraitRing(active = false) {
+    return this._make(`ring-${active ? 'gold' : 'stone'}`, 138, 192, (g, w, h, rng) => {
+      const pal = active
+        ? ['#E4DCA8', '#D6CE94', '#A69764', '#8B7F42', '#54491E']
+        : ['#8B8A8B', '#6E6C6D', '#585758', '#454344', '#262425'];
+      const thick = w * 0.115;
+      const outer = new Path2D();
+      outer.ellipse(w / 2, h / 2, w / 2 - 1, h / 2 - 1, 0, 0, TAU);
+      const inner = new Path2D();
+      inner.ellipse(w / 2, h / 2, w / 2 - thick, h / 2 - thick * 0.86, 0, 0, TAU);
+
+      const grd = g.createLinearGradient(0, 0, w, h);
+      grd.addColorStop(0, pal[0]);
+      grd.addColorStop(0.3, pal[1]);
+      grd.addColorStop(0.55, pal[2]);
+      grd.addColorStop(0.8, pal[3]);
+      grd.addColorStop(1, pal[4]);
+      g.fillStyle = grd;
+      g.fill(outer);
+
+      // Torus shading: light on the upper-left of the roll, dark below.
+      g.save();
+      g.clip(outer);
+      UITextures.dab(g, w * 0.28, h * 0.14, w * 0.34, h * 0.10, -0.5, '#FFFFFF', active ? 0.5 : 0.35, 6);
+      UITextures.dab(g, w * 0.74, h * 0.9, w * 0.30, h * 0.09, -0.5, '#000000', 0.45, 7);
+      for (let i = 0; i < 60; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(1.5, 8), rng.range(1.5, 6),
+          rng.range(0, TAU), rng.chance(0.5) ? '#FFFFFF' : '#000000', rng.range(0.02, 0.09), 2);
+      }
       g.restore();
 
-      // Ink outline, then a warm rim on the lit side.
+      // Inner reveal: a dark lip, then punch the hole.
+      g.save();
+      g.strokeStyle = 'rgba(20,18,16,0.85)';
       g.lineWidth = 3;
-      g.strokeStyle = 'rgba(46,30,14,0.75)';
-      g.stroke(p);
-      g.stroke(body);
-      g.lineWidth = 1.4;
-      g.strokeStyle = 'rgba(246,226,168,0.35)';
-      g.stroke(p);
-      g.stroke(body);
+      g.stroke(inner);
+      g.globalCompositeOperation = 'destination-out';
+      g.fillStyle = '#000';
+      g.fill(inner);
+      g.restore();
+
+      // Outer shadow line so the ring sits proud of the marble.
+      g.save();
+      g.strokeStyle = 'rgba(24,22,22,0.75)';
+      g.lineWidth = 2;
+      g.stroke(outer);
+      g.restore();
+    });
+  }
+
+  /** The recessed stone channel the HP/SP tubes run in. */
+  tubeSlot() {
+    return this._make('tube-slot', 60, 240, (g, w, h, rng) => {
+      const grd = g.createLinearGradient(0, 0, w, 0);
+      grd.addColorStop(0, '#3E3835');
+      grd.addColorStop(0.25, '#534A47');
+      grd.addColorStop(0.7, '#5E5651');
+      grd.addColorStop(1, '#3A3431');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = 'rgba(0,0,0,0.55)';
+      g.fillRect(0, 0, w, 2);
+      g.fillRect(0, 0, 2, h);
+      g.fillStyle = 'rgba(226,220,212,0.4)';
+      g.fillRect(0, h - 2, w, 2);
+      g.fillRect(w - 2, 0, 2, h);
+      UITextures.grain(g, w, h, rng, 10);
+    });
+  }
+
+  /** A tiny gold classical capital, used at both ends of every tube. */
+  tubeCap(flip = false) {
+    return this._make(`tube-cap-${flip ? 'b' : 't'}`, 32, 20, (g, w, h) => {
+      g.save();
+      if (flip) { g.translate(0, h); g.scale(1, -1); }
+      const grd = g.createLinearGradient(0, 0, 0, h);
+      grd.addColorStop(0, '#DBBC80');
+      grd.addColorStop(0.35, '#C9AC67');
+      grd.addColorStop(0.72, '#A98E4E');
+      grd.addColorStop(1, '#95844C');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = 'rgba(255,246,206,0.7)';
+      g.fillRect(0, 0, w, 2);
+      g.fillStyle = 'rgba(50,36,10,0.7)';
+      g.fillRect(0, h - 2, w, 2);
+      g.fillStyle = 'rgba(255,246,206,0.35)';
+      g.fillRect(w * 0.12, h * 0.35, w * 0.2, h * 0.4);
+      g.restore();
+    });
+  }
+
+  /** The painted tombstone scene that replaces a dead character's portrait. */
+  tombstone() {
+    return this._make('tombstone', 138, 192, (g, w, h, rng) => {
+      const sky = g.createLinearGradient(0, 0, 0, h * 0.7);
+      sky.addColorStop(0, '#8A6BA8');
+      sky.addColorStop(1, '#C2A2CE');
+      g.fillStyle = sky;
+      g.fillRect(0, 0, w, h);
+      // Small yellow sun.
+      g.fillStyle = '#F4E06A';
+      g.beginPath(); g.arc(w * 0.78, h * 0.18, w * 0.09, 0, TAU); g.fill();
+      // Purple blossom trees.
+      for (const [x, s] of [[w * 0.16, 0.9], [w * 0.88, 0.7]]) {
+        g.fillStyle = '#4A2A18';
+        g.fillRect(x - 2, h * 0.44, 4, h * 0.2);
+        g.fillStyle = '#9A5AB0';
+        g.beginPath(); g.ellipse(x, h * 0.40, w * 0.11 * s, h * 0.08 * s, 0, 0, TAU); g.fill();
+      }
+      // Grass.
+      const gr = g.createLinearGradient(0, h * 0.6, 0, h);
+      gr.addColorStop(0, '#4E7A2E');
+      gr.addColorStop(1, '#2E4A1C');
+      g.fillStyle = gr;
+      g.fillRect(0, h * 0.6, w, h * 0.4);
+      // Brown mound.
+      g.fillStyle = '#5A3C22';
+      g.beginPath();
+      g.ellipse(w / 2, h * 0.86, w * 0.34, h * 0.10, 0, 0, TAU);
+      g.fill();
+      // Rounded grey headstone.
+      const st = g.createLinearGradient(0, h * 0.4, 0, h * 0.86);
+      st.addColorStop(0, '#B4AFAA');
+      st.addColorStop(0.5, '#8E8984');
+      st.addColorStop(1, '#5E5A56');
+      g.fillStyle = st;
+      g.beginPath();
+      g.moveTo(w * 0.34, h * 0.84);
+      g.lineTo(w * 0.34, h * 0.52);
+      g.quadraticCurveTo(w * 0.5, h * 0.36, w * 0.66, h * 0.52);
+      g.lineTo(w * 0.66, h * 0.84);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = 'rgba(40,38,36,0.6)';
+      g.lineWidth = 2;
+      g.stroke();
+      g.strokeStyle = 'rgba(70,66,62,0.9)';
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(w * 0.5, h * 0.54);
+      g.lineTo(w * 0.5, h * 0.72);
+      g.moveTo(w * 0.43, h * 0.60);
+      g.lineTo(w * 0.57, h * 0.60);
+      g.stroke();
+      UITextures.grain(g, w, h, rng, 10);
+    });
+  }
+
+  // ── gold buttons ──────────────────────────────────────────────────────────
+
+  /** The four tall sidebar ovals: 28 x 60 native, aspect 1 : 2.14. */
+  tallOval(glyph) {
+    return this._make(`oval-tall-${glyph}`, 56, 120, (g, w, h, rng) => {
+      UITextures.brassFace(g, 1, 1, w - 2, h - 2, rng);
+      UITextures.emboss(g, (c) => GLYPHS[glyph]?.(c, w, h));
+    });
+  }
+
+  /** The five wide panel ovals: 58 x 30 native, aspect 1.95 : 1. */
+  wideOval(glyph) {
+    return this._make(`oval-wide-${glyph}`, 116, 60, (g, w, h, rng) => {
+      UITextures.brassFace(g, 1, 1, w - 2, h - 2, rng);
+      UITextures.emboss(g, (c) => GLYPHS[glyph]?.(c, w, h));
+    });
+  }
+
+  // ── the full-body equipment figure ────────────────────────────────────────
+
+  /**
+   * The equipment display. MM6 has no paper doll: this *is* a painted figure
+   * standing in a dark stone niche, wearing the party member's actual gear, and
+   * items are dragged straight onto it.
+   */
+  figure(spec = {}) {
+    const key = `figure-${spec.key ?? spec.classId ?? 'x'}-${spec.gender ?? 'm'}`;
+    return this._make(key, 300, 640, (g, w, h, rng) => {
+      UITextures.paintNiche(g, w, h, rng);
+      paintFigure(g, w, h, spec, rng);
     });
   }
 
   // ── character portraits ───────────────────────────────────────────────────
 
   /**
-   * A painted head-and-shoulders portrait.
-   *
-   * spec: { key, classId, gender, skin, hair, hairStyle, eyes, age, armour }
-   * Everything is layered the way an oil sketch is: ground, mass, form shadow,
-   * reflected light, features, hair, rim light, glaze and grain.
+   * A painted head-and-neck portrait, facing the viewer straight on, with its
+   * own painted background — near-black navy for some sitters, plain pale grey
+   * for others, exactly as MM6's bitmaps do.
    */
   portrait(spec = {}) {
     const key = `portrait-${spec.key ?? spec.classId ?? 'x'}-${spec.gender ?? 'm'}`;
@@ -1042,28 +2106,43 @@ export class UITextures {
     if (!target?.style) return;
     const U = UITextures.cssUrl;
     const vars = {
-      '--tex-oak': this.oakTile(),
-      '--tex-frame': this.frameOak(),
-      '--tex-frame-gold': this.frameGold(),
-      '--tex-frame-iron': this.frameIron(),
-      '--tex-parchment': this.parchmentTile(),
-      '--tex-parchment-edge': this.parchmentEdge(),
-      '--tex-iron': this.ironTile(),
-      '--tex-cloth': this.clothTile(),
-      '--tex-vignette': this.vignette(),
-      '--tex-slot': this.slot(),
-      '--tex-cartouche': this.cartouche(),
-      '--tex-gold-rule': this.goldRule(),
-      '--tex-book-spine': this.bookSpine(),
-      '--tex-paper-doll': this.paperDoll(),
-      '--tex-compass-bezel': this.compassBezel(),
-      '--tex-compass-rose': this.compassRose(),
-      '--tex-orb-red': this.orb(6),
-      '--tex-orb-blue': this.orb(212),
-      '--tex-orb-green': this.orb(104),
-      '--tex-orb-gold': this.orb(42),
-      '--tex-orb-violet': this.orb(282),
-      '--tex-orb-white': this.orb(48),
+      '--tex-marble': this.marbleBar(),
+      '--tex-marble-side': this.marbleSidebar(),
+      '--tex-marble-rest': this.marbleRest(),
+      '--tex-granite': this.granite(),
+      '--tex-serpentine': this.serpentine(),
+      '--tex-col-left': this.columnShaft('left'),
+      '--tex-col-mid': this.columnShaft('mid'),
+      '--tex-col-right': this.columnShaft('right'),
+      '--tex-collar-left': this.columnCollar('left'),
+      '--tex-collar-mid': this.columnCollar('mid'),
+      '--tex-collar-right': this.columnCollar('right'),
+      '--tex-capital': this.columnCapital(),
+      '--tex-col-base': this.columnBase(),
+      '--tex-arch': this.archFrame(),
+      '--tex-compass': this.compassPlate(),
+      '--tex-glass': this.stainedGlass(),
+      '--tex-shelf': this.bookShelf(),
+      '--tex-apple': this.apple(),
+      '--tex-coins': this.coins(),
+      '--tex-magnifier': this.magnifier(),
+      '--tex-planks': this.woodPlanks(),
+      '--tex-wood-vert': this.woodVertical(),
+      '--tex-rock': this.chiselRock(),
+      '--tex-pack': this.packLeather(),
+      '--tex-spell-page': this.spellPage(),
+      '--tex-cloth': this.greenCloth(),
+      '--tex-quest-page': this.questPage(),
+      '--tex-landscape': this.landscapePlate(),
+      '--tex-hourglass': this.hourglass(),
+      '--tex-torch': this.torch(),
+      '--tex-sky-strip': this.skyStrip(),
+      '--tex-ring-gold': this.portraitRing(true),
+      '--tex-ring-stone': this.portraitRing(false),
+      '--tex-tube-slot': this.tubeSlot(),
+      '--tex-tube-cap': this.tubeCap(false),
+      '--tex-tube-base': this.tubeCap(true),
+      '--tex-tomb': this.tombstone(),
     };
     for (const [k, v] of Object.entries(vars)) target.style.setProperty(k, U(v));
   }
@@ -1072,6 +2151,529 @@ export class UITextures {
     this._cache.clear();
   }
 }
+
+// ── glyph library for the gold ovals ────────────────────────────────────────
+
+const GLYPHS = {
+  /** Five-pointed star ringed by five dots — Cast Spell. */
+  star(g, w, h) {
+    const cx = w / 2;
+    const cy = h * 0.5;
+    const r = Math.min(w, h) * 0.26;
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i / 10) * TAU;
+      const rr = i % 2 ? r * 0.42 : r;
+      const px = cx + Math.cos(a) * rr;
+      const py = cy + Math.sin(a) * rr;
+      if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+    }
+    g.closePath();
+    g.fill();
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + (i / 5) * TAU;
+      g.beginPath();
+      g.arc(cx + Math.cos(a) * r * 1.5, cy + Math.sin(a) * r * 1.5, Math.max(1.5, r * 0.14), 0, TAU);
+      g.fill();
+    }
+  },
+  /** Peaked pavilion tent with a pennant — Rest. */
+  tent(g, w, h) {
+    const cx = w / 2;
+    const base = h * 0.70;
+    const top = h * 0.30;
+    g.beginPath();
+    g.moveTo(cx, top);
+    g.lineTo(cx + w * 0.28, base);
+    g.lineTo(cx - w * 0.28, base);
+    g.closePath();
+    g.fill();
+    // Doorway notch.
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.beginPath();
+    g.moveTo(cx, base - h * 0.22);
+    g.lineTo(cx + w * 0.07, base);
+    g.lineTo(cx - w * 0.07, base);
+    g.closePath();
+    g.fill();
+    g.restore();
+    g.lineWidth = Math.max(1.4, w * 0.035);
+    g.beginPath();
+    g.moveTo(cx, top);
+    g.lineTo(cx, top - h * 0.12);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(cx, top - h * 0.12);
+    g.lineTo(cx + w * 0.16, top - h * 0.08);
+    g.lineTo(cx, top - h * 0.03);
+    g.closePath();
+    g.fill();
+  },
+  /** A rolled scroll that reads at a glance like a stylised "2". */
+  scroll2(g, w, h) {
+    const cx = w / 2;
+    g.lineWidth = Math.max(2.6, w * 0.11);
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(cx - w * 0.17, h * 0.40);
+    g.quadraticCurveTo(cx - w * 0.17, h * 0.28, cx, h * 0.28);
+    g.quadraticCurveTo(cx + w * 0.19, h * 0.28, cx + w * 0.17, h * 0.44);
+    g.quadraticCurveTo(cx + w * 0.14, h * 0.58, cx - w * 0.18, h * 0.70);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(cx - w * 0.19, h * 0.70);
+    g.lineTo(cx + w * 0.20, h * 0.70);
+    g.stroke();
+  },
+  /** A 3.5-inch floppy disk — Game Menu / Save. */
+  floppy(g, w, h) {
+    const bw = w * 0.46;
+    const bh = h * 0.30;
+    const x = (w - bw) / 2;
+    const y = (h - bh) / 2;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + bw - bw * 0.16, y);
+    g.lineTo(x + bw, y + bh * 0.16);
+    g.lineTo(x + bw, y + bh);
+    g.lineTo(x, y + bh);
+    g.closePath();
+    g.fill();
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.fillRect(x + bw * 0.24, y, bw * 0.44, bh * 0.36);
+    g.fillRect(x + bw * 0.18, y + bh * 0.55, bw * 0.64, bh * 0.45);
+    g.restore();
+    g.fillRect(x + bw * 0.5, y + bh * 0.02, bw * 0.12, bh * 0.30);
+  },
+  /** A head in profile — the Stats page. */
+  head(g, w, h) {
+    const cx = w * 0.52;
+    const cy = h * 0.5;
+    const r = Math.min(w * 0.5, h * 0.9) * 0.42;
+    g.beginPath();
+    g.moveTo(cx - r * 0.2, cy + r);
+    g.bezierCurveTo(cx - r * 1.1, cy + r * 0.7, cx - r * 1.05, cy - r * 0.9, cx - r * 0.05, cy - r);
+    g.bezierCurveTo(cx + r * 0.75, cy - r, cx + r * 0.85, cy - r * 0.2, cx + r * 0.6, cy + r * 0.1);
+    g.lineTo(cx + r * 0.78, cy + r * 0.28);
+    g.lineTo(cx + r * 0.5, cy + r * 0.38);
+    g.lineTo(cx + r * 0.5, cy + r * 0.72);
+    g.lineTo(cx + r * 0.1, cy + r);
+    g.closePath();
+    g.fill();
+  },
+  /** A clenched fist — the Skills page. */
+  fist(g, w, h) {
+    const cx = w / 2;
+    const cy = h * 0.5;
+    const s = Math.min(w * 0.5, h) * 0.5;
+    g.beginPath();
+    g.ellipse(cx, cy, s * 0.78, s * 0.62, -0.12, 0, TAU);
+    g.fill();
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.lineWidth = Math.max(1.2, s * 0.1);
+    g.strokeStyle = '#000';
+    for (let i = 0; i < 3; i++) {
+      g.beginPath();
+      g.moveTo(cx - s * 0.5, cy - s * 0.3 + i * s * 0.28);
+      g.lineTo(cx + s * 0.5, cy - s * 0.34 + i * s * 0.28);
+      g.stroke();
+    }
+    g.restore();
+    g.beginPath();
+    g.ellipse(cx - s * 0.85, cy + s * 0.18, s * 0.28, s * 0.36, 0.3, 0, TAU);
+    g.fill();
+  },
+  /** A sword across a shield — the Inventory page. */
+  swordShield(g, w, h) {
+    const cx = w / 2;
+    const cy = h * 0.5;
+    const s = Math.min(w * 0.5, h) * 0.52;
+    g.beginPath();
+    g.moveTo(cx - s * 0.6, cy - s * 0.62);
+    g.lineTo(cx + s * 0.6, cy - s * 0.62);
+    g.lineTo(cx + s * 0.6, cy + s * 0.1);
+    g.quadraticCurveTo(cx, cy + s * 0.8, cx - s * 0.6, cy + s * 0.1);
+    g.closePath();
+    g.fill();
+    g.lineWidth = Math.max(2, s * 0.16);
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(cx - s * 1.05, cy + s * 0.85);
+    g.lineTo(cx + s * 1.05, cy - s * 0.85);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(cx + s * 0.35, cy - s * 0.95);
+    g.lineTo(cx + s * 0.9, cy - s * 0.32);
+    g.stroke();
+  },
+  /** A ribboned medal — the Awards page. */
+  medal(g, w, h) {
+    const cx = w / 2;
+    const cy = h * 0.56;
+    const r = Math.min(w * 0.5, h) * 0.26;
+    g.beginPath();
+    g.moveTo(cx - r * 1.1, h * 0.20);
+    g.lineTo(cx + r * 1.1, h * 0.20);
+    g.lineTo(cx + r * 0.55, h * 0.44);
+    g.lineTo(cx - r * 0.55, h * 0.44);
+    g.closePath();
+    g.fill();
+    g.beginPath();
+    for (let i = 0; i < 16; i++) {
+      const a = -Math.PI / 2 + (i / 16) * TAU;
+      const rr = i % 2 ? r * 0.62 : r;
+      const px = cx + Math.cos(a) * rr;
+      const py = cy + r * 0.5 + Math.sin(a) * rr;
+      if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+    }
+    g.closePath();
+    g.fill();
+  },
+  /** An arrow entering a doorway — Exit. */
+  exitDoor(g, w, h) {
+    const x = w * 0.56;
+    const y = h * 0.22;
+    const dw = w * 0.20;
+    const dh = h * 0.56;
+    g.fillRect(x, y, dw, dh);
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.fillRect(x + dw * 0.22, y + dh * 0.12, dw * 0.56, dh * 0.76);
+    g.restore();
+    g.lineWidth = Math.max(2.2, w * 0.05);
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(x - w * 0.26, h * 0.5);
+    g.lineTo(x - w * 0.02, h * 0.5);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(x - w * 0.12, h * 0.38);
+    g.lineTo(x + w * 0.02, h * 0.5);
+    g.lineTo(x - w * 0.12, h * 0.62);
+    g.closePath();
+    g.fill();
+  },
+};
+
+const EMBLEM_FOR = {
+  knight: 'shield', cavalier: 'shield', champion: 'shield', paladin: 'shield',
+  crusader: 'shield', hero: 'shield', villain: 'shield', black_knight: 'shield',
+  archer: 'bow', battle_mage: 'bow', warrior_mage: 'bow', master_archer: 'bow',
+  ranger: 'bow', hunter: 'bow', ranger_lord: 'bow',
+  cleric: 'ankh', priest: 'ankh', priest_of_light: 'ankh', priest_of_dark: 'ankh',
+  monk: 'ankh', initiate: 'ankh', master: 'ankh',
+  druid: 'tree', great_druid: 'tree', arch_druid: 'tree',
+  sorcerer: 'star', wizard: 'star', archmage: 'star', lich: 'star',
+  thief: 'star', rogue: 'star', spy: 'star',
+};
+
+const SPELL_PALETTE = {
+  fire: ['#F0F4F8', '#F4B12A', '#E8720E', '#B42A08', '#5A1204'],
+  air: ['#F0F4F8', '#C6D8EE', '#8CB0CE', '#4A78A5', '#20304A'],
+  water: ['#F0F4F8', '#A8CADE', '#4A78A5', '#2A5478', '#12283C'],
+  earth: ['#DCD0B8', '#A08A5E', '#6A5432', '#3E3018', '#1C1408'],
+  spirit: ['#FFFFFF', '#F0E8C8', '#C8B87A', '#8A7A40', '#3A3018'],
+  mind: ['#F0E8F8', '#C8A8DE', '#8A5EA8', '#4A2E5E', '#20122E'],
+  body: ['#F8E8DC', '#DEA88C', '#A8654A', '#5E3220', '#28140C'],
+  light: ['#FFFFFF', '#FFF4C8', '#F4DC7A', '#C8A030', '#5E4808'],
+  dark: ['#B8B0C0', '#6A6076', '#3A3444', '#1C1824', '#08060C'],
+};
+
+// ── the full-body figure ────────────────────────────────────────────────────
+
+/**
+ * A painted 3/4-front figure in contrapposto, ~85% of the niche height, with
+ * equipment composited in the correct z-order: cloak behind, then body, then
+ * armour, then belt and vambraces, then helm, then the weapon in front. The
+ * gear carries its own baked highlights and is markedly brighter than the
+ * granite beside it.
+ */
+function paintFigure(g, w, h, spec, rng) {
+  const look = FIGURE_LOOK[spec.classId] ?? FIGURE_LOOK.knight;
+  const skin = ['#F2D0AC', '#E3B489', '#C98F63', '#A3653F'][spec.skin ?? 1];
+  const skinDark = mixHex(skin, '#3A1C0C', 0.45);
+  const cx = w * 0.5;
+  const top = h * 0.10;
+  const bottom = h * 0.94;
+  const H = bottom - top;
+  const headR = H * 0.072;
+  const headY = top + headR;
+  const shoulderY = top + H * 0.185;
+  const waistY = top + H * 0.44;
+  const hipY = top + H * 0.50;
+  const kneeY = top + H * 0.72;
+  const footY = bottom;
+  const halfShoulder = H * 0.115;
+  const halfHip = H * 0.085;
+
+  // Contact shadow on the flagstones.
+  UITextures.dab(g, cx, footY + H * 0.012, halfShoulder * 1.5, H * 0.018, 0, 'rgba(0,0,0,0.6)', 1, 5);
+
+  // Cloak behind the body.
+  if (look.cloak) {
+    g.save();
+    const cl = g.createLinearGradient(cx - halfShoulder * 1.6, shoulderY, cx + halfShoulder * 1.6, footY);
+    cl.addColorStop(0, mixHex(look.cloak, '#FFFFFF', 0.25));
+    cl.addColorStop(0.4, look.cloak);
+    cl.addColorStop(1, mixHex(look.cloak, '#000000', 0.6));
+    g.fillStyle = cl;
+    g.beginPath();
+    g.moveTo(cx - halfShoulder * 1.05, shoulderY - H * 0.02);
+    g.bezierCurveTo(cx - halfShoulder * 2.1, waistY, cx - halfShoulder * 2.3, kneeY, cx - halfShoulder * 1.9, footY - H * 0.06);
+    g.lineTo(cx + halfShoulder * 1.9, footY - H * 0.06);
+    g.bezierCurveTo(cx + halfShoulder * 2.3, kneeY, cx + halfShoulder * 2.1, waistY, cx + halfShoulder * 1.05, shoulderY - H * 0.02);
+    g.closePath();
+    g.fill();
+    for (let i = 0; i < 26; i++) {
+      const x = cx + rng.range(-halfShoulder * 2, halfShoulder * 2);
+      g.save();
+      g.globalAlpha = rng.range(0.08, 0.3);
+      g.strokeStyle = rng.chance(0.5) ? '#FFFFFF' : '#000000';
+      g.lineWidth = rng.range(2, 7);
+      g.filter = 'blur(3px)';
+      g.beginPath();
+      g.moveTo(x, shoulderY);
+      g.quadraticCurveTo(x + rng.range(-18, 18), kneeY, x + rng.range(-30, 30), footY - H * 0.05);
+      g.stroke();
+      g.restore();
+    }
+    g.restore();
+  }
+
+  // Legs.
+  for (const side of [-1, 1]) {
+    const hx = cx + side * halfHip * 0.55;
+    const kx = cx + side * halfHip * (side < 0 ? 0.95 : 0.6);
+    const fx = cx + side * halfHip * (side < 0 ? 1.15 : 0.5);
+    g.save();
+    g.strokeStyle = look.hose;
+    g.lineWidth = H * 0.052;
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(hx, hipY);
+    g.quadraticCurveTo(kx, kneeY, fx, footY - H * 0.035);
+    g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,0.18)';
+    g.lineWidth = H * 0.016;
+    g.beginPath();
+    g.moveTo(hx - H * 0.012, hipY);
+    g.quadraticCurveTo(kx - H * 0.012, kneeY, fx - H * 0.010, footY - H * 0.04);
+    g.stroke();
+    g.restore();
+    // Boots.
+    g.fillStyle = look.boot;
+    g.beginPath();
+    g.ellipse(fx + side * H * 0.012, footY - H * 0.018, H * 0.045, H * 0.024, side * 0.2, 0, TAU);
+    g.fill();
+    g.fillStyle = 'rgba(255,240,210,0.2)';
+    g.beginPath();
+    g.ellipse(fx, footY - H * 0.03, H * 0.03, H * 0.010, 0, 0, TAU);
+    g.fill();
+  }
+
+  // Torso.
+  const torso = new Path2D();
+  torso.moveTo(cx - halfShoulder, shoulderY);
+  torso.bezierCurveTo(cx - halfShoulder * 1.02, waistY - H * 0.06, cx - halfHip * 1.02, waistY, cx - halfHip, hipY);
+  torso.lineTo(cx + halfHip, hipY);
+  torso.bezierCurveTo(cx + halfHip * 1.02, waistY, cx + halfShoulder * 1.02, waistY - H * 0.06, cx + halfShoulder, shoulderY);
+  torso.bezierCurveTo(cx + halfShoulder * 0.5, shoulderY - H * 0.03, cx - halfShoulder * 0.5, shoulderY - H * 0.03, cx - halfShoulder, shoulderY);
+  torso.closePath();
+  g.save();
+  const bodyGrd = g.createLinearGradient(cx - halfShoulder, 0, cx + halfShoulder, 0);
+  bodyGrd.addColorStop(0, mixHex(look.body, '#FFFFFF', 0.30));
+  bodyGrd.addColorStop(0.35, look.body);
+  bodyGrd.addColorStop(1, mixHex(look.body, '#000000', 0.55));
+  g.fillStyle = bodyGrd;
+  g.fill(torso);
+  g.clip(torso);
+  if (look.mail) {
+    for (let y = shoulderY; y < hipY; y += 4) {
+      for (let x = cx - halfShoulder; x < cx + halfShoulder; x += 4) {
+        g.fillStyle = ((Math.round(y / 4) + Math.round(x / 4)) % 2)
+          ? 'rgba(255,232,180,0.20)' : 'rgba(0,0,0,0.22)';
+        g.fillRect(x, y, 2.4, 2.4);
+      }
+    }
+  } else {
+    for (let i = 0; i < 30; i++) {
+      const x = cx + rng.range(-halfShoulder, halfShoulder);
+      g.save();
+      g.globalAlpha = rng.range(0.06, 0.24);
+      g.strokeStyle = rng.chance(0.5) ? '#FFFFFF' : '#000000';
+      g.lineWidth = rng.range(2, 6);
+      g.filter = 'blur(2.5px)';
+      g.beginPath();
+      g.moveTo(x, shoulderY);
+      g.lineTo(x + rng.range(-10, 10), hipY);
+      g.stroke();
+      g.restore();
+    }
+  }
+  UITextures.dab(g, cx - halfShoulder * 0.45, shoulderY + H * 0.08, halfShoulder * 0.5, H * 0.11, 0, '#FFFFFF', 0.16, 8);
+  UITextures.dab(g, cx + halfShoulder * 0.7, shoulderY + H * 0.12, halfShoulder * 0.45, H * 0.14, 0, '#000000', 0.30, 9);
+  g.restore();
+
+  // Trim at the collar and hem.
+  g.strokeStyle = look.trim;
+  g.lineWidth = H * 0.010;
+  g.beginPath();
+  g.moveTo(cx - halfShoulder * 0.62, shoulderY - H * 0.012);
+  g.quadraticCurveTo(cx, shoulderY + H * 0.045, cx + halfShoulder * 0.62, shoulderY - H * 0.012);
+  g.stroke();
+  g.beginPath();
+  g.moveTo(cx - halfHip, hipY);
+  g.lineTo(cx + halfHip, hipY);
+  g.stroke();
+
+  // Belt.
+  const beltGrd = g.createLinearGradient(cx - halfHip, 0, cx + halfHip, 0);
+  beltGrd.addColorStop(0, '#6A4A22');
+  beltGrd.addColorStop(0.4, '#A8763A');
+  beltGrd.addColorStop(1, '#3A2410');
+  g.fillStyle = beltGrd;
+  g.fillRect(cx - halfHip * 1.05, waistY + H * 0.02, halfHip * 2.1, H * 0.026);
+  g.fillStyle = look.trim;
+  g.fillRect(cx - H * 0.018, waistY + H * 0.018, H * 0.036, H * 0.034);
+
+  // Arms. The sword arm is raised; the shield arm hangs across the body.
+  const armLen = H * 0.30;
+  // Shield arm (viewer's right).
+  g.save();
+  g.strokeStyle = look.sleeve;
+  g.lineWidth = H * 0.040;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(cx + halfShoulder * 0.9, shoulderY + H * 0.02);
+  g.quadraticCurveTo(cx + halfShoulder * 1.5, shoulderY + armLen * 0.6, cx + halfShoulder * 1.1, shoulderY + armLen);
+  g.stroke();
+  g.restore();
+  // Shield.
+  const shR = H * 0.085;
+  const shX = cx + halfShoulder * 1.25;
+  const shY = shoulderY + armLen * 1.05;
+  const shGrd = g.createRadialGradient(shX - shR * 0.35, shY - shR * 0.35, shR * 0.1, shX, shY, shR);
+  shGrd.addColorStop(0, '#E8B26A');
+  shGrd.addColorStop(0.5, '#B0762E');
+  shGrd.addColorStop(1, '#5A3810');
+  g.fillStyle = shGrd;
+  g.beginPath(); g.arc(shX, shY, shR, 0, TAU); g.fill();
+  g.strokeStyle = '#C8C4BC';
+  g.lineWidth = H * 0.009;
+  g.beginPath(); g.arc(shX, shY, shR - H * 0.004, 0, TAU); g.stroke();
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + (i / 5) * TAU;
+    g.fillStyle = '#8E8A82';
+    g.beginPath(); g.arc(shX + Math.cos(a) * shR * 0.6, shY + Math.sin(a) * shR * 0.6, shR * 0.09, 0, TAU); g.fill();
+  }
+  // Weapon arm (viewer's left), raised.
+  g.save();
+  g.strokeStyle = look.sleeve;
+  g.lineWidth = H * 0.040;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(cx - halfShoulder * 0.9, shoulderY + H * 0.02);
+  g.quadraticCurveTo(cx - halfShoulder * 1.7, shoulderY + armLen * 0.5, cx - halfShoulder * 1.35, shoulderY + armLen * 0.82);
+  g.stroke();
+  g.restore();
+  const handX = cx - halfShoulder * 1.35;
+  const handY = shoulderY + armLen * 0.86;
+  g.fillStyle = skin;
+  g.beginPath(); g.ellipse(handX, handY, H * 0.020, H * 0.024, 0, 0, TAU); g.fill();
+
+  // Weapon in front of everything.
+  g.save();
+  g.translate(handX, handY);
+  if (look.weapon === 'staff') {
+    const st = g.createLinearGradient(-H * 0.01, 0, H * 0.01, 0);
+    st.addColorStop(0, '#3A2410');
+    st.addColorStop(0.4, '#8A5A2A');
+    st.addColorStop(1, '#2A1808');
+    g.fillStyle = st;
+    g.fillRect(-H * 0.010, -H * 0.36, H * 0.020, H * 0.62);
+    g.fillStyle = '#6ACBE8';
+    g.beginPath(); g.arc(0, -H * 0.38, H * 0.024, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.7)';
+    g.beginPath(); g.arc(-H * 0.008, -H * 0.39, H * 0.008, 0, TAU); g.fill();
+  } else {
+    // Blade.
+    const bl = g.createLinearGradient(-H * 0.012, 0, H * 0.012, 0);
+    bl.addColorStop(0, '#9FB4C4');
+    bl.addColorStop(0.35, '#E4EEF4');
+    bl.addColorStop(0.6, '#B4C4D0');
+    bl.addColorStop(1, '#5E6E7A');
+    g.fillStyle = bl;
+    g.beginPath();
+    g.moveTo(-H * 0.012, -H * 0.05);
+    g.lineTo(H * 0.012, -H * 0.05);
+    g.lineTo(H * 0.004, -H * 0.42);
+    g.lineTo(-H * 0.004, -H * 0.42);
+    g.closePath();
+    g.fill();
+    // Crossguard, grip and pommel.
+    g.fillStyle = '#C9A44A';
+    g.fillRect(-H * 0.038, -H * 0.055, H * 0.076, H * 0.014);
+    g.fillStyle = '#3A2410';
+    g.fillRect(-H * 0.010, -H * 0.042, H * 0.020, H * 0.052);
+    g.fillStyle = '#C9A44A';
+    g.beginPath(); g.arc(0, H * 0.016, H * 0.014, 0, TAU); g.fill();
+  }
+  g.restore();
+
+  // Head, neck and hair.
+  g.fillStyle = skinDark;
+  g.fillRect(cx - headR * 0.32, headY + headR * 0.7, headR * 0.64, H * 0.03);
+  const headGrd = g.createRadialGradient(cx - headR * 0.35, headY - headR * 0.35, headR * 0.1, cx, headY, headR * 1.3);
+  headGrd.addColorStop(0, mixHex(skin, '#FFFFFF', 0.3));
+  headGrd.addColorStop(0.5, skin);
+  headGrd.addColorStop(1, skinDark);
+  g.fillStyle = headGrd;
+  g.beginPath();
+  g.ellipse(cx, headY, headR * 0.78, headR, 0, 0, TAU);
+  g.fill();
+  // Hair or helm.
+  g.fillStyle = look.hair;
+  g.beginPath();
+  g.ellipse(cx, headY - headR * 0.30, headR * 0.84, headR * 0.62, 0, Math.PI, TAU);
+  g.fill();
+  if (look.helm) {
+    g.fillStyle = look.trim;
+    g.fillRect(cx - headR * 0.86, headY - headR * 0.34, headR * 1.72, headR * 0.20);
+    g.fillStyle = '#2A6A8C';
+    g.beginPath(); g.arc(cx, headY - headR * 0.24, headR * 0.13, 0, TAU); g.fill();
+  }
+  // Eyes and a suggestion of a mouth: at this size, three dabs is enough.
+  g.fillStyle = '#2A1C10';
+  g.beginPath(); g.ellipse(cx - headR * 0.30, headY + headR * 0.02, headR * 0.10, headR * 0.07, 0, 0, TAU); g.fill();
+  g.beginPath(); g.ellipse(cx + headR * 0.30, headY + headR * 0.02, headR * 0.10, headR * 0.07, 0, 0, TAU); g.fill();
+  UITextures.dab(g, cx, headY + headR * 0.46, headR * 0.22, headR * 0.06, 0, '#8A4438', 0.6, 1.5);
+  if (look.beard) {
+    UITextures.dab(g, cx, headY + headR * 0.62, headR * 0.52, headR * 0.34, 0, look.hair, 0.9, 2.5);
+  }
+
+  // A separate warm key light from the front-left, over the whole figure.
+  const key = g.createLinearGradient(0, 0, w, h);
+  key.addColorStop(0, 'rgba(255,226,178,0.14)');
+  key.addColorStop(0.5, 'rgba(255,226,178,0)');
+  key.addColorStop(1, 'rgba(0,0,0,0.18)');
+  g.fillStyle = key;
+  g.fillRect(0, top - H * 0.05, w, H * 1.1);
+}
+
+const FIGURE_LOOK = {
+  knight: { body: '#8A7A4A', mail: true, sleeve: '#2E6B32', hose: '#2E8038', boot: '#6A4A22', trim: '#C9A44A', hair: '#1A2A5A', cloak: null, helm: true, beard: true, weapon: 'sword' },
+  paladin: { body: '#B4BCC6', mail: true, sleeve: '#8A96A4', hose: '#4A5460', boot: '#3A3028', trim: '#E4D08A', hair: '#5A3A1C', cloak: '#7A2A2A', helm: true, beard: false, weapon: 'sword' },
+  cleric: { body: '#D8CDB4', mail: false, sleeve: '#C8BCA0', hose: '#A8987C', boot: '#5A4428', trim: '#C9A94A', hair: '#8A6026', cloak: '#6A5A3A', helm: false, beard: false, weapon: 'staff' },
+  sorcerer: { body: '#2F3A63', mail: false, sleeve: '#3A4678', hose: '#28304E', boot: '#2A2418', trim: '#8FA8E0', hair: '#2B1C10', cloak: '#1E2648', helm: false, beard: false, weapon: 'staff' },
+  archer: { body: '#6B5330', mail: false, sleeve: '#4F5C34', hose: '#3F4A2A', boot: '#4A3218', trim: '#3F5C33', hair: '#8D3F1C', cloak: '#3A4A2A', helm: false, beard: false, weapon: 'sword' },
+  druid: { body: '#4A5A35', mail: false, sleeve: '#3F5230', hose: '#38452A', boot: '#3A2A18', trim: '#A8934A', hair: '#5A3A1C', cloak: '#2E3A20', helm: false, beard: true, weapon: 'staff' },
+  thief: { body: '#3A3128', mail: false, sleeve: '#332B23', hose: '#2A241E', boot: '#221C16', trim: '#5A4A34', hair: '#2B1C10', cloak: '#241E18', helm: false, beard: false, weapon: 'sword' },
+  ranger: { body: '#4F5C34', mail: false, sleeve: '#455230', hose: '#3A452A', boot: '#4A3218', trim: '#7A6244', hair: '#5A3A1C', cloak: '#38442A', helm: false, beard: false, weapon: 'sword' },
+  monk: { body: '#8A5A2A', mail: false, sleeve: '#A0692F', hose: '#6A4420', boot: '#3A2A18', trim: '#C9A94A', hair: '#120B05', cloak: null, helm: false, beard: false, weapon: 'staff' },
+};
 
 // ── portrait painting ───────────────────────────────────────────────────────
 
@@ -1148,6 +2750,7 @@ function resolvePortraitLook(spec, rng) {
     metal: look.palette,
     trim: look.trim,
     age: spec.age ?? rng.range(0, 1),
+    groundIndex: spec.ground ?? rng.int(0, 4),
     undead,
   };
 }
@@ -1193,27 +2796,32 @@ function paintPortrait(g, w, h, cfg, rng) {
   paintFinish(g, w, h, cfg, rng, geo);
 }
 
-/** Studio backdrop: a dim wall with a warm halo behind the sitter. */
+/**
+ * The painted ground each MM6 portrait bitmap carries with it: a near-black
+ * navy for some sitters, a plain pale grey for others. It is a flat field, not
+ * a studio vignette, and the oval mask simply crops it.
+ */
 function paintBackdrop(g, w, h, cfg, rng, geo) {
+  const grounds = [
+    ['#0D1020', '#080821'],
+    ['#080821', '#0A0C18'],
+    ['#8E8B86', '#6E6B67'],
+    ['#1A2030', '#0E1220'],
+    ['#A09C94', '#7C7873'],
+  ];
+  const pick = grounds[cfg.groundIndex % grounds.length];
   const bg = g.createLinearGradient(0, 0, 0, h);
-  bg.addColorStop(0, '#2a1e14');
-  bg.addColorStop(0.5, '#181009');
-  bg.addColorStop(1, '#0a0704');
+  bg.addColorStop(0, pick[0]);
+  bg.addColorStop(1, pick[1]);
   g.fillStyle = bg;
   g.fillRect(0, 0, w, h);
 
-  const halo = g.createRadialGradient(geo.cx - w * 0.07, geo.cy - h * 0.04, 8, geo.cx, geo.cy, w * 0.66);
-  halo.addColorStop(0, 'rgba(162,120,66,0.46)');
-  halo.addColorStop(0.45, 'rgba(96,68,36,0.20)');
-  halo.addColorStop(1, 'rgba(0,0,0,0)');
-  g.fillStyle = halo;
-  g.fillRect(0, 0, w, h);
-
-  // Broken colour in the ground so it is not a clean gradient.
-  for (let i = 0; i < 70; i++) {
+  // Broken colour in the ground so it is paint, not a clean gradient.
+  for (let i = 0; i < 60; i++) {
     UITextures.dab(g, rng.range(0, w), rng.range(0, h * 0.9),
       rng.range(24, 96), rng.range(10, 44), rng.range(0, TAU),
-      rng.chance(0.5) ? '#4a3320' : '#0b0704', rng.range(0.04, 0.13), 12);
+      rng.chance(0.5) ? mixHex(pick[0], '#FFFFFF', 0.22) : '#000000',
+      rng.range(0.04, 0.13), 12);
   }
 }
 
@@ -1936,21 +3544,22 @@ function paintFinish(g, w, h, cfg, rng, geo) {
   g.stroke();
   g.restore();
 
+  // MM6's portraits are flat-lit and warm; only a whisper of glaze and
+  // vignette, or the oval reads as a spotlit modern render.
   const glaze = g.createLinearGradient(0, 0, w * 0.55, h);
-  glaze.addColorStop(0, 'rgba(255,206,132,0.11)');
+  glaze.addColorStop(0, 'rgba(255,206,132,0.09)');
   glaze.addColorStop(0.5, 'rgba(120,80,40,0)');
-  glaze.addColorStop(1, 'rgba(18,9,3,0.26)');
+  glaze.addColorStop(1, 'rgba(18,9,3,0.14)');
   g.fillStyle = glaze;
   g.fillRect(0, 0, w, h);
 
-  const vig = g.createRadialGradient(cx, h * 0.42, w * 0.22, cx, h * 0.5, w * 0.80);
+  const vig = g.createRadialGradient(cx, h * 0.42, w * 0.30, cx, h * 0.5, w * 0.86);
   vig.addColorStop(0, 'rgba(0,0,0,0)');
-  vig.addColorStop(0.62, 'rgba(0,0,0,0.20)');
-  vig.addColorStop(1, 'rgba(0,0,0,0.74)');
+  vig.addColorStop(0.7, 'rgba(0,0,0,0.08)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.32)');
   g.fillStyle = vig;
   g.fillRect(0, 0, w, h);
 
   UITextures.grain(g, w, h, rng, 12);
 }
 
-export default UITextures;
