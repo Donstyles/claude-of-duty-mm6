@@ -334,6 +334,55 @@ function fbmP(h, x, y, F0, oct, gain) {
   return s / norm;
 }
 
+/** Independent per-cell random, periodic modulo `F`. `salt` picks the stream. */
+function cellVal(h, ix, iy, F, salt) {
+  const x = ((ix % F) + F) % F;
+  const y = ((iy % F) + F) % F;
+  return h.G[h.P[(h.P[(x + salt * 251) & 1023] + y * 3 + salt * 97) & 1023] & 1023];
+}
+
+/**
+ * Periodic metaball field — the primitive that actually produces cumulus.
+ *
+ * fBm, however it is warped or ridged, makes *amoebas*: smooth blobs with
+ * stringy arms and ring-shaped bays. A cumulus is the opposite — a union of
+ * overlapping spheroids, so its silhouette is a chain of convex arcs and its
+ * interior is domed. Summing smooth radial kernels on a jittered periodic grid
+ * gives exactly that: partially-overlapping blobs merge into one lumpy mass
+ * with a cauliflower outline, and isolated ones stay readable as single puffs.
+ *
+ * @param {number} G     cells per tile — sets the puff diameter
+ * @param {number} rMin  blob radius in cells, minimum
+ * @param {number} rMax  blob radius in cells, maximum (keep ≤ 1.3 for a 3×3 scan)
+ */
+function blobsP(h, u, v, G, rMin, rMax) {
+  const fx = u * G;
+  const fy = v * G;
+  const ix0 = Math.floor(fx);
+  const iy0 = Math.floor(fy);
+  let acc = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const cx = ix0 + dx;
+      const cy = iy0 + dy;
+      const jx = cx + 0.5 + (cellVal(h, cx, cy, G, 0) - 0.5) * 0.88;
+      const jy = cy + 0.5 + (cellVal(h, cx, cy, G, 1) - 0.5) * 0.88;
+      const r = rMin + (rMax - rMin) * cellVal(h, cx, cy, G, 2);
+      const amp = 0.52 + 0.48 * cellVal(h, cx, cy, G, 3);
+      // A mild random aspect keeps the blobs from reading as stamped circles.
+      const ex = 1 + (cellVal(h, cx, cy, G, 4) - 0.5) * 0.55;
+      const ddx = (fx - jx) / (r * ex);
+      const ddy = (fy - jy) / (r / ex);
+      const t2 = ddx * ddx + ddy * ddy;
+      if (t2 < 1) {
+        const w = 1 - t2;
+        acc += w * w * amp;   // (1-t²)² — C¹ smooth, peak 1 at the centre
+      }
+    }
+  }
+  return acc;
+}
+
 /** Separable box blur with wrap-around — the sheet has to stay tileable. */
 function blurWrap(src, N, radius) {
   const tmp = new Float32Array(N * N);
