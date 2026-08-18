@@ -67,11 +67,27 @@ the reviewer is not given.
 6. **Overall colour is cooler and greyer** than the reference, which is warmer
    and more saturated throughout.
 
-### Unverified
+### Measured, and not a defect after all
 
-The cloud form has only been photographed at `medium` this round; the ultra
-capture could not complete under load. Do not conclude anything about the
-clouds until one lands.
+The clouds looked wrong to me at `medium` — beige blobs in bands rather than
+white cumulus — so I photographed them at `ultra` and measured instead of
+trusting the impression. Sky crop, cloud pixels taken as luminance > 150:
+
+| | cloud RGB | sky RGB | cover |
+|---|---|---|---|
+| ours | 178, 160, 130 | 66, 82, 134 | 7% |
+| reference 33 | 161, 152, 151 | 60, 81, 107 | 1% |
+| reference 35 | 188, 176, 141 | 72, 89, 137 | 24% |
+| reference 32 | 183, 172, 141 | 120, 118, 139 | 39% |
+
+Ours sits inside the reference's range on every axis, and MM6's own cloud
+cover swings from 1% to 39% between scenes, so 7% is unremarkable. The warm
+cast I objected to is what the reference does too. **Do not re-tint the clouds
+or reduce their count on the strength of someone's eye, including mine.**
+
+What measurement does not settle is the *arrangement* — ours compress into
+bands toward the horizon. That is what a cloud plane does in projection and is
+probably right; if a reviewer raises it, get a number before acting.
 
 ### Not defects — do not "fix" these
 - The flat sky with no horizon gradient is **correct** and deliberate.
