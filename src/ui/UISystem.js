@@ -462,8 +462,8 @@ export class UISystem extends System {
     const rng = this.rng.fork('sample-party');
     const defs = [
       {
-        name: 'Sir Roland', classId: 'paladin', gender: 'm', level: 12, skin: 0, hair: 1, helm: 1, ground: 0,
-        conditions: [], awards: ['Defender of New Sorpigal', 'Slayer of the Goblin King', 'Knight of Ironfist'],
+        name: 'Sir Edran Vaile', classId: 'paladin', gender: 'm', level: 12, skin: 0, hair: 1, helm: 1, ground: 0,
+        conditions: [], awards: ['Defender of Millhaven', 'Slayer of the Goblin King', 'Knight of Thornwick'],
         gear: {
           mainhand: 'sword_bastard', offhand: 'shield_kite', armour: 'plate_field', helm: 'helm_great',
           gauntlets: 'gauntlets_plate', boots: 'boots_plate', belt: 'belt_plate', cloak: 'cloak_fur',
@@ -475,7 +475,7 @@ export class UISystem extends System {
       },
       {
         name: 'Cassandra', classId: 'sorcerer', gender: 'f', level: 12, skin: 0, hair: 3, helm: 0, ground: 2,
-        conditions: ['weak'], awards: ['Apprentice of the Sorpigal Guild', 'Reader of the Burned Ledger'],
+        conditions: ['weak'], awards: ['Apprentice of the Millhaven Guild', 'Reader of the Burned Ledger'],
         gear: {
           mainhand: 'staff_rune', armour: 'leather_elven', cloak: 'cloak_cape',
           boots: 'boots_leather', belt: 'belt_studded', amulet: 'amulet_talisman', ring1: 'ring_band',
@@ -496,7 +496,7 @@ export class UISystem extends System {
       },
       {
         name: 'Kellen', classId: 'archer', gender: 'm', level: 12, skin: 1, hair: 2, helm: 0, ground: 4,
-        conditions: ['poisoned_weak'], awards: ['Marchwarden of Bootleg Bay'],
+        conditions: ['poisoned_weak'], awards: ['Marchwarden of Saltmarch'],
         gear: {
           mainhand: 'sword_broad', ranged: 'bow_composite', armour: 'leather_studded',
           helm: 'helm_leather_cap', gauntlets: 'gauntlets_leather', boots: 'boots_leather',
@@ -636,7 +636,7 @@ export class UISystem extends System {
 
   _sampleTurnOrder() {
     return [
-      { name: 'Sir Roland', initiative: 24 },
+      { name: 'Sir Edran Vaile', initiative: 24 },
       { name: 'Goblin Chief', initiative: 21, foe: true },
       { name: 'Kellen', initiative: 19 },
       { name: 'Cassandra', initiative: 16 },
@@ -853,7 +853,7 @@ export class UISystem extends System {
   /**
    * The magnifying glass on the equipment niche's floor: the party's own
    * Identify Item and Repair Item skills, applied to one item, so a shop is not
-   * the only honest appraiser in Enroth. Both fail out loud.
+   * the only honest appraiser in Caerwen. Both fail out loud.
    */
   appraiseItem(index, item) {
     const c = this._chars[index];
@@ -1089,7 +1089,7 @@ export class UISystem extends System {
 
     const region = this.ctx?.get('player')?.regionName
       ?? this.ctx?.get('town')?.name
-      ?? 'New Sorpigal';
+      ?? 'Millhaven';
 
     this._map = {
       sizeX, sizeY, colour, explored, roads, pins, span, spanY, origin,
@@ -1151,15 +1151,15 @@ export class UISystem extends System {
       active,
       completed,
       awards: [
-        'Defender of New Sorpigal',
+        'Defender of Millhaven',
         'Slayer of the Goblin King',
-        'Guest of the Free Haven Guild',
+        'Guest of the Thornwick Guild',
         'Survived a night in the Mist',
       ],
       notes: [
-        'The seal on the smugglers\' crates is not any house in Enroth. It is not any house at all.',
-        'Kilburn pays in crown coin, which the temples will not take. Change it at the bank.',
-        'The Sorpigal well runs dry at low tide. Something below is drinking it.',
+        'The seal on the smugglers\' crates is not any house in Caerwen. It is not any house at all.',
+        'The Marshal pays in crown coin, which the temples will not take. Change it at the bank.',
+        'The Millhaven well runs dry at low tide. Something below is drinking it.',
       ],
     };
     return this._sampleQuests;
@@ -1172,8 +1172,10 @@ export class UISystem extends System {
     const live = safe(() => npcSys?.getDialogue?.(npcId), null);
     if (live?.name) return live;
 
-    const src = (npcId && NPCS?.[npcId]) || NPCS?.npc_lord_kilburn
-      || Object.values(NPCS ?? {})[0];
+    // Falls back to whichever NPC the table happens to hold first rather than
+    // to a named one: the roster is being rewritten around this code, and a
+    // hardcoded id is a blank conversation the moment that id is renamed.
+    const src = (npcId && NPCS?.[npcId]) || Object.values(NPCS ?? {})[0];
     if (!src) {
       return {
         name: 'A Traveller', profession: 'Wanderer', place: 'The road', venueKind: 'forge',
@@ -1255,7 +1257,7 @@ export class UISystem extends System {
 
     this._shop = {
       id: src?.id ?? 'shop_default',
-      name: src?.name ?? 'The Sorpigal Armoury',
+      name: src?.name ?? 'The Millhaven Armoury',
       keeper: src?.keeper ?? 'Master Hallern',
       greeting: src?.greeting ?? '"Steel, leather and honest prices. Mostly honest."',
       markup: src?.markup ?? 2.0,

@@ -410,7 +410,7 @@ function mergeByslot(parts) {
 }
 
 /**
- * The building roster for New Sorpigal. Sizes and roles follow MM6's town:
+ * The building roster for Millhaven. Sizes and roles follow MM6's town:
  * a temple and town hall on the square, the trades around it, a tavern, a
  * training hall, and the guild halls.
  */

@@ -221,7 +221,7 @@ export class PartySystem extends System {
       ctx.get('capture')?.registerShot('party-hud', {
         description: 'Default outdoor view with the full party HUD showing.',
         apply: (c) => {
-          c.events.emit('ui:log', { text: 'The road out of New Sorpigal is open.', kind: 'info' });
+          c.events.emit('ui:log', { text: 'The road out of Millhaven is open.', kind: 'info' });
         },
       });
     }

@@ -3789,7 +3789,7 @@ function paintHair(g, w, h, cfg, rng, geo) {
   g.globalAlpha = 1;
 }
 
-/** A nasal helm with cheek guards — the Ironfist pattern. */
+/** A nasal helm with cheek guards — the Caerwen pattern. */
 function paintHelm(g, cfg, rng, geo) {
   const { cx, cy, rx, ry } = geo;
   const metal = cfg.metal;

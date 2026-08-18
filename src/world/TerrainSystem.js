@@ -413,12 +413,12 @@ export class TerrainSystem extends System {
       apply(c) { c.state.worldTime = 10.5 * 3600; },
     });
     capture.registerShot('terrain-coast', {
-      description: 'The Bootleg Bay shoreline at golden hour.',
+      description: 'The Saltmarch shoreline at golden hour.',
       camera: { position: eye(430, 520, 6), yaw: 40, pitch: -6, fov: 75 },
       apply(c) { c.state.worldTime = 18.0 * 3600; },
     });
     capture.registerShot('terrain-town-site', {
-      description: 'The New Sorpigal plateau, before the town is built on it.',
+      description: 'The Millhaven plateau, before the town is built on it.',
       camera: { position: eye(-260, 380, 18), yaw: 0, pitch: -7, fov: 75 },
       apply(c) { c.state.worldTime = 11.0 * 3600; },
     });

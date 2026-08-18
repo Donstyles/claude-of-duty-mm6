@@ -259,7 +259,7 @@ export class VegetationSystem extends System {
 
 
   /**
-   * Deliberate planting inside New Sorpigal.
+   * Deliberate planting inside Millhaven.
    *
    * Radii track the town's own layout, which was densified after the first
    * pass: the wall now stands at 74 m and the trade plots run out to about
@@ -335,7 +335,7 @@ export class VegetationSystem extends System {
 
     // ── the town ─────────────────────────────────────────────────────────
     // The wild planting excludes the landmark discs, which is right — trees do
-    // not grow through streets. But it left New Sorpigal a bare parade ground
+    // not grow through streets. But it left Millhaven a bare parade ground
     // of paving and walls, where the reference frames its gate with big
     // broadleaf trees and plants beds in the square. So plant it deliberately,
     // here, before the instance caps are sized.

@@ -302,7 +302,7 @@ export function generateTerrain(rng) {
         h += mountMask * m * 210;
       }
 
-      // Sea in the south-east corner: the Bootleg Bay coastline.
+      // Sea in the south-east corner: the Saltmarch coastline.
       const coast = smoothstep(0.30, 0.80, u * 0.62 + v * 0.78 + 0.18);
       h = lerp(h, -22, coast * coast);
 

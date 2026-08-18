@@ -64,7 +64,7 @@ export class PlayerSystem extends System {
       skinWidth: 0.02,
     }) ?? null;
 
-    // Start on the road just outside New Sorpigal's gate, facing the town —
+    // Start on the road just outside Millhaven's gate, facing the town —
     // the same first view MM6 opens on.
     const terrain = ctx.get('terrain');
     const town = ctx.get('town');
@@ -257,7 +257,7 @@ export class PlayerSystem extends System {
     if (town?.centre) {
       const c = town.centre();
       if (Math.hypot(this.position.x - c.x, this.position.z - c.z) < 125) {
-        region = 'New Sorpigal';
+        region = 'Millhaven';
         kind = 'town';
       }
     }
@@ -274,7 +274,7 @@ export class PlayerSystem extends System {
 
   _registerShots(ctx) {
     ctx.get('capture')?.registerShot('player-spawn', {
-      description: 'The opening view: on the road outside New Sorpigal, facing the gate.',
+      description: 'The opening view: on the road outside Millhaven, facing the gate.',
       apply: (c) => {
         // Deliberately does NOT set a camera — it shows where the game starts.
         this._captureHeld = false;
