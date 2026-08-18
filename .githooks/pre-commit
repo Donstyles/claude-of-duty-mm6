@@ -26,7 +26,7 @@ for file in $(git diff --cached --name-only --diff-filter=ACM); do
 
   echo "$patterns" | while IFS= read -r pat; do
     [ -n "$pat" ] || continue
-    if git show ":$file" 2>/dev/null | grep -q "$pat"; then
+    if git show ":$file" 2>/dev/null | grep -q -e "$pat"; then
       echo "BLOCKED: '$file' looks like it contains a credential (/$pat/)." >&2
       exit 1
     fi
