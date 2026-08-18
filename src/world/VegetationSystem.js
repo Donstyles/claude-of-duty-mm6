@@ -80,8 +80,8 @@ const GRASS_FADE = 7;              // metres of soft edge at the streaming rim
 
 /** Keep-out radii around named places so nothing grows through a building. */
 const LANDMARK_CLEAR = {
-  newSorpigal: 152,
-  castleIronfist: 96,
+  millhaven: 152,
+  thornwickKeep: 96,
   templeRuin: 48,
   goblinCamp: 46,
   lighthouse: 34,
@@ -268,7 +268,7 @@ export class VegetationSystem extends System {
    * bearing as in the reference. These numbers must move if TOWN.radius does.
    */
   _plantTown(terrain, rng) {
-    const town = terrain.landmark?.('newSorpigal');
+    const town = terrain.landmark?.('millhaven');
     if (!town) return;
     const { x: tx, z: tz } = town;
 

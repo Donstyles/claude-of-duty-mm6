@@ -132,8 +132,8 @@ export const LANDMARKS = {
   // flattenDisc only fully levels the inner 55% of its radius, so this must be
   // comfortably wider than the town it carries (walls at 118 m) or the outer
   // ring of buildings ends up half-buried in a slope.
-  newSorpigal: { x: -260, z: 240, radius: 250, flatten: 0.96, height: 14 },
-  castleIronfist: { x: 470, z: -430, radius: 110, flatten: 0.9, height: 62 },
+  millhaven: { x: -260, z: 240, radius: 250, flatten: 0.96, height: 14 },
+  thornwickKeep: { x: 470, z: -430, radius: 110, flatten: 0.9, height: 62 },
   templeRuin: { x: 120, z: -180, radius: 55, flatten: 0.75, height: 34 },
   goblinCamp: { x: -520, z: -300, radius: 60, flatten: 0.6, height: 26 },
   lighthouse: { x: -700, z: 640, radius: 40, flatten: 0.8, height: 8 },
@@ -141,7 +141,7 @@ export const LANDMARKS = {
 
 /** Road control points, in order. Roads flatten and re-texture the ground. */
 export const ROADS = [
-  // South out of New Sorpigal, through the gate. The reference frames its gate
+  // South out of Millhaven, through the gate. The reference frames its gate
   // with a packed-dirt approach running up to it; without this spur the road
   // network stopped at the town centre and the gate opened onto open grass.
   [[-260, 240], [-260, 166], [-256, 108], [-196, 44]],

@@ -107,5 +107,5 @@ export const WORLD_SEED = (() => {
     const q = new URLSearchParams(location.search).get('seed');
     if (q) return hashSeed(q);
   }
-  return hashSeed('enroth-1998');
+  return hashSeed('caerwen-1998');
 })();

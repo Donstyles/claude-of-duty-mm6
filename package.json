@@ -1,9 +1,9 @@
 {
-  "name": "claude-of-duty-mm6",
+  "name": "claude-of-duty",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A Might & Magic VI-class first-person party RPG rendered in Three.js",
+  "description": "A first-person party RPG in the Kingdom of Caerwen, built in Three.js.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

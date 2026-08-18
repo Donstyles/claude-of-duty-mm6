@@ -10,22 +10,22 @@ import { CONDITIONS } from './rules.js';
  * group rather than on any one character.
  */
 
-/** MM6's default starting party: Knight, Cleric, Sorcerer, Archer. */
+/** The default starting party: Knight, Cleric, Sorcerer, Archer. */
 const DEFAULT_PARTY = [
   {
-    name: 'Sir Roland', classId: 'knight', sex: 'male', portrait: 0, age: 24,
+    name: 'Sir Edran Vaile', classId: 'knight', sex: 'male', portrait: 0, age: 24,
     skills: { sword: { level: 4, mastery: 'normal' }, plate: { level: 2, mastery: 'normal' }, shield: { level: 2, mastery: 'normal' }, armsmaster: { level: 1, mastery: 'normal' } },
   },
   {
-    name: 'Serena', classId: 'cleric', sex: 'female', portrait: 1, age: 22,
+    name: 'Sister Ilma', classId: 'cleric', sex: 'female', portrait: 1, age: 22,
     skills: { mace: { level: 3, mastery: 'normal' }, spirit: { level: 4, mastery: 'normal' }, body: { level: 2, mastery: 'normal' }, leather: { level: 2, mastery: 'normal' } },
   },
   {
-    name: 'Cassandra', classId: 'sorcerer', sex: 'female', portrait: 2, age: 21,
+    name: 'Cassira Ossran', classId: 'sorcerer', sex: 'female', portrait: 2, age: 21,
     skills: { staff: { level: 2, mastery: 'normal' }, fire: { level: 4, mastery: 'normal' }, air: { level: 3, mastery: 'normal' }, meditation: { level: 2, mastery: 'normal' } },
   },
   {
-    name: 'Kellen', classId: 'archer', sex: 'male', portrait: 3, age: 23,
+    name: 'Dell Fletcher', classId: 'archer', sex: 'male', portrait: 3, age: 23,
     skills: { bow: { level: 4, mastery: 'normal' }, sword: { level: 2, mastery: 'normal' }, air: { level: 2, mastery: 'normal' }, leather: { level: 2, mastery: 'normal' } },
   },
 ];

@@ -21,14 +21,14 @@ function setProgress(frac, label) {
 }
 
 const FLAVOUR = {
-  TerrainSystem: 'Raising the Bootleg Bay coastline…',
+  TerrainSystem: 'Raising the Millhaven coastline…',
   LightingSystem: 'Hanging the sun…',
   SkySystem: 'Scattering the atmosphere…',
   WaterSystem: 'Filling the rivers…',
   WeatherSystem: 'Seeding the weather front…',
   VegetationSystem: 'Planting ten thousand trees…',
   PropSystem: 'Scattering ruins and rocks…',
-  TownSystem: 'Building New Sorpigal…',
+  TownSystem: 'Building Millhaven…',
   DungeonSystem: 'Digging the Abandoned Temple…',
   PartySystem: 'Mustering the adventurers…',
   PhysicsSystem: 'Teaching gravity its business…',

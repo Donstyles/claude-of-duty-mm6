@@ -140,7 +140,7 @@ async function main() {
 
   try {
     const extra = opts.params ? `&${String(opts.params).replace(/^[?&]/, '')}` : '';
-    const target = `${url}?quality=${opts.quality}&seed=enroth-1998&capture=1${extra}`;
+    const target = `${url}?quality=${opts.quality}&seed=caerwen-1998&capture=1${extra}`;
     await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Wait for boot. Report the in-page error rather than a bare timeout.
