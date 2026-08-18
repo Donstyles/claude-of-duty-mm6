@@ -565,9 +565,11 @@ export class SkySystem extends System {
 
     this.keyLight = null;
     this.fillLight = null;
+    this.floorLight = null;
 
     // ── internals ──
     this._ctx = null;
+    this._thresholdFor = null;
     this._mesh = null;
     this._material = null;
     this._geometry = null;
@@ -743,10 +745,29 @@ export class SkySystem extends System {
     this._u = u;
   }
 
+  /**
+   * Build the scene's whole light rig.
+   *
+   * The exposure brief is REFERENCE §2.7 read against the actual captures:
+   * MM6's open sunlit grass measures `#385028`–`#405028` (luminance 63–77 of
+   * 255) and its dirt `#503020`. Nothing in a lit MM6 exterior sits at black.
+   * Three things have to be true at once and each one is a separate light:
+   *
+   *  - a **key** bright and warm enough that open ground lands in that band —
+   *    which at ACES exposure 1.0 and a ~0.12 grass albedo means an intensity
+   *    around 2.0, not the 0.88 of a naive "sun is 1.0" rig;
+   *  - a **hemisphere fill** nearly as strong as the key, because MM6's
+   *    lit-to-shadow spread across a whole hillside is ±3% and our own ceiling
+   *    is 40% — a physically plausible 1:8 sun-to-sky ratio reads as overcast
+   *    dusk in this palette;
+   *  - a small **flat floor**, so a cliff face turned fully away from both the
+   *    sun and the sky still resolves as rock instead of a hole. MM6's own
+   *    floor is `#101010` in mortar joints; ours must not go under it.
+   */
   _buildLights(ctx) {
     const shadows = ctx.config?.shadows !== false;
 
-    const key = new THREE.DirectionalLight(0xfff3dc, 0.88);
+    const key = new THREE.DirectionalLight(0xfff1d2, 2.08);
     key.name = 'sky-key';
     key.castShadow = shadows;
     if (shadows) {
@@ -766,10 +787,15 @@ export class SkySystem extends System {
     this.keyLight = key;
     this._keyTarget = target;
 
-    const fill = new THREE.HemisphereLight(0x86a6dc, 0x6e6a48, 1.02);
+    const fill = new THREE.HemisphereLight(0x93aedd, 0x8a7c56, 2.34);
     fill.name = 'sky-fill';
     ctx.scene.add(fill);
     this.fillLight = fill;
+
+    const floor = new THREE.AmbientLight(0x8e8f8c, 0.52);
+    floor.name = 'sky-floor';
+    ctx.scene.add(floor);
+    this.floorLight = floor;
 
     // Lightning is a real light: a second, shadowless directional that spikes.
     const bolt = new THREE.DirectionalLight(0xb8ccff, 0);
@@ -884,13 +910,18 @@ export class SkySystem extends System {
       u.uStarAmount.value = p.stars * (1 - desat * 0.92);
 
       // ── clouds ──
-      // §2.4: clouds cover 35–40% of the visible sky, so clear weather has to
-      // cut *high* — a few big forms with real blue between them.
+      // §2.4: clouds cover 35–40% of the visible sky. The threshold comes out
+      // of the sheet's own CDF, so that number is honoured rather than hoped
+      // for — and the near-horizon compression then pushes the *screen* share
+      // a little above the sheet share, which is exactly what MM6 shows.
       const cover = clamp(w.cover, 0, 1);
-      u.uThrA.value = lerp(0.660, 0.140, cover);
-      u.uThrB.value = lerp(0.820, 0.460, cover);
+      const thr = this._thresholdFor;
+      if (thr) {
+        u.uThrA.value = thr(lerp(COVER_A[0], COVER_A[1], cover));
+        u.uThrB.value = thr(lerp(COVER_B[0], COVER_B[1], cover));
+      }
       u.uOpacityA.value = 1.0;
-      u.uOpacityB.value = lerp(0.30, 0.16, cover) * w.opacityB;
+      u.uOpacityB.value = lerp(0.26, 0.62, cover) * w.opacityB;
       u.uCloudBright.value = p.cbright * w.bright;
       u.uSilver.value = p.silver * (1 - desat * 0.7);
       // Under a heavy sky the ramp's locked 0x8C blue has to let go, or a
@@ -952,6 +983,18 @@ export class SkySystem extends System {
           THREE.LinearSRGBColorSpace,
         );
         fill.intensity = this.ambientIntensity + this._flash * 1.4;
+      }
+      // The flat floor is a fixed fraction of the fill, tinted halfway between
+      // sky and ground bounce so it neither blues nor yellows a shadowed face.
+      const floor = this.floorLight;
+      if (floor) {
+        floor.color.setRGB(
+          srgbToLinear(lerp(p.ambSky[0], p.ambGnd[0], 0.45)),
+          srgbToLinear(lerp(p.ambSky[1], p.ambGnd[1], 0.45)),
+          srgbToLinear(lerp(p.ambSky[2], p.ambGnd[2], 0.45)),
+          THREE.LinearSRGBColorSpace,
+        );
+        floor.intensity = this.ambientIntensity * 0.22 + this._flash * 0.5;
       }
       if (this._boltLight) this._boltLight.intensity = this._flash * 3.8;
     }
@@ -1164,6 +1207,7 @@ export class SkySystem extends System {
       if (this.keyLight) ctx.scene.remove(this.keyLight);
       if (this._keyTarget) ctx.scene.remove(this._keyTarget);
       if (this.fillLight) ctx.scene.remove(this.fillLight);
+      if (this.floorLight) ctx.scene.remove(this.floorLight);
       if (this._boltLight) ctx.scene.remove(this._boltLight);
       if (this._ownsFog) ctx.scene.fog = null;
     }
