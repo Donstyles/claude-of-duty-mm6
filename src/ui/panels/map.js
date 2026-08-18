@@ -25,6 +25,8 @@ import { VENUE_KINDS, venuesInTown } from '../../game/data/Venues.js';
 const TRACK_CELL = 6;
 /** Cells either side of the party lit by simply being there. */
 const TRACK_RADIUS = 4;
+/** Metres per cell of the dungeon builder's own grid. */
+const DUNGEON_CELL = 4;
 
 /** Notes outlive a session; they are the player's own writing, not game state. */
 const NOTE_KEY = 'claude-of-duty:map-notes';
@@ -56,41 +58,41 @@ const C = {
  * off it, the Sunder in the eastern uplands with Ossra Deep beneath it.
  */
 const CHART = [
-  { id: 'millhaven_downs', name: 'Millhaven Downs', danger: 1, kind: 'meadow', x: -0.62, z: 0.70, rx: 0.19, rz: 0.15 },
-  { id: 'thornwick_vale', name: 'Thornwick Vale', danger: 2, kind: 'orchard', x: -0.18, z: 0.30, rx: 0.22, rz: 0.17 },
-  { id: 'ashford_hollow', name: 'Ashford Hollow', danger: 3, kind: 'wood', x: -0.40, z: -0.10, rx: 0.18, rz: 0.16 },
-  { id: 'saltmarch', name: 'Saltmarch', danger: 3, kind: 'marsh', x: -0.74, z: 0.26, rx: 0.14, rz: 0.16 },
-  { id: 'the_cindermoor', name: 'The Cindermoor', danger: 4, kind: 'heath', x: 0.10, z: 0.02, rx: 0.18, rz: 0.15 },
-  { id: 'brackwater_isle', name: 'Brackwater Isle', danger: 4, kind: 'island', x: -0.90, z: 0.54, rx: 0.09, rz: 0.10 },
-  { id: 'verdant_weald', name: 'The Verdant Weald', danger: 5, kind: 'forest', x: 0.02, z: 0.46, rx: 0.19, rz: 0.15 },
-  { id: 'greywater_fen', name: 'Greywater Fen', danger: 5, kind: 'marsh', x: -0.32, z: 0.62, rx: 0.17, rz: 0.13 },
-  { id: 'coldwater_sound', name: 'Coldwater Sound', danger: 6, kind: 'fjord', x: -0.62, z: -0.60, rx: 0.19, rz: 0.17 },
-  { id: 'fallowmere', name: 'Fallowmere', danger: 6, kind: 'island', x: -0.92, z: -0.16, rx: 0.09, rz: 0.11 },
-  { id: 'netherby_moors', name: 'Netherby Moors', danger: 7, kind: 'moor', x: 0.26, z: -0.30, rx: 0.19, rz: 0.16 },
-  { id: 'the_riven_steppe', name: 'The Riven Steppe', danger: 7, kind: 'steppe', x: 0.34, z: -0.64, rx: 0.21, rz: 0.15 },
-  { id: 'the_whitemantle', name: 'The Whitemantle', danger: 7, kind: 'ice', x: -0.20, z: -0.66, rx: 0.19, rz: 0.15 },
-  { id: 'gallowfen', name: 'The Gallowfen', danger: 8, kind: 'marsh', x: 0.32, z: 0.60, rx: 0.17, rz: 0.14 },
-  { id: 'duskorn_waste', name: 'Duskorn Waste', danger: 8, kind: 'ruin', x: 0.54, z: -0.16, rx: 0.17, rz: 0.15 },
-  { id: 'emberhold', name: 'Emberhold', danger: 9, kind: 'volcanic', x: -0.86, z: -0.72, rx: 0.09, rz: 0.10 },
-  { id: 'malveth_spires', name: 'Malveth Spires', danger: 9, kind: 'crag', x: 0.80, z: -0.52, rx: 0.15, rz: 0.16 },
-  { id: 'verhal_sands', name: 'Verhal Sands', danger: 10, kind: 'desert', x: 0.84, z: 0.46, rx: 0.16, rz: 0.17 },
-  { id: 'the_sunder', name: 'The Sunder', danger: 10, kind: 'crater', x: 0.64, z: 0.16, rx: 0.16, rz: 0.15 },
-  { id: 'ossra_deep', name: 'Ossra Deep', danger: 10, kind: 'under', x: 0.64, z: 0.16, rx: 0.07, rz: 0.065 },
+  { id: 'millhaven_downs', name: 'Millhaven Downs', danger: 1, kind: 'meadow', x: -0.52, z: 0.70, rx: 0.19, rz: 0.15 },
+  { id: 'thornwick_vale', name: 'Thornwick Vale', danger: 2, kind: 'orchard', x: -0.12, z: 0.30, rx: 0.22, rz: 0.17 },
+  { id: 'ashford_hollow', name: 'Ashford Hollow', danger: 3, kind: 'wood', x: -0.34, z: -0.10, rx: 0.18, rz: 0.16 },
+  { id: 'saltmarch', name: 'Saltmarch', danger: 3, kind: 'marsh', x: -0.62, z: 0.26, rx: 0.14, rz: 0.16 },
+  { id: 'the_cindermoor', name: 'The Cindermoor', danger: 4, kind: 'heath', x: 0.14, z: 0.02, rx: 0.18, rz: 0.15 },
+  { id: 'brackwater_isle', name: 'Brackwater Isle', danger: 4, kind: 'island', x: -0.97, z: 0.54, rx: 0.085, rz: 0.10 },
+  { id: 'verdant_weald', name: 'The Verdant Weald', danger: 5, kind: 'forest', x: 0.06, z: 0.46, rx: 0.19, rz: 0.15 },
+  { id: 'greywater_fen', name: 'Greywater Fen', danger: 5, kind: 'marsh', x: -0.26, z: 0.62, rx: 0.17, rz: 0.13 },
+  { id: 'coldwater_sound', name: 'Coldwater Sound', danger: 6, kind: 'fjord', x: -0.56, z: -0.60, rx: 0.18, rz: 0.17 },
+  { id: 'fallowmere', name: 'Fallowmere', danger: 6, kind: 'island', x: -0.99, z: -0.14, rx: 0.085, rz: 0.10 },
+  { id: 'netherby_moors', name: 'Netherby Moors', danger: 7, kind: 'moor', x: 0.28, z: -0.30, rx: 0.19, rz: 0.16 },
+  { id: 'the_riven_steppe', name: 'The Riven Steppe', danger: 7, kind: 'steppe', x: 0.36, z: -0.64, rx: 0.21, rz: 0.15 },
+  { id: 'the_whitemantle', name: 'The Whitemantle', danger: 7, kind: 'ice', x: -0.16, z: -0.66, rx: 0.19, rz: 0.15 },
+  { id: 'gallowfen', name: 'The Gallowfen', danger: 8, kind: 'marsh', x: 0.34, z: 0.60, rx: 0.17, rz: 0.14 },
+  { id: 'duskorn_waste', name: 'Duskorn Waste', danger: 8, kind: 'ruin', x: 0.56, z: -0.16, rx: 0.17, rz: 0.15 },
+  { id: 'emberhold', name: 'Emberhold', danger: 9, kind: 'volcanic', x: -0.93, z: -0.70, rx: 0.085, rz: 0.10 },
+  { id: 'malveth_spires', name: 'Malveth Spires', danger: 9, kind: 'crag', x: 0.82, z: -0.50, rx: 0.15, rz: 0.16 },
+  { id: 'verhal_sands', name: 'Verhal Sands', danger: 10, kind: 'desert', x: 0.86, z: 0.44, rx: 0.16, rz: 0.17 },
+  { id: 'the_sunder', name: 'The Sunder', danger: 10, kind: 'crater', x: 0.66, z: 0.16, rx: 0.16, rz: 0.15 },
+  { id: 'ossra_deep', name: 'Ossra Deep', danger: 10, kind: 'under', x: 0.66, z: 0.16, rx: 0.07, rz: 0.065 },
 ];
 
 /** The eleven towns, likewise normalised, likewise overridden by live data. */
 const CHART_TOWNS = [
-  { id: 'town_millhaven', name: 'Millhaven', region: 'millhaven_downs', size: 'small', port: true, x: -0.71, z: 0.72 },
-  { id: 'town_thornwick', name: 'Thornwick', region: 'thornwick_vale', size: 'large', port: false, x: -0.18, z: 0.30 },
-  { id: 'town_ashford', name: 'Ashford', region: 'ashford_hollow', size: 'medium', port: false, x: -0.40, z: -0.10 },
-  { id: 'town_saltmarch', name: 'Saltmarch', region: 'saltmarch', size: 'medium', port: true, x: -0.77, z: 0.26 },
-  { id: 'town_greywater', name: 'Greywater', region: 'greywater_fen', size: 'small', port: false, x: -0.32, z: 0.62 },
-  { id: 'town_coldwater', name: 'Coldwater', region: 'coldwater_sound', size: 'medium', port: true, x: -0.67, z: -0.58 },
-  { id: 'town_netherby', name: 'Netherby', region: 'netherby_moors', size: 'small', port: false, x: 0.26, z: -0.30 },
-  { id: 'town_brackwater', name: 'Brackwater', region: 'brackwater_isle', size: 'hamlet', port: true, x: -0.90, z: 0.54 },
-  { id: 'town_fallowmere', name: 'Fallowmere', region: 'fallowmere', size: 'hamlet', port: true, x: -0.92, z: -0.16 },
-  { id: 'town_emberhold', name: 'Emberhold', region: 'emberhold', size: 'small', port: true, x: -0.86, z: -0.72 },
-  { id: 'town_duskorn', name: 'Duskorn', region: 'duskorn_waste', size: 'ruin', port: false, x: 0.54, z: -0.16 },
+  { id: 'town_millhaven', name: 'Millhaven', region: 'millhaven_downs', size: 'small', port: true, x: -0.66, z: 0.72 },
+  { id: 'town_thornwick', name: 'Thornwick', region: 'thornwick_vale', size: 'large', port: false, x: -0.12, z: 0.30 },
+  { id: 'town_ashford', name: 'Ashford', region: 'ashford_hollow', size: 'medium', port: false, x: -0.34, z: -0.10 },
+  { id: 'town_saltmarch', name: 'Saltmarch', region: 'saltmarch', size: 'medium', port: true, x: -0.68, z: 0.26 },
+  { id: 'town_greywater', name: 'Greywater', region: 'greywater_fen', size: 'small', port: false, x: -0.26, z: 0.62 },
+  { id: 'town_coldwater', name: 'Coldwater', region: 'coldwater_sound', size: 'medium', port: true, x: -0.62, z: -0.58 },
+  { id: 'town_netherby', name: 'Netherby', region: 'netherby_moors', size: 'small', port: false, x: 0.28, z: -0.30 },
+  { id: 'town_brackwater', name: 'Brackwater', region: 'brackwater_isle', size: 'hamlet', port: true, x: -0.97, z: 0.54 },
+  { id: 'town_fallowmere', name: 'Fallowmere', region: 'fallowmere', size: 'hamlet', port: true, x: -0.99, z: -0.14 },
+  { id: 'town_emberhold', name: 'Emberhold', region: 'emberhold', size: 'small', port: true, x: -0.93, z: -0.70 },
+  { id: 'town_duskorn', name: 'Duskorn', region: 'duskorn_waste', size: 'ruin', port: false, x: 0.56, z: -0.16 },
 ];
 
 /** Ground tints for the chart. Painted, not the automap's flat key. */
@@ -387,11 +389,13 @@ export class MapPanel extends Panel {
     }
     if (dungeon?.current) {
       const built = dungeon.built?.get?.(dungeon.current);
+      // The dungeon is laid out on a grid of four-metre cells centred on the
+      // origin, so its world transform is the builder's own, not the survey's.
       if (built?.grid) {
-        // The dungeon grid is authored in cells; its world origin is the same
-        // centring the builder uses, so the two rasters share one transform.
-        const cell = (built.size * 4) / built.size;
-        frame.dungeon = { grid: built.grid, size: built.size, cell, half: (built.size * cell) / 2 };
+        frame.dungeon = {
+          grid: built.grid, size: built.size,
+          cell: DUNGEON_CELL, half: (built.size * DUNGEON_CELL) / 2,
+        };
       }
     }
     return frame;
@@ -423,7 +427,7 @@ export class MapPanel extends Panel {
     this._drawParty(g, toX(f.party.x), toZ(f.party.z), f.party.yaw, Math.max(7, s * 3.2));
     this._drawScale(g, W, H, s);
 
-    this.titleEl.textContent = this._areaName();
+    this.titleEl.textContent = this.areaName();
     this.subEl.textContent = f.dungeon ? 'Surveyed by torchlight' : 'Surveyed as you walk';
     this._setLegend([
       ['road', 'Road'], ['building', 'Building'], ['door', 'Door'],
@@ -695,17 +699,18 @@ export class MapPanel extends Panel {
     const H = g.canvas.height;
     const regions = this._regions();
     const towns = this._towns();
-    const pad = 26;
-    const base = Math.min((W - pad * 2) / 2.1, (H - pad * 2) / 1.9);
+    // The chart runs from the islands in the west to the sands in the east and
+    // is drawn to one scale on both axes, or the coast stops being a coast.
+    const pad = 24;
+    const base = Math.min((W - pad * 2) / 2.3, (H - pad * 2) / 1.95);
     const s = base * this.zoom.world;
     const c = this.centre.world;
     const toX = (nx) => W / 2 + (nx - c.x) * s;
     const toZ = (nz) => H / 2 + (nz - c.z) * s;
     this._proj = { toX, toZ, s, centre: c, kind: 'world' };
 
-    // Vellum, then the sea over it: a chart is paper first.
-    g.fillStyle = '#C9BB98';
-    g.fillRect(0, 0, W, H);
+    // Sea first, then the land drawn on top of it: everything not accounted
+    // for on a chart is water.
     g.fillStyle = '#8C9DB0';
     g.fillRect(0, 0, W, H);
     g.strokeStyle = 'rgba(255,255,255,0.10)';
@@ -1152,7 +1157,8 @@ export class MapPanel extends Panel {
 
   // ── chrome helpers ────────────────────────────────────────────────────────
 
-  _areaName() {
+  /** What this place is called — read by the save menu as well as the header. */
+  areaName() {
     const dungeon = this.ctx?.get('dungeon');
     if (dungeon?.currentName) return dungeon.currentName;
     const townId = this.ctx?.get('venue')?.town;

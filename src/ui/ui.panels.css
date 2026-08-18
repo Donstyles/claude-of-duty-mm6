@@ -1376,3 +1376,13 @@
 /* ── icons ────────────────────────────────────────────────────────────────── */
 
 .mm-icon { display: block; }
+
+
+/* The equipment niche carries two background layers when a painted body plate
+   exists: the body on top, sized to fit and standing on the floor of the
+   niche, and the procedurally painted stone behind it filling the frame. */
+.mm-niche-figure.has-plate {
+  background-size: contain, cover;
+  background-position: center bottom, center center;
+  background-repeat: no-repeat, no-repeat;
+}

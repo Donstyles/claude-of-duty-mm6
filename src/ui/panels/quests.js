@@ -206,7 +206,7 @@ const AUTONOTES = [
   { group: 'Places', text: 'Ossra Deep lies under the Sunder. The glass floor of the crater is its ceiling.' },
   { group: 'Places', text: 'Duskorn was killed in a single night and is still standing. Isabeau Ossran sells what she scavenges out of a stall in the old forum.' },
   { group: 'Places', text: 'The ford east of the Millhaven mill is passable below waist height, and only below waist height.' },
-  { group: 'Recipes', text: 'Blue lotus and a widowsweep berry, ground cold, make a draught that holds a fever off for a day. Ground warm they make a poison.' },
+  { group: 'Recipes', text: 'Fen lily and a bloodhaw berry, ground cold, make a draught that holds a fever off for a day. Ground warm they make a poison.' },
 ];
 
 export class QuestPanel extends Panel {

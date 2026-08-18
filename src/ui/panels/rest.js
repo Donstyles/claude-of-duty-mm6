@@ -1,7 +1,6 @@
 import './rest.css';
 import { Panel } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, engraved, labelRow, clamp } from '../widgets.js';
-import { icon } from '../Icons.js';
 
 /**
  * Rest, wait, and the calendar.

@@ -62,7 +62,7 @@
 .mm-skill.is-known:hover > * { color: var(--down); }
 
 /* Not learned is listed, not hidden — recessed to a stone grey so the roster
-   reads as a plan rather than a inventory of failures. */
+   reads as a plan rather than an inventory of failures. */
 .mm-skill.is-untaught > * { color: #9d968c; }
 .mm-skill.is-untaught .mm-skill-rank { color: #86807a; font-size: calc(var(--u) * 10); }
 

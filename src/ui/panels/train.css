@@ -1,26 +1,29 @@
 /* Styles owned by ./train.js. Shared chrome stays in ../ui.panels.css.
 
-   The screen is 460 x 352 native pixels, like every other panel, and every
-   measurement below is quoted in those units through `--u`. Granite surround,
-   engraved sub-panels (dark line top and left, pale bottom and right), values
-   right-aligned, hierarchy by position and colour only. */
+   The panel is the viewport rectangle, 460 x 352 native pixels, and the painted
+   sand yard is its background (see base.js `_applyInterior`). The room is the
+   screen: the sign rides on a scrim at the top, the drillmaster's answer on a
+   strip at the bottom, the account stands in the sidebar, and the muster roll
+   is a board that only comes out when the whole party is being counted.
 
-.mm-train {
+   Every measurement is quoted in native game pixels through `--u`. */
+
+.mm-train { position: absolute; inset: 0; }
+
+/* ── the sign over the yard ───────────────────────────────────────────────── */
+
+.mm-train-head {
   position: absolute;
-  inset: calc(var(--u) * 8) calc(var(--u) * 14) calc(var(--u) * 8);
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--u) * 6);
+  top: 0; left: 0; right: 0;
+  padding: calc(var(--u) * 5) calc(var(--u) * 10) calc(var(--u) * 6);
+  background: linear-gradient(180deg, rgba(8, 8, 6, 0.82) 0%, rgba(8, 8, 6, 0.55) 62%, rgba(8, 8, 6, 0) 100%);
+  pointer-events: none;
 }
-
 .mm-train-title {
   text-align: center;
-  font-size: calc(var(--u) * 15);
+  font-size: calc(var(--u) * 16);
   line-height: calc(var(--u) * 18);
 }
-
-/* The hall's ceiling is the one number that decides whether the party is in the
-   right town, so it sits under the name where the eye lands next. */
 .mm-train-sub {
   text-align: center;
   font-style: italic;
@@ -29,9 +32,26 @@
   color: var(--gold);
 }
 
-.mm-train-board { padding: calc(var(--u) * 5) calc(var(--u) * 4); }
+/* ── the muster roll ──────────────────────────────────────────────────────── */
 
-.mm-train-roll { display: flex; flex-direction: column; }
+.mm-train-roll {
+  position: absolute;
+  left: calc(var(--u) * 18);
+  right: calc(var(--u) * 18);
+  top: calc(var(--u) * 64);
+  border-radius: calc(var(--u) * 5);
+  padding: calc(var(--u) * 5) calc(var(--u) * 4);
+  display: none;
+  flex-direction: column;
+  /* Weathered board over the sand: dark enough for white type, transparent
+     enough that the yard is still behind it. */
+  background: rgba(24, 18, 12, 0.86);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(15, 18, 16, 0.9),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(196, 192, 196, 0.55),
+    0 calc(var(--u) * 3) calc(var(--u) * 12) rgba(0, 0, 0, 0.7);
+}
+.mm-panel[data-panel='train'][data-view='roll'] .mm-train-roll { display: flex; }
 
 .mm-train-row {
   display: grid;
@@ -51,58 +71,46 @@
   color: var(--gold);
   line-height: calc(var(--u) * 19);
   font-size: calc(var(--u) * 12);
-  border-bottom: calc(var(--u) * 1) solid rgba(15, 18, 16, 0.55);
+  border-bottom: calc(var(--u) * 1) solid rgba(15, 18, 16, 0.7);
   margin-bottom: calc(var(--u) * 2);
   cursor: default;
 }
 
-.mm-train-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mm-train-row.is-selected .mm-train-who { color: var(--gold); }
-.mm-train-row.is-ready .mm-train-who { text-shadow: var(--shadow); }
-
+.mm-train-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-train-row.is-selected .mm-train-name { color: var(--gold); }
 /* MM6 turns the whole row under the cursor red — name, rank and number
    together. It is the only hover state the interface has. */
 .mm-train-row:not(.is-head):hover,
 .mm-train-row:not(.is-head):hover span { color: var(--down); }
 
+/* ── the strip that explains every refusal ────────────────────────────────── */
+
 .mm-train-notice {
+  position: absolute;
+  left: calc(var(--u) * 8);
+  right: calc(var(--u) * 8);
+  bottom: calc(var(--u) * 4);
   min-height: calc(var(--u) * 46);
-  padding: calc(var(--u) * 6) calc(var(--u) * 10);
+  padding: calc(var(--u) * 5) calc(var(--u) * 10);
+  background: rgba(10, 12, 10, 0.72);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(15, 18, 16, 0.9),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(196, 192, 196, 0.5);
 }
 .mm-train-notice-text {
   font-style: italic;
-  font-size: calc(var(--u) * 13);
-  line-height: calc(var(--u) * 15);
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 14);
 }
 
-.mm-train-foot {
-  display: flex;
-  gap: calc(var(--u) * 10);
-  justify-content: center;
-  margin-top: auto;
-}
+/* ── the drillmaster's panel ──────────────────────────────────────────────── */
 
-/* Raised plaques, the polarity MM6 uses for anything you press. */
-.mm-train-btn {
-  min-width: calc(var(--u) * 150);
-  padding: calc(var(--u) * 4) calc(var(--u) * 12);
-  font-size: calc(var(--u) * 15);
-  text-align: center;
-  box-shadow:
-    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 var(--bevel-light),
-    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--bevel-dark);
-}
-.mm-train-btn:hover { color: var(--gold); }
-.mm-train-btn.is-dim { color: #a49e96; }
-
-/* ── sidebar ──────────────────────────────────────────────────────────────── */
-
-.mm-train-side { position: absolute; inset: 0; padding: calc(var(--u) * 8); }
+.mm-train-side { position: absolute; inset: 0; padding: calc(var(--u) * 7); }
 
 .mm-train-portrait {
-  width: calc(var(--u) * 68);
-  height: calc(var(--u) * 84);
-  margin: calc(var(--u) * 18) auto 0;
+  width: calc(var(--u) * 62);
+  height: calc(var(--u) * 76);
+  margin: calc(var(--u) * 10) auto 0;
   background: center / cover no-repeat;
   box-shadow:
     0 0 0 calc(var(--u) * 1) #10120f,
@@ -111,32 +119,50 @@
     0 calc(var(--u) * 2) calc(var(--u) * 5) rgba(0, 0, 0, 0.55);
 }
 .mm-train-trainer {
-  margin-top: calc(var(--u) * 8);
+  margin-top: calc(var(--u) * 7);
   text-align: center;
   font-size: calc(var(--u) * 14);
-  line-height: calc(var(--u) * 16);
+  line-height: calc(var(--u) * 15);
   color: var(--azure);
 }
-.mm-train-exit {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--u) * 8);
-  transform: translateX(-50%);
-}
 
-/* The trainer's own words, then who is being put through it. */
-.mm-train-greeting {
-  margin-top: calc(var(--u) * 6);
-  padding: 0 calc(var(--u) * 4);
-  text-align: center;
-  font-style: italic;
-  font-size: calc(var(--u) * 12);
-  line-height: calc(var(--u) * 14);
-  color: #e6e0d4;
+/* One adventurer's account: engraved into the timber, labels flush left and
+   values flush right, which is how MM6 states any set of numbers. */
+.mm-train-account {
+  margin-top: calc(var(--u) * 8);
+  padding: calc(var(--u) * 4) 0;
 }
-.mm-train-pupil {
-  margin-top: calc(var(--u) * 12);
+.mm-train-account .mm-row {
+  padding: 0 calc(var(--u) * 6);
+  line-height: calc(var(--u) * 15);
+  font-size: calc(var(--u) * 12);
+}
+.mm-train-who {
   text-align: center;
   font-style: italic;
   font-size: calc(var(--u) * 13);
+  line-height: calc(var(--u) * 16);
+}
+
+.mm-train-options {
+  margin-top: calc(var(--u) * 10);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 9);
+}
+.mm-train-option {
+  font-size: calc(var(--u) * 15);
+  font-style: italic;
+  text-align: center;
+  line-height: calc(var(--u) * 16);
+  max-width: calc(var(--u) * 130);
+}
+.mm-train-option:hover { color: var(--gold); }
+
+.mm-train-exit {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--u) * 6);
+  transform: translateX(-50%);
 }

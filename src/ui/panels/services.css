@@ -227,7 +227,6 @@
   background: rgba(24, 14, 6, 0.42);
 }
 .mm-svc-quote { font-size: calc(var(--u) * 15); font-style: italic; line-height: 1.35; }
-.mm-svc-quote.is-dim { color: #cfc6b2; }
 .mm-svc-earlier-head { font-size: calc(var(--u) * 12); font-style: italic; color: var(--gold-deep); }
 .mm-svc-earlier {
   font-size: calc(var(--u) * 12);
@@ -265,7 +264,15 @@
 
 /* ── the keeper's side of the counter ────────────────────────────────────── */
 
-.mm-svc-side { position: absolute; inset: 0; padding: calc(var(--u) * 6) calc(var(--u) * 8); }
+/* A column, not a stack of absolutely-placed pieces: a venue with a long name
+   and two neighbours must never push an entry under the exit oval. */
+.mm-svc-side {
+  position: absolute;
+  inset: 0;
+  padding: calc(var(--u) * 6) calc(var(--u) * 8) calc(var(--u) * 8);
+  display: flex;
+  flex-direction: column;
+}
 
 /* The venue's name runs across the top of the wood, white upright serif and
    centred, exactly where MM6 puts "The Knife Shoppe". */
@@ -279,6 +286,7 @@
   overflow: hidden;
 }
 .mm-svc-portrait {
+  flex: none;
   width: calc(var(--u) * 70);
   height: calc(var(--u) * 88);
   margin: calc(var(--u) * 8) auto 0;
@@ -298,11 +306,14 @@
    dimmed rather than replaced — there is nobody there to paint. */
 .mm-svc-portrait.is-vacant { filter: grayscale(0.85) brightness(0.5); }
 .mm-svc-options {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   margin-top: calc(var(--u) * 10);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(var(--u) * 10);
+  gap: calc(var(--u) * 9);
 }
 .mm-svc-option {
   font-size: calc(var(--u) * 16);
@@ -321,4 +332,4 @@
   font-style: italic;
   color: #b8ae98;
 }
-.mm-svc-exit { position: absolute; left: 50%; bottom: calc(var(--u) * 8); transform: translateX(-50%); }
+.mm-svc-exit { flex: none; margin: calc(var(--u) * 6) auto 0; }

@@ -2,7 +2,7 @@
 
    Every measurement is in `--u`, one native 640x480 game pixel, so the screen
    keeps its proportions from 720p to 4K. The budget down the page is exact:
-   30 title + 300 columns + 150 bottom strip = the game's own 480 rows.
+   30 title + 292 columns + 158 bottom strip = the game's own 480 rows.
 
    Rules here are written with a `.mm-create` ancestor wherever they restate
    something ../ui.panels.css already says, so the create screen wins on
@@ -86,7 +86,10 @@
 /* ── the four columns ─────────────────────────────────────────────────────── */
 
 .mm-create .mm-create-cols {
-  flex: 0 0 calc(var(--u) * 292);
+  /* 292 native rows is what a column needs; a taller window gives the surplus
+     to the columns rather than to the strip, where it would only be dead
+     stone. */
+  flex: 1 1 calc(var(--u) * 292);
   display: flex;
   min-height: 0;
   padding: 0 calc(var(--u) * 8);
@@ -369,7 +372,7 @@
 /* ── the bottom strip: three recessed panels ──────────────────────────────── */
 
 .mm-create .mm-create-bottom {
-  flex: 1;
+  flex: 0 0 calc(var(--u) * 158);
   min-height: 0;
   display: flex;
   gap: calc(var(--u) * 6);

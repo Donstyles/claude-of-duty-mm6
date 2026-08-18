@@ -2305,10 +2305,26 @@ export class UITextures {
    */
   figure(spec = {}) {
     const key = `figure-${spec.key ?? spec.classId ?? 'x'}-${spec.gender ?? 'm'}`;
+    // The niche is always painted here, because it has to keep matching the
+    // panel's stone. Only the body on top of it is a plate — the procedural
+    // painter builds a correct silhouette and then reads as a flat cartoon,
+    // which is the same wall the portraits hit for the same reason.
     return this._make(key, 300, 640, (g, w, h, rng) => {
       UITextures.paintNiche(g, w, h, rng);
       paintFigure(g, w, h, spec, rng);
     });
+  }
+
+  /**
+   * The painted body plate for a character, or null when there is none.
+   *
+   * Returned separately from `figure()` rather than composited into it: the
+   * plate loads asynchronously as an image and the niche is a synchronous
+   * canvas, so the caller layers them in CSS and gets the stone immediately
+   * with the body arriving a frame later.
+   */
+  figurePlate(spec = {}) {
+    return FIGURE_PLATES.pick(spec);
   }
 
   // ── character portraits ───────────────────────────────────────────────────
@@ -3015,6 +3031,48 @@ const PORTRAIT_PLATES = {
     for (let i = 0; i < seed.length; i++) hsh = (hsh * 31 + seed.charCodeAt(i)) >>> 0;
     return `${this.base}${pool[hsh % pool.length]}.jpg`;
   },
+};
+
+/**
+ * Standing figures for the equipment niche.
+ *
+ * Nine base classes in both sexes. Promoted classes share their base class's
+ * figure, the same way the portraits do — a Champion is a Knight in better
+ * armour, and painting eighteen more plates to say so would not repay itself.
+ *
+ * The plates carry alpha and are composited over the procedurally painted
+ * niche, so the stone behind them keeps matching the panel it sits in.
+ */
+const FIGURE_PLATES = {
+  base: 'art/figures/',
+  available: new Set([
+    'm-knight', 'm-paladin', 'm-archer', 'm-cleric', 'm-sorcerer',
+    'm-druid', 'm-ranger', 'm-monk', 'm-thief',
+    'f-knight', 'f-paladin', 'f-archer', 'f-cleric', 'f-sorcerer',
+    'f-druid', 'f-ranger', 'f-monk', 'f-thief',
+  ]),
+
+  has(name) { return this.available.has(name); },
+
+  pick(spec = {}) {
+    const sex = (spec.gender ?? spec.sex ?? 'm') === 'f' ? 'f' : 'm';
+    const role = FIGURE_BASE_CLASS[spec.classId] ?? 'thief';
+    const want = `${sex}-${role}`;
+    return this.has(want) ? `${this.base}${want}.plate.png` : null;
+  },
+};
+
+/** Promotion ladder collapsed to the nine base classes. */
+const FIGURE_BASE_CLASS = {
+  knight: 'knight', cavalier: 'knight', champion: 'knight', black_knight: 'knight',
+  paladin: 'paladin', crusader: 'paladin', hero: 'paladin', villain: 'paladin',
+  archer: 'archer', battle_mage: 'archer', warrior_mage: 'archer', master_archer: 'archer',
+  cleric: 'cleric', priest: 'cleric', priest_of_light: 'cleric', priest_of_dark: 'cleric',
+  sorcerer: 'sorcerer', wizard: 'sorcerer', archmage: 'sorcerer', lich: 'sorcerer',
+  druid: 'druid', great_druid: 'druid', arch_druid: 'druid',
+  ranger: 'ranger', hunter: 'ranger', ranger_lord: 'ranger',
+  monk: 'monk', initiate: 'monk', master: 'monk',
+  thief: 'thief', rogue: 'thief', spy: 'thief',
 };
 
 const SKIN_TONES = [

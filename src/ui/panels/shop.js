@@ -6,7 +6,7 @@ import {
 } from '../widgets.js';
 import { MASTERY_LABEL } from '../../game/data/Skills.js';
 import {
-  ShopSystem, SHOP_TYPES, displayName, isIdentified,
+  ShopSystem, SHOPS, SHOP_TYPES, displayName, isIdentified,
 } from '../../game/ShopSystem.js';
 
 /**
@@ -83,6 +83,8 @@ export class ShopPanel extends Panel {
     /** null at the counter; otherwise the verb whose goods are on show. */
     this.mode = null;
     this.shopId = null;
+    /** The live shop record, so persistent handlers can reach it. */
+    this.stall = null;
     /** Kept because the capture harness drives panels through a tab shim. */
     this.tabs = { setActive: (id) => this.setMode(id) };
     this._system = this._bootSystem();
@@ -146,6 +148,13 @@ export class ShopPanel extends Panel {
     side.appendChild(el('div', { className: 'mm-npc-side mm-shop-side' },
       this.venueEl, this.portraitEl, this.nameEl, this.optionsEl, this.exitEl));
 
+    // Bound once: the portrait outlives every redraw, and `tooltip.attach`
+    // stacks a listener each time it is called.
+    tooltip.attach(this.portraitEl, () => this._keeperTip());
+    this.portraitEl.addEventListener('click', () => {
+      if (this.stall) this._speak(this.system.greeting(this.stall));
+    });
+
     // Right-click backs out of the goods and returns to the counter, as the
     // game does; there is no other way back once you are looking at the wall.
     body.addEventListener('contextmenu', (e) => {
@@ -159,8 +168,13 @@ export class ShopPanel extends Panel {
 
   onOpen(opts = {}) {
     // `venue` is what the world hands the panel (Venues.js `context`), and a
-    // shop's id *is* its venue id, so the two are the same key.
+    // shop's id *is* its venue id, so the two are the same key. The bus route
+    // in — `ui:forcePanel` — currently carries only the panel id and drops the
+    // options, so ask `VenueSystem` which door the party actually walked
+    // through rather than trusting that anybody told us.
+    const here = this.ui.ctx?.get('venue')?.current;
     if (opts.venue || opts.shopId) this.shopId = opts.venue ?? opts.shopId;
+    else if (here && SHOPS[here.id]) this.shopId = here.id;
     if (opts.mode !== undefined) this.mode = opts.mode;
     const sys = this.system;
     const shop = sys?.shop(this.shopId);
@@ -207,6 +221,7 @@ export class ShopPanel extends Panel {
     const shop = sys.shop(this.shopId);
     if (!shop) return;
     this.shopId = shop.id;
+    this.stall = shop;
     const trader = sys.trader();
     const T = this.ui.textures;
     const type = SHOP_TYPES[shop.type];
@@ -225,9 +240,6 @@ export class ShopPanel extends Panel {
     setChildren(this.nameEl,
       el('div', { text: shop.keeper }),
       el('div', { text: `the ${type?.trade ?? 'Merchant'}` }));
-    tooltip.attach(this.portraitEl, () => this._keeperTip(sys, shop, trader));
-    this.portraitEl.onclick = () => this._speak(sys.greeting(shop));
-
     this._buildOptions(sys, shop, trader);
     if (this.mode === 'buy') this._buildWall(sys, shop, trader);
     else if (this.mode) this._buildPack(sys, shop, trader);
@@ -298,7 +310,11 @@ export class ShopPanel extends Panel {
     });
   }
 
-  _keeperTip(sys, shop, trader) {
+  _keeperTip() {
+    const sys = this.system;
+    const shop = this.stall;
+    if (!sys || !shop) return '';
+    const trader = sys.trader();
     const t = sys.terms(shop, trader);
     const m = trader.skills.merchant ?? { level: 0, mastery: 'normal' };
     return tipMarkup({

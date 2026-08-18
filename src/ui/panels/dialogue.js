@@ -102,7 +102,7 @@ export class DialoguePanel extends Panel {
       this._applyInterior({ interior: model.interiorFor(this.conv.speaker) });
     } catch { /* a missing plate leaves the panel's own surface, which is fine */ }
     const s = this.conv.speaker;
-    this.ui.log(`${s.name}, ${s.profession.toLowerCase()} — ${s.place}.`, 'info');
+    this.ui.log(`${s.name} — ${s.place}.`, 'info');
   }
 
   refresh() {

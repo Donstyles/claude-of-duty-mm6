@@ -43,8 +43,15 @@ const OFFICES = {
   ],
 };
 
-/** The painted head that stands in for each kind of keeper. */
-const KEEPER_LOOK = { bank: 'elder', temple: 'cleric', tavern: 'rogue' };
+/**
+ * The painted head that stands in for each kind of keeper.
+ *
+ * These are plate *roles*, not classes: the portrait set has one face per role,
+ * and a clerk of the Ledger in a dark embroidered coat is the sorcerer plate
+ * whatever it was drawn for. Three different roles so a clerk and an innkeeper
+ * are never the same man.
+ */
+const KEEPER_LOOK = { bank: 'sorcerer', temple: 'cleric', tavern: 'rogue' };
 
 /** Offices that are a page to read rather than a counter to lean on. */
 const TALL_PAGES = new Set(['ledger', 'hiring']);
@@ -75,7 +82,30 @@ export class ServicesPanel extends Panel {
       members: () => this.ui.members().map((vm) => vm.source ?? vm),
     });
 
+    // The three rooms are fetched by `Panel` the instant a screen opens, and a
+    // door you walk through should not show a grey rectangle while the plate
+    // decodes. Warming them here costs three cached images and removes the
+    // flash entirely — including from the capture harness, which photographs
+    // shortly after opening.
+    this._warm = [];
+    for (const kind of ['bank', 'temple', 'tavern']) this._preload(`/art/interiors/${kind}.jpg`);
+    // The keeper's face is a painted plate and arrives the same way, so warm
+    // the six that the three buildings can ask for.
+    for (const classId of Object.values(KEEPER_LOOK)) {
+      for (const gender of ['m', 'f']) {
+        this._preload(this.ui.textures?.portrait?.({ key: `svc-${classId}`, classId, gender }));
+      }
+    }
+
     this._registerShots();
+  }
+
+  /** Hold a decoded copy of a plate so the first frame that needs it has it. */
+  _preload(src) {
+    if (!src) return;
+    const img = new Image();
+    img.src = src;
+    this._warm.push(img);
   }
 
   // ── chrome ───────────────────────────────────────────────────────────────
@@ -342,7 +372,7 @@ export class ServicesPanel extends Panel {
         plaque,
         el('div', {
           className: 'mm-svc-note',
-          text: `+${t.power} to every attribute, +${t.resist} resistance, ${t.days} days`,
+          text: `+${t.power} to every stat · +${t.resist} resistance · ${t.days} days`,
         }));
     });
 
@@ -475,11 +505,15 @@ export class ServicesPanel extends Panel {
         el('span', { className: 'mm-svc-hire-name' },
           el('b', { text: hand.name }),
           el('i', { text: ` — ${hand.profession}` })),
-        el('span', { className: 'mm-svc-slot-pay', text: `${hand.wage} a day · paid ${fmt(hand.paid ?? 0)}` }),
+        el('span', { className: 'mm-svc-slot-pay', text: `${hand.wage} a day` }),
         el('span', { className: 'mm-svc-slot-go', text: 'Pay off' }));
       tooltip.attach(off, () => tipMarkup({
         title: hand.name, subtitle: hand.profession,
-        lines: [{ k: 'Hired', v: `day ${hand.hiredDay}` }, ...effectLines(hand.effect)],
+        lines: [
+          { k: 'Hired', v: `day ${hand.hiredDay}` },
+          { k: 'Paid so far', v: `${fmt(hand.paid ?? 0)} gold` },
+          ...effectLines(hand.effect),
+        ],
         flavour: 'Click to settle the account and part company.',
       }));
       off.addEventListener('click', () => this._say(this.model.dismiss(i)));
@@ -570,10 +604,11 @@ export class ServicesPanel extends Panel {
   // ── capture ──────────────────────────────────────────────────────────────
 
   /**
-   * Four viewpoints, one per office worth photographing. Each forces the state
-   * the screen exists to show — a ledger with a season in it, a party that has
-   * been badly used — because a bank with an empty account and a temple with a
-   * healthy party photograph as two identical grey lists.
+   * One viewpoint per office worth photographing, plus the bare room for the
+   * bank and the tavern. Each forces the state the screen exists to show — a
+   * ledger with a season in it, a party that has been badly used — because a
+   * bank with an empty account and a temple with a healthy party photograph as
+   * two identical empty lists. `_snapshot` puts all of it back afterwards.
    */
   _registerShots() {
     const cap = this.ui.ctx?.get?.('capture');

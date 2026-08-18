@@ -9,10 +9,10 @@
  *
  * Colour carries the meaning here exactly as it does everywhere else —
  *
- *   #FFFF9C  headers, the bonus pool, the profession under the cursor
+ *   #FFFF9C  headers, the bonus pool, and the profession being described
  *   #00FE00  a statistic raised above the class norm, and a chosen skill
  *   #FF0000  a statistic sold below the class norm, and anything illegal
- *   #109AEF  the selected profession and the two chosen skills
+ *   #4AD8F0  the profession this column holds, and the sex in force
  *   #FFFFFF  everything else
  *
  * The screen owns no rules. Every edit is a call into `game/PartyCreation.js`,
@@ -679,6 +679,9 @@ export class CreatePanel extends Panel {
       party.activeIndex = 0;
     }
     this.ctx?.events?.emit('party:created', { members: members.map((m) => m.toJSON()) });
+    // The interface re-reads the party ten times a second anyway; pushing it
+    // now means the bar under the closing screen is already the new party.
+    this.ui._syncParty?.(true);
     this.ui.selectMember(0);
     this.ui.closePanel();
     this.ui.log(`${members.map((m) => m.name).join(', ')} take the road out of Millhaven.`, 'good');

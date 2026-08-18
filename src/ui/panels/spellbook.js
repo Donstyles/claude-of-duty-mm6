@@ -134,25 +134,37 @@ function serpentClasp(tall) {
     + '</svg>';
 }
 
+/** A four-pointed sparkle, which is how the plates say "magic". */
+function spark(cx, cy, r) {
+  const i = r * 0.22;
+  return `M${cx} ${cy - r}L${cx + i} ${cy - i}L${cx + r} ${cy}L${cx + i} ${cy + i}`
+    + `L${cx} ${cy + r}L${cx - i} ${cy + i}L${cx - r} ${cy}L${cx - i} ${cy - i}Z`;
+}
+
 /**
  * The bone plates' glyphs.
  *
  * The real buttons carry a wand throwing sparks, a scroll throwing sparks and
  * an arrow going through a doorway. The shared icon set has none of the three,
  * and its question-mark fallback in their place is worse than drawing them.
+ * They are laid out wide rather than square because the plate is 54 x 16 and a
+ * glyph on a square canvas would be twelve pixels of it.
  */
-const SPARKS = '<path d="M13.4 5.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>'
-  + '<path d="M18.6 10.4l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z"/>'
-  + '<path d="M19.4 3.4l.4 1.2 1.2.4-1.2.4-.4 1.2-.4-1.2-1.2-.4 1.2-.4z"/>';
-
 const PLATE_GLYPH = {
-  cast: '<path d="M2.6 21.4L12.2 11.8l1.6 1.6-9.6 9.6z"/><path d="M13.6 10.4l2.6-2.6 1.6 1.6-2.6 2.6z"/>' + SPARKS,
-  quick: '<path d="M10.6 4.2c2 0 3.4 1.2 3.4 2.7 0 .9-.6 1.5-1.4 1.5-.7 0-1.2-.4-1.2-1.1 0-.4.3-.7.3-1 0-.4-.3-.6-.9-.6-1 0-1.7.8-1.7 1.9 0 2 2.5 3 2.5 5.5 0 2.2-1.6 3.7-3.9 3.7H5.8c1-1 1.5-2 1.5-3.2 0-2.6-2.5-3.6-2.5-5.7 0-2.1 1.6-3.7 3.9-3.7z"/>' + SPARKS,
-  exit: '<path d="M2 10.9h7.2V8.1L14 12l-4.8 3.9V13H2z"/><path d="M16.2 3.6h5.4v16.8h-5.4z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="17.8" cy="12" r="0.9"/>',
+  cast: '<path d="M4.4 13.4 15 4.2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>'
+    + '<circle cx="3.6" cy="14.2" r="1.8"/>'
+    + `<path d="${spark(23, 8, 4.4)}${spark(31, 4.6, 2.8)}${spark(36.5, 11.2, 3.2)}"/>`,
+  quick: '<path d="M20.5 4.2C14.6 2.2 9.6 3.4 9.6 6.1c0 3.2 10 2.4 10 5.2 0 2.5-5 3.1-9.6 1.2"'
+    + ' fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>'
+    + `<path d="${spark(26.8, 7.6, 3.6)}${spark(33.4, 4.2, 2.4)}${spark(37.8, 11.4, 2.8)}"/>`,
+  exit: '<path d="M7 8h10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
+    + '<path d="M14.4 3.4 19.6 8l-5.2 4.6z"/>'
+    + '<path d="M25.4 2.4h9.4v11.2h-9.4z" fill="none" stroke="currentColor" stroke-width="1.9"/>'
+    + '<circle cx="27.6" cy="8" r="1"/>',
 };
 
 function plateGlyph(kind) {
-  return '<svg class="mm-icon" viewBox="0 0 24 24" width="100%" height="100%" fill="currentColor"'
+  return '<svg class="mm-icon" viewBox="0 0 44 16" width="100%" height="100%" fill="currentColor"'
     + ` role="img" aria-hidden="true" focusable="false">${PLATE_GLYPH[kind] ?? ''}</svg>`;
 }
 
@@ -201,6 +213,8 @@ export class SpellbookPanel extends Panel {
     super(ui);
     this.school = 'fire';
     this.spellId = null;
+    /** Last cell clicked, for spotting a double-click across a page rebuild. */
+    this._lastClick = null;
   }
 
   build(body) {
@@ -340,6 +354,7 @@ export class SpellbookPanel extends Panel {
       const url = this.ui.textures?.illuminatedPlate?.(school.id);
       art.style.backgroundImage = url ? `url("${url}")` : 'none';
       art.style.backgroundSize = '126% 126%';
+      art.style.transform = 'none';
     });
 
     const cell = el('div', { className: `mm-sb-cell${state.open ? '' : ' is-locked'}` },
@@ -376,10 +391,16 @@ export class SpellbookPanel extends Panel {
     tooltip.attach(cell, () => this._spellTip(spell, vm, state, learned, check));
     // Hover names go through the message strip, exactly as in the play view.
     cell.addEventListener('mouseenter', () => this.ui.log(spell.name, 'info'));
-    cell.addEventListener('click', () => this.select(spell, learned, check));
-    cell.addEventListener('dblclick', () => {
+    cell.addEventListener('click', () => {
+      // Readying a spell syncs the party, which rebuilds this grid, so a
+      // `dblclick` listener would never fire — the second click lands on a
+      // different element and the browser has no common target. Timing the two
+      // clicks here is the only way to catch the gesture.
+      const now = performance.now();
+      const again = this._lastClick?.id === spell.id && now - this._lastClick.at < 420;
+      this._lastClick = { id: spell.id, at: now };
       this.select(spell, learned, check);
-      if (learned && check.ok) this.ui.castSpell(vm.index, spell.id);
+      if (again && learned && check.ok) this.ui.castSpell(vm.index, spell.id);
     });
     return cell;
   }
@@ -503,6 +524,7 @@ export class SpellbookPanel extends Panel {
    */
   select(spell, learned, check) {
     const vm = this.ui.active();
+    if (!vm) return;
     if (!learned) {
       this.ui.log(`${vm?.name ?? 'This character'} has not learned ${spell.name}.`, 'warn');
       return;
@@ -519,12 +541,14 @@ export class SpellbookPanel extends Panel {
 
   readySelected() {
     const vm = this.ui.active();
+    if (!vm) return;
     if (!this.spellId) { this.ui.log('Select a spell first.', 'warn'); return; }
     this.ui.setQuickSpell(vm.index, this.spellId);
   }
 
   castSelected() {
     const vm = this.ui.active();
+    if (!vm) return;
     const spell = spellsForSchool(this.school).find((s) => s.id === this.spellId);
     if (!spell) { this.ui.log('Select a spell first.', 'warn'); return; }
     const known = new Set(this.ui.knownSpells(vm) ?? []);

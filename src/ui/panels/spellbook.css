@@ -226,14 +226,15 @@
     inset 0 0 0 calc(var(--u) * 6) rgba(58, 42, 14, 0.7),
     calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 5) rgba(60, 50, 36, 0.5);
 }
-/* The cover fills the mount; the procedural stand-in is blown up instead, until
-   the gilt border painted into it is off the edge and only its watercolour is
-   inside our own. Which of the two is showing decides the size, so the JS sets
-   it. */
+/* The covers are photographs of paintings, several of them still carrying the
+   mount, the deckle or the studio frame they were shot in, so the art is pushed
+   past the mount and the surround falls off the edge. The procedural stand-in
+   is blown up by its own amount instead, and the JS sets both. */
 .mm-sb-illum-art {
   position: absolute;
   inset: calc(var(--u) * 6);
   background: center no-repeat;
+  transform: scale(1.3);
 }
 .mm-sb-cell.is-locked .mm-sb-illum-art { filter: grayscale(0.75) opacity(0.55); }
 
@@ -287,7 +288,10 @@
   flex-direction: column;
   gap: calc(var(--u) * 3);
 }
-.mm-sb-tab {
+/* Scoped through the book: the shared skin resets every button's background and
+   colour at `.mm-ui :where(button)`, which carries the same specificity as a
+   bare class and loads after this file, so a one-class selector loses the tie. */
+.mm-sb .mm-sb-tab {
   position: relative;
   height: calc(var(--u) * 27);
   margin-left: calc(var(--u) * 14);
@@ -296,23 +300,23 @@
   padding-left: calc(var(--u) * 7);
   color: #7d6a4a;
   background: linear-gradient(180deg, #eee5d1 0%, #e0d6bf 52%, #c8bda3 100%);
-  clip-path: polygon(0 0, 100% 0, 72% 25%, 100% 50%, 72% 75%, 100% 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 0, 86% 26%, 100% 50%, 86% 74%, 100% 100%, 0 100%);
   filter: drop-shadow(calc(var(--u) * -1) calc(var(--u) * 1) calc(var(--u) * 2) rgba(0, 0, 0, 0.55));
   transition: margin-left 0.12s ease-out;
 }
 /* The sigil is sized in native pixels like everything else on the page, not in
    the CSS pixels the shared icon helper defaults to. */
 .mm-sb-tab svg { width: calc(var(--u) * 15); height: calc(var(--u) * 15); }
-.mm-sb-tab.is-active {
+.mm-sb .mm-sb-tab.is-active {
   margin-left: calc(var(--u) * -8);
   background: linear-gradient(180deg, #fdf6e4 0%, #f0e6cc 52%, #dbcfb2 100%);
 }
 /* A school this character was never taught: the flap is there, dulled to old
    card, and it does not open. Never hidden — you are meant to see what you are
    missing. */
-.mm-sb-tab.is-locked {
-  background: linear-gradient(180deg, #b6ad99 0%, #a89e89 52%, #928871 100%);
-  color: rgba(58, 48, 32, 0.5);
+.mm-sb .mm-sb-tab.is-locked {
+  background: linear-gradient(180deg, #c3b9a3 0%, #b3a893 52%, #9a907a 100%);
+  color: rgba(58, 48, 32, 0.45);
   cursor: default;
 }
 
@@ -333,7 +337,7 @@
   display: flex;
   gap: calc(var(--u) * 4);
 }
-.mm-sb-btn {
+.mm-sb .mm-sb-btn {
   width: calc(var(--u) * 54);
   height: calc(var(--u) * 16);
   display: grid;
@@ -346,5 +350,5 @@
     inset 0 calc(var(--u) * -1) 0 rgba(94, 84, 64, 0.75),
     calc(var(--u) * 1) calc(var(--u) * 1) calc(var(--u) * 3) rgba(0, 0, 0, 0.5);
 }
-.mm-sb-btn svg { width: calc(var(--u) * 30); height: calc(var(--u) * 13); }
-.mm-sb-btn.is-off { color: rgba(36, 26, 14, 0.32); cursor: default; }
+.mm-sb .mm-sb-btn svg { width: calc(var(--u) * 34); height: calc(var(--u) * 12); }
+.mm-sb .mm-sb-btn.is-off { color: rgba(36, 26, 14, 0.34); cursor: default; }

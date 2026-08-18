@@ -110,15 +110,18 @@
 /* ── the keeper's panel ───────────────────────────────────────────────────── */
 
 /* A column, so the five words always land between the keeper's name and the
-   brass oval however long a name Venues.js hands us. */
-.mm-shop-side {
+   brass oval however long a name Venues.js hands us. The doubled class is not
+   decoration: `.mm-npc-side` in the shared chrome sets the same properties at
+   the same specificity, and panel stylesheets are separate chunks whose load
+   order is the bundler's business, so a tie here is a coin toss. */
+.mm-npc-side.mm-shop-side {
   display: flex;
   flex-direction: column;
   padding: calc(var(--u) * 4) calc(var(--u) * 8) calc(var(--u) * 46);
 }
 
 /* The shop's name sits at the very top of the timber, white upright serif. */
-.mm-shop-side .mm-venue {
+.mm-npc-side.mm-shop-side .mm-venue {
   position: static;
   margin: calc(var(--u) * 3) 0 0;
   font-size: calc(var(--u) * 14);
@@ -127,7 +130,7 @@
 
 /* A framed painting, not a cut-out: rectangular, ~4:5, thin grey-green bevel
    over a black card, with the keeper's own room behind them. */
-.mm-shop-side .mm-npc-portrait {
+.mm-npc-side.mm-shop-side .mm-npc-portrait {
   width: calc(var(--u) * 62);
   height: calc(var(--u) * 76);
   margin: calc(var(--u) * 9) auto 0;
@@ -140,7 +143,7 @@
 }
 
 /* "Caine the / Blacksmith" — azure, upright serif, centred, two lines. */
-.mm-shop-side .mm-npc-name {
+.mm-npc-side.mm-shop-side .mm-npc-name {
   margin-top: calc(var(--u) * 9);
   font-size: calc(var(--u) * 15);
   line-height: calc(var(--u) * 17);
@@ -149,16 +152,16 @@
 /* The five words. White italic serif, centred, ~32 native pitch; the verb you
    are inside turns MM6's pale gold, and Special is the deeper gold it always
    is in the game. */
-.mm-shop-side .mm-npc-options {
+.mm-npc-side.mm-shop-side .mm-npc-options {
   flex: 1;
   margin-top: calc(var(--u) * 8);
   justify-content: space-evenly;
   gap: 0;
 }
-.mm-shop-side .mm-npc-option {
+.mm-npc-side.mm-shop-side .mm-npc-option {
   font-size: calc(var(--u) * 17);
   line-height: calc(var(--u) * 17);
 }
-.mm-shop-side .mm-npc-option.is-current { color: var(--gold); }
-.mm-shop-side .mm-npc-option.is-special { color: var(--gold-deep); }
-.mm-shop-side .mm-npc-option.is-special:hover { color: var(--gold); }
+.mm-npc-side.mm-shop-side .mm-npc-option.is-current { color: var(--gold); }
+.mm-npc-side.mm-shop-side .mm-npc-option.is-special { color: var(--gold-deep); }
+.mm-npc-side.mm-shop-side .mm-npc-option.is-special:hover { color: var(--gold); }

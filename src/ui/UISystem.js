@@ -475,7 +475,7 @@ export class UISystem extends System {
           amulet: 'amulet_pendant', ring1: 'ring_signet',
         },
         pack: ['potion_red', 'potion_red', 'potion_yellow', 'gem_topaz', ['axe_battle', { identified: false }],
-          'qi_kilburns_letter', 'potion_white', 'torch', ['shield_buckler', { broken: true }], 'helm_helm',
+          'qi_fletchers_letter', 'potion_white', 'torch', ['shield_buckler', { broken: true }], 'helm_helm',
           'gem_quartz', 'potion_grey', 'boots_leather'],
       },
       {
@@ -486,7 +486,7 @@ export class UISystem extends System {
           boots: 'boots_leather', belt: 'belt_studded', amulet: 'amulet_talisman', ring1: 'ring_band',
         },
         pack: ['potion_blue', 'potion_blue', 'scroll_fire_fireball', 'scroll_water_town_portal',
-          ['wand_fire', { identified: false }], 'gem_amethyst', 'blue_lotus', 'poppysnaps', 'potion_bottle',
+          ['wand_fire', { identified: false }], 'gem_amethyst', 'fen_lily', 'bellflax', 'potion_bottle',
           ['dagger_dirk', { broken: true }], 'torch', 'gem_opal'],
       },
       {
@@ -496,8 +496,8 @@ export class UISystem extends System {
           mainhand: 'mace_morning_star', offhand: 'shield_small', armour: 'chain_chain', helm: 'helm_coif',
           boots: 'boots_boots', belt: 'belt_leather', amulet: 'amulet_amulet', ring1: 'ring_ring',
         },
-        pack: ['potion_red', 'potion_golden', 'potion_green', 'gem_pearl', 'widowsweep_berries',
-          'crimson_toadstool', 'scroll_body_first_aid', 'potion_cyan', 'torch', 'mace_mace', 'gem_quartz'],
+        pack: ['potion_red', 'potion_golden', 'potion_green', 'gem_pearl', 'bloodhaw_berries',
+          'emberfoot_cap', 'scroll_body_first_aid', 'potion_cyan', 'torch', 'mace_mace', 'gem_quartz'],
       },
       {
         name: 'Kellen', classId: 'archer', gender: 'm', level: 12, skin: 1, hair: 2, helm: 0, ground: 4,
@@ -507,7 +507,7 @@ export class UISystem extends System {
           helm: 'helm_leather_cap', gauntlets: 'gauntlets_leather', boots: 'boots_leather',
           belt: 'belt_leather', cloak: 'cloak_cloak', ring1: 'ring_ring',
         },
-        pack: ['potion_red', 'potion_haste', 'dagger_dirk', 'gem_opal', 'phirna_root', 'potion_yellow',
+        pack: ['potion_red', 'potion_haste', 'dagger_dirk', 'gem_opal', 'tallowroot', 'potion_yellow',
           'bow_long', 'potion_courage', 'torch', 'sulfur_clump', 'gem_amethyst', 'leather_armour'],
       },
     ];
@@ -1138,8 +1138,8 @@ export class UISystem extends System {
     };
 
     const active = [
-      pick('main_01_the_summons', 2, false),
-      pick('main_02_the_manifest', 1, false),
+      pick('main_01_a_small_errand', 2, false),
+      pick('main_02_the_singing_cave', 1, false),
     ].filter(Boolean);
     const completed = [];
     // Fill from whatever the registry actually holds so this never comes up empty.
@@ -1239,7 +1239,7 @@ export class UISystem extends System {
   shopData(shopId) {
     if (this._shop && (!shopId || this._shop.id === shopId)) return this._shop;
     const src = (shopId && SHOPS?.[shopId])
-      || SHOPS?.shop_ns_weapons
+      || SHOPS?.town_millhaven_weaponsmith
       || Object.values(SHOPS ?? {})[0]
       || null;
     const rng = this.rng.fork(`shop:${src?.id ?? 'default'}`);

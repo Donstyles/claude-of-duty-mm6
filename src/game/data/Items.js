@@ -87,9 +87,9 @@ function arm(id, name, category, skill, ac, tier, value, opts = {}) {
 
 // ── Weapons ─────────────────────────────────────────────────────────────────
 
-wpn('sword_long', 'Long Sword', 'sword', 1, 0, 60, { desc: 'The kingdom\'s standard blade. Every guardhouse in Enroth has a rack of them.' });
+wpn('sword_long', 'Long Sword', 'sword', 1, 0, 60, { desc: 'The kingdom\'s standard blade. Every guardhouse in Caerwen has a rack of them.' });
 wpn('sword_broad', 'Broad Sword', 'sword', 2, 2, 180);
-wpn('sword_cutlass', 'Cutlass', 'sword', 2, 3, 240, { recovery: 65, desc: 'Free Haven dockside steel — short, heavy and quick.' });
+wpn('sword_cutlass', 'Cutlass', 'sword', 2, 3, 240, { recovery: 65, desc: 'Saltmarch dockside steel — short, heavy and quick.' });
 wpn('sword_sabre', 'Sabre', 'sword', 3, 4, 420);
 wpn('sword_bastard', 'Bastard Sword', 'sword', 4, 6, 900, { hands: 2, weight: 12 });
 wpn('sword_great', 'Great Sword', 'sword', 5, 9, 1800, { hands: 2, weight: 16, recovery: 90 });
@@ -130,8 +130,8 @@ wpn('bow_composite', 'Composite Bow', 'bow', 3, 4, 560);
 wpn('bow_elven', 'Elven Bow', 'bow', 4, 6, 1200, { recovery: 50 });
 wpn('bow_great', 'Great Bow', 'bow', 5, 9, 2400, { weight: 12 });
 
-wpn('blaster_blaster', 'Blaster', 'blaster', 6, 0, 6000, { enchantable: false, desc: 'Ancestor technology from a fallen sky-ship. Nothing in Enroth resists it.' });
-wpn('blaster_rifle', 'Blaster Rifle', 'blaster', 6, 10, 15000, { hands: 2, enchantable: false, desc: 'The long-barrelled version. The Control Center made thousands; six are still working.' });
+wpn('blaster_blaster', 'Blaster', 'blaster', 6, 0, 6000, { enchantable: false, desc: 'Lifted out of the wreck under the glass. Nothing in Caerwen resists it.' });
+wpn('blaster_rifle', 'Blaster Rifle', 'blaster', 6, 10, 15000, { hands: 2, enchantable: false, desc: 'The long-barrelled version. The wreck held racks of them; six are still working.' });
 
 export const WEAPONS = deepFreeze(weapons);
 
@@ -141,7 +141,7 @@ arm('leather_armour', 'Leather Armour', 'armour', 'leather', 3, 1, 60, { recover
 arm('leather_studded', 'Studded Leather', 'armour', 'leather', 5, 2, 190, { recoveryPenalty: 6 });
 arm('leather_hardened', 'Hardened Leather', 'armour', 'leather', 7, 3, 440, { recoveryPenalty: 7 });
 arm('leather_elven', 'Elven Leather', 'armour', 'leather', 10, 4, 1100, { recoveryPenalty: 4 });
-arm('leather_dragon', 'Dragon Hide', 'armour', 'leather', 14, 5, 2600, { recoveryPenalty: 5, desc: 'Scaled and supple. Kriegspire hunters swear the seams still smoke in the cold.' });
+arm('leather_dragon', 'Dragon Hide', 'armour', 'leather', 14, 5, 2600, { recoveryPenalty: 5, desc: 'Scaled and supple. Malveth hunters swear the seams still smoke in the cold.' });
 
 arm('chain_ring', 'Ring Mail', 'armour', 'chain', 6, 1, 120, { recoveryPenalty: 15 });
 arm('chain_chain', 'Chain Mail', 'armour', 'chain', 8, 2, 320, { recoveryPenalty: 18 });
@@ -165,7 +165,7 @@ arm('helm_leather_cap', 'Leather Cap', 'helm', 'leather', 1, 1, 25);
 arm('helm_coif', 'Chain Coif', 'helm', 'chain', 2, 2, 90);
 arm('helm_helm', 'Helm', 'helm', 'plate', 4, 3, 260);
 arm('helm_great', 'Great Helm', 'helm', 'plate', 6, 4, 620);
-arm('helm_crown', 'Crown', 'helm', null, 8, 5, 1800, { desc: 'Ceremonial, but the goldsmiths of Free Haven build them to stop a mace.' });
+arm('helm_crown', 'Crown', 'helm', null, 8, 5, 1800, { desc: 'Ceremonial, but the goldsmiths of Thornwick build them to stop a mace.' });
 
 arm('gauntlets_leather', 'Leather Gloves', 'gauntlets', 'leather', 1, 1, 20);
 arm('gauntlets_gauntlets', 'Gauntlets', 'gauntlets', 'chain', 3, 3, 180);
@@ -219,7 +219,7 @@ function potion(id, name, colour, layer, effect, power, value, opts = {}) {
 
 potion('potion_bottle', 'Bottle of Water', 'clear', 0, 'none', 0, 2, { desc: 'The base of every mixture. Free from any well; the alchemists still charge for it.' });
 
-potion('potion_red', 'Red Potion', 'red', 1, 'heal', 10, 20, { desc: 'Cure Wounds. Widowsweep berries and a little patience.' });
+potion('potion_red', 'Red Potion', 'red', 1, 'heal', 10, 20, { desc: 'Cure Wounds. Bloodhaw berries and a little patience.' });
 potion('potion_blue', 'Blue Potion', 'blue', 1, 'restore-sp', 10, 25, { desc: 'Magic. Restores spell points and tastes of pond.' });
 potion('potion_yellow', 'Yellow Potion', 'yellow', 1, 'cure-weak', 0, 20, { cures: ['weak'], desc: 'Energy. Chases off exhaustion and the shakes.' });
 
@@ -263,14 +263,14 @@ export const POTIONS = deepFreeze(potions);
 // ── Reagents ────────────────────────────────────────────────────────────────
 
 export const REAGENTS = deepFreeze({
-  widowsweep_berries: { id: 'widowsweep_berries', name: 'Widowsweep Berries', category: 'reagent', makes: 'potion_red', boost: 0, value: 20, weight: 1, biome: 'forest' },
-  crimson_toadstool: { id: 'crimson_toadstool', name: 'Crimson Toadstool', category: 'reagent', makes: 'potion_red', boost: 0, value: 25, weight: 1, biome: 'swamp' },
-  poppysnaps: { id: 'poppysnaps', name: 'Poppysnaps', category: 'reagent', makes: 'potion_blue', boost: 0, value: 20, weight: 1, biome: 'grass' },
-  blue_lotus: { id: 'blue_lotus', name: 'Blue Lotus', category: 'reagent', makes: 'potion_blue', boost: 0, value: 30, weight: 1, biome: 'swamp' },
-  phirna_root: { id: 'phirna_root', name: 'Phirna Root', category: 'reagent', makes: 'potion_yellow', boost: 0, value: 20, weight: 1, biome: 'dirt' },
+  bloodhaw_berries: { id: 'bloodhaw_berries', name: 'Bloodhaw Berries', category: 'reagent', makes: 'potion_red', boost: 0, value: 20, weight: 1, biome: 'forest' },
+  emberfoot_cap: { id: 'emberfoot_cap', name: 'Emberfoot Cap', category: 'reagent', makes: 'potion_red', boost: 0, value: 25, weight: 1, biome: 'swamp' },
+  bellflax: { id: 'bellflax', name: 'Bellflax', category: 'reagent', makes: 'potion_blue', boost: 0, value: 20, weight: 1, biome: 'grass' },
+  fen_lily: { id: 'fen_lily', name: 'Fen Lily', category: 'reagent', makes: 'potion_blue', boost: 0, value: 30, weight: 1, biome: 'swamp' },
+  tallowroot: { id: 'tallowroot', name: 'Tallowroot', category: 'reagent', makes: 'potion_yellow', boost: 0, value: 20, weight: 1, biome: 'dirt' },
   sulfur_clump: { id: 'sulfur_clump', name: 'Clump of Sulfur', category: 'reagent', makes: 'potion_yellow', boost: 0, value: 28, weight: 1, biome: 'rock' },
   vial_of_troll_blood: { id: 'vial_of_troll_blood', name: 'Vial of Troll Blood', category: 'reagent', makes: null, boost: 5, value: 200, weight: 1, biome: 'swamp' },
-  vial_of_ooze_endoctrin: { id: 'vial_of_ooze_endoctrin', name: 'Vial of Ooze Endoctrin', category: 'reagent', makes: null, boost: 10, value: 500, weight: 1, biome: 'dungeon' },
+  vial_of_ooze_distillate: { id: 'vial_of_ooze_distillate', name: 'Vial of Ooze Distillate', category: 'reagent', makes: null, boost: 10, value: 500, weight: 1, biome: 'dungeon' },
   vial_of_devil_ichor: { id: 'vial_of_devil_ichor', name: 'Vial of Devil Ichor', category: 'reagent', makes: null, boost: 15, value: 1200, weight: 1, biome: 'dungeon' },
   philosophers_stone: { id: 'philosophers_stone', name: "Philosopher's Stone", category: 'reagent', makes: null, boost: 25, value: 5000, weight: 1, biome: 'dungeon' },
 });
@@ -314,7 +314,7 @@ wand('wand_lightning', 'Wand of Lightning', 'air_lightning_bolt', 20, 12, 1700, 
 wand('wand_charm', 'Wand of Charms', 'mind_charm', 15, 10, 1400, 3);
 wand('wand_paralyzing', 'Wand of Paralyzing', 'light_paralyze', 15, 12, 2200, 4);
 wand('wand_rock', 'Wand of Rock Blast', 'earth_rock_blast', 15, 14, 2400, 4);
-wand('wand_shrapmetal', 'Wand of Shrapmetal', 'dark_shrapmetal', 15, 14, 2600, 4);
+wand('wand_shrapmetal', 'Wand of Iron Hail', 'dark_shrapmetal', 15, 14, 2600, 4);
 wand('wand_ice_blast', 'Wand of Ice Blast', 'water_ice_blast', 10, 18, 4500, 5);
 wand('wand_incineration', 'Wand of Incineration', 'fire_incinerate', 10, 20, 6000, 5);
 wand('wand_doom', 'Wand of Doom', 'dark_dragon_breath', 10, 20, 6500, 5);
@@ -352,43 +352,45 @@ const questItem = (id, name, desc) =>
   ({ id, name, category: 'quest', value: 0, weight: 1, droppable: false, desc });
 
 export const QUEST_ITEMS = deepFreeze({
-  qi_kilburns_letter: questItem('qi_kilburns_letter', "Lord Kilburn's Letter", 'A sealed request for help, written in a hurry.'),
-  qi_shipping_manifest: questItem('qi_shipping_manifest', 'Shipping Manifest', 'Free Haven harbour records with three cargoes that never existed.'),
-  qi_smugglers_ledger: questItem('qi_smugglers_ledger', "Smuggler's Ledger", 'Names, dates and a payment schedule in the Cult of Baa\'s cipher.'),
-  qi_temple_key_baa: questItem('qi_temple_key_baa', 'Baa Temple Key', 'Cold iron, cast in the shape of a ram\'s skull.'),
-  qi_baa_roster: questItem('qi_baa_roster', 'Cult Roster', 'Every sworn member of the Cult of Baa in the kingdom, copied by hand.'),
-  qi_soul_jar_of_baa: questItem('qi_soul_jar_of_baa', 'Soul Jar of Baa', 'It hums when carried, and is warm on the coldest days.'),
-  qi_prince_nicolai_signet: questItem('qi_prince_nicolai_signet', "Prince Nicolai's Signet", 'The heir\'s ring, taken from him on the night he vanished.'),
-  qi_ironfist_crown: questItem('qi_ironfist_crown', 'Crown of Ironfist', 'Plain iron banded with gold. Heavier than it looks.'),
-  qi_mandate_of_heaven: questItem('qi_mandate_of_heaven', 'Mandate of Heaven', 'The writ that makes a king. Signed, sealed, and thought lost for a generation.'),
-  qi_oracle_part_alpha: questItem('qi_oracle_part_alpha', 'Oracle Component: Memory Core', 'A slab of ancestor crystal, still faintly warm.'),
-  qi_oracle_part_beta: questItem('qi_oracle_part_beta', 'Oracle Component: Power Cell', 'Sealed, humming, and older than the kingdom.'),
-  qi_oracle_part_gamma: questItem('qi_oracle_part_gamma', 'Oracle Component: Control Rod', 'Machined to a tolerance no smith in Enroth can match.'),
-  qi_control_center_pass: questItem('qi_control_center_pass', 'Control Center Pass', 'A card of white metal that opens doors nobody else can.'),
-  qi_hive_key: questItem('qi_hive_key', 'Hive Access Key', 'Taken from a Kreegan overseer. It is still sticky.'),
-  qi_dragon_tooth: questItem('qi_dragon_tooth', 'Dragon Tooth', 'As long as a forearm and sharper than any blade in Free Haven.'),
-  qi_sun_font_ember: questItem('qi_sun_font_ember', 'Ember of the Sun Font', 'The last live coal from the Temple of the Sun.'),
-  qi_marchwardens_bow: questItem('qi_marchwardens_bow', "Marchwarden's Bow", 'Lost in the Bootleg Bay marshes with its owner.'),
-  qi_white_stag_hide: questItem('qi_white_stag_hide', 'White Stag Hide', 'Taken cleanly, with a single arrow, as tradition demands.'),
+  qi_fletchers_letter: questItem('qi_fletchers_letter', 'The Crown Summons', 'Four lines and a seal, written by a clerk who was clearly in a hurry.'),
+  qi_choir_psalter: questItem('qi_choir_psalter', 'Choir Psalter', 'Vellum, unbound, and the notation is not any notation the Concord teaches.'),
+  qi_ledger_manifest: questItem('qi_ledger_manifest', 'Ledger Manifest', 'Saltmarch dock records with three cargoes on them that no ship carried.'),
+  qi_smugglers_ledger: questItem('qi_smugglers_ledger', "Smuggler's Ledger", 'Names, dates and a payment schedule. It is not a devotional document; it is an accounts book.'),
+  qi_choir_key: questItem('qi_choir_key', 'Choir Key', 'Cold iron cast in the shape of an open mouth.'),
+  qi_choir_roll: questItem('qi_choir_roll', 'The Choir Roll', 'Every sworn voice in the kingdom, copied out by hand in a hurry.'),
+  qi_reliquary: questItem('qi_reliquary', 'The Sealed Reliquary', 'It hums when carried, and it is warm on the coldest days.'),
+  qi_wysk_cipher: questItem('qi_wysk_cipher', "Wysk's Cipher", 'A court cipher wheel, worn smooth at the letters the Choir uses most.'),
+  qi_crown_of_caerwen: questItem('qi_crown_of_caerwen', 'Crown of Caerwen', 'Plain iron banded with gold. Heavier than it looks, and it is not ceremonial.'),
+  qi_sword_warrant: questItem('qi_sword_warrant', 'Warrant of the Sword Chapter', 'Signed by the Lord Marshal, countersigned by two serjeants, and worth a company.'),
+  qi_ledger_warrant: questItem('qi_ledger_warrant', "Warrant of the Ledger", 'Seats on every coach and every packet in Caerwen, at cost. The Ledger does not do favours; it does terms.'),
+  qi_order_warrant: questItem('qi_order_warrant', 'Warrant of the Kindled Lamp', 'The Order will treat, house and bury the bearer anywhere it keeps a lamp.'),
+  qi_ninefold_seal: questItem('qi_ninefold_seal', 'The Ninefold Seal', 'Nine keys hung on one ring. Together they weigh almost nothing.'),
+  qi_dawnbell_key: questItem('qi_dawnbell_key', 'Key of the Dawnbell', 'Struck from the metal of a bell that was rung once and then buried.'),
+  qi_longshadow_key: questItem('qi_longshadow_key', 'Key of the Long Shadow', 'Black glass. It is warm on the side you are not holding.'),
+  qi_vessel_pass: questItem('qi_vessel_pass', 'Wafer of White Metal', 'A card of white metal that opens doors no key in Caerwen will.'),
+  qi_glass_lens: questItem('qi_glass_lens', 'Lens of the Deep', 'Ground from a single crystal by nobody. Looking through it hurts.'),
+  qi_swelling_key: questItem('qi_swelling_key', 'Overseer\'s Key', 'Taken off an overseer in the Gallowfen. It is still sticky.'),
+  qi_dragon_tooth: questItem('qi_dragon_tooth', 'Dragon Tooth', 'As long as a forearm and sharper than any blade in Thornwick.'),
+  qi_font_ember: questItem('qi_font_ember', 'Ember of the Old Fire', 'The last live coal from a font that has been cold for twenty years.'),
+  qi_marchwardens_bow: questItem('qi_marchwardens_bow', "Marchwarden's Bow", 'Lost in the Saltmarch channels with its owner, eleven years ago.'),
+  qi_white_hart_hide: questItem('qi_white_hart_hide', 'White Hart Hide', 'Taken cleanly, with a single arrow, as tradition demands.'),
   qi_harbourmasters_seal: questItem('qi_harbourmasters_seal', "Harbourmaster's Seal", 'Bronze, heavy, and worth a fortune to the right forger.'),
   qi_phylactery_shell: questItem('qi_phylactery_shell', 'Empty Phylactery', 'A jar of black glass with room inside for exactly one heart.'),
-  qi_heartstone_shard: questItem('qi_heartstone_shard', 'Heartstone Shard', 'A splinter of the stone at the centre of Paradise Valley.'),
-  qi_antidote_of_the_grove: questItem('qi_antidote_of_the_grove', 'Antidote of the Grove', 'Four reagents, one grove, and a very long night of brewing.'),
+  qi_greenheart_shard: questItem('qi_greenheart_shard', 'Greenheart Shard', 'A splinter off the stone at the root of the Weald. It hums flat.'),
+  qi_holt_antidote: questItem('qi_holt_antidote', 'Antidote of the Holt', 'Four reagents, one poisoned wood, and a very long night of brewing.'),
   qi_black_harness: questItem('qi_black_harness', 'Black Harness', 'It fits whoever puts it on. That is the first warning sign.'),
-  qi_abbots_answer: questItem('qi_abbots_answer', "The Abbot's Answer", 'One word, sealed in wax. Nobody who has read it will repeat it.'),
-  qi_zokarrs_bones: questItem('qi_zokarrs_bones', "Zokarr's Bones", 'The remains of the last Archmage of VARN, still faintly charged.'),
-  qi_lens_of_the_oracle: questItem('qi_lens_of_the_oracle', 'Lens of the Oracle', 'Ground from a single crystal. Looking through it hurts.'),
+  qi_hessas_answer: questItem('qi_hessas_answer', "Hessa's Answer", 'One word, sealed in wax. Nobody who has read it will repeat it.'),
 });
 
 // ── Misc goods ──────────────────────────────────────────────────────────────
 
 export const MISC_ITEMS = deepFreeze({
-  torch: { id: 'torch', name: 'Torch', category: 'misc', value: 5, weight: 1, desc: 'Burns for an hour. Every dungeon in Enroth is darker than the last.' },
+  torch: { id: 'torch', name: 'Torch', category: 'misc', value: 5, weight: 1, desc: 'Burns for an hour. Every hole in Caerwen is darker than the last.' },
   lockpicks: { id: 'lockpicks', name: 'Lockpicks', category: 'misc', value: 60, weight: 1, desc: 'Adds five to Disarm Trap attempts on locks.' },
   rope: { id: 'rope', name: 'Coil of Rope', category: 'misc', value: 30, weight: 3 },
   spellbook_blank: { id: 'spellbook_blank', name: 'Blank Spellbook', category: 'misc', value: 200, weight: 2 },
   arrows: { id: 'arrows', name: 'Quiver of Arrows', category: 'misc', value: 20, weight: 2 },
-  ancestor_scrap: { id: 'ancestor_scrap', name: 'Ancestor Scrap', category: 'misc', value: 350, weight: 2, desc: 'Bright metal from a sky-ship hull. The guilds pay well and ask nothing.' },
+  sunder_alloy: { id: 'sunder_alloy', name: 'Sunder Alloy', category: 'misc', value: 350, weight: 2, desc: 'Bright metal off a hull that fell out of the sky. The Concord pays well and asks nothing.' },
 });
 
 // ── Enchantments ────────────────────────────────────────────────────────────
@@ -401,7 +403,7 @@ const prefix = (id, name, effects, valueMult, minLevel, categories, desc) =>
 export const PREFIXES = deepFreeze({
   sharp: prefix('sharp', 'Sharp', { damage: 3 }, 1.5, 1, ['weapon'], 'Kept to an edge that will not forgive a careless grip.'),
   swift: prefix('swift', 'Swift', { recovery: -15 }, 2.0, 4, ['weapon'], 'Balanced so far forward it seems to want to move.'),
-  blessed: prefix('blessed', 'Blessed', { attack: 5 }, 1.8, 4, ['weapon'], 'Consecrated at the Temple of the Sun.'),
+  blessed: prefix('blessed', 'Blessed', { attack: 5 }, 1.8, 4, ['weapon'], 'Consecrated at the Great Lamp in Thornwick.'),
   flaming: prefix('flaming', 'Flaming', { bonusDamage: { type: 'fire', amount: 6 } }, 2.4, 8, ['weapon'], 'The blade runs with fire when drawn.'),
   freezing: prefix('freezing', 'Freezing', { bonusDamage: { type: 'water', amount: 6 } }, 2.4, 8, ['weapon'], 'Frost crawls up the haft in the warmest room.'),
   sparking: prefix('sparking', 'Sparking', { bonusDamage: { type: 'air', amount: 6 } }, 2.4, 8, ['weapon'], 'It cracks and spits between strikes.'),
@@ -411,7 +413,7 @@ export const PREFIXES = deepFreeze({
   dwarven: prefix('dwarven', 'Dwarven', { stats: { endurance: 10 }, ac: 3 }, 2.6, 10, ['weapon', 'armour', 'helm', 'shield', 'gauntlets'], 'Twice the weight, three times the life.'),
   undead_slaying: prefix('undead_slaying', 'Undead Slaying', { slaying: { family: 'undead', multiplier: 2 } }, 2.8, 8, ['weapon'], 'Runes down the fuller that glow near a grave.'),
   dragon_slaying: prefix('dragon_slaying', 'Dragon Slaying', { slaying: { family: 'dragon', multiplier: 2 } }, 3.0, 16, ['weapon'], 'Forged for one purpose by people who mostly failed at it.'),
-  demon_slaying: prefix('demon_slaying', 'Demon Slaying', { slaying: { family: 'devil', multiplier: 2 } }, 3.0, 16, ['weapon'], 'The Cult of Baa pays to have these destroyed.'),
+  demon_slaying: prefix('demon_slaying', 'Demon Slaying', { slaying: { family: 'devil', multiplier: 2 } }, 3.0, 16, ['weapon'], 'The Hollow Choir pays to have these destroyed.'),
   titan_slaying: prefix('titan_slaying', 'Titan Slaying', { slaying: { family: 'titan', multiplier: 2 } }, 3.2, 24, ['weapon'], 'Sized for a mortal, meant for something much larger.'),
 });
 
@@ -458,7 +460,7 @@ const suffixes = {
   of_alchemy: suffix('of_alchemy', 'of Alchemy', { skills: { alchemy: 5 } }, 2.0, 6, ALL_WEARABLE, ''),
   of_meditation: suffix('of_meditation', 'of Meditation', { skills: { meditation: 5 } }, 2.2, 6, ALL_WEARABLE, ''),
   of_perception: suffix('of_perception', 'of Perception', { skills: { perception: 5 } }, 2.2, 6, ALL_WEARABLE, ''),
-  of_armsmaster: suffix('of_armsmaster', 'of Armsmaster', { skills: { armsmaster: 5 } }, 2.6, 10, ['weapon', 'gauntlets', 'belt'], ''),
+  of_armsmaster: suffix('of_armsmaster', 'of Drill', { skills: { armsmaster: 5 } }, 2.6, 10, ['weapon', 'gauntlets', 'belt'], ''),
   of_the_gods: suffix('of_the_gods', 'of the Gods', {
     stats: { might: 10, intellect: 10, personality: 10, endurance: 10, accuracy: 10, speed: 10, luck: 10 },
   }, 8.0, 30, ALL_ENCHANTABLE, 'Ten points to every attribute. There are perhaps forty of these in the world.'),
@@ -483,94 +485,94 @@ const artifact = (id, name, base, effects, downside, value, desc) =>
   ({ id, name, category: 'artifact', baseItem: base, unique: true, effects, downside, value, weight: 6, desc });
 
 export const ARTIFACTS = deepFreeze({
-  art_justice: artifact('art_justice', 'Justice', 'sword_bastard',
+  art_oathkeep: artifact('art_oathkeep', 'Oathkeep', 'sword_bastard',
     { damage: 25, attack: 20, stats: { personality: 20 }, resists: { dark: 30 } },
     { stats: { luck: -15 } }, 60000,
-    'The old crown sword of Ironfist. It will not be drawn in an unjust cause, and it judges what that means.'),
-  art_mordred: artifact('art_mordred', 'Mordred', 'sword_great',
+    'The blade the first Caerwen swore on. It will not leave the scabbard in a cause it judges dishonest, and it does the judging.'),
+  art_recant: artifact('art_recant', 'Recant', 'sword_great',
     { damage: 35, attack: 15, lifesteal: 0.25, bonusDamage: { type: 'dark', amount: 20 } },
     { stats: { personality: -20 }, curse: 'shopkeepers-refuse' }, 65000,
-    'The blade that made a Black Knight of its first owner and eleven since.'),
-  art_ghoulsbane: artifact('art_ghoulsbane', 'Ghoulsbane', 'axe_great',
+    'Reforged from Oathkeep\'s ruined twin. It has made a black knight of eleven owners, every one of whom expected to be the exception.'),
+  art_barrowclean: artifact('art_barrowclean', 'Barrowclean', 'axe_great',
     { damage: 20, slaying: { family: 'undead', multiplier: 3 }, resists: { dark: 40 } },
     { stats: { speed: -10 } }, 42000,
-    'Undead within twenty paces of it come apart at the seams.'),
-  art_splitter: artifact('art_splitter', 'Splitter', 'axe_executioner',
+    'Cut for the Netherby vigils. The dead within twenty paces of it come apart along the seams they were sewn on.'),
+  art_assessor: artifact('art_assessor', 'Assessor', 'axe_executioner',
     { damage: 30, onHit: 'sunder', armourShred: 20 },
     { recovery: 20 }, 48000,
-    'It takes the armour off a target before it takes anything else.'),
-  art_ullyses: artifact('art_ullyses', 'Ullyses', 'bow_great',
+    'The Ledger sent it to collect on a Duskorn strongroom. It takes the armour off a debtor before it takes anything else.'),
+  art_second_arrow: artifact('art_second_arrow', 'The Second Arrow', 'bow_great',
     { damage: 22, attack: 25, arrows: 1, bonusDamage: { type: 'air', amount: 15 } },
     { stats: { might: -10 } }, 52000,
-    'A bow that adds an arrow to every volley, and takes the strength to draw it out of you.'),
-  art_the_perfect_bow: artifact('art_the_perfect_bow', 'The Perfect Bow', 'bow_elven',
+    'Adds an arrow to every volley and takes the strength for it out of the archer. Nobody has ever seen the second one leave the string.'),
+  art_cindrast_yew: artifact('art_cindrast_yew', 'Cindrast Yew', 'bow_elven',
     { damage: 18, attack: 30, recovery: -25 },
     { durability: 'fragile' }, 55000,
-    'Nothing about it can be improved. Nothing about it can be repaired either.'),
-  art_old_nick: artifact('art_old_nick', 'Old Nick', 'dagger_main_gauche',
+    'The last bow out of the imperial yards at Cindrast. Nothing about it can be improved. Nothing about it can be repaired either.'),
+  art_small_hours: artifact('art_small_hours', 'The Small Hours', 'dagger_main_gauche',
     { damage: 15, attack: 20, tripleChance: 0.25, stats: { speed: 20 } },
     { stats: { endurance: -15 } }, 38000,
-    'Small, plain, and it has ended three kings.'),
-  art_puck: artifact('art_puck', 'Puck', 'dagger_kris',
+    'Small, plain, unremarkable in the hand. It has ended three kings, all of them between midnight and dawn.'),
+  art_magpie: artifact('art_magpie', 'Magpie', 'dagger_kris',
     { damage: 12, stats: { luck: 30, speed: 15 }, skills: { stealing: 10, disarm_trap: 10 } },
     { curse: 'random-teleport' }, 36000,
-    'It finds its way into pockets, including yours, including at inconvenient moments.'),
-  art_perion: artifact('art_perion', 'Perion', 'spear_lance',
+    'Found in a Ledger strongroom that had never been opened. It finds its way into pockets, including yours, and occasionally somewhere else entirely.'),
+  art_oakhallow_lance: artifact('art_oakhallow_lance', "Oakhallow's Lance", 'spear_lance',
     { damage: 28, attack: 18, ac: 15, resists: { fire: 30, air: 30, water: 30, earth: 30 } },
     { stats: { intellect: -20 } }, 58000,
-    'The lance of the first Marchwarden. It has never been broken and has never had a subtle owner.'),
-  art_mash: artifact('art_mash', 'Mash', 'mace_war_hammer',
+    'The lance of the first Lord Marshal. It has never been broken and has never had a subtle owner.'),
+  art_quernstone: artifact('art_quernstone', 'Quernstone', 'mace_war_hammer',
     { damage: 32, stunChance: 0.4, stats: { might: 25 } },
     { recovery: 25, stats: { accuracy: -10 } }, 45000,
-    'It does exactly what its name says, slowly and thoroughly.'),
-  art_ethrics_staff: artifact('art_ethrics_staff', "Ethric's Staff", 'staff_elder',
+    'A Millhaven smith made it out of a broken millstone and never said why. It does what a millstone does, slowly and thoroughly.'),
+  art_tharn_staff: artifact('art_tharn_staff', 'The Tharn Staff', 'staff_elder',
     { damage: 20, sp: 60, skills: { dark: 8, fire: 5, air: 5, water: 5, earth: 5 } },
     { resists: { light: -30 } }, 70000,
-    'Ethric the Mad left behind one thing worth keeping. This is it, and it still argues.'),
-  art_charele: artifact('art_charele', 'Charele', 'staff_rune',
+    'Cut by an archmagus of Tharn who was walled up for what he did with it. It still argues, in a language the Concord will not transcribe.'),
+  art_alderquiet: artifact('art_alderquiet', 'Alderquiet', 'staff_rune',
     { damage: 14, sp: 40, regenSP: 3, skills: { water: 6, earth: 6 } },
     { stats: { might: -15 } }, 44000,
-    'Cut from a living tree that was asked politely and agreed.'),
-  art_iron_feather: artifact('art_iron_feather', 'Iron Feather', 'chain_elven',
+    'Cut from a living alder in the Greywater carr that was asked politely and agreed. That bank has been quiet ever since.'),
+  art_gullwing_mail: artifact('art_gullwing_mail', 'Gullwing Mail', 'chain_elven',
     { ac: 35, stats: { speed: 25 }, recovery: -20, resists: { air: 40 } },
     { resists: { earth: -25 } }, 62000,
-    'Chain that weighs nothing at all, which is exactly as unsettling as it sounds.'),
-  art_supreme_plate: artifact('art_supreme_plate', 'Supreme Plate', 'plate_noble',
+    'Coldwater chain that weighs nothing at all, which is exactly as unsettling as it sounds.'),
+  art_thornwick_harness: artifact('art_thornwick_harness', 'The Thornwick Harness', 'plate_noble',
     { ac: 50, resists: { fire: 25, air: 25, water: 25, earth: 25 }, hp: 60 },
     { stats: { speed: -25 }, recovery: 20 }, 80000,
-    'The finest harness ever built in Free Haven. You will not be running anywhere in it.'),
-  art_harecks_leather: artifact('art_harecks_leather', "Hareck's Leather", 'leather_dragon',
+    'The finest thing the royal yards ever turned out. You will not be running anywhere in it.'),
+  art_sallowhide: artifact('art_sallowhide', 'Sallowhide', 'leather_dragon',
     { ac: 28, stats: { speed: 20, luck: 15 }, skills: { dodging: 8 } },
     { resists: { fire: -20 } }, 47000,
-    'Cured by a man who was eaten shortly after finishing it.'),
-  art_gibbet: artifact('art_gibbet', 'Gibbet', 'helm_great',
+    'Cured on Emberhold by a tanner who was eaten a fortnight after he finished it, by a relative of the donor.'),
+  art_the_blank: artifact('art_the_blank', 'The Blank', 'helm_great',
     { ac: 20, resists: { mind: 60 }, immune: ['afraid', 'insane'] },
     { stats: { personality: -20 } }, 40000,
-    'A closed helm with no visor slit worth the name. You see fine. Nobody knows how.'),
-  art_lady_carmine: artifact('art_lady_carmine', 'Lady Carmine', 'cloak_ermine',
+    'A closed helm with no visor slit worth the name. You see perfectly well. The Concord has stopped asking how.'),
+  art_factors_coat: artifact('art_factors_coat', "The Factor's Coat", 'cloak_ermine',
     { ac: 18, stats: { personality: 30 }, skills: { merchant: 10, diplomacy: 10 } },
     { curse: 'attracts-thieves' }, 39000,
-    'Every door in Free Haven opens for it. So do a great many purses that should not.'),
-  art_titans_belt: artifact('art_titans_belt', "Titan's Belt", 'belt_girdle',
+    'Every door in Thornwick opens for it, and a good many purses that should not.'),
+  art_riven_girdle: artifact('art_riven_girdle', 'The Riven Girdle', 'belt_girdle',
     { ac: 12, stats: { might: 40 }, hp: 50 },
     { stats: { intellect: -20, personality: -20 } }, 54000,
-    'Sized down from something enormous. It remembers being larger.'),
-  art_guinevere: artifact('art_guinevere', 'Guinevere', 'amulet_necklace',
+    'Cut down from something that wintered on the Riven Steppe. It remembers being larger.'),
+  art_ossran_pendant: artifact('art_ossran_pendant', 'The Ossran Pendant', 'amulet_necklace',
     { sp: 80, regenSP: 4, skills: { spirit: 8, body: 8, mind: 8 } },
     { hp: -40 }, 66000,
-    'A queen\'s pendant that trades vitality for power, and does not ask first.'),
-  art_amuck: artifact('art_amuck', 'Amuck', 'ring_loop',
+    'Old Cindric blood-work. It trades vitality for power at a fixed rate and does not ask first.'),
+  art_standing_ring: artifact('art_standing_ring', 'The Standing Ring', 'ring_loop',
     { damage: 20, attack: 20, stats: { might: 20, speed: 20 } },
     { ac: -20, curse: 'no-flee' }, 43000,
-    'The wearer cannot retreat. This is presented as a feature.'),
-  art_elfbane: artifact('art_elfbane', 'Elfbane', 'ring_band',
+    'A Sword Chapter oath cast in gold. The wearer cannot retreat. This is presented as a feature.'),
+  art_null_band: artifact('art_null_band', 'The Null Band', 'ring_band',
     { resists: { magic: 50, mind: 40 }, ac: 15 },
     { sp: -50 }, 41000,
-    'Turns hostile magic aside beautifully. Turns yours aside too.'),
-  art_the_wetsuit: artifact('art_the_wetsuit', 'The Wetsuit', 'leather_elven',
+    'Turns hostile magic aside beautifully. Turns yours aside too, which is why the Concord licensed exactly one.'),
+  art_sealed_skin: artifact('art_sealed_skin', 'The Sealed Skin', 'leather_elven',
     { ac: 22, resists: { water: 70 }, waterBreathing: true, waterWalk: true },
     { resists: { fire: -30 } }, 37000,
-    'Ancestor-made, sealed at every seam. Eel-Infested Waters holds no terror in it.'),
+    'Cindral work, sealed at every seam. The Greywater channels hold no terror in it and the eels find it disappointing.'),
 });
 
 // ── The merged catalogue ────────────────────────────────────────────────────

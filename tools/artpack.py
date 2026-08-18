@@ -111,6 +111,64 @@ def _normalise(a, alpha):
     return np.clip(255.0 * np.power(np.clip(a, 0, 255) / 255.0, g), 0, 255)
 
 
+def pack_figures(width=320, feather=0.012):
+    """Matte the standing figures off their flat grey ground.
+
+    Same connectivity trick as the spell plates, but keyed on distance from the
+    border colour rather than on brightness: these are painted on a mid-grey
+    that is darker than plenty of the paint on top of it, so a brightness
+    threshold would eat the highlights out of a cleric's white robe.
+
+    They are composited over a procedurally painted stone niche that has to keep
+    matching the panel, which is why they carry alpha instead of shipping their
+    own background.
+    """
+    out = 0
+    for src in sorted(glob.glob(os.path.join(ROOT, 'figures', '*.png'))):
+        a = np.asarray(Image.open(src).convert('RGB'), dtype=np.float32)
+        h, w, _ = a.shape
+
+        bg = _flat_ground_mask(a)
+        soft = np.asarray(
+            Image.fromarray(((~bg) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(2.0)),
+            dtype=np.float32) / 255.0
+        # No vignette top or bottom: a figure stands on the bottom edge of its
+        # frame and fading its boots out would leave it floating.
+        alpha = soft * _side_falloff(h, w, feather)
+
+        rgba = np.dstack([a, alpha * 255.0]).astype(np.uint8)
+        im = Image.fromarray(rgba, 'RGBA')
+        im = im.resize((width, max(1, round(width * h / w))), Image.LANCZOS)
+        im.save(os.path.join(ROOT, 'figures', os.path.basename(src)[:-4] + '.plate.png'),
+                'PNG', optimize=True)
+        out += 1
+    return out
+
+
+def _flat_ground_mask(a):
+    """The connected run of flat backdrop reachable from the frame edge."""
+    ring = np.concatenate([
+        a[:8].reshape(-1, 3), a[-8:].reshape(-1, 3),
+        a[:, :8].reshape(-1, 3), a[:, -8:].reshape(-1, 3),
+    ])
+    ground = np.median(ring, axis=0)
+    near = (np.linalg.norm(a - ground, axis=2) < 26).astype(np.uint8) * 255
+
+    h, w = near.shape
+    padded = np.full((h + 2, w + 2), 255, np.uint8)
+    padded[1:-1, 1:-1] = near
+    im = Image.fromarray(np.dstack([padded] * 3), 'RGB')
+    ImageDraw.floodfill(im, (0, 0), (255, 0, 0), thresh=0)
+    filled = np.asarray(im)[1:-1, 1:-1]
+    return (filled[:, :, 0] == 255) & (filled[:, :, 1] == 0)
+
+
+def _side_falloff(h, w, feather):
+    """Feather the left and right edges only."""
+    x = np.abs(np.linspace(-1.0, 1.0, w))[None, :]
+    return np.clip((1.0 - x) / feather, 0.0, 1.0) * np.ones((h, 1), np.float32)
+
+
 def _paper_mask(a):
     """The connected run of page reachable from the frame edge.
 
@@ -171,11 +229,13 @@ def pack_flat(sub, size, quality=86, only=None):
 if __name__ == '__main__':
     p = pack_portraits()
     s, suspect = pack_spells()
+    f = pack_figures()
     i = pack_flat('interiors', 960)
     # The school covers sit in the same folder as the spell plates but are
     # opaque framed paintings rather than matted cut-outs, so they take the
     # flat treatment; pack_spells skips them by prefix for the same reason.
     c = pack_flat('spells', 448, only='cover_')
-    print(f'[artpack] {p} portraits, {s} spell plates, {c} school covers, {i} interiors')
+    print(f'[artpack] {p} portraits, {s} spell plates, {c} school covers, '
+          f'{i} interiors, {f} figures')
     for name, cover in suspect:
         print(f'  ?  {name}: matte kept {cover:.0%} of the frame - check it')

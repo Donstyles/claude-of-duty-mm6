@@ -6,6 +6,11 @@
  * the sidebar is not a slab of wood: it is marble with a plank board inset into
  * it, the venue title sitting on the bare marble above the board, exactly as
  * MM6 arranges it (REFERENCE §3.4, screenshot 28).
+ *
+ * Every rule that restates one in `ui.panels.css` is written through an
+ * ancestor on purpose. The shared sheet is imported first, so a tie on
+ * specificity would be won by whichever file the bundler happened to emit
+ * last; one extra class settles it deterministically.
  */
 
 /* ── the room, and the words over the bottom of it ─────────────────────────── */
@@ -53,28 +58,33 @@
 
 /* ── the sidebar block ────────────────────────────────────────────────────── */
 
-.mm-npc-side {
+.mm-panel-side .mm-npc-side {
   position: absolute;
   inset: 0;
+  padding: 0;
   background: var(--tex-marble-side) center / 100% calc(var(--u) * 352) no-repeat;
   background-color: #8c8578;
 }
 
-/* Venue title: bare marble above the board, white upright serif, centred. */
-.mm-venue {
+/* Venue title: bare marble above the board, white upright serif, centred, and
+   on one line — a second line would disappear behind the board. */
+.mm-npc-side .mm-venue {
   position: absolute;
-  top: calc(var(--u) * 3);
+  top: calc(var(--u) * 4);
   left: calc(var(--u) * 4);
   right: calc(var(--u) * 4);
   text-align: center;
-  font-size: calc(var(--u) * 13);
-  line-height: calc(var(--u) * 16);
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 15);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--ink);
   text-shadow: var(--shadow);
 }
 
 /* The plank board, inset into the marble with rounded corners. */
-.mm-npc-board {
+.mm-npc-side .mm-npc-board {
   position: absolute;
   top: calc(var(--u) * 21);
   left: calc(var(--u) * 4);
@@ -94,12 +104,13 @@
     0 calc(var(--u) * 1) calc(var(--u) * 3) rgba(0, 0, 0, 0.5);
 }
 
-/* Rectangular, 4:5, in a thin grey-green bevel — never an oval. The party's
-   own portraits are the eggs; a shopkeeper's is a framed picture. */
-.mm-npc-portrait {
-  width: calc(var(--u) * 62);
-  height: calc(var(--u) * 78);
+/* Rectangular, 4:5, in a thin grey-green bevel — never an oval. The party's own
+   portraits are the eggs; a shopkeeper's is a framed picture on a wall. */
+.mm-npc-board .mm-npc-portrait {
+  width: calc(var(--u) * 60);
+  height: calc(var(--u) * 75);
   margin: calc(var(--u) * 4) 0 0;
+  flex: none;
   background: center / cover no-repeat;
   background-color: #241a12;
   box-shadow:
@@ -108,8 +119,8 @@
     inset 0 0 calc(var(--u) * 8) rgba(0, 0, 0, 0.55);
 }
 
-.mm-npc-name {
-  margin-top: calc(var(--u) * 8);
+.mm-npc-board .mm-npc-name {
+  margin-top: calc(var(--u) * 7);
   text-align: center;
   font-size: calc(var(--u) * 14);
   line-height: calc(var(--u) * 15);
@@ -117,7 +128,7 @@
   text-shadow: var(--shadow);
 }
 
-.mm-npc-trade {
+.mm-npc-board .mm-npc-trade {
   margin-top: calc(var(--u) * 2);
   text-align: center;
   font-size: calc(var(--u) * 10);
@@ -126,24 +137,28 @@
   text-shadow: var(--shadow);
 }
 
-/* Options: centred white italic, wrapping to centred second lines. */
-.mm-npc-options {
+/* Options: centred white italic, wrapping to centred second lines. Centred with
+   auto margins rather than `justify-content`, which clips the first row when a
+   long list has to scroll. */
+.mm-npc-board .mm-npc-options {
   flex: 1;
   min-height: 0;
   width: 100%;
-  margin-top: calc(var(--u) * 9);
+  margin-top: calc(var(--u) * 5);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: calc(var(--u) * 9);
+  gap: calc(var(--u) * 8);
   overflow-y: auto;
   scrollbar-width: none;
 }
 
-.mm-npc-options::-webkit-scrollbar { display: none; }
+.mm-npc-board .mm-npc-options > *:first-child { margin-top: auto; }
+.mm-npc-board .mm-npc-options > *:last-child { margin-bottom: auto; }
+.mm-npc-board .mm-npc-options::-webkit-scrollbar { display: none; }
 
-.mm-npc-option {
+.mm-npc-board .mm-npc-option {
+  flex: none;
   font-size: calc(var(--u) * 14);
   font-style: italic;
   text-align: center;
@@ -153,21 +168,22 @@
   text-shadow: var(--shadow);
 }
 
-.mm-npc-option:hover,
-.mm-npc-option:focus-visible { color: var(--gold); outline: none; }
-.mm-npc-option.is-special { color: var(--gold-deep); }
-.mm-npc-option.is-special:hover { color: var(--gold); }
+.mm-npc-board .mm-npc-option:hover,
+.mm-npc-board .mm-npc-option:focus-visible { color: var(--gold); outline: none; }
+.mm-npc-board .mm-npc-option.is-special { color: var(--gold-deep); }
+.mm-npc-board .mm-npc-option.is-special:hover { color: var(--gold); }
 
-.mm-npc-closed {
+.mm-npc-board .mm-npc-closed {
   font-size: calc(var(--u) * 12);
   font-style: italic;
-  color: #b3a58a;
+  color: #d8cbb0;
   text-align: center;
 }
 
-.mm-npc-exit {
+/* The one brass oval, sitting on the boards at the foot of the list. */
+.mm-npc-board .mm-npc-exit {
   position: static;
   transform: none;
-  margin: calc(var(--u) * 6) 0 calc(var(--u) * 2);
   flex: none;
+  margin: calc(var(--u) * 6) 0 calc(var(--u) * 2);
 }

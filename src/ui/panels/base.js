@@ -186,8 +186,17 @@ export class Panel {
   refreshNiche() {
     const vm = this.ui.active();
     if (!this.nicheFigure || !vm) return;
-    const url = this.ui.textures.figure(vm.portraitSpec ?? { classId: vm.classId });
-    this.nicheFigure.style.backgroundImage = url ? `url("${url}")` : '';
+    const spec = vm.portraitSpec ?? { classId: vm.classId };
+    // Two layers, painted stone underneath and a painted body on top. The
+    // stone is a synchronous canvas so it is there on the first frame; the
+    // body is a file and arrives a frame later, which is the right way round.
+    const stone = this.ui.textures.figure(spec);
+    const body = this.ui.textures.figurePlate?.(spec);
+    const layers = [];
+    if (body) layers.push(`url("${body}")`);
+    if (stone) layers.push(`url("${stone}")`);
+    this.nicheFigure.style.backgroundImage = layers.join(', ');
+    this.nicheFigure.classList.toggle('has-plate', !!body);
   }
 
   /** The five wide gold ovals every equipment screen carries. */

@@ -96,8 +96,16 @@ export class CharacterPanel extends Panel {
   constructor(ui) {
     super(ui);
     this.page = 'stats';
+    /** Set by `tabs.setActive` before the screen is open; consumed by onOpen. */
+    this._pending = null;
     // Kept so callers can drive the page the way they always have.
-    this.tabs = { setActive: (id) => { this.page = id; if (this.opened) this.refresh(); } };
+    this.tabs = {
+      setActive: (id) => {
+        this.page = id;
+        this._pending = id;
+        if (this.opened) this.refresh();
+      },
+    };
   }
 
   build(body, side) {
@@ -139,7 +147,16 @@ export class CharacterPanel extends Panel {
     this.buildNiche(side);
   }
 
-  onOpen(opts) { if (opts?.page) this.page = opts.page; }
+  /**
+   * The sheet always opens on Stats unless the caller names a page — the ovals
+   * do, and only they do. Remembering the last page instead would make what the
+   * screen shows depend on what somebody did to it an hour ago, which is also
+   * what would make the registered capture shot non-deterministic.
+   */
+  onOpen(opts) {
+    this.page = opts?.page ?? this._pending ?? 'stats';
+    this._pending = null;
+  }
 
   /**
    * MM6 leaves the party bar live under every full-screen panel, so the sheet
@@ -339,21 +356,29 @@ export class CharacterPanel extends Panel {
       fight.appendChild(labelRow('Damage', 'N/A', { tone: 'mm-t-dim', tip: () => none }));
     }
 
+    // The resistance roll is `effective / (effective + 30)`, where Luck counts
+    // twice its bonus and the attacker's power comes off the top — so the sheet
+    // can quote the real odds against an unremarkable attacker.
+    const luck = statBonus(effectiveStat(src, 'luck')) * 2;
     const res = engraved('mm-block is-fill');
     for (const [id, label] of RESISTANCES) {
       const r = this._resistance(c, src, id);
+      const effective = Math.max(0, r.cur + luck);
       res.appendChild(labelRow(label, `${r.cur} / ${r.base}`, {
         tone: this._tone(r.cur, r.base),
         tip: () => tipMarkup({
           title: `${label} Resistance`,
-          subtitle: r.cur > 0 ? `${Math.min(90, Math.round((r.cur / (r.cur + 30)) * 100))}% of blows shrugged off` : 'Unprotected',
+          subtitle: effective > 0
+            ? `${Math.round((effective / (effective + 30)) * 100)}% to halve the damage`
+            : 'No defence at all',
           lines: [
             { k: 'Base', v: r.base },
             r.items ? { k: 'Equipment', v: signed(r.items) } : null,
             r.school ? { k: 'Grandmaster of the school', v: signed(r.school) } : null,
+            luck ? { k: 'Luck, counted twice', v: signed(luck) } : null,
           ],
           flavour: RESISTANCE_NOTE[id],
-          footer: 'Luck weights the roll; a passed check cuts the damage, a well-passed one cuts it again.',
+          footer: 'A passed check halves the hit; the caster\'s own power comes off your total first. 200 is immunity.',
         }),
       }));
     }

@@ -4,13 +4,18 @@ import { getMaterialLibrary } from '../render/MaterialLibrary.js';
 import { buildBuilding, BUILDING_TYPES, STYLE_MATERIALS, SLOT_COUNT } from './BuildingGen.js';
 
 /**
- * New Sorpigal.
+ * Millhaven.
  *
- * Laid out the way MM6's starting town reads in the reference: a walled
- * settlement on a flattened plateau, a stone archway gate with a hanging sign,
- * a cobbled central square with a well, and the trades fronting the streets
- * that run off it. Buildings face the street they stand on, which is most of
- * what makes a procedural town look designed rather than scattered.
+ * Laid out the way the reference's starting town reads: a walled settlement on
+ * a flattened plateau, a stone archway gate with a hanging sign, a cobbled
+ * central square with a well, and the trades fronting the streets that run off
+ * it. Buildings face the street they stand on, which is most of what makes a
+ * procedural town look designed rather than scattered.
+ *
+ * The sign over each door comes from `Venues.js`; `VenueSystem` matches the
+ * plot type to a venue kind and opens the right screen behind it. Three plots
+ * — the moot hall, the rope walk and the sea watch — are scenery, and are
+ * named here because a blank building reads as an unfinished prop.
  */
 
 const TOWN = { x: -260, z: 240, radius: 74 };
@@ -20,17 +25,17 @@ const STREETS = [0, 72, 144, 216, 288];
 
 const PLOTS = [
   // ring: which street ring the plot sits on; along: metres from the square
-  { type: 'temple', street: 0, along: 26, side: 0, name: 'Temple of the Sun' },
-  { type: 'townHall', street: 2, along: 25, side: 0, name: 'Town Hall' },
-  { type: 'tavern', street: 1, along: 17, side: -1, name: 'The Laughing Bandit' },
-  { type: 'weaponSmith', street: 1, along: 17, side: 1, name: 'The Knife Shoppe' },
-  { type: 'armoury', street: 3, along: 17, side: -1, name: 'Ironhand Armoury' },
-  { type: 'magicShop', street: 3, along: 17, side: 1, name: 'Arcane Sundries' },
-  { type: 'alchemist', street: 4, along: 17, side: -1, name: 'The Green Flask' },
-  { type: 'generalStore', street: 4, along: 17, side: 1, name: 'Sorpigal Provisions' },
-  { type: 'trainingHall', street: 2, along: 38, side: 1, name: 'Training Grounds' },
-  { type: 'guildHall', street: 0, along: 39, side: -1, name: 'Guild of Elements' },
-  { type: 'tower', street: 2, along: 48, side: -1, name: 'The Watchtower' },
+  { type: 'temple', street: 0, along: 26, side: 0, name: 'Chapel of the Kindled Lamp' },
+  { type: 'townHall', street: 2, along: 25, side: 0, name: 'The Moot Hall' },
+  { type: 'tavern', street: 1, along: 17, side: -1, name: 'The Bell and Anchor' },
+  { type: 'weaponSmith', street: 1, along: 17, side: 1, name: 'Hobb’s Forge' },
+  { type: 'armoury', street: 3, along: 17, side: -1, name: 'The Riveted Coat' },
+  { type: 'magicShop', street: 3, along: 17, side: 1, name: 'The Rope Walk' },
+  { type: 'alchemist', street: 4, along: 17, side: -1, name: 'Green Bottle' },
+  { type: 'generalStore', street: 4, along: 17, side: 1, name: 'Downs Provisioners' },
+  { type: 'trainingHall', street: 2, along: 38, side: 1, name: 'Millhaven Yard' },
+  { type: 'guildHall', street: 0, along: 39, side: -1, name: 'Guild of the Ember' },
+  { type: 'tower', street: 2, along: 48, side: -1, name: 'The Sea Watch' },
   { type: 'house', street: 0, along: 37, side: 1 },
   { type: 'house', street: 1, along: 29, side: -1 },
   { type: 'house', street: 1, along: 29, side: 1 },
@@ -48,6 +53,8 @@ export class TownSystem extends System {
 
   constructor() {
     super();
+    /** Which town in Regions.js this geometry is. VenueSystem reads it. */
+    this.townId = 'town_millhaven';
     this.group = null;
     this.buildings = [];
     this.doors = [];
@@ -270,7 +277,7 @@ export class TownSystem extends System {
     this.group.add(wall);
 
     // The gate: two rough stone piers carrying a timber lintel and a sign —
-    // this is the silhouette that identifies New Sorpigal in the reference.
+    // this is the silhouette that identifies the starting town in the reference.
     const gx = TOWN.x + Math.sin(gateBearing) * R;
     const gz = TOWN.z + Math.cos(gateBearing) * R;
     const gate = new THREE.Group();
@@ -297,7 +304,7 @@ export class TownSystem extends System {
     // distance.
     const board = new THREE.Mesh(
       new THREE.BoxGeometry(3.1, 1.1, 0.12),
-      [timber, timber, timber, timber, this._signMaterial('NEW SORPIGAL'), timber],
+      [timber, timber, timber, timber, this._signMaterial('MILLHAVEN'), timber],
     );
     board.position.set(0, pierH - 1.35, 0);
     board.castShadow = true;
@@ -479,7 +486,7 @@ export class TownSystem extends System {
 
     const sqX = TOWN.x + 15, sqZ = TOWN.z + 21;
     capture.registerShot('town-square', {
-      description: 'New Sorpigal square across the well, mid-morning.',
+      description: 'Millhaven square across the well, mid-morning.',
       camera: {
         position: [sqX, eyeY(sqX, sqZ), sqZ],
         yaw: lookAt(sqX, sqZ, TOWN.x - 6, TOWN.z - 30), pitch: -3, fov: 75,

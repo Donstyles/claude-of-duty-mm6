@@ -316,7 +316,7 @@ const WEAPON = {
   },
   blaster: {
     id: 'blaster', name: 'Blaster', category: 'weapon', attribute: 'accuracy',
-    description: 'Ancestor technology out of the sky-ship wrecks. It does not care what you are made of.',
+    description: 'Salvage out of the wreck under the glass. It does not care what you are made of.',
     tiers: {
       normal: { label: 'Normal', effect: '+1 Attack and +1 Damage per point of Blaster skill.' },
       expert: { label: 'Expert', effect: 'As Normal, with recovery time reduced by 10 frames.' },
@@ -538,7 +538,7 @@ const MISC = {
   },
   repair_item: {
     id: 'repair_item', name: 'Repair Item', category: 'misc', attribute: 'accuracy',
-    description: 'Straightening a bent blade in the field beats carrying it to Free Haven.',
+    description: 'Straightening a bent blade in the field beats carrying it back to Thornwick.',
     tiers: {
       normal: { label: 'Normal', effect: 'Repair broken items of power up to twice your skill.' },
       expert: { label: 'Expert', effect: 'Repair items of power up to three times your skill.' },
@@ -555,7 +555,7 @@ const MISC = {
     },
   },
   body_building: {
-    id: 'body_building', name: 'Body Building', category: 'misc', attribute: 'endurance',
+    id: 'body_building', name: 'Conditioning', category: 'misc', attribute: 'endurance',
     description: 'Slabs of hard-earned muscle standing between you and a dragon\'s claw.',
     tiers: {
       normal: { label: 'Normal', effect: '+1 Hit Point per point of skill.' },
@@ -619,7 +619,7 @@ const MISC = {
   },
   disarm_trap: {
     id: 'disarm_trap', name: 'Disarm Trap', category: 'misc', attribute: 'accuracy',
-    description: 'Chests in Enroth are rarely just chests. Wire cutters and steady nerves.',
+    description: 'A Cindric chest is rarely just a chest. Wire cutters and steady nerves.',
     tiers: {
       normal: { label: 'Normal', effect: 'Disarm chance scales with skill against the trap\'s level.' },
       expert: { label: 'Expert', effect: 'Effective skill is increased by half.' },
@@ -668,7 +668,7 @@ const MISC = {
   },
   stealing: {
     id: 'stealing', name: 'Stealing', category: 'misc', attribute: 'speed',
-    description: 'The other economy. Guards in Free Haven have opinions about it.',
+    description: 'The other economy. The Saltmarch watch has opinions about it.',
     tiers: {
       normal: { label: 'Normal', effect: 'Lift coin from a pocket; often noticed.' },
       expert: { label: 'Expert', effect: 'Effective skill increased by half; larger hauls.' },
@@ -687,7 +687,7 @@ const MISC = {
     },
   },
   armsmaster: {
-    id: 'armsmaster', name: 'Armsmaster', category: 'misc', attribute: 'might',
+    id: 'armsmaster', name: 'Weapon Drill', category: 'misc', attribute: 'might',
     description: 'General mastery of arms. It sharpens every weapon you have ever picked up.',
     tiers: {
       normal: { label: 'Normal', effect: '+1 Attack per point of skill with every weapon.' },

@@ -1,1 +1,289 @@
-/* Styles owned by ./menu.js. Shared chrome stays in ../ui.panels.css. */
+/* Styles owned by ./menu.js. Shared chrome stays in ../ui.panels.css.
+ *
+ * The root page is the original: a near-black cavern, a gold-plated logo
+ * cartouche and recessed plaques in warm gold serif with Quit in red. The
+ * pages behind it — options, slots, controls — are built from the same three
+ * materials, so nothing on them reads as a different game's dialogue box.
+ */
+
+.mm-menu {
+  padding: calc(var(--u) * 14) calc(var(--u) * 18) calc(var(--u) * 12);
+  gap: calc(var(--u) * 10);
+  justify-content: flex-start;
+  background:
+    radial-gradient(ellipse at 50% 38%, rgba(80, 74, 58, 0.55), rgba(0, 0, 0, 0) 62%),
+    radial-gradient(ellipse at 50% 40%, #313029, #212018 45%, #181810 100%);
+}
+
+.mm-menu-logo {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  padding: calc(var(--u) * 5) calc(var(--u) * 30);
+  font-size: calc(var(--u) * 26);
+}
+.mm-menu-logo-name { letter-spacing: 0.16em; line-height: 1.05; }
+.mm-menu-logo-sub {
+  font-size: calc(var(--u) * 11);
+  letter-spacing: 0.30em;
+  color: #c9a44a;
+}
+
+/* The root page keeps MM6's centred column; every other page is a working
+   sheet and fills the width it is given. */
+.mm-menu-page {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+}
+.mm-panel[data-panel='menu'][data-page='root'] .mm-menu-page { justify-content: center; }
+
+.mm-menu-grid { grid-template-columns: repeat(2, calc(var(--u) * 156)); gap: calc(var(--u) * 8); }
+.mm-menu-item {
+  height: calc(var(--u) * 32);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 1);
+  padding: 0 calc(var(--u) * 6);
+}
+.mm-menu-item small {
+  font-size: calc(var(--u) * 9);
+  font-style: italic;
+  color: #a09070;
+  line-height: 1;
+}
+.mm-menu-item.is-dead { color: #8a7c5c; cursor: default; }
+.mm-menu-item.is-dead:hover { color: #8a7c5c; }
+
+.mm-menu-hint {
+  font-size: calc(var(--u) * 10);
+  font-style: italic;
+  color: #8a7f66;
+}
+
+/* ── page furniture ───────────────────────────────────────────────────────── */
+
+.mm-menu-head { width: 100%; text-align: center; flex: 0 0 auto; }
+.mm-menu-head h2 {
+  margin: 0;
+  font-size: calc(var(--u) * 18);
+  font-weight: normal;
+  letter-spacing: 0.12em;
+  color: #ffdf94;
+}
+.mm-menu-head p {
+  margin: calc(var(--u) * 2) auto 0;
+  max-width: calc(var(--u) * 360);
+  font-size: calc(var(--u) * 10);
+  font-style: italic;
+  line-height: 1.35;
+  color: #b6a988;
+}
+
+.mm-menu-prose {
+  max-width: calc(var(--u) * 340);
+  font-size: calc(var(--u) * 11);
+  line-height: 1.45;
+  color: #d8ccb0;
+}
+.mm-menu-prose p { margin: 0 0 calc(var(--u) * 6); }
+
+.mm-menu-actions { display: flex; gap: calc(var(--u) * 8); flex: 0 0 auto; }
+.mm-menu-actions.is-foot { margin-top: auto; }
+
+.mm-menu-plaque {
+  height: calc(var(--u) * 26);
+  padding: 0 calc(var(--u) * 16);
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--u) * 13);
+  color: #ffd773;
+  background: rgba(30, 28, 22, 0.7);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(10, 8, 4, 0.95),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(140, 122, 74, 0.6);
+}
+.mm-menu-plaque:hover { color: #fff2c0; }
+.mm-menu-plaque.is-lead { color: #fff2c0; background: rgba(70, 58, 26, 0.75); }
+
+/* ── save slots ───────────────────────────────────────────────────────────── */
+
+.mm-slot-list {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 4);
+  padding-right: calc(var(--u) * 4);
+}
+.mm-slot-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-slot-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+
+.mm-slot-wrap { position: relative; display: flex; }
+.mm-slot {
+  flex: 1;
+  min-width: 0;
+  padding: calc(var(--u) * 4) calc(var(--u) * 10);
+  text-align: left;
+  background: rgba(26, 24, 18, 0.75);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(8, 6, 2, 0.95),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(120, 104, 62, 0.55);
+}
+.mm-slot:hover { background: rgba(46, 40, 24, 0.85); }
+.mm-slot.is-empty { color: #8a7f66; }
+.mm-slot:disabled { cursor: default; }
+.mm-slot:disabled:hover { background: rgba(26, 24, 18, 0.75); }
+
+.mm-slot-head { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
+.mm-slot-name { font-size: calc(var(--u) * 13); color: #ffd773; }
+.mm-slot.is-empty .mm-slot-name { color: #9a8c6a; }
+.mm-slot-when { font-size: calc(var(--u) * 9); color: #9a8c6a; white-space: nowrap; }
+.mm-slot-body { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
+.mm-slot-party {
+  font-size: calc(var(--u) * 10);
+  color: #d8ccb0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mm-slot-place { font-size: calc(var(--u) * 10); font-style: italic; color: #a5966f; white-space: nowrap; }
+
+.mm-slot-del {
+  width: calc(var(--u) * 20);
+  display: grid;
+  place-items: center;
+  color: #b06050;
+}
+.mm-slot-del:hover { color: #ff8a70; }
+
+/* ── options ──────────────────────────────────────────────────────────────── */
+
+.mm-opt-list {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  padding-right: calc(var(--u) * 4);
+}
+.mm-opt-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-opt-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+
+.mm-opt-row {
+  display: grid;
+  grid-template-columns: 1fr calc(var(--u) * 150) calc(var(--u) * 44);
+  align-items: center;
+  gap: calc(var(--u) * 10);
+  padding: calc(var(--u) * 4) calc(var(--u) * 6);
+  border-bottom: 1px solid rgba(120, 104, 62, 0.22);
+}
+.mm-opt-label span { font-size: calc(var(--u) * 12); color: #ffd773; }
+.mm-opt-label small {
+  display: block;
+  font-size: calc(var(--u) * 9);
+  font-style: italic;
+  line-height: 1.3;
+  color: #a5966f;
+}
+.mm-opt-value { font-size: calc(var(--u) * 11); text-align: right; color: #fff2c0; }
+.mm-opt-wide { grid-column: 2 / span 2; display: flex; gap: calc(var(--u) * 4); }
+
+/* A slider MM6 never had, built out of the parts it did: a recessed channel
+   and a brass fitting sliding in it. */
+.mm-opt-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: calc(var(--u) * 10);
+  background: linear-gradient(180deg, #191712, #2c2820);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.95),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(120, 104, 62, 0.5);
+  outline: none;
+  cursor: pointer;
+}
+.mm-opt-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: calc(var(--u) * 11);
+  height: calc(var(--u) * 18);
+  background: linear-gradient(180deg, #ebe2a7 0 18%, #c3b37a 45%, #a98e57 70%, #7a6031);
+  box-shadow: 0 0 0 1px #302410;
+}
+.mm-opt-slider::-moz-range-thumb {
+  width: calc(var(--u) * 11);
+  height: calc(var(--u) * 18);
+  border: 1px solid #302410;
+  border-radius: 0;
+  background: linear-gradient(180deg, #ebe2a7 0 18%, #c3b37a 45%, #a98e57 70%, #7a6031);
+}
+
+.mm-opt-toggle,
+.mm-opt-choice {
+  min-width: calc(var(--u) * 40);
+  height: calc(var(--u) * 20);
+  padding: 0 calc(var(--u) * 8);
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--u) * 11);
+  color: #b6a988;
+  background: rgba(26, 24, 18, 0.8);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(8, 6, 2, 0.95),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(120, 104, 62, 0.5);
+}
+.mm-opt-toggle:hover,
+.mm-opt-choice:hover { color: #fff2c0; }
+.mm-opt-toggle.is-on,
+.mm-opt-choice.is-on {
+  color: #16301e;
+  background: linear-gradient(180deg, #f4dd92, #c19a34);
+  box-shadow: inset 0 calc(var(--u) * 1) 0 rgba(255, 255, 255, 0.5);
+  text-shadow: none;
+}
+
+/* ── controls ─────────────────────────────────────────────────────────────── */
+
+.mm-ctrl-list {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  columns: 2;
+  column-gap: calc(var(--u) * 20);
+  padding-right: calc(var(--u) * 4);
+}
+.mm-ctrl-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-ctrl-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+.mm-ctrl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: calc(var(--u) * 8);
+  break-inside: avoid;
+  padding: calc(var(--u) * 2) 0;
+  font-size: calc(var(--u) * 11);
+  color: #d8ccb0;
+  border-bottom: 1px solid rgba(120, 104, 62, 0.18);
+}
+.mm-ctrl-keys { display: flex; gap: calc(var(--u) * 3); }
+.mm-ctrl-row kbd {
+  font: inherit;
+  font-size: calc(var(--u) * 10);
+  padding: 0 calc(var(--u) * 5);
+  color: #ffd773;
+  background: rgba(40, 36, 24, 0.9);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(140, 122, 74, 0.5),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(8, 6, 2, 0.9);
+}

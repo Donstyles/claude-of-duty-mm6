@@ -1,11 +1,11 @@
 /**
- * Monsters — the bestiary, in MM6's three-tier family ladders.
+ * Monsters — the bestiary, in three-tier family ladders.
  *
  * Every family has a common, an uncommon and a boss-grade variant that share a
- * silhouette but differ in colour, scale and equipment, exactly as MM6 did with
- * its Goblin / Goblin Shaman / Goblin King palette swaps.
+ * silhouette but differ in colour, scale and equipment, the way the reference
+ * did with its Goblin / Goblin Shaman / Goblin King palette swaps.
  *
- * Resistances are MM6-style percentages against the eleven damage channels:
+ * Resistances are percentages against the eleven damage channels:
  *   0 = none, 50 = halved, 100 = strong, 200 = immune.
  *
  * The `visual` block is a build recipe, not a description: `bodyPlan` selects a
@@ -104,7 +104,7 @@ mon('goblin', 'Goblin', 'goblin', 1, 2, 14, 3, [1, 4, 1], {
   speed: 3.6, height: 1.4, size: 'small', aggro: 16,
   visual: vis('humanoid', { primary: 0x6f7a3a, secondary: 0x5a4029, accent: 0x8c8578, eye: 0xd8a020 },
     ['loincloth', 'crude-blade', 'pointed-ears', 'hunched'], { scale: 0.8 }),
-  desc: 'Knee-high, foul-tempered and never alone. The first thing every party in New Sorpigal kills.',
+  desc: 'Knee-high, foul-tempered and never alone. The first thing every party out of Millhaven kills.',
 });
 mon('goblin_shaman', 'Goblin Shaman', 'goblin', 2, 5, 30, 5, [1, 4, 2], {
   speed: 3.2, height: 1.45, size: 'small', aggro: 20,
@@ -128,7 +128,7 @@ mon('bat', 'Bat', 'bat', 1, 1, 8, 6, [1, 3, 0], {
   speed: 5.5, height: 0.5, size: 'tiny', aggro: 12, flags: { flying: true },
   visual: vis('avian', { primary: 0x3a2e28, secondary: 0x5a4438, accent: 0x201a16, eye: 0xc03020 },
     ['leather-wings', 'fangs', 'large-ears'], { scale: 0.5 }),
-  desc: 'A nuisance with teeth. Every cellar in Enroth has a colony.',
+  desc: 'A nuisance with teeth. Every cellar in Caerwen has a colony.',
 });
 mon('vampire_bat', 'Vampire Bat', 'bat', 2, 4, 26, 10, [1, 4, 2], {
   speed: 6.2, height: 0.7, size: 'small', aggro: 16,
@@ -178,7 +178,7 @@ mon('dragonfly', 'Dragonfly', 'dragonfly', 1, 2, 16, 9, [1, 4, 0], {
   speed: 5.8, height: 0.9, size: 'small', flags: { flying: true },
   visual: vis('insectoid', { primary: 0x3a7a6a, secondary: 0x8ad0c0, accent: 0x204038, eye: 0xd0ff60 },
     ['glass-wings', 'segmented-tail', 'compound-eyes'], { scale: 0.9 }),
-  desc: 'The size of a hunting hawk and twice as fast. The Bootleg Bay marshes are full of them.',
+  desc: 'The size of a hunting hawk and twice as fast. The Saltmarch channels are full of them.',
 });
 mon('bloodsucker', 'Bloodsucker', 'dragonfly', 2, 6, 42, 14, [1, 6, 2], {
   speed: 6.4, height: 1.1, flags: { flying: true, poisonous: true },
@@ -202,7 +202,7 @@ mon('wolf', 'Wolf', 'wolf', 1, 3, 24, 7, [1, 6, 1], {
   speed: 5.2, height: 1.0, size: 'medium', aggro: 20,
   visual: vis('quadruped', { primary: 0x6a5a4a, secondary: 0x8c8578, accent: 0x2a2018, eye: 0xd8b040 },
     ['fur', 'fangs', 'tail', 'ruff'], { scale: 1.0 }),
-  desc: 'Hunts the Ironfist woods in packs of five or six. Never just one.',
+  desc: 'Hunts the Thornwick woods in packs of five or six. Never just one.',
 });
 mon('dire_wolf', 'Dire Wolf', 'wolf', 2, 7, 55, 13, [2, 5, 2], {
   speed: 5.8, height: 1.3, size: 'large', aggro: 24,
@@ -217,7 +217,7 @@ mon('hell_hound', 'Hell Hound', 'wolf', 3, 13, 130, 24, [2, 8, 4], {
   resists: { fire: IMMUNE, water: -25, dark: 40 },
   visual: vis('quadruped', { primary: 0x2a1010, secondary: 0xff5020, accent: 0x0a0404, eye: 0xffd020 },
     ['fur', 'fangs', 'tail', 'ember-glow', 'smoke'], { scale: 1.4 }),
-  desc: 'Kreegan-bred. The scorch marks on the ground last longer than the corpse does.',
+  desc: 'Bred somewhere under the glass. The scorch marks outlast the corpse.',
 });
 
 // ── Spiders ─────────────────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ mon('harpy', 'Harpy', 'harpy', 1, 5, 34, 12, [1, 6, 2], {
   speed: 5.0, height: 1.6, flags: { flying: true },
   visual: vis('winged-humanoid', { primary: 0x8a6a40, secondary: 0xc0a060, accent: 0x40301a, eye: 0xffd060 },
     ['feathered-wings', 'talons', 'matted-hair', 'beak'], { scale: 1.0 }),
-  desc: 'Nests on the Bootleg Bay cliffs and screams the whole way down at you.',
+  desc: 'Nests on the Saltmarch cliffs and screams the whole way down at you.',
 });
 mon('harpy_hag', 'Harpy Hag', 'harpy', 2, 10, 82, 20, [2, 5, 3], {
   speed: 5.4, height: 1.7, flags: { flying: true }, treasure: 2,
@@ -320,7 +320,7 @@ mon('steel_gargoyle', 'Steel Gargoyle', 'gargoyle', 3, 18, 210, 42, [2, 8, 6], {
   resists: { physical: 75, earth: 90, mind: IMMUNE, body: IMMUNE, fire: 50, air: 40 },
   visual: vis('winged-humanoid', { primary: 0x4a4f57, secondary: 0xa0a8b0, accent: 0x1e2126, eye: 0x60ffff },
     ['metal-wings', 'horns', 'claws', 'riveted-plates', 'blue-glow'], { scale: 1.4 }),
-  desc: 'Ancestor work, not stonemason\'s. Something inside it is still running.',
+  desc: 'Cindral work, not a stonemason\'s. Something inside it is still running.',
 });
 
 // ── Minotaurs ───────────────────────────────────────────────────────────────
@@ -344,7 +344,7 @@ mon('minotaur_king', 'Minotaur King', 'minotaur', 3, 24, 380, 48, [3, 10, 7], {
   resists: { physical: 50, mind: 70, fire: 40, earth: 30 },
   visual: vis('brute', { primary: 0x2a2020, secondary: 0xd8b25c, accent: 0x100a08, eye: 0xffd020 },
     ['bull-head', 'gilded-horns', 'great-axe', 'plate-harness', 'crown', 'war-paint'], { scale: 1.8 }),
-  desc: 'The labyrinth under Kriegspire has one, and it has been there longer than the mountain has had a name.',
+  desc: 'The labyrinth under Malveth has one, and it was there before the needles had a name.',
 });
 
 // ── Dragons ─────────────────────────────────────────────────────────────────
@@ -365,7 +365,7 @@ mon('elder_dragon', 'Elder Dragon', 'dragon', 2, 32, 750, 60, [4, 10, 10], {
   resists: { fire: 100, physical: 60, mind: 90, earth: 50, air: 50, water: 50, dark: 40 },
   visual: vis('dragon', { primary: 0x5a2020, secondary: 0xd06020, accent: 0x200808, eye: 0xffe040 },
     ['scales', 'membrane-wings', 'crest-horns', 'long-tail', 'claws', 'fangs', 'ember-glow'], { scale: 3.6 }),
-  desc: 'Red-scaled and utterly certain. Dragonsand is named for the ones that died there.',
+  desc: 'Red-scaled and utterly certain. The Verhal Sands are glazed where the old ones died.',
 });
 mon('great_wyrm', 'Great Wyrm', 'dragon', 3, 40, 1100, 72, [5, 10, 12], {
   speed: 5.4, height: 6.5, size: 'gigantic', aggro: 50, treasure: 6, attacksPerRound: 3,
@@ -402,7 +402,7 @@ mon('inferno_lord', 'Inferno Lord', 'elemental_fire', 3, 26, 340, 46, [3, 8, 8],
   resists: { fire: IMMUNE, water: -40, physical: 70, mind: IMMUNE, body: IMMUNE, earth: 50, dark: 40 },
   visual: vis('elemental', { primary: 0xffd020, secondary: 0xff3000, accent: 0x401000, eye: 0xffffff },
     ['flame-body', 'ember-trail', 'crown-of-fire', 'humanoid-shape', 'core-glow'], { scale: 2.2, emissive: true }),
-  desc: 'The Kreegans call these up. They are not reliably grateful about it.',
+  desc: 'The Choir calls these up. They are not reliably grateful about it.',
 });
 
 mon('zephyr', 'Zephyr', 'elemental_air', 1, 8, 50, 24, [1, 6, 3], {
@@ -427,7 +427,7 @@ mon('storm_lord', 'Storm Lord', 'elemental_air', 3, 26, 300, 54, [2, 10, 7], {
   resists: { air: IMMUNE, earth: -40, physical: 80, mind: IMMUNE, body: IMMUNE, water: 50, light: 30 },
   visual: vis('elemental', { primary: 0x6098d8, secondary: 0xffffff, accent: 0x203050, eye: 0xffffff },
     ['vortex-body', 'lightning-arcs', 'storm-crown', 'humanoid-shape'], { scale: 2.4, translucent: true }),
-  desc: 'Brings its own weather. Kriegspire storms are sometimes just one of these in a mood.',
+  desc: 'Brings its own weather. A Malveth storm is sometimes just one of these in a mood.',
 });
 
 mon('earth_sprite', 'Earth Sprite', 'elemental_earth', 1, 9, 80, 22, [1, 10, 3], {
@@ -458,7 +458,7 @@ mon('water_sprite', 'Water Sprite', 'elemental_water', 1, 9, 60, 20, [1, 8, 2], 
   resists: { water: IMMUNE, fire: 60, physical: 55, mind: IMMUNE, body: IMMUNE, air: -30 },
   visual: vis('elemental', { primary: 0x4fa8e8, secondary: 0xd0f0ff, accent: 0x18506a, eye: 0xffffff },
     ['water-body', 'ripples', 'no-legs'], { scale: 1.0, translucent: true }),
-  desc: 'A wave that stood up. Bootleg Bay is thick with them at high tide.',
+  desc: 'A wave that stood up. The Saltmarch flats are thick with them at high tide.',
 });
 mon('water_elemental', 'Water Elemental', 'elemental_water', 2, 17, 200, 36, [2, 8, 5], {
   speed: 4.8, height: 2.6, size: 'large', damageType: 'water', treasure: 3, flags: { aquatic: true },
@@ -475,32 +475,32 @@ mon('tide_lord', 'Tide Lord', 'elemental_water', 3, 27, 400, 52, [3, 8, 8], {
   resists: { water: IMMUNE, fire: 100, physical: 75, mind: IMMUNE, body: IMMUNE, air: -20, earth: 40 },
   visual: vis('elemental', { primary: 0x1c6a9a, secondary: 0xa0e0ff, accent: 0x082838, eye: 0x80ffff },
     ['water-body', 'ripples', 'humanoid-shape', 'coral-crown', 'foam-crest'], { scale: 2.6, translucent: true }),
-  desc: 'Eel-Infested Waters answers to one of these, and the eels know it.',
+  desc: 'Every channel in Greywater Fen answers to one of these, and the eels know it.',
 });
 
-// ── Cult of Baa ─────────────────────────────────────────────────────────────
+// ── The Hollow Choir ────────────────────────────────────────────────────────
 
-mon('baa_fanatic', 'Baa Fanatic', 'cultist', 1, 4, 30, 10, [1, 6, 2], {
+mon('choir_penitent', 'Choir Penitent', 'cultist', 1, 4, 30, 10, [1, 6, 2], {
   speed: 4.0, height: 1.8, treasure: 1,
   visual: vis('humanoid', { primary: 0x8c2030, secondary: 0x2a1a20, accent: 0xd8b25c, eye: 0xff4020 },
     ['red-robe', 'hood', 'ritual-dagger', 'brand-scar'], { scale: 1.0 }),
   desc: 'Converted, shaved and given a knife. There is always another one behind it.',
 });
-mon('cleric_of_baa', 'Cleric of Baa', 'cultist', 2, 9, 78, 18, [1, 8, 3], {
+mon('choir_cantor', 'Choir Cantor', 'cultist', 2, 9, 78, 18, [1, 8, 3], {
   speed: 3.8, height: 1.8, treasure: 3,
   ranged: { kind: 'spell', spellId: 'body_harm', power: 9, range: 30, cooldown: 4 },
   resists: { dark: 50, mind: 30 },
   visual: vis('humanoid', { primary: 0x6a1828, secondary: 0x1a1014, accent: 0xd8b25c, eye: 0xff6020 },
-    ['red-robe', 'hood', 'ram-skull-mask', 'censer', 'ritual-dagger'], { scale: 1.05 }),
+    ['ash-robe', 'hood', 'blank-mask', 'censer', 'ritual-dagger'], { scale: 1.05 }),
   desc: 'Runs a shrine, a ledger, and a quiet trade in people who will not be missed.',
 });
-mon('high_priest_of_baa', 'High Priest of Baa', 'cultist', 3, 17, 190, 30, [2, 6, 4], {
+mon('choir_precentor', 'Choir Precentor', 'cultist', 3, 17, 190, 30, [2, 6, 4], {
   speed: 3.6, height: 1.9, treasure: 5, attacksPerRound: 2,
   ranged: { kind: 'spell', spellId: 'dark_dragon_breath', power: 17, range: 40, cooldown: 6 },
   resists: { dark: 80, mind: 60, fire: 40, light: -25 },
   visual: vis('humanoid', { primary: 0x2a0a18, secondary: 0x8c2030, accent: 0xd8b25c, eye: 0xff2040 },
-    ['high-mitre', 'red-robe', 'ram-skull-mask', 'soul-jar', 'ritual-dagger'], { scale: 1.15 }),
-  desc: 'Speaks for Baa in the kingdom and has an unsettling amount of correspondence with the palace.',
+    ['high-mitre', 'ash-robe', 'blank-mask', 'reliquary', 'ritual-dagger'], { scale: 1.15 }),
+  desc: 'Speaks for the Unnamed Below, and keeps an unsettling amount of correspondence with the palace.',
 });
 
 // ── Renegade mages ──────────────────────────────────────────────────────────
@@ -557,7 +557,7 @@ mon('titan_lord', 'Titan Lord', 'titan', 3, 46, 1400, 78, [6, 10, 12], {
   resists: { physical: 70, air: IMMUNE, mind: 90, earth: 70, magic: 60, light: 50, fire: 40 },
   visual: vis('giant', { primary: 0xfff4d8, secondary: 0x2a4a7a, accent: 0xffe040, eye: 0xffffff },
     ['bronze-armour', 'great-hammer', 'beard', 'storm-halo', 'crown', 'gold-torc'], { scale: 4.4 }),
-  desc: 'There is one. It has a name, and nobody in Enroth will say it out loud.',
+  desc: 'There is one. It has a name, and nobody in Caerwen will say it out loud.',
 });
 
 // ── Devils ──────────────────────────────────────────────────────────────────
@@ -569,7 +569,7 @@ mon('devil', 'Devil', 'devil', 1, 22, 300, 44, [3, 8, 6], {
   resists: { fire: 90, dark: 70, mind: 60, physical: 40, light: -25 },
   visual: vis('winged-humanoid', { primary: 0x8a2020, secondary: 0x2a0a0a, accent: 0xff6020, eye: 0xffd020 },
     ['membrane-wings', 'horns', 'barbed-tail', 'cloven-hooves', 'ember-glow'], { scale: 1.6 }),
-  desc: 'Kreegan shock troops in a shape chosen to be recognised and feared.',
+  desc: 'Shock troops in a shape chosen to be recognised and feared.',
 });
 mon('horned_devil', 'Horned Devil', 'devil', 2, 30, 520, 56, [4, 8, 8], {
   speed: 5.4, height: 3.2, size: 'huge', aggro: 34, treasure: 5, attacksPerRound: 2,
@@ -587,7 +587,7 @@ mon('arch_devil', 'Arch Devil', 'devil', 3, 38, 850, 70, [5, 8, 11], {
   resists: { fire: IMMUNE, dark: 100, mind: 90, physical: 65, light: -20, earth: 60, water: 40 },
   visual: vis('winged-humanoid', { primary: 0x2a0808, secondary: 0xff3000, accent: 0xffd020, eye: 0xffffff },
     ['membrane-wings', 'great-horns', 'barbed-tail', 'cloven-hooves', 'flaming-glaive', 'crown-of-fire'], { scale: 2.4 }),
-  desc: 'One of the voices behind the Cult of Baa, and not the highest.',
+  desc: 'One of the voices the Choir sings to, and not the highest.',
 });
 
 // ── Zombies and ghouls ──────────────────────────────────────────────────────
@@ -641,7 +641,7 @@ mon('wraith', 'Wraith', 'ghost', 3, 24, 260, 46, [3, 8, 6], {
   resists: { physical: 95, mind: IMMUNE, body: IMMUNE, earth: 80, dark: 90, light: -20, fire: 60 },
   visual: vis('floating', { primary: 0x30304a, secondary: 0x8060c0, accent: 0x0a0a14, eye: 0xa040ff },
     ['translucent', 'tattered-shroud', 'no-legs', 'cold-mist', 'soul-flame', 'scythe'], { scale: 1.4, translucent: true }),
-  desc: 'Darkmoor is full of them, and the town has stopped pretending otherwise.',
+  desc: 'The Netherby barrows are full of them, and the town has stopped pretending otherwise.',
 });
 
 // ── Liches ──────────────────────────────────────────────────────────────────
@@ -671,7 +671,7 @@ mon('master_lich', 'Master Lich', 'lich', 3, 42, 800, 72, [3, 10, 10], {
   resists: { mind: IMMUNE, body: IMMUNE, dark: IMMUNE, physical: 70, earth: 80, fire: 70, air: 60, magic: 60, light: -20 },
   visual: vis('skeletal', { primary: 0x807650, secondary: 0x0a0416, accent: 0xff40ff, eye: 0xffffff },
     ['crown', 'robe', 'skull', 'soul-flame', 'phylactery', 'elder-staff', 'arcane-runes'], { scale: 1.25 }),
-  desc: 'The Tomb of VARN has one, and it was expecting you.',
+  desc: 'The vaults under Ossra keep one, and it was expecting you.',
 });
 
 // ── Ogres ───────────────────────────────────────────────────────────────────
@@ -720,7 +720,7 @@ mon('troll_king', 'Troll King', 'troll', 3, 23, 400, 44, [3, 10, 7], {
   flags: { regenerates: true }, resists: { physical: 60, earth: 75, dark: 50, water: 40, fire: -40 },
   visual: vis('brute', { primary: 0x2a3a4a, secondary: 0x8c8578, accent: 0xd8b25c, eye: 0x60ff60 },
     ['long-arms', 'claws', 'warty-hide', 'bone-crown', 'trophy-belt'], { scale: 2.2 }),
-  desc: 'The Mist keeps one, and the Mist keeps it fed.',
+  desc: 'The Gallowfen keeps one, and the Gallowfen keeps it fed.',
 });
 
 // ── Cyclopes ────────────────────────────────────────────────────────────────
@@ -794,7 +794,7 @@ mon('efreeti', 'Efreeti', 'genie', 2, 25, 320, 48, [3, 8, 7], {
   resists: { fire: IMMUNE, air: 60, mind: 60, physical: 45, water: -25 },
   visual: vis('floating', { primary: 0xc03020, secondary: 0xffd060, accent: 0x401008, eye: 0xffe040 },
     ['smoke-tail', 'bare-torso', 'gold-bands', 'flame-crown', 'no-legs'], { scale: 2.0, emissive: true }),
-  desc: 'Dragonsand belongs to these, whatever the maps say.',
+  desc: 'The Verhal Sands belong to these, whatever the maps say.',
 });
 mon('djinn_lord', 'Djinn Lord', 'genie', 3, 33, 480, 62, [3, 10, 9], {
   speed: 5.6, height: 3.8, size: 'huge', treasure: 6, attacksPerRound: 2, flags: { flying: true },
@@ -835,7 +835,7 @@ mon('seraph', 'Seraph', 'angel', 3, 42, 780, 76, [5, 8, 11], {
   desc: 'Nobody has ever reported speaking with one and been believed.',
 });
 
-// ── Ancestor constructs ─────────────────────────────────────────────────────
+// ── Cindral constructs ──────────────────────────────────────────────────────
 
 mon('guardian', 'Guardian', 'construct', 1, 14, 180, 34, [2, 8, 5], {
   speed: 3.4, height: 2.2, size: 'large', treasure: 3,
@@ -846,35 +846,35 @@ mon('guardian', 'Guardian', 'construct', 1, 14, 180, 34, [2, 8, 5], {
     ['riveted-plates', 'servo-joints', 'sensor-eye', 'energy-vents'], { scale: 1.5 }),
   desc: 'Still patrolling a corridor whose purpose nobody alive remembers.',
 });
-mon('sentry_droid', 'Sentry Droid', 'construct', 2, 22, 300, 48, [3, 8, 6], {
+mon('iron_sentinel', 'Iron Sentinel', 'construct', 2, 22, 300, 48, [3, 8, 6], {
   speed: 3.8, height: 2.4, size: 'large', treasure: 5, attacksPerRound: 2,
   flags: { mindless: true },
   ranged: { kind: 'missile', damage: [3, 8, 6], type: 'air', range: 40, cooldown: 2.5, projectile: 'energy-bolt' },
   resists: { mind: IMMUNE, body: IMMUNE, physical: 60, earth: 60, air: -25, fire: 55, water: 40 },
   visual: vis('construct', { primary: 0xa0a8b0, secondary: 0x2a2e34, accent: 0xff6020, eye: 0xff4020 },
     ['riveted-plates', 'servo-joints', 'sensor-eye', 'arm-cannon', 'energy-vents'], { scale: 1.7 }),
-  desc: 'Ancestor security. It has a list, and you are not on it.',
+  desc: 'Still on shift eight centuries after the shift ended. It has a list, and you are not on it.',
 });
-mon('terminator', 'Terminator', 'construct', 3, 31, 520, 64, [4, 8, 9], {
+mon('warden_engine', 'Warden Engine', 'construct', 3, 31, 520, 64, [4, 8, 9], {
   speed: 4.2, height: 2.8, size: 'huge', treasure: 6, attacksPerRound: 2,
   ranged: { kind: 'missile', damage: [5, 8, 8], type: 'air', range: 50, cooldown: 2, projectile: 'blaster-bolt' },
   resists: { mind: IMMUNE, body: IMMUNE, physical: 75, earth: 70, air: -20, fire: 70, water: 60, magic: 50 },
   visual: vis('construct', { primary: 0x3a4048, secondary: 0xc0c8d0, accent: 0xff2020, eye: 0xff0000 },
     ['riveted-plates', 'servo-joints', 'sensor-array', 'twin-cannons', 'energy-vents'], { scale: 2.0 }),
-  desc: 'The Control Center made these to end wars. It succeeded, once.',
+  desc: 'The Imperium built these to end a war. They succeeded, once.',
 });
 
-// ── Gogs ────────────────────────────────────────────────────────────────────
+// ── Imps ────────────────────────────────────────────────────────────────────
 
-mon('gog', 'Gog', 'gog', 1, 6, 44, 14, [1, 6, 2], {
+mon('imp', 'Imp', 'imp', 1, 6, 44, 14, [1, 6, 2], {
   speed: 4.4, height: 1.2, size: 'small', damageType: 'fire',
   ranged: { kind: 'missile', damage: [1, 6, 2], type: 'fire', range: 25, cooldown: 3, projectile: 'fire-mote' },
   resists: { fire: 80, water: -25, dark: 30 },
   visual: vis('humanoid', { primary: 0xc04020, secondary: 0x601810, accent: 0xffa020, eye: 0xffd020 },
     ['horns', 'ember-glow', 'clawed-hands', 'hunched'], { scale: 0.8, emissive: true }),
-  desc: 'Knee-high imps that throw fire and giggle about it.',
+  desc: 'Knee-high, throws fire, and giggles about it.',
 });
-mon('magog', 'Magog', 'gog', 2, 12, 105, 24, [2, 6, 3], {
+mon('greater_imp', 'Greater Imp', 'imp', 2, 12, 105, 24, [2, 6, 3], {
   speed: 4.6, height: 1.6, damageType: 'fire', treasure: 2,
   ranged: { kind: 'missile', damage: [2, 6, 4], type: 'fire', range: 32, cooldown: 2.5, projectile: 'fire-mote' },
   resists: { fire: 100, water: -25, dark: 50, physical: 20 },
@@ -882,7 +882,7 @@ mon('magog', 'Magog', 'gog', 2, 12, 105, 24, [2, 6, 3], {
     ['horns', 'ember-glow', 'clawed-hands', 'ash-skin'], { scale: 1.0, emissive: true }),
   desc: 'The grown version, and it has learned to aim.',
 });
-mon('gog_sorcerer', 'Gog Sorcerer', 'gog', 3, 19, 190, 34, [2, 6, 4], {
+mon('imp_warlock', 'Imp Warlock', 'imp', 3, 19, 190, 34, [2, 6, 4], {
   speed: 4.4, height: 1.8, damageType: 'fire', treasure: 4, attacksPerRound: 2,
   ranged: { kind: 'spell', spellId: 'fire_fire_spike', power: 19, range: 40, cooldown: 5 },
   resists: { fire: IMMUNE, water: -20, dark: 70, physical: 30, mind: 40 },
@@ -897,7 +897,7 @@ mon('thief_monster', 'Thief', 'bandit', 1, 3, 26, 10, [1, 4, 2], {
   speed: 4.6, height: 1.75, treasure: 1,
   visual: vis('humanoid', { primary: 0x3a3a3a, secondary: 0x5a4029, accent: 0x8c8578, eye: 0xd8b25c },
     ['hood', 'dagger', 'leather-armour', 'crouched'], { scale: 1.0 }),
-  desc: 'Works the New Sorpigal road and runs the moment the odds turn.',
+  desc: 'Works the Millhaven road and runs the moment the odds turn.',
 });
 mon('bandit', 'Bandit', 'bandit', 2, 7, 62, 18, [1, 8, 3], {
   speed: 4.4, height: 1.8, treasure: 2,
@@ -912,7 +912,7 @@ mon('brigand', 'Brigand', 'bandit', 3, 12, 125, 28, [2, 8, 4], {
   resists: { physical: 20 },
   visual: vis('humanoid', { primary: 0x2a2e34, secondary: 0x8c2030, accent: 0xd8b25c, eye: 0xffd040 },
     ['chain-armour', 'broad-sword', 'long-bow', 'face-scarf', 'trophy-belt'], { scale: 1.05 }),
-  desc: 'Runs a camp of twenty and taxes the Blackshire road more efficiently than the crown does.',
+  desc: 'Runs a camp of twenty and taxes the Duskorn road more efficiently than the crown does.',
 });
 
 // ── Eels and sea things ─────────────────────────────────────────────────────
@@ -922,7 +922,7 @@ mon('eel', 'Eel', 'eel', 1, 5, 36, 12, [1, 6, 2], {
   resists: { water: 80, air: 40 },
   visual: vis('serpent', { primary: 0x2a4a4a, secondary: 0x60a0a0, accent: 0x102020, eye: 0x60ffff },
     ['slick-hide', 'fins', 'spark-glow'], { scale: 0.9 }),
-  desc: 'Eel-Infested Waters is not a figure of speech.',
+  desc: 'The fen channels are named for these, and the name is not decorative.',
 });
 mon('giant_eel', 'Giant Eel', 'eel', 2, 11, 120, 22, [2, 6, 4], {
   speed: 5.2, height: 1.2, size: 'large', damageType: 'air', flags: { aquatic: true }, treasure: 2,
@@ -938,7 +938,7 @@ mon('sea_serpent', 'Sea Serpent', 'eel', 3, 20, 290, 38, [3, 8, 6], {
   resists: { water: IMMUNE, air: 70, physical: 45, fire: 40 },
   visual: vis('serpent', { primary: 0x14304a, secondary: 0x2a90a0, accent: 0x061018, eye: 0xffe040 },
     ['scales', 'fins', 'crest', 'jaw-teeth', 'long-body'], { scale: 3.0 }),
-  desc: 'Takes fishing boats whole. The Silver Cove fleet sails in convoy because of it.',
+  desc: 'Takes fishing boats whole. The Coldwater fleet sails in convoy because of it.',
 });
 
 // ── Vermin ──────────────────────────────────────────────────────────────────
@@ -961,7 +961,7 @@ mon('plague_rat', 'Plague Rat', 'rat', 3, 6, 44, 14, [1, 6, 2], {
   resists: { body: 80, earth: 50, dark: 30 },
   visual: vis('quadruped', { primary: 0x3a4a3a, secondary: 0x8a9a70, accent: 0x101810, eye: 0x90ff40 },
     ['fur', 'long-tail', 'incisors', 'weeping-sores'], { scale: 0.9 }),
-  desc: 'The Mist breeds them. Cure Disease before you sleep.',
+  desc: 'The Gallowfen breeds them. Cure Disease before you sleep.',
 });
 
 // ── Registry ────────────────────────────────────────────────────────────────

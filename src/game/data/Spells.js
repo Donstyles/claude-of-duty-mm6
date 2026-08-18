@@ -250,7 +250,7 @@ const AIR = [
     duration: minutes(5, 10),
     tags: ['buff', 'utility'],
     vfx: fx('aura', 0xcfe8ff, 0xffffff, 'motes', 'shimmer', 'spell-feather-fall'),
-    desc: 'The party drifts down rather than falls. Every cliff in Kriegspire becomes a shortcut.',
+    desc: 'The party drifts down rather than falls. Every cliff in the Malveth Spires becomes a shortcut.',
   }),
   spell({
     school: 'air', key: 'protection_from_air', name: 'Protection from Air', level: 3, sp: 3,
@@ -320,7 +320,7 @@ const AIR = [
     tags: ['buff', 'movement'],
     notes: 'Drains one spell point per minute aloft. Cannot be cast indoors.',
     vfx: fx('aura', 0xbfe4ff, 0xffffff, 'motes', 'gust', 'spell-fly'),
-    desc: 'The whole party takes to the air. Half of Enroth\'s treasure is on a ledge somewhere.',
+    desc: 'The whole party takes to the air. Half of Caerwen\'s treasure is on a ledge somewhere.',
   }),
   spell({
     school: 'air', key: 'starburst', name: 'Starburst', level: 11, sp: 30,
@@ -378,7 +378,7 @@ const WATER = [
     tags: ['buff', 'movement'],
     notes: 'Drains one spell point per minute spent over deep water.',
     vfx: fx('aura', 0x60c0f0, 0xffffff, 'ripple', 'ripple', 'spell-water-walk'),
-    desc: 'The sea holds the party\'s weight. Eel-Infested Waters becomes a road.',
+    desc: 'The water holds the party\'s weight. The Greywater channels become a road.',
   }),
   spell({
     school: 'water', key: 'recharge_item', name: 'Recharge Item', level: 6, sp: 10,
@@ -426,13 +426,13 @@ const WATER = [
     desc: 'A boulder of ice that detonates into a killing field of shards.',
   }),
   spell({
-    school: 'water', key: 'lloyds_beacon', name: "Lloyd's Beacon", level: 11, sp: 30,
+    school: 'water', key: 'vellorys_beacon', name: "Vellory's Beacon", level: 11, sp: 30,
     target: 'party', delivery: 'instant',
     duration: hours(24, 24), magnitude: amount(1, 0.2),
     utility: 'beacon',
     tags: ['travel'],
     vfx: fx('burst', 0x80e0ff, 0xffffff, 'swirl', 'portal', 'spell-beacon'),
-    desc: 'Sets a beacon anywhere in the world and returns the party to it later. The number of beacons and how long they hold both scale with skill.',
+    desc: 'Archivist Vellory\'s working: set an anchor anywhere in the kingdom and come back to it later. Skill decides how many anchors hold, and for how long.',
   }),
 ];
 
@@ -775,7 +775,7 @@ const BODY = [
     desc: 'Draws venom out of the blood, however deep it has gone.',
   }),
   spell({
-    school: 'body', key: 'hammerhands', name: 'Hammerhands', level: 7, sp: 10,
+    school: 'body', key: 'hammerhands', name: 'Stone Fists', level: 7, sp: 10,
     target: 'single-ally', delivery: 'aura',
     duration: hours(1), magnitude: amount(0, 1),
     tags: ['buff'],
@@ -788,7 +788,7 @@ const BODY = [
     cures: ['diseased_weak', 'diseased_severe', 'diseased_deadly'],
     tags: ['cure'],
     vfx: fx('burst', 0xffc890, 0xfff0d8, 'none', 'flash-soft', 'spell-cure-disease'),
-    desc: 'Burns a sickness out of the body, including the ones the Kreegans brought.',
+    desc: 'Burns a sickness out of the body, including the ones the Gallowfen breeds.',
   }),
   spell({
     school: 'body', key: 'protection_from_magic', name: 'Protection from Magic', level: 9, sp: 20,
@@ -865,7 +865,7 @@ const LIGHT = [
     desc: 'Calls an elemental servant to fight for the party. Master calls two, Grandmaster three.',
   }),
   spell({
-    school: 'light', key: 'day_of_the_gods', name: 'Day of the Gods', level: 6, sp: 15,
+    school: 'light', key: 'day_of_the_gods', name: 'Day of the Kindled', level: 6, sp: 15,
     target: 'party', delivery: 'aura',
     duration: hours(1), magnitude: amount(10, 3),
     tags: ['buff'],
@@ -891,11 +891,11 @@ const LIGHT = [
     desc: 'Every protection the party can carry, laid on at once and at full strength.',
   }),
   spell({
-    school: 'light', key: 'hour_of_power', name: 'Hour of Power', level: 9, sp: 30,
+    school: 'light', key: 'hour_of_power', name: 'The Long Hour', level: 9, sp: 30,
     target: 'party', delivery: 'aura',
     duration: hours(1), magnitude: amount(10, 2),
     tags: ['buff'],
-    notes: 'Bless, Heroism, Haste, Shield, Stone Skin and Day of the Gods together, all at the caster\'s skill.',
+    notes: 'Bless, Heroism, Haste, Shield, Stone Skin and Day of the Kindled together, all at the caster\'s skill.',
     vfx: fx('aura', 0xffffff, 0xffd870, 'motes', 'radiant-big', 'spell-hour-of-power'),
     desc: 'Every offensive and defensive blessing the party knows, in a single breath.',
   }),
@@ -958,7 +958,7 @@ const DARK = [
     desc: 'Reduces a creature\'s size, and its damage with it. Titans become manageable.',
   }),
   spell({
-    school: 'dark', key: 'shrapmetal', name: 'Shrapmetal', level: 5, sp: 12,
+    school: 'dark', key: 'shrapmetal', name: 'Iron Hail', level: 5, sp: 12,
     target: 'area', delivery: 'cone', range: 25, radius: 8,
     damage: dice(2, 0.4, 6, 'physical'),
     magnitude: amount(5, 0.3, { normal: 0, expert: 2, master: 5, grandmaster: 9 }),
@@ -1009,7 +1009,7 @@ const DARK = [
     desc: 'The sky comes down on everything in the region, the party included.',
   }),
   spell({
-    school: 'dark', key: 'souldrinker', name: 'Souldrinker', level: 11, sp: 50,
+    school: 'dark', key: 'souldrinker', name: 'Soul Reave', level: 11, sp: 50,
     target: 'area', delivery: 'view', radius: 30,
     damage: flat(25, 10, 'dark'),
     heal: healing(0, 5),
