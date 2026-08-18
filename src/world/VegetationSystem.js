@@ -257,6 +257,58 @@ export class VegetationSystem extends System {
     return w;
   }
 
+
+  /**
+   * Deliberate planting inside New Sorpigal.
+   *
+   * Radii track the town's own layout, which was densified after the first
+   * pass: the wall now stands at 74 m and the trade plots run out to about
+   * 49 m along five street spokes. So the avenue ring sits at 63 m, clear of
+   * every building and inside the wall, and trees flank the gate on the south
+   * bearing as in the reference. These numbers must move if TOWN.radius does.
+   */
+  _plantTown(terrain, rng) {
+    const town = terrain.landmark?.('newSorpigal');
+    if (!town) return;
+    const { x: tx, z: tz } = town;
+
+    const near = (x, z, r) => (x - tx) * (x - tx) + (z - tz) * (z - tz) < r * r;
+    const ok = (x, z) => !terrain.isWater(x, z) && terrain.roadAt(x, z) <= 0.30;
+
+    // Two big broadleaf trees flanking the gate, just inside the wall. The gate
+    // sits on the south bearing (PI), which is -Z.
+    for (const side of [-1, 1]) {
+      const x = tx + side * 9;
+      const z = tz - 64;
+      if (ok(x, z)) this._addTree(terrain, rng, x, z, 'oak');
+    }
+
+    // An avenue ring between the outer plots and the wall.
+    const RING = 16;
+    for (let i = 0; i < RING; i++) {
+      const a = (i / RING) * Math.PI * 2 + 0.21;
+      const r = 63 + rng.range(-4, 4);
+      const x = tx + Math.sin(a) * r;
+      const z = tz + Math.cos(a) * r;
+      if (!ok(x, z)) continue;
+      // Skip the gateway itself so the approach stays open.
+      if (Math.abs(Math.atan2(Math.sin(a - Math.PI), Math.cos(a - Math.PI))) < 0.22) continue;
+      this._addTree(terrain, rng, x, z, rng.chance(0.72) ? 'oak' : 'birch');
+    }
+
+    // Street trees between the spokes, set back from the doors.
+    for (let s = 0; s < 5; s++) {
+      const bearing = (s * 72 + 36) * Math.PI / 180;   // between the streets
+      for (const along of [27, 40]) {
+        const x = tx + Math.sin(bearing) * along;
+        const z = tz + Math.cos(bearing) * along;
+        if (ok(x, z) && near(x, z, 70)) {
+          this._addTree(terrain, rng, x, z, rng.chance(0.5) ? 'birch' : 'oak');
+        }
+      }
+    }
+  }
+
   _canPlant(terrain, x, z, exclusions) {
     if (terrain.isWater(x, z)) return false;
     if (terrain.roadAt(x, z) > 0.14) return false;
@@ -278,6 +330,14 @@ export class VegetationSystem extends System {
       const L = terrain.landmark?.(name);
       if (L) exclusions.push({ x: L.x, z: L.z, r });
     }
+
+    // ── the town ─────────────────────────────────────────────────────────
+    // The wild planting excludes the landmark discs, which is right — trees do
+    // not grow through streets. But it left New Sorpigal a bare parade ground
+    // of paving and walls, where the reference frames its gate with big
+    // broadleaf trees and plants beds in the square. So plant it deliberately,
+    // here, before the instance caps are sized.
+    this._plantTown(terrain, rng);
 
     // ── copses ───────────────────────────────────────────────────────────
     const wanted = Math.round(q.copses);

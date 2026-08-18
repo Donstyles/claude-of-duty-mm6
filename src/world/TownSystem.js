@@ -164,7 +164,11 @@ export class TownSystem extends System {
     geom.setIndex(idx);
     geom.computeVertexNormals();
 
-    const mat = lib.get('cobblestone', { repeat: 1, tint: 0xc9b79a });
+    // Measured against the reference rather than judged by eye. MM6's paving
+    // sits at (79,66,53); ours was landing at (96,80,53) -- brighter, and
+    // markedly more yellow (red/blue 1.82 against their 1.49). The existing
+    // warm tint was pulling it further that way, so this cools and darkens it.
+    const mat = lib.get('cobblestone', { repeat: 1, tint: 0xb0a49e });
     mat.vertexColors = true;
     mat.transparent = true;
     mat.depthWrite = false;
