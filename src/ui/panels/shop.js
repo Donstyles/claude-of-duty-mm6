@@ -1,6 +1,7 @@
 import './shop.css';
 import { Panel, itemFootprint, itemSprite, itemQuality, itemPlateUrl } from './base.js';
 import { itemMaterial } from '../Icons.js';
+import { ITEM_PLATE_ASPECT } from '../itemPlates.js';
 import {
   el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, goldOval,
 } from '../widgets.js';
@@ -63,12 +64,19 @@ const WALL = Object.freeze({
 });
 
 /**
- * The proportions the item plates were painted at (`tools/art-manifest.js`):
- * weapons and wands stand on a 9:16 canvas, everything else is square. A plate
- * is a photograph of an object and must never be stretched, so the sprite's box
- * is cut to the plate rather than to the pack's cell grid.
+ * The object's real proportions, from the packed plate.
+ *
+ * The generation frame is not the object: a long sword is painted down the
+ * middle of a 9:16 canvas and fills 39% of its width. Reserving the frame's
+ * ratio meant every sword claimed two and a half times the wall it needed, and
+ * nine items bunched into a third of the board. `tools/artpack.py` crops each
+ * plate to its paint and writes the resulting ratio out; the frame ratio is
+ * only the fallback for an item with no plate at all.
  */
 function plateAspect(item) {
+  const id = item?.baseId ?? item?.id;
+  const known = ITEM_PLATE_ASPECT[id];
+  if (known) return known;
   return item?.category === 'weapon' || item?.category === 'wand' ? 9 / 16 : 1;
 }
 

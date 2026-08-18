@@ -314,7 +314,7 @@ export function itemTooltip(item, opts = {}) {
 export function itemSprite(item, w, h, cls = 'mm-item') {
   const plate = itemPlateUrl(item);
   const node = el('div', {
-    className: `${cls} is-${itemQuality(item)}${plate ? ' has-plate' : ''}`,
+    className: `${cls} is-${itemQuality(item)}${plate ? ' has-item-plate' : ''}`,
     dataset: { cat: item.category ?? 'misc' },
     style: { width: w, height: h },
   });

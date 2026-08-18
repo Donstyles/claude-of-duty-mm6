@@ -74,6 +74,8 @@ export class InventoryPanel extends Panel {
     /** The glass on the niche floor is a mode, not a one-shot button. */
     this.inspecting = false;
     this.ghost = null;
+    /** While this stands, hover names keep off the message strip. */
+    this._quietUntil = 0;
     this._onMove = (e) => this._track(e.clientX, e.clientY);
     this._onUp = (e) => this._release(e);
     this._onKeyCapture = (e) => this._key(e);
@@ -280,7 +282,7 @@ export class InventoryPanel extends Panel {
   }
 
   _hover(text) {
-    if (performance.now() < (this._quietUntil ?? 0)) return;
+    if (performance.now() < this._quietUntil) return;
     this.ui.hud?.setMessage?.(text);
   }
 

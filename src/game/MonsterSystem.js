@@ -312,7 +312,14 @@ export class MonsterSystem extends System {
     }
 
     // Sit on the ground, or bob above it for hovering creatures.
-    const ground = terrain?.heightAt?.(m.pos.x, m.pos.z) ?? 0;
+    //
+    // Indoors the heightfield is the wrong answer entirely: a dungeon's floor
+    // is built nine hundred metres above the terrain, so re-seating a creature
+    // on `heightAt` every frame dropped every dungeon dweller through its own
+    // floor. Anything placed inside carries the floor it stands on.
+    const ground = Number.isFinite(m.indoorY)
+      ? m.indoorY
+      : (terrain?.heightAt?.(m.pos.x, m.pos.z) ?? 0);
     m.pos.y = ground;
     m.group.position.copy(m.pos);
     if (m.built.hover) {

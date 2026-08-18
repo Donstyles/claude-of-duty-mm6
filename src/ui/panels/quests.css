@@ -29,7 +29,7 @@
 }
 .mm-ui .mm-quest-page.is-left { flex: 196; }
 /* The right page starts below the tabs that overhang the top of the book. */
-.mm-ui .mm-quest-page.is-right { flex: 214; padding-top: calc(var(--u) * 26); }
+.mm-ui .mm-quest-page.is-right { flex: 214; padding-top: calc(var(--u) * 14); }
 
 /* The gutter: two pages of one sheet, folded — the shadow belongs to the paper
    on both sides of the fold, not to a gap between two cards. */
@@ -172,14 +172,14 @@
   mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 12), transparent 100%);
 }
 .mm-ui .mm-qb-title {
-  margin: 0 0 calc(var(--u) * 4);
+  margin: 0 0 calc(var(--u) * 3);
   font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
-  font-size: calc(var(--u) * 16);
+  font-size: calc(var(--u) * 15);
   font-weight: normal;
   color: #1a1408;
   line-height: 1.1;
 }
-.mm-ui .mm-qb-meta { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); margin-bottom: calc(var(--u) * 6); }
+.mm-ui .mm-qb-meta { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 3); margin-bottom: calc(var(--u) * 4); }
 .mm-ui .mm-qb-chip,
 .mm-ui .mm-qb-reward {
   display: inline-flex;
@@ -195,7 +195,7 @@
 .mm-ui .mm-qb-reward b { font-weight: normal; color: #6a5c44; text-transform: uppercase; letter-spacing: 0.06em; }
 
 .mm-ui .mm-qb-summary {
-  margin: 0 0 calc(var(--u) * 6);
+  margin: 0 0 calc(var(--u) * 4);
   font-style: italic;
   font-size: calc(var(--u) * 11);
   line-height: 1.4;
@@ -207,7 +207,7 @@
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 5);
-  margin: calc(var(--u) * 7) 0 calc(var(--u) * 4);
+  margin: calc(var(--u) * 5) 0 calc(var(--u) * 3);
 }
 .mm-ui .mm-qb-rule span {
   font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
@@ -228,7 +228,7 @@
 }
 
 .mm-ui .mm-qb-stage {
-  margin: 0 0 calc(var(--u) * 5);
+  margin: 0 0 calc(var(--u) * 4);
   padding-left: calc(var(--u) * 7);
   font-size: calc(var(--u) * 10);
   line-height: 1.42;
@@ -244,7 +244,7 @@
   align-items: baseline;
   gap: calc(var(--u) * 5);
   font-size: calc(var(--u) * 10);
-  line-height: calc(var(--u) * 15);
+  line-height: calc(var(--u) * 14);
 }
 .mm-ui .mm-qb-obj i { color: #5a4c34; line-height: 0; }
 .mm-ui .mm-qb-obj.is-done { color: #4a5a3a; text-decoration: line-through; text-decoration-color: rgba(70, 90, 50, 0.6); }

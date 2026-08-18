@@ -306,9 +306,11 @@ export class MapPanel extends Panel {
 
   // ── lifecycle ─────────────────────────────────────────────────────────────
 
-  onOpen() {
+  onOpen(opts = {}) {
     this._cancelNote();
-    // The local map always opens on the party, however far it was panned.
+    // The Maps key always opens on where the party is standing, as MM6 does;
+    // the chart of the kingdom is a deliberate second look, one tab away.
+    this.view = opts.view ?? 'local';
     this.centre.local = null;
   }
 
@@ -956,13 +958,14 @@ export class MapPanel extends Panel {
     if (!p) return;
     const x = toX(p.x / (WORLD_SIZE / 2));
     const z = toZ(p.z / (WORLD_SIZE / 2));
-    const r = clamp(s / 40, 7, 14);
+    const r = clamp(s / 40, 8, 15);
     g.save();
     g.translate(x, z);
-    // A halo, because the star sits on top of a town glyph as often as not.
+    // A pale halo, because the star sits on a town glyph as often as not and a
+    // white mark on a salmon roof is a white mark nobody sees.
     g.beginPath();
-    g.arc(0, 0, r * 1.5, 0, Math.PI * 2);
-    g.fillStyle = 'rgba(20,16,10,0.45)';
+    g.arc(0, 0, r * 1.6, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(255,250,230,0.55)';
     g.fill();
     g.beginPath();
     for (let i = 0; i < 8; i++) {
@@ -1265,23 +1268,21 @@ export class MapPanel extends Panel {
       description: 'The Maps book on its Kingdom tab: the chart of Caerwen with the twenty regions, '
         + 'the eleven towns, the Ledger coach roads and the dashed packet-ship lanes.',
       apply: () => {
-        this.view = 'world';
         this.zoom.world = 1;
         this.centre.world = { x: null, z: null };
         // A chart nobody has travelled is all grey; show the opening act's reach.
         for (const id of ['millhaven_downs', 'thornwick_vale', 'saltmarch', 'ashford_hollow', 'greywater_fen']) this._see(id);
         for (const id of ['town_millhaven', 'town_thornwick', 'town_saltmarch', 'town_ashford']) this._seeTown(id);
-        this.ui.openPanel('map');
+        this.ui.openPanel('map', { view: 'world' });
       },
     });
     cap.registerShot('ui-map-local', {
       description: 'The Maps book on its Local tab: surveyed ground in MM6 automap colours, town '
         + 'buildings with salmon roofs, door glyphs, and the white party arrow.',
       apply: () => {
-        this.view = 'local';
         this.zoom.local = 1;
         this.centre.local = null;
-        this.ui.openPanel('map');
+        this.ui.openPanel('map', { view: 'local' });
       },
     });
   }

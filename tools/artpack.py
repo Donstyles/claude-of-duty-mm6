@@ -179,15 +179,36 @@ def pack_items(width=256, feather=0.012):
         alpha = soft * _side_falloff(h, w, feather)
 
         rgba = np.dstack([a, alpha * 255.0]).astype(np.uint8)
-        im = Image.fromarray(rgba, 'RGBA')
-        im = im.resize((width, max(1, round(width * h / w))), Image.LANCZOS)
+        im = _crop_to_paint(Image.fromarray(rgba, 'RGBA'))
+        cw, ch = im.size
+        im = im.resize((width, max(1, round(width * ch / cw))), Image.LANCZOS)
         base = os.path.basename(src)[:-4]
         im.save(os.path.join(ROOT, 'items', base + '.plate.png'), 'PNG', optimize=True)
-        names.append(base)
+        names.append((base, round(cw / ch, 4)))
         out += 1
 
     _write_item_index(names)
     return out
+
+
+def _crop_to_paint(im, margin=0.02):
+    """Trim the transparent surround so the plate is the object.
+
+    The generator centres a long sword in a square frame, which leaves 61% of
+    the plate empty — and a layout that reserves box width for that emptiness
+    bunches nine items into a third of the wall. Cropping here rather than in
+    each consumer means the plate's own proportions become the object's, once,
+    for every screen that draws it.
+    """
+    a = np.asarray(im)
+    painted = a[:, :, 3] > 24
+    if not painted.any():
+        return im
+    ys, xs = np.where(painted)
+    h, w = painted.shape
+    mx, my = round(w * margin), round(h * margin)
+    return im.crop((max(0, xs.min() - mx), max(0, ys.min() - my),
+                    min(w, xs.max() + 1 + mx), min(h, ys.max() + 1 + my)))
 
 
 def _write_item_index(names):
@@ -202,7 +223,9 @@ def _write_item_index(names):
     # reading the empty stub in src/ and every item fell back to a flat icon.
     repo = os.path.dirname(os.path.dirname(ROOT))
     dst = os.path.join(repo, 'src', 'ui', 'itemPlates.js')
-    body = '\n'.join(f"  '{n}'," for n in sorted(names))
+    names = sorted(names)
+    body = '\n'.join(f"  '{n}'," for n, _ in names)
+    ratios = '\n'.join(f"  '{n}': {r}," for n, r in names)
     with open(dst, 'w') as f:
         f.write(
             '/**\n'
@@ -216,7 +239,18 @@ def _write_item_index(names):
             'export const ITEM_PLATES = new Set([\n'
             + body +
             '\n]);\n\n'
-            "export const ITEM_PLATE_BASE = 'art/items/';\n"
+            "export const ITEM_PLATE_BASE = 'art/items/';\n\n"
+            '/**\n'
+            ' * Each plate\'s width/height after cropping to the paint.\n'
+            ' *\n'
+            ' * Consumers that reserve a box for a sprite need the object\'s real\n'
+            ' * proportions, not the frame it was generated in — guessing 9:16 for\n'
+            ' * every weapon reserved two and a half times the width a long sword\n'
+            ' * actually needs.\n'
+            ' */\n'
+            'export const ITEM_PLATE_ASPECT = {\n'
+            + ratios +
+            '\n};\n'
         )
 
 

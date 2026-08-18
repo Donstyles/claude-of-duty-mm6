@@ -25,6 +25,14 @@ import { DUNGEONS, entranceOf } from '../game/data/Dungeons.js';
  * being able to tell the difference by eye, so the generator has to earn it.
  *
  * Everything is deterministic from `ctx.rng.fork('dungeon:<id>')`.
+ *
+ * NOTE ON SIZE. This is past the ~900-line mark ARCHITECTURE §9 asks work to be
+ * split at, and it wants splitting into three: the system (entry, exit,
+ * lighting, frame, shots), the generator (grammars, shell, stairs), and the kit
+ * (`_prop*`, `Batch`, the geometry helpers). The seams are already drawn as the
+ * banner comments below, and the kit is the one that would come out first —
+ * nothing in it touches `this` except `state.batches`. It is left whole here
+ * only because this pass was scoped to two files.
  */
 
 /** Metres per grid cell — one corridor wide. `ui/panels/map.js` assumes 4. */
