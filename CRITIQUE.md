@@ -23,48 +23,55 @@ It is unlabelled on purpose.
 
 ---
 
-## Round 5 blind test — `shots/blind/town-square.png` vs `screenshot-17-.jpg`
+## Round 6 — where the project stands
 
-**The chrome now reproduces closely.** Fluted stone columns, the arched
-automap with its compass plaque and zoom controls, stained-glass hireling
-slots, the four gold book emblems, the recessed plaque, apple-and-gold
-readouts, four gold ovals, pale marble portrait bar, green HP over blue SP,
-condition dots, white italic message line. Side by side these read as the same
-interface.
+Photographed at `shots/round5/` and `shots/world5/`, 900x675, HUD on, 4:3.
+Build the A/B sheets with `python3 tools/blindtest.py --ours shots/round5
+--out shots/blind6`; it pairs each screen with its reference still, decides
+left/right from a hash of the screen name, and writes the answer key to a file
+the reviewer is not given.
 
-**Where we win:** 3D geometry detail (real half-timbering, roof tiles, framed
-window openings), lighting (soft shadows, warm lamp glow), and overall
-crispness of the viewport.
+### Closed since round 5
 
-**Where we lose — this is the whole remaining gap:**
+1. **Portraits.** Painted plates replaced the procedural faces. Measured
+   contrast 58.3 against the reference's 61.2, edge energy 12.53 against
+   12.91. This was the single most damaging defect in the project and it is
+   gone.
+2. **Town planting.** Millhaven now carries gate trees, an avenue ring and
+   street trees — and, as of this round, *not* in the market square, where an
+   oak was standing on the exact spot the viewpoint occupies.
+3. **The standing figure.** The equipment niche was the last place the
+   procedural painter was still doing the work; at full length it read as a
+   flat cartoon. Eighteen painted figures, nine classes in both sexes.
+4. **Item sprites.** A blue teardrop is a potion the way a road sign is a car.
+   141 rendered objects now back the backpack, the shop wall and the loot pile.
+5. **Venue interiors.** Walking into a shop shows the room — forge, chapel,
+   counting house — the way the reference does, instead of a flat panel.
 
-1. **PORTRAITS. The single most damaging defect in the project.**
-   MM6's are painted, photo-real head-and-shoulders faces with real bone
-   structure, lighting, hair and costume — they look like miniature oil
-   paintings. Ours are flat, doll-like cartoon faces with no modelling: same
-   blank expression, no shading, no character. Put the two bars side by side
-   and this is the first thing anyone notices. Fixing this alone moves the
-   blind verdict more than anything else available.
+### Open
 
-2. **NO PLANTING IN TOWN.** The reference frames the gate with big lush
-   green trees, flowering shrubs and a planted bed in the square. Ours is all
-   paving, walls and empty ground. The trees exist in the wilderness — they
-   are simply not placed in or around the town.
-
-3. **PAVING IS TOO YELLOW.** Ours reads as yellow-tan packed dirt; MM6's
-   flagstones are a cooler grey with a blue-green cast. It makes our square
-   look like a farmyard rather than a town.
-
-4. **Overall colour is cooler and greyer** than the reference, which is warmer
+1. **The quality tiers do not degrade gracefully.** Everything was tuned at
+   `ultra`. At `medium` the sky bakes its cloud sheet at 512 instead of 1024
+   and drops a shader tier, and the clouds become hard-edged blobs in rows
+   rather than soft cumulus; at `low` grass density is zero and the meadows are
+   bare. A player on medium sees a visibly worse game, not a cheaper one.
+   Lower tiers must look like a softer ultra, never like a broken one.
+2. **Paving is too yellow** — reads as packed dirt; the reference's flagstones
+   are cooler grey with a blue-green cast.
+3. **Windows read as dark muddle** — they need glazing tone or an interior
+   suggestion rather than a brown texture.
+4. **The marble bottom bar carries dark crack lines** that read as damage
+   rather than veining.
+5. **Dungeon floors tile visibly**, and interiors want rubble, bones, cobwebs
+   and chests. Being addressed with the dungeon rebuild.
+6. **Overall colour is cooler and greyer** than the reference, which is warmer
    and more saturated throughout.
 
-5. **Windows read as dark muddle** — they need glazing tone or an interior
-   suggestion rather than a brown texture.
+### Unverified
 
-6. **The marble bottom bar carries dark crack lines** that read as damage
-   rather than veining.
-
-7. Dungeon floors tile visibly; interiors need rubble, bones, cobwebs, chests.
+The cloud form has only been photographed at `medium` this round; the ultra
+capture could not complete under load. Do not conclude anything about the
+clouds until one lands.
 
 ### Not defects — do not "fix" these
 - The flat sky with no horizon gradient is **correct** and deliberate.
