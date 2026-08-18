@@ -12,60 +12,57 @@ axis**, never on the average.
 
 ## Blind-test methodology — settled, keep doing this
 
-Captures for the blind test must be taken **with the HUD on, at 4:3**
-(`--width 1440 --height 1080`, no `--hud 0`). MM6 is never seen without its
-chrome, which fills roughly 28% of every frame, and comparing a full-bleed 16:9
-vista against a framed 4:3 screenshot tells you nothing.
+Capture **with the HUD on, at 4:3** (`--width 1440 --height 1080`, no
+`--hud 0`). MM6 is never seen without its chrome, which fills ~28% of every
+frame; comparing a full-bleed 16:9 vista against a framed 4:3 screenshot tells
+you nothing. Then:
 
-Build a sheet with:
 `node tools/imgproc.mjs compare <ours>.png reference/mm6-web/<theirs>.jpg out.jpg`
-It is unlabelled on purpose.
 
-**Standing result:** the interface now reproduces very closely — right panel,
-arched automap, stained-glass hireling slots, the four book emblems, marble
-portrait bar, green HP over blue SP. The 3D view is where we still lose.
+It is unlabelled on purpose.
 
 ---
 
-## Round 4 — `shots/dense2/`, `shots/wx2/`, `shots/wx3/`, `shots/npc/`
+## Round 5 blind test — `shots/blind/town-square.png` vs `screenshot-17-.jpg`
 
-### Fixed since round 3
-- **Town density.** Plots pulled to ~half their setback; buildings now crowd
-  the frame instead of ringing a parade ground.
-- **Plaster crazing gone.** The cracked reptile-skin pattern that kept
-  appearing on walls *and* was misread as a ground defect was plaster's crack
-  network running at 85% strength evenly. Now hairline and patchy.
-- **Townsfolk are people.** They were purple cones because the system read
-  `def.palette/greeting/topics`, which do not exist — the catalogue nests them
-  under `look` and `dialogue`.
-- **Paving warmed** and dropped from 2.4 m flagstones to 1.5 m.
-- **Water captures find a real shoreline** and the sea fills the frame.
-- **Trees exist** and render in copses.
+**The chrome now reproduces closely.** Fluted stone columns, the arched
+automap with its compass plaque and zoom controls, stained-glass hireling
+slots, the four gold book emblems, the recessed plaque, apple-and-gold
+readouts, four gold ovals, pale marble portrait bar, green HP over blue SP,
+condition dots, white italic message line. Side by side these read as the same
+interface.
 
-### Open defects, most damaging first
+**Where we win:** 3D geometry detail (real half-timbering, roof tiles, framed
+window openings), lighting (soft shadows, warm lamp glow), and overall
+crispness of the viewport.
 
-1. **DUSK IS NEON MAGENTA.** `shots/wx2/water-shore.png` at 18.2h renders a hot
-   pink/magenta sky with glowing white hotspots in the clouds. It looks like a
-   synthwave album cover, not MM6's warm golden evening. Noon is unaffected
-   (`shots/wx3/water-noon.png` is correct), so this is specific to the low-sun
-   keyframes and their cloud tinting.
+**Where we lose — this is the whole remaining gap:**
 
-2. **CLOUDS HAVE OVERSHOT.** They were too few and too large; they are now too
-   many and too small, reading as evenly-scattered popcorn blobs rather than
-   MM6's varied cumulus. Needs a middle setting with a *range* of sizes — a few
-   large forms plus smaller ones — rather than one uniform scale. They are also
-   tinted slightly too yellow at midday.
+1. **PORTRAITS. The single most damaging defect in the project.**
+   MM6's are painted, photo-real head-and-shoulders faces with real bone
+   structure, lighting, hair and costume — they look like miniature oil
+   paintings. Ours are flat, doll-like cartoon faces with no modelling: same
+   blank expression, no shading, no character. Put the two bars side by side
+   and this is the first thing anyone notices. Fixing this alone moves the
+   blind verdict more than anything else available.
 
-3. **HARD SEAM AT THE HORIZON** where sky meets sea — a visible straight line
-   rather than a soft meeting.
+2. **NO PLANTING IN TOWN.** The reference frames the gate with big lush
+   green trees, flowering shrubs and a planted bed in the square. Ours is all
+   paving, walls and empty ground. The trees exist in the wilderness — they
+   are simply not placed in or around the town.
 
-4. **NO PLANTING IN TOWN.** The reference has trees flanking the gate, flowering
-   shrubs, and a planted bed in the square. Ours is all paving and walls.
+3. **PAVING IS TOO YELLOW.** Ours reads as yellow-tan packed dirt; MM6's
+   flagstones are a cooler grey with a blue-green cast. It makes our square
+   look like a farmyard rather than a town.
 
-5. **PORTRAITS ARE FLAT CARTOON FACES** next to MM6's painted photo-real ones.
-   Now the most obvious difference between our chrome and the real chrome.
+4. **Overall colour is cooler and greyer** than the reference, which is warmer
+   and more saturated throughout.
 
-6. **Windows read as black holes** — they need interior tone or glazing.
+5. **Windows read as dark muddle** — they need glazing tone or an interior
+   suggestion rather than a brown texture.
+
+6. **The marble bottom bar carries dark crack lines** that read as damage
+   rather than veining.
 
 7. Dungeon floors tile visibly; interiors need rubble, bones, cobwebs, chests.
 
@@ -73,5 +70,4 @@ portrait bar, green HP over blue SP. The 3D view is where we still lose.
 - The flat sky with no horizon gradient is **correct** and deliberate.
 - 10–15 fps in the capture harness is software rendering, **not** a bug.
 - Bounded directional shadowing is intentional; see the caps in `REFERENCE.md`.
-- `shots/pfxoff/` looks wrong on purpose: with post disabled the sky stays in
-  pre-tonemap mode and renders dark. Debug view, not a target.
+- Dusk is now warm gold, not magenta — that is fixed; do not re-tint it.
