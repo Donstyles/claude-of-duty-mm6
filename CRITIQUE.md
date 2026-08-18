@@ -1,60 +1,62 @@
 # Live visual critique
 
-The current round's photographed defects. **This file is rewritten every review
-round** — always read it before doing visual work, and trust it over any
-critique embedded in an older task prompt.
+The current round's photographed defects. **Rewritten every review round** —
+read it before doing visual work, and trust it over any critique embedded in an
+older task prompt.
 
-Shots live in `shots/<round>/`. Reference stills are in `reference/mm6-web/`.
+Shots are in `shots/<round>/`. Real MM6 stills are in `reference/mm6-web/`.
 Judge against `REFERENCE.md`'s rubric: a shot passes only at **8+ on every
 axis**, never on the average.
 
 ---
 
-## Round 2 — `shots/r2/`, captured after sky and terrain landed
+## Round 3 — `shots/pfx4/`, `shots/dun5/`, `shots/mon/`
 
-### Fixed since round 1
-- **Exposure.** The frame is now bright and sunny rather than reading as heavy
-  overcast. Good.
-- **Cloud form.** Now genuine rounded cumulus with clear blue between them,
-  instead of smeared horizontal cirrus ribbons. Good.
-- **Sky blue.** Flat vivid `#29458C` with no pale horizon haze band. Correct and
-  must not regress.
-- **Town silhouette.** New Sorpigal reads at distance — steep roofs, warm tile,
-  wall and gate. Good.
+### Fixed since round 2
+- **Grass tiling is gone.** The repeating diagonal hatch across the hillsides
+  no longer appears. This was the worst defect in round 2.
+- **Daylight is calibrated.** Sunlit grass measures `(102,125,69)` against
+  MM6's `(111,122,58)`; the sky holds at `(56,77,134)` against `(41,69,140)`.
+- **The town's circular hem is broken up** and feathers into the grass.
+- **Dungeons exist** and read correctly: warm torch pools against dark stone,
+  columns, a corridor receding into black.
+- **Monsters exist**, animate, and carry weapons and clothing.
+- **Post-processing is in** — bloom thresholded high, light grade, SMAA.
 
 ### Open defects, most damaging first
 
-1. **GRASS TILES VISIBLY — the worst defect in the frame.**
-   The midground carries a regular diagonal hatch repeating every few metres
-   across the entire hillside. It reads as wallpaper, not ground. At the
-   terrain's 5.5 m grass tile this repetition is unmissable. Any strong,
-   directional, high-contrast feature in the grass albedo/normal will do this.
-   Fix in the material: kill low-frequency periodicity, keep hero features
-   subtle, and let large-scale variation come from the terrain's macro tint.
-
-2. **THE PALE CRACKED MATERIAL IS STILL BROKEN.**
-   The foreground still shows a cracked, scaly, dried-mud / reptile-skin
-   pattern. It reads as no real ground material. Identify which catalogue entry
-   the splat rules put there (see `computeSplat` in `src/world/TerrainGen.js`
-   and `LAYER_SCALE` in `src/world/TerrainSystem.js`) and rebuild it.
-
-3. **VERTICAL STRIPING ARTIFACT ON THE RIGHT-HAND HILLSIDE.**
-   A band of vertical stripes appears on the distant slope on the right. Likely
-   stretched UVs where the triplanar blend hands over, or a normal-map seam on
-   steep ground.
-
-4. **NO VEGETATION AT ALL.**
+1. **NO VEGETATION. Still the single biggest gap.**
    The world is bare ground. Trees are most of what makes an MM6 outdoor frame
-   read as MM6, and their absence is why the frame still looks like a terrain
-   demo rather than a game.
+   read as MM6, and their absence is why the vista still looks like a landscape
+   renderer rather than a game. Big round full canopies on short trunks, in
+   clumps with open meadows between — never a uniform carpet.
 
-5. **GROUND COLOUR IS UNIFORM.**
-   One flat green across the whole midground. Real MM6 ground varies —
-   sun-bleached tops, greener hollows, dry patches, dirt showing through.
+2. **CLOUDS HAVE PARTLY REGRESSED.** Some read as proper rounded cumulus, but
+   many are stretched into thin horizontal wisps and streaks, especially near
+   the horizon. They need to be individually readable puffs with soft shaded
+   undersides across the whole sky, not just overhead.
+
+3. **GRASS IS NOW TOO SMOOTH.** Fixing the tiling overcorrected into flat felt.
+   It needs close-range blade detail that does NOT reintroduce a repeating
+   pattern — high-frequency, non-directional, with the macro tint carrying the
+   large-scale variation.
+
+4. **THE PALE CRACKED FOREGROUND MATERIAL IS STILL WRONG.** Bottom-left of the
+   vista still shows a crazed, mud-cracked, scaly pattern. Warmer than before,
+   but still reads as no real ground material.
+
+5. **TERRAIN SILHOUETTE IS SOFT.** The hills are rounded and samey. MM6 has
+   more variety — the odd bluff, outcrop and steep face breaking the skyline.
+
+6. **Dungeon floors tile visibly** at the flagstone scale, and interiors need
+   props: rubble, bones, cobwebs, chests, doors.
+
+7. **Monsters are simple.** Recognisable by silhouette and correctly kitted,
+   but the surfacing is flat colour; they need real material treatment.
 
 ### Not defects — do not "fix" these
 - The flat sky with no horizon gradient is **correct** and deliberate.
-- 10–15 fps in the capture harness is software rendering, **not** a performance
-  bug.
-- The absence of strong directional shadows is bounded on purpose; see the
-  lighting caps in `REFERENCE.md`.
+- 10–15 fps in the capture harness is software rendering, **not** a bug.
+- Bounded directional shadowing is intentional; see the caps in `REFERENCE.md`.
+- `shots/pfxoff/` looks wrong on purpose — with post disabled the sky stays in
+  pre-tonemap mode and renders dark. It is a debug view, not a target.
