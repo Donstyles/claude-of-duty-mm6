@@ -14,14 +14,20 @@ import { DialoguePanel } from './dialogue.js';
 import { ShopPanel } from './shop.js';
 import { MenuPanel } from './menu.js';
 import { CreatePanel } from './create.js';
+import { ServicesPanel } from './services.js';
+import { GuildPanel } from './guild.js';
+import { TrainPanel } from './train.js';
+import { TravelPanel } from './travel.js';
 
 export { Panel, itemFootprint, itemSprite } from './base.js';
 export {
   CharacterPanel, InventoryPanel, SpellbookPanel, MapPanel, QuestPanel,
   RestPanel, DialoguePanel, ShopPanel, MenuPanel, CreatePanel,
+  ServicesPanel, GuildPanel, TrainPanel, TravelPanel,
 };
 
 export const PANEL_CLASSES = [
   CharacterPanel, InventoryPanel, SpellbookPanel, MapPanel, QuestPanel,
   RestPanel, DialoguePanel, ShopPanel, MenuPanel, CreatePanel,
+  ServicesPanel, GuildPanel, TrainPanel, TravelPanel,
 ];

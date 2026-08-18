@@ -1,4 +1,11 @@
 import { getClass, skillCap, MASTERY_ORDER } from './data/Classes.js';
+// Imported rather than restated. They were restated once, as `weapon`/`bow`
+// instead of `mainhand`/`ranged`, which meant a character's equipment object
+// had keys nothing else in the game ever read: rules.js asks for
+// `equipment.mainhand` for every attack and damage roll, so an equipped weapon
+// contributed nothing to combat and the bug was invisible in the UI, which
+// reads the same wrong keys the UI itself wrote.
+import { EQUIP_SLOTS } from './data/Items.js';
 import {
   hpForLevel, spForLevel, armourClassFor, effectiveStat,
   experienceForLevel, levelForExperience, worstCondition, isIncapacitated,
@@ -7,10 +14,6 @@ import {
 
 const ATTRS = ['might', 'intellect', 'personality', 'endurance', 'accuracy', 'speed', 'luck'];
 
-const EQUIP_SLOTS = [
-  'weapon', 'offhand', 'bow', 'armour', 'helm', 'gauntlets',
-  'boots', 'belt', 'cloak', 'amulet', 'ring1', 'ring2',
-];
 
 /**
  * One adventurer.
