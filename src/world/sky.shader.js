@@ -286,7 +286,7 @@ void main() {
   vec4 cB = texture2D(uClouds, uvB);
   float hB = clamp((cB.r - uThrB) / max(1.0 - uThrB, 0.06), 0.0, 1.0);
   float aB = smoothstep(0.02, 0.34, hB) * uOpacityB;
-  aB *= smoothstep(0.004, 0.048, up) / (1.0 + tB / 26000.0);
+  aB *= smoothstep(0.008, 0.062, up) / (1.0 + tB / 26000.0);
 
   float tA = uAltA * proj;
   vec2 pA = uCamPos.xz + d.xz * tA;
@@ -309,7 +309,7 @@ void main() {
   // A fairly tight alpha ramp: MM6's puffs have readable, individual outlines
   // against flat blue, not a soft airbrushed falloff.
   float aA = smoothstep(0.015, 0.17, hA);
-  aA *= smoothstep(0.003, 0.040, up) / (1.0 + tA / 26000.0);
+  aA *= smoothstep(0.006, 0.055, up) / (1.0 + tA / 26000.0);
   aA *= uOpacityA;
 
   // Surface relief from the baked gradient.
@@ -331,13 +331,13 @@ void main() {
   // Thick cores and the bellies under them sit in their own shadow — this is
   // the term that gives a puff a bright crown and a soft grey-cream underside.
   float thick = cA.a;
-  float ao = 1.0 - 0.48 * smoothstep(0.20, 0.86, thick);
+  float ao = 1.0 - 0.30 * smoothstep(0.18, 0.88, thick);
 
   // Tuned so the shading spans the *whole* measured MM6 ramp: a shaded flank
   // lands on the mauves (#73758C–#8C8A8C), a lit face on the creams
   // (#A59A8C–#C6BA8C) and only a sunward crest reaches #E7D38C.
-  float amb = (0.15 + 0.20 * n.y) * ao;
-  float direct = wrapped * shade * 0.68 * (0.72 + 0.28 * ao);
+  float amb = (0.24 + 0.22 * n.y) * ao;
+  float direct = wrapped * shade * 0.72 * (0.85 + 0.15 * ao);
   float lumA = amb + direct;
 
   // Crown and belly. Every puff is seen from underneath, so the part of it we
@@ -347,7 +347,7 @@ void main() {
   // bright crown / soft grey-cream belly on every mass at once, whatever the
   // sun is doing, which a pure N·L never does with a near-overhead sun.
   vec2 rad2 = normalize(d.xz + vec2(1e-5, 1e-5));
-  lumA -= dot(n.xz, rad2) * 0.19 * smoothstep(0.02, 0.30, hA);
+  lumA -= dot(n.xz, rad2) * 0.15 * smoothstep(0.02, 0.30, hA);
 
   // Silver lining: thin edges facing the sun burn out.
   float rim = pow(max(0.0, dot(d, uSunDir)), 9.0) * (1.0 - smoothstep(0.10, 0.55, hA));
@@ -357,8 +357,8 @@ void main() {
   // Layer B gets a cheaper version of the same model — flatter, because it is
   // read at a much smaller angular size — but it must not be a flat wash.
   vec3 nB = normalize(vec3(-(cB.g * 2.0 - 1.0) * uBump * 0.7, 1.0, -(cB.b * 2.0 - 1.0) * uBump * 0.7));
-  float lumB = (0.17 + 0.17 * nB.y) * (1.0 - 0.38 * smoothstep(0.24, 0.88, cB.a))
-             + clamp((dot(nB, uSunDir) + 0.34) / 1.34, 0.0, 1.0) * 0.60;
+  float lumB = (0.25 + 0.18 * nB.y) * (1.0 - 0.24 * smoothstep(0.24, 0.88, cB.a))
+             + clamp((dot(nB, uSunDir) + 0.34) / 1.34, 0.0, 1.0) * 0.62;
   lumB = lumB * uCloudBright * (0.90 + 0.22 * pow(max(0.0, dot(d, uSunDir)), 4.0));
 
   vec3 colB = mm6Ramp(clamp(lumB, 0.0, 1.0)) * uCloudTintMul + uCloudTintAdd;

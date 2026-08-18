@@ -39,11 +39,11 @@ const out = await page.evaluate(async ({ url, rects }) => {
     const counts = new Map();
     for (let i = 0; i < d.length; i += 4) {
       sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; n++;
-      const k = (d[i] >> 3 << 10) | (d[i + 1] >> 3 << 5) | (d[i + 2] >> 3);
+      const k = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
       counts.set(k, (counts.get(k) || 0) + 1);
     }
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
-      .map(([k, cnt]) => `${hex((k >> 10 & 31) * 8, (k >> 5 & 31) * 8, (k & 31) * 8)}(${(100 * cnt / n).toFixed(1)}%)`);
+      .map(([k, cnt]) => `${hex(k >> 16 & 255, k >> 8 & 255, k & 255)}(${(100 * cnt / n).toFixed(1)}%)`);
     res.rects.push({
       name: r.name, px: [x, y, w, h],
       mean: hex(sr / n, sg / n, sb / n),
