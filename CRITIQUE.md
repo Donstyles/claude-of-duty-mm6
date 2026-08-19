@@ -122,6 +122,61 @@ defects in the game and are being fixed first.
   acting on a blind verdict.** A reviewer describing "panel A" is not
   describing us until the key says so.
 
+## Round 9 — the world views, judged at last
+
+`shots/blind9w/`, four pairs, captured after the harness actually returned the
+world to a known state between shots. **We won all four**, and the reviewer —
+who did not know which panel was ours — named our town square the best image in
+the set and our dungeon corridor "the best lighting in the set by a wide
+margin".
+
+That is the first honest read we have ever had of the exterior. It does not
+mean the exterior is finished; the same reviewer listed real defects in it (a
+hard horizon slab with aerial perspective running *backwards*, near-field
+ground with no detail map, trees as dark blobs with no contact shadow) and
+those are live work.
+
+The dungeon note is already actioned: 35% of the frame sat under value 10 and
+an interactive gate was invisible in it. Now 11.5%. See the commit for why it
+was deliberately not taken to reference parity.
+
+## Round 9 — the typography reviewer, decoded
+
+A second reviewer judged the same sixteen sheets on layout and type alone.
+**Eleven wins, two losses** on the thirteen valid pairs (`ui-shop-counter` and
+`ui-hud`), three void.
+
+It disagrees with the materials reviewer on `ui-menu` and `ui-spellbook` — both
+of which it scored as *wins* for us. That is not a contradiction to resolve:
+our menu is well set and badly made, and both reviewers are right about their
+own half. Fix the material without disturbing the setting.
+
+### The most damaging finding in either round
+
+Neither a screen nor a texture. **Our interface disagrees with itself.** The
+reviewer catalogued twelve internal conflicts and called them, unprompted, the
+most damaging thing it found:
+
+1. Two type systems — serif everywhere, a neo-grotesque sans for the whole
+   quest journal, and both in one window.
+2. **The same component on two grounds with the ink unchanged.** The NPC
+   sidebar is dark wood on seven screens and pale marble on the shop counter.
+   Contrast collapses from 6.06:1 to **1.29:1**. This is the single worst
+   defect in the set and the only one that stops a screen working.
+3. Four different name/role treatments for the same NPC block.
+4. Curly quotes on one screen, straight quotes on four.
+5. Three caption treatments (gradient scrim / hard black box / no caption).
+6. **Seven status-bar grammars.**
+7. The same problem solved two ways: the trainer states cost as a right-aligned
+   table with the blocking figure in red; the guild states it as a centred
+   two-line run-on.
+8. Two screens sharing one title, so the title bar never says which you are on.
+9. Green doing three jobs on one panel; gold doing four across the set.
+
+The reviewer's closing observation is the one to keep: the reference set is
+"uniformly plain; it does not disagree with itself about its own rules," and on
+internal consistency alone it wins. We are losing on discipline, not on craft.
+
 ### What we won on, and should not lose
 
 The venue interiors, the guild library, the training yard, the character
