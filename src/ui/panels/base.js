@@ -324,8 +324,23 @@ export function itemSprite(item, w, h, cls = 'mm-item') {
     // liquid is a wash behind it. Painting twelve bottles would have cost the
     // same as twelve more weapons and told the player nothing extra.
     const tint = POTION_TINT[item.id] ?? POTION_TINT[item.baseId];
-    if (tint) node.appendChild(el('div', { className: 'mm-item-fill', style: { background: tint } }));
     node.appendChild(el('div', { className: 'mm-item-plate', style: { backgroundImage: `url("${plate}")` } }));
+    // The wash goes *over* the glass and multiplies into it, masked by the
+    // glass's own alpha. Behind it, it was invisible: the painted bottle is
+    // opaque through the belly, so the only place the tint ever showed was
+    // outside the silhouette — which is exactly the hard-edged red block a
+    // reviewer read as "an un-keyed matte left in the sprite". Twelve potions
+    // shared one bottle and none of them had anything in it.
+    if (tint) {
+      node.appendChild(el('div', {
+        className: 'mm-item-fill',
+        style: {
+          background: tint,
+          webkitMaskImage: `url("${plate}")`,
+          maskImage: `url("${plate}")`,
+        },
+      }));
+    }
   } else {
     node.innerHTML = paintedIcon(itemIconName(item), itemMaterial(item));
   }

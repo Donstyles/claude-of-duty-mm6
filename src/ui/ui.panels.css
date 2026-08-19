@@ -1493,7 +1493,9 @@
  * body — so un-scoping it from the backpack (to spare the shop a duplicate rule
  * block) silently gave the niche `position: relative` and collapsed the figure.
  * One name meaning two things is the bug; the item sprite now has its own. */
-.has-item-plate { position: relative; }
+/* `isolate` keeps the potion wash's multiply inside the sprite: without it the
+   blend reaches the leather lining behind and darkens the whole cell. */
+.has-item-plate { position: relative; isolation: isolate; }
 .mm-item-plate,
 .mm-item-fill {
   position: absolute;
@@ -1503,4 +1505,31 @@
   background-size: contain;
   pointer-events: none;
 }
-.mm-item-fill { opacity: 0.85; }
+/* The liquid is masked to the bottle it is inside.
+ *
+ * This was a plain tinted rectangle sitting behind the keyed glass plate, so
+ * the wash painted the whole cell: a hard-edged red block wider than the bottle,
+ * covering the grid line and clipping at the cell boundary. A blind reviewer
+ * ranked it the fourth worst material defect in thirteen screens and read it,
+ * fairly, as "an un-keyed matte left in the sprite" — the most bug-like thing
+ * in the set.
+ *
+ * The plate already carries the silhouette in its alpha, so the mask is the
+ * same image, at the same size and position, and the wash can only reach where
+ * there is bottle. The URL is set inline beside the background, because only
+ * the call site knows which item this is. */
+.mm-item-fill {
+  /* Multiply, so the painted glass keeps its highlights and its cork and the
+     colour reads as something *in* the bottle rather than a coat of paint on
+     it. Blending is confined to this element's own stacking context by the
+     isolate below, or a multiply over a dark leather lining turns the whole
+     cell to mud. */
+  mix-blend-mode: multiply;
+  opacity: 0.88;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
