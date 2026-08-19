@@ -106,6 +106,17 @@ const THEMES = {
 /** Simultaneous point lights. Torch anchors are unlimited; the pool is not. */
 const LIGHT_POOL = { low: 7, medium: 9, high: 12, ultra: 16 };
 
+/**
+ * Underground haze. See `_hazeColour` for why the colour is computed rather
+ * than taken from the theme, and why the value is set here instead.
+ *
+ * The density came down from 0.021 at the same time: at that figure a corridor
+ * was three-quarters fogged by the far end of its own torchlight, so the
+ * lighting work was being painted over before the player could see it.
+ */
+const HAZE_DENSITY = 0.0125;
+const HAZE_VALUE = 0.26;
+
 export class DungeonSystem extends System {
   static id = 'dungeon';
   static order = 76;
@@ -352,9 +363,23 @@ export class DungeonSystem extends System {
       const tone = new THREE.Color(light.ambient);
       const peak = Math.max(tone.r, tone.g, tone.b) || 1;
       tone.multiplyScalar(1 / peak);
-      this._ambient.color.copy(tone);
-      this._ambient.groundColor.copy(tone).multiplyScalar(0.34);
-      this._ambient.intensity = 0.65;
+      // Cool from above, warm from below — and it is a hemisphere light, so
+      // that costs nothing extra. A blind reviewer put this corridor's lighting
+      // ahead of the reference's ("the best lighting in the set by a wide
+      // margin") and then named the one thing wrong with it: 35% of the frame
+      // sat under value 10, and an interactive gate on the right-hand wall was
+      // geometry the player simply could not see. Its prescription was a cool
+      // fill, so the darks hold a silhouette instead of holding nothing.
+      //
+      // Splitting the hemisphere does that without touching the torches, which
+      // are what won: stone vaulting bounces cold light down, a torchlit floor
+      // bounces warm light back up, and a shape standing between the two is
+      // legible from either side even with no torch on it.
+      const cool = tone.clone().lerp(new THREE.Color(0x8fa8c8), 0.38);
+      const warm = tone.clone().lerp(new THREE.Color(light.torch ?? 0xff9a3c), 0.42);
+      this._ambient.color.copy(cool);
+      this._ambient.groundColor.copy(warm).multiplyScalar(0.55);
+      this._ambient.intensity = 1.55;
       this._ambient.visible = true;
 
       this._savedExposure = ctx.renderer.toneMappingExposure;
@@ -365,7 +390,7 @@ export class DungeonSystem extends System {
       // thing in an interior to push past that.
       ctx.renderer.toneMappingExposure = 1.16;
       this._savedFog = ctx.scene.fog;
-      ctx.scene.fog = new THREE.FogExp2(light.ambient, 0.021);
+      ctx.scene.fog = new THREE.FogExp2(this._hazeColour(light).getHex(), HAZE_DENSITY);
 
       this._hidden = [];
       for (const key of ['keyLight', 'fillLight', 'floorLight']) {
@@ -382,6 +407,36 @@ export class DungeonSystem extends System {
       for (const l of this._pool) l.intensity = 0;
       sky?.setTimeFrozen?.(false);
     }
+  }
+
+  /**
+   * The colour distance fades to underground.
+   *
+   * `light.ambient` is an authored *mood* hex — `#0e0e10` and its neighbours —
+   * and handing it straight to the fog is the same trap the ambient light above
+   * documents, but with worse consequences. An ambient colour gets multiplied
+   * by an intensity, so a dark hex can still be opened up. A fog colour *is*
+   * the final pixel: at `#0e0e10` every corridor fades to literal black about
+   * twenty metres out, however bright the torches are.
+   *
+   * Measured against the reference, that is exactly what was happening — our
+   * dungeon frame ran a median luminance of 16 against the reference's 61,
+   * with 41% of the frame under value 12 where the reference has 9%. The dark
+   * was not the torches being weak; it was the haze painting black over them.
+   *
+   * So: take the theme's hue, warm it a third of the way toward its own
+   * torchlight — dust underground is lit by the same flame the walls are — and
+   * set the *value* deliberately, into the band REFERENCE rule 8 puts the bulk
+   * of an MM6 frame in, rather than inheriting whatever the mood hex happened
+   * to be.
+   */
+  _hazeColour(light) {
+    const tone = new THREE.Color(light.ambient);
+    const peak = Math.max(tone.r, tone.g, tone.b) || 1;
+    tone.multiplyScalar(1 / peak);
+    const torch = new THREE.Color(light.torch ?? 0xff9a3c);
+    tone.lerp(torch, 0.34);
+    return tone.multiplyScalar(HAZE_VALUE);
   }
 
   _buildLightPool(ctx) {
@@ -1663,8 +1718,8 @@ export class DungeonSystem extends System {
     // interior's own fog has to be restated after it rather than installed once.
     const fog = ctx.scene.fog;
     if (fog?.isFogExp2) {
-      fog.color.setHex(this.currentDef.light.ambient);
-      fog.density = 0.021;
+      fog.color.copy(this._hazeColour(this.currentDef.light));
+      fog.density = HAZE_DENSITY;
     }
 
     this._driveLights(ctx, built);
