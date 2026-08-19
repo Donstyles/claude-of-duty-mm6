@@ -83,6 +83,19 @@ async function main() {
     shadows: params.get('shadows') !== '0',
   });
 
+  // Register the offline shell, but never during a capture.
+  //
+  // A service worker serving a cached build under a screenshot run is how a
+  // review round ends up judging last night's pixels — this project has already
+  // lost two rounds to stale captures and does not need a third source of them.
+  // It is also pointless on the dev server, where Vite is the authority.
+  if ('serviceWorker' in navigator && import.meta.env.PROD && !params.has('capture')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register(new URL('./sw.js', document.baseURI), { scope: './' })
+        .catch((err) => console.warn('[pwa] service worker did not register:', err));
+    });
+  }
+
   // Expose early so the capture harness can observe a failed boot too.
   window.__ENGINE = engine;
   window.__GAME = {

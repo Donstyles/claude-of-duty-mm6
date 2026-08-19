@@ -28,6 +28,32 @@ html, body {
   font-family: var(--face, 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif);
   -webkit-font-smoothing: antialiased;
   user-select: none;
+  -webkit-user-select: none;
+  /* iOS: a drag that reaches the document edge rubber-bands the whole page and
+     drops the gesture the game was tracking. */
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  /* Stops the grey flash iOS paints under a tapped element. */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+/* The safe area, as tokens, so nothing has to remember the incantation.
+ *
+ * With `viewport-fit=cover` the page owns every pixel including the ones under
+ * the Dynamic Island and the home indicator — which is what "borderless" means
+ * and is also how you lose a button under a notch. `#app` still fills the
+ * screen, so the 3-D view and the painted chrome bleed edge to edge; only
+ * things that must stay *touchable* get pushed in by these.
+ *
+ * In landscape the island is on one short edge and which edge depends on which
+ * way the phone was turned, so both left and right are honoured rather than
+ * assuming. */
+:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
 }
 
 #app { position: fixed; inset: 0; }
@@ -115,4 +141,58 @@ html, body {
   font-style: normal;
   white-space: pre-wrap;
   text-align: left;
+}
+
+/* ── portrait ────────────────────────────────────────────────────────────── */
+
+/* The manifest asks for landscape and Android honours it. iOS does not — a
+ * home-screen web app rotates with the phone whatever the manifest says, and
+ * there is no API to lock it. So the one thing we can do is say so, and say it
+ * without ceremony: the game keeps running behind this, and the moment the
+ * phone turns the veil is gone.
+ *
+ * Keyed on aspect ratio rather than `orientation: portrait` so it also catches
+ * a squat desktop window, and gated on coarse pointers so it can never appear
+ * on a mouse-driven machine that happens to be tall. */
+#rotate-veil { display: none; }
+
+@media (pointer: coarse) and (max-aspect-ratio: 13 / 10) {
+  #rotate-veil {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    gap: 18px;
+    padding: calc(var(--safe-t) + 24px) calc(var(--safe-r) + 24px)
+             calc(var(--safe-b) + 24px) calc(var(--safe-l) + 24px);
+    background: #12141c;
+    text-align: center;
+  }
+  #rotate-veil .rv-glyph {
+    width: 64px;
+    height: 96px;
+    border: 3px solid var(--gold);
+    border-radius: 9px;
+    animation: rv-turn 2.4s ease-in-out infinite;
+  }
+  #rotate-veil .rv-text {
+    font-size: 17px;
+    letter-spacing: 0.08em;
+    color: var(--ink);
+  }
+  #rotate-veil .rv-sub {
+    font-size: 13px;
+    font-style: italic;
+    color: var(--ink-dim);
+  }
+}
+
+@keyframes rv-turn {
+  0%, 30%   { transform: rotate(0deg); }
+  60%, 100% { transform: rotate(-90deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #rotate-veil .rv-glyph { animation: none; transform: rotate(-90deg); }
 }

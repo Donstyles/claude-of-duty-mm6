@@ -2,8 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- `viewport-fit=cover` is what lets the canvas reach into the notch and
+         the home-indicator strip; `user-scalable=no` plus `maximum-scale=1`
+         stops a two-finger drag on the look control pinch-zooming the page,
+         which iOS otherwise does even with `touch-action: none`. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Claude of Duty — The Kingdom of Caerwen</title>
+
+    <!-- Installable. On Android the manifest alone gets a real fullscreen
+         launcher entry. iOS ignores most of it: Safari reads the three
+         `apple-*` tags below and the `apple-touch-icon` link instead, and only
+         once the page is added to the Home Screen does it launch in its own
+         window without Safari's chrome. `black-translucent` is the one that
+         puts our own pixels under the status bar rather than beside it — the
+         difference between borderless and a black band. -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#12141c" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Caerwen" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png" />
+    <!-- Safari will happily let a swipe on the game select the party names. -->
+    <meta name="format-detection" content="telephone=no" />
     <!-- Inline so there is no second request. Without any icon at all the
          browser asks for /favicon.ico, gets a 404, and every capture report
          then carries a console error — which is exactly how a review process
@@ -15,6 +36,13 @@
     <div id="app">
       <canvas id="viewport"></canvas>
       <div id="ui-root"></div>
+      <!-- Shown only on a coarse pointer in a portrait-ish window; see ui.css.
+           The game keeps running behind it. -->
+      <div id="rotate-veil">
+        <div class="rv-glyph"></div>
+        <div class="rv-text">TURN THE PHONE</div>
+        <div class="rv-sub">Caerwen is a widescreen kingdom.</div>
+      </div>
       <div id="boot">
         <div class="boot-inner">
           <div class="boot-title">CLAUDE OF DUTY</div>
