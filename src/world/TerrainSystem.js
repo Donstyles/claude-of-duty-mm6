@@ -82,50 +82,49 @@ const LAYER_SCALE = { grass: 4.0, dirt: 4.5, rock: 8.0, sand: 4.0 };
  *    swatch, and the residual is a known and deliberate miss.
  */
 const LAYER_TINT = {
-  grass: [0.92, 1.00, 1.32],
-  dirt: [1.60, 1.00, 1.62],
-  rock: [1.02, 1.00, 1.10],
-  sand: [1.08, 1.00, 1.04],
+  grass: [0.92, 1.00, 1.20],
+  dirt: [1.52, 0.98, 1.50],
+  rock: [1.02, 1.00, 1.06],
+  sand: [1.08, 1.00, 1.00],
 };
 
 /**
  * Per-layer albedo contrast, as a power curve about `LAYER_PIVOT`.
  *
- * This is the single biggest finding of the exposure-matched comparison, and
- * it is not the one the aggregate numbers suggest. Splitting both frames'
- * ground luminance into grass and dirt populations and decomposing the
- * variance gives:
+ * Modest on purpose, and the reason is worth recording, because the obvious
+ * reading of the aggregate numbers points the other way and is wrong.
  *
- *                    within-material   between-material   total
- *   ours                    14.1              13.2         19.3
- *   reference               30.3               0.4         30.3
+ * Decomposing both frames' ground luminance into grass and dirt populations
+ * says the reference's spread is almost entirely *within* each material — its
+ * grass population carries a standard deviation of 25.1 against our 11.8. Read
+ * as a statement about texture contrast, that argues for a large exponent
+ * here, and this constant was pushed to 3.1 chasing it.
  *
- * The reference's between-material term is **zero** — MM6's dirt and its grass
- * sit at the *same* luminance (89.0 against 89.8) and are told apart purely by
- * chroma. Every bit of its value range lives *inside* each material: its grass
- * carries a standard deviation of 25.1 and its dirt 34.5, against our 11.8 and
- * 17.2. That matches REFERENCE §2.2, which lists MM6's dirt as ranging
- * `#311C10 → #73594A` — a threefold luminance range within one texture.
+ * It is not a statement about texture contrast. Comparing the two at *matched
+ * distance* instead of in aggregate:
  *
- * So the range our ground is missing is *inside* the materials, and that is
- * what this curve supplies. It also explains why the key/fill rebalance moved
- * the histogram bodily without widening it, and it is consistent with MM6's
- * own hillside, whose dome measures a standard deviation of 6.7 luminance
- * units — essentially unshaded. The range was never coming from directional
- * light, so no amount of re-pointing the sun was going to produce it.
+ *                          within-patch relative sd
+ *   reference, distant hill            8.0%
+ *   reference, near foreground        15.5%
+ *   ours, distant (terrain-vista)     15.8%
+ *   ours, near (veg-meadow)           31.1%
  *
- * The other half of our total, the 13.2 between-material term, is a different
- * thing and mostly not a defect: our dirt sits on slopes and slopes are the
- * surfaces angled away from the sun, so the two populations separate in value
- * in a way MM6's cannot, because MM6 shades nothing. It is reduced by not
- * over-concentrating dirt on steep ground (TerrainGen.computeSplat) rather
- * than by re-tinting a material that already measures on canon.
+ * Our grass is already roughly twice as varied as MM6's at every distance. The
+ * reference's population standard deviation is large because that frame holds
+ * several *different* grass zones at different values — its hill measures 109
+ * and its foreground 88, a 19% step with no lighting involved — not because
+ * any one patch is noisy. MM6 gets range from having many authored variants;
+ * chasing the same number through per-texel contrast just makes our ground
+ * grainy, which at 3.1 it visibly was.
+ *
+ * So this stays low, and the between-patch variety that actually accounts for
+ * the reference's spread is produced where it belongs, in `_macroTint`.
  *
  * `pow` about a pivot rather than a linear stretch: it cannot drive a texel
  * negative, and it expands proportionally, so a texture's bright grain and its
  * dark grain open up together instead of one end clipping first.
  */
-const LAYER_CONTRAST = { grass: 2.70, dirt: 2.60, rock: 1.70, sand: 1.55 };
+const LAYER_CONTRAST = { grass: 1.85, dirt: 2.05, rock: 1.45, sand: 1.35 };
 
 /**
  * Each layer's mean linear albedo *luminance* — what the curve rotates about.
@@ -586,7 +585,7 @@ export class TerrainSystem extends System {
     // because the worst case is the sum of all four and pushing for the last
     // few points starts producing patches dark enough to read as shadow. The
     // clamp is a guard on that tail, not a working part of the range.
-    const v = fine * 0.094 + mid * 0.196 + broad * 0.145 + region * 0.102;
+    const v = fine * 0.077 + mid * 0.161 + broad * 0.119 + region * 0.084;
     const lo = 0.30;
     const hi = 1.55;
     const cl = (x) => (x < lo ? lo : x > hi ? hi : x);

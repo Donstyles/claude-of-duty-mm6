@@ -68,7 +68,7 @@ import { WORLD_SIZE } from './TerrainGen.js';
  * eventually fixed. Re-pointing the sun was never going to produce it, and
  * MM6's own hillside (standard deviation 6.7 across the dome) says why.
  */
-const KEY_GAIN = 1.70;
+const KEY_GAIN = 1.84;
 const FILL_GAIN = 0.58;
 
 /**
@@ -119,7 +119,7 @@ const SKY_DAY_GAIN = [1.53, 1.47, 1.40];
  * pasted along the skyline instead of as more land. The gain lands the band on
  * the terrain's own colour after the fog mix is added back.
  */
-const GROUND_BAND_GAIN = [1.40, 1.05, 0.72];
+const GROUND_BAND_GAIN = [1.45, 0.98, 0.71];
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;

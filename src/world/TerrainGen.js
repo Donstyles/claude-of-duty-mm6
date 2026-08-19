@@ -559,13 +559,16 @@ function computeSplat(data, perm) {
       // measure on canon. The green comes down by showing more earth, not by
       // making the grass browner than MM6's actually is.
       //
-      // 0.80 was tried first and is too much — it strips whole hillsides to
-      // bare terracotta, which no reference frame shows: MM6's hills keep a
-      // grassed dome and erode on the flanks.
+      // The ceiling matters: at 0.80 whole hillsides strip to bare earth,
+      // which no reference frame shows — MM6's hills keep a grassed dome and
+      // erode on the flanks. This lands the mix near the reference frame's own
+      // 44% dirt, which is also where the ground's red channel and its value
+      // range come from: earth is the material that is both redder than grass
+      // and much wider in value.
       const dirt = clamp(
         data.road[i] * 1.25 +
-        smoothstep(0.19, 0.42, slope) * 0.66 +
-        Math.max(0, n) * 0.42,
+        smoothstep(0.19, 0.42, slope) * 0.74 +
+        Math.max(0, n) * 0.48,
         0, 1,
       ) * (1 - rock) * (1 - sand);
       const grass = clamp(1 - rock - sand - dirt, 0, 1);

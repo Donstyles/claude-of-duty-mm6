@@ -863,7 +863,17 @@ export function trianglesFromGeometry(geometry, matrixWorld = null, maxTriangles
     w += 9;
     written++;
   }
-  const packed = written === n ? out : out.subarray(0, written).slice();
+  // `w` counts floats and `written` counts triangles, and the slice length is
+  // in floats. This read `out.subarray(0, written)`, so the moment a geometry
+  // contained a single degenerate triangle it returned about a ninth of its
+  // own data — and a length no longer divisible by nine.
+  //
+  // Nothing threw here. `BVH.fromObject` then accumulated `tris.length / 9`
+  // into a fractional triangle total, sized `merged` from it, and `merged.set`
+  // ran off the end. The only symptom was one line — `addCollider failed:
+  // offset is out of bounds` — and a whole town with no collision in it, which
+  // is how Saltmarch shipped walk-through walls.
+  const packed = w === out.length ? out : out.subarray(0, w).slice();
   if (matrixWorld) transformTriangles(packed, matrixWorld);
   return packed;
 }

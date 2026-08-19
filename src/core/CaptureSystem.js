@@ -82,6 +82,17 @@ export class CaptureSystem extends System {
 
         if (shot.camera) api.setCamera(shot.camera);
         await shot.apply?.(ctx, opts);
+
+        // An explicitly requested hour beats the shot's own.
+        //
+        // A viewpoint may set `worldTime` in its `apply` to frame itself — the
+        // town square picks 20:24 so its lanterns are lit — and that is a fine
+        // default. But it silently defeated `--time`, so a run asking for noon
+        // got dusk and said nothing about it, and every town in a five-town
+        // contact sheet came out dark. Worse for the review loop: the reference
+        // stills are daylight, so a blind comparison was pitting our dusk
+        // against MM6's noon and calling the difference craft.
+        if (opts.time !== undefined) api.setTimeOfDay(opts.time);
         this._settleFrames = 0;
         return true;
       },
