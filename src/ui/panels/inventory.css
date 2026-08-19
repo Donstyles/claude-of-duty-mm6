@@ -47,14 +47,21 @@
   padding: 0 calc(var(--u) * 6);
 }
 
-/* A party member's proper name. STYLE.md §2 gives that its own colour and it
-   is not gold: gold means the live control, and this is not one. The token is
-   declared here the way the venue sidebars declare theirs, until §2's palette
-   moves into ../ui.panels.css. */
+/* A party member's proper name — and not gold, whatever it used to be: gold
+   means the live control (STYLE.md §2) and this line is not one.
+ *
+ * §2 would have it `--name` #5fbcff, and it cannot be. Measured on this
+ * granite (median relative luminance 0.0796 off a 1200x900 capture) #5fbcff
+ * tops out at **3.90:1 even at full coverage**, and the glyph-plus-antialias
+ * mean §6 actually asks for came in at **2.76:1** — under the 4.5:1 floor, on
+ * the one string that says whose pack you are looking at. So it takes `--ink`,
+ * which measures 5.4:1 here, and §3a's own rule for a name at the head of a
+ * screen — white — is the precedent. The conflict is real and belongs to
+ * whoever owns the palette: see the report. */
 [data-panel="inventory"] .mm-inv-owner {
   flex: 1;
   min-width: 0;
-  color: var(--name, #5fbcff);
+  color: var(--ink);
   font-style: italic;
   font-size: calc(var(--u) * 11);
   line-height: calc(var(--u) * 13);

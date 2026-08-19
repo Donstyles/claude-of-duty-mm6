@@ -160,7 +160,7 @@
    unbought spell is a shape you cannot read rather than a spell you can. */
 .mm-panel[data-panel='spellbook'] .mm-sb-cell.is-unknown .mm-sb-name { display: none; }
 .mm-panel[data-panel='spellbook'] .mm-sb-cell.is-unknown .mm-sb-ink {
-  filter: grayscale(0.88) contrast(0.72) opacity(0.22);
+  filter: grayscale(1) contrast(0.92) opacity(0.18);
 }
 .mm-panel[data-panel='spellbook'] .mm-sb-cell.is-unknown { cursor: default; }
 

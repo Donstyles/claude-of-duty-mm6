@@ -2,11 +2,28 @@ import './guild.css';
 import { Panel } from './base.js';
 import {
   el, setChildren, tooltip, tipMarkup, fmt, ellipsis, goldOval, engraved, labelRow,
+  attribute,
 } from '../widgets.js';
-import { attribute } from './dialogue.js';
 import { icon } from '../Icons.js';
 import { MASTERY_LABEL, masteryRank } from '../../game/data/Skills.js';
+import { enterLine } from './dialogue.js';
 import { GuildSystem } from '../../game/GuildSystem.js';
+
+/**
+ * Straight quotation marks upgraded to curly, in place (STYLE.md §7).
+ *
+ * `GuildSystem`'s `door` lines are *narration containing speech*: `{keeper}
+ * does not look up from the crucible. "The Ember takes apprentices at the
+ * forge…"`. They must not be attributed, only typeset. `attribute()` handles
+ * the other case — a bare quotation that needs a speaker put in front of it.
+ *
+ * It belongs in `ui/widgets.js` beside `attribute()`; that file is not ours.
+ */
+function curly(text) {
+  let open = true;
+  return String(text ?? '').replace(/"/g, () => (open = !open) ? '\u201d' : '\u201c')
+    .replace(/(\w)'(\w)/g, '$1\u2019$2');
+}
 
 /**
  * Where the painted spell plates live. Committed art, never fetched, and the
@@ -153,13 +170,19 @@ export class GuildPanel extends Panel {
     if (!hall) return;
     const member = guilds.isMember(hall);
     this.view = opts.view ?? 'hall';
-    // Attributed, in curly quotes — one grammar for everything anybody says
-    // anywhere in the interface (STYLE.md §7).
-    this._notice = attribute(hall.keeper, guilds.say(hall, member ? 'welcome' : 'door'));
+    // `welcome` is bare speech and takes the speaker's name; `door` is
+    // narration that already names them and quotes them inside itself. Passing
+    // both through `attribute()` printed the name twice and put quotes inside
+    // quotes: `Adept Sella Roon: “Adept Sella Roon does not look up from the
+    // crucible. "The Ember takes…"”`. One helper cannot tell prose from
+    // speech, so the caller has to (STYLE.md §7).
+    this._notice = member
+      ? attribute(hall.keeper, guilds.say(hall, 'welcome'))
+      : curly(guilds.say(hall, 'door'));
     // One grammar for the strip: a complete sentence, sentence case, full stop
     // (STYLE.md §5). `Guild of the Ember, Millhaven.` was a label, not a
     // sentence, and it was one of seven different grammars in the set.
-    this.ui.log(`You enter ${hall.name}.`, 'info');
+    this.ui.log(enterLine(hall.name), 'info');
   }
 
   // ── draw ───────────────────────────────────────────────────────────────────
@@ -199,7 +222,10 @@ export class GuildPanel extends Panel {
       el('div', { className: 'mm-guild-who', text: ellipsis(vm?.name ?? '—', 17) }),
       labelRow('Standing', member ? 'member' : 'at the door',
         { tone: member ? 'mm-t-up' : 'mm-t-down' }),
-      labelRow('Teaches to', MASTERY_LABEL[hall.teaches] ?? '—'),
+      // No "Teaches to" row: the sign over the room already says it, in better
+      // words — a tier-one hall reads "teaches the trade only" up there and
+      // would have read "Normal" down here, which is the same fact stated
+      // twice on one screen and disagreeing with itself the second time.
       labelRow('Entry', member ? '—' : fmt(fee),
         { tone: short ? 'mm-t-down' : 'mm-t-golddeep' }),
       labelRow('In the purse', fmt(purse), { tone: 'mm-t-golddeep' }));
@@ -240,7 +266,7 @@ export class GuildPanel extends Panel {
     add('door', member ? 'Membership' : 'Join the Guild', () => {
       if (!member) {
         this.view = 'door';
-        this._notice = attribute(hall.keeper, guilds.say(hall, 'door'));
+        this._notice = curly(guilds.say(hall, 'door'));
         this.refresh();
         return;
       }
@@ -432,7 +458,7 @@ export class GuildPanel extends Panel {
   /** What a stranger gets for touching the stock. */
   _shutOut(hall) {
     this.view = 'door';
-    this._say(attribute(hall.keeper, this.guilds().say(hall, 'door')), false);
+    this._say(curly(this.guilds().say(hall, 'door')), false);
   }
 
   /**

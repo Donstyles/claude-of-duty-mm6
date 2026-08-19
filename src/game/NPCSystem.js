@@ -388,7 +388,7 @@ export class NPCSystem extends System {
     const waistY = 0.88 * Hs;
     const hemY = Math.max(0.02, (1 - DRESS.skirt) * 0.62 * Hs);
     const shoulderY = 1.28 * Hs;
-    const headY = 1.44 * Hs;
+    const headY = 1.475 * Hs;
     const lean = (x, y, z) => -hunch * (y / Math.max(headY, 0.01)) * 0.5;
 
     // Folds are per-person: the same robe hangs differently on two people.
@@ -456,11 +456,14 @@ export class NPCSystem extends System {
     // A shoulder cape or yoke. Robes get one because it is the cheapest way to
     // break the long vertical run of cloth into a body with shoulders on it.
     if (DRESS.cape) {
-      const cap = lathe(shoulderY - 0.24 * Hs, shoulderY + 0.025, 0.262 * W, 0.125 * W, 16, 5);
-      flute(cap, folds + 2, 0.040, phase + 1.1);
+      // Narrower than the arms hang and stopping short of the collar. The first
+      // version flared past the shoulder line, so the sleeves emerged through it
+      // and the mantle read as a stack of angular petals rather than cloth.
+      const cap = lathe(shoulderY - 0.17 * Hs, shoulderY - 0.02, 0.232 * W, 0.120 * W, 20, 5);
+      flute(cap, folds + 2, 0.028, phase + 1.1);
       cap.scale(1.06, 1, 0.90);
       cap.translate(0, 0, lean(0, shoulderY, 0));
-      uvRepeat(cap, (2 * Math.PI * 0.21 * W) / gTile, (0.23 * Hs) / gTile);
+      uvRepeat(cap, (2 * Math.PI * 0.18 * W) / gTile, (0.15 * Hs) / gTile);
       push(paint(cap, cloak, flat(1.06)), garment);
     }
 
@@ -510,7 +513,7 @@ export class NPCSystem extends System {
       for (const sgn of [-1, 1]) {
         const p = new THREE.SphereGeometry(0.105 * W, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2);
         p.scale(1, 0.78, 1);
-        p.translate(sgn * 0.225 * W, shoulderY - 0.045, lean(0, shoulderY, 0));
+        p.translate(sgn * 0.248 * W, shoulderY - 0.040, lean(0, shoulderY, 0));
         uvRepeat(p, (2 * Math.PI * 0.105 * W) / TILE.metal, (0.16 * W) / TILE.metal);
         push(paint(p, trimCol), metal);
       }
@@ -534,14 +537,14 @@ export class NPCSystem extends System {
       uvRepeat(arm, (2 * Math.PI * 0.05 * W) / gTile, armLen / gTile);
       arm.rotateZ(sgn * set[i]);
       arm.rotateX(swing[i]);
-      arm.translate(sgn * 0.235 * W, shoulderY - armLen * 0.52, lean(0, shoulderY, 0));
+      arm.translate(sgn * 0.262 * W, shoulderY - armLen * 0.52, lean(0, shoulderY, 0));
       push(paint(arm, cloak, flat(0.96)), garment);
 
       const hand = new THREE.SphereGeometry(0.044, 9, 7);
       hand.scale(0.9, 1.25, 0.72);
       hand.rotateX(swing[i]);
       hand.translate(
-        sgn * (0.235 * W + Math.sin(set[i]) * armLen * 0.55),
+        sgn * (0.262 * W + Math.sin(set[i]) * armLen * 0.55),
         shoulderY - armLen * 0.98,
         lean(0, shoulderY, 0) - Math.sin(swing[i]) * armLen * 0.5,
       );
@@ -553,9 +556,9 @@ export class NPCSystem extends System {
 
     const hz = lean(0, headY, 0);
     {
-      const neck = new THREE.CylinderGeometry(0.048, 0.056, 0.09, 9);
-      neck.translate(0, shoulderY + 0.035, hz);
-      uvRepeat(neck, (2 * Math.PI * 0.05) / TILE['npc-skin'], 0.09 / TILE['npc-skin']);
+      const neck = new THREE.CylinderGeometry(0.046, 0.058, 0.13, 9);
+      neck.translate(0, shoulderY + 0.055, hz);
+      uvRepeat(neck, (2 * Math.PI * 0.05) / TILE['npc-skin'], 0.13 / TILE['npc-skin']);
       push(paint(neck, skinCol, flat(0.82)), skin);
 
       const head = new THREE.SphereGeometry(0.115, 16, 13);
@@ -564,26 +567,22 @@ export class NPCSystem extends System {
       uvRepeat(head, (2 * Math.PI * 0.115) / TILE['npc-skin'], (Math.PI * 0.115) / TILE['npc-skin']);
       push(paint(head, skinCol), skin);
 
-      // Brow, chin and ears. Four cheap primitives, and the difference between
-      // a face and a ball with two dots on it.
-      const brow = new THREE.SphereGeometry(0.085, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.55);
-      brow.scale(1.12, 0.42, 0.66);
-      brow.translate(0, headY + 0.026, hz - 0.050);
-      uvRepeat(brow, (2 * Math.PI * 0.09) / TILE['npc-skin'], (Math.PI * 0.04) / TILE['npc-skin']);
-      push(paint(brow, skinCol, flat(1.03)), skin);
-
-      const chin = new THREE.SphereGeometry(0.062, 9, 7);
-      chin.scale(1.0, 0.86, 0.86);
-      chin.translate(0, headY - 0.078, hz - 0.036);
-      uvRepeat(chin, (2 * Math.PI * 0.062) / TILE['npc-skin'], (Math.PI * 0.062) / TILE['npc-skin']);
-      push(paint(chin, skinCol, flat(0.96)), skin);
+      // Brow and ears, and nothing else. An earlier pass added a chin ball and
+      // a much heavier brow on the theory that more primitives make more of a
+      // face; they made a potato. Two shallow ridges that stay inside the
+      // head's own silhouette read as a face, and lumps that break it do not.
+      const brow = new THREE.SphereGeometry(0.104, 12, 7, 0, Math.PI * 2, 0, Math.PI * 0.5);
+      brow.scale(1.02, 0.30, 0.96);
+      brow.translate(0, headY + 0.030, hz - 0.014);
+      uvRepeat(brow, (2 * Math.PI * 0.104) / TILE['npc-skin'], (Math.PI * 0.03) / TILE['npc-skin']);
+      push(paint(brow, skinCol, flat(1.04)), skin);
 
       for (const sgn of [-1, 1]) {
-        const ear = new THREE.SphereGeometry(0.030, 7, 6);
-        ear.scale(0.42, 1.15, 0.85);
-        ear.translate(sgn * 0.108, headY + 0.004, hz + 0.008);
-        uvRepeat(ear, (2 * Math.PI * 0.03) / TILE['npc-skin'], (Math.PI * 0.03) / TILE['npc-skin']);
-        push(paint(ear, skinCol, flat(1.05)), skin);
+        const ear = new THREE.SphereGeometry(0.028, 7, 6);
+        ear.scale(0.40, 1.10, 0.80);
+        ear.translate(sgn * 0.104, headY - 0.004, hz + 0.012);
+        uvRepeat(ear, (2 * Math.PI * 0.028) / TILE['npc-skin'], (Math.PI * 0.028) / TILE['npc-skin']);
+        push(paint(ear, skinCol, flat(1.03)), skin);
       }
 
       const nose = new THREE.ConeGeometry(0.024, 0.056, 7);
@@ -929,10 +928,13 @@ export class NPCSystem extends System {
       const len = Math.hypot(dx, dz) || 1;
       const ux = dx / len, uz = dz / len;
       const ox = -uz, oz = ux;
-      const cam = [p.x + ux * 1.75 + ox * 1.30, p.y + 1.46, p.z + uz * 1.75 + oz * 1.30];
+      // Far enough back that the whole figure fits with ground either side.
+      // Materials have to be judged against the surface next to them, and a
+      // frame cropped at the waist gives nothing to compare the cloth with.
+      const cam = [p.x + ux * 2.45 + ox * 1.55, p.y + 1.52, p.z + uz * 2.45 + oz * 1.55];
       capture.registerShot('npc-close', {
         description: 'A townsperson at conversation range.',
-        camera: { position: cam, yaw: lookAt(cam[0], cam[2], p.x, p.z), pitch: -6, fov: 50 },
+        camera: { position: cam, yaw: lookAt(cam[0], cam[2], p.x, p.z), pitch: -11, fov: 52 },
         apply(g) { g.state.worldTime = 12.5 * 3600; },
       });
     }

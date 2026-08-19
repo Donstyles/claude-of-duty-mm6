@@ -3,9 +3,9 @@ import { Panel, itemFootprint, itemSprite, itemQuality, itemPlateUrl } from './b
 import { itemMaterial } from '../Icons.js';
 import { ITEM_PLATE_ASPECT } from '../itemPlates.js';
 import {
-  el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, goldOval,
+  el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, goldOval, attribute,
 } from '../widgets.js';
-import { attribute } from './dialogue.js';
+import { enterLine } from './dialogue.js';
 import { MASTERY_LABEL } from '../../game/data/Skills.js';
 import {
   ShopSystem, SHOPS, SHOP_TYPES, displayName, isIdentified,
@@ -19,9 +19,9 @@ import {
  *   · **The counter.** The viewport is the room — the painted forge with its
  *     hearth and tool wall, the apothecary with its shelf of bottles — and the
  *     sidebar's upper block is replaced by vertical figured timber carrying the
- *     shop's name, the keeper's rectangular portrait, their name and trade in
- *     azure, and the five words that are the whole interface: Buy, Sell,
- *     Identify, Repair, Special.
+ *     shop's name, the keeper's rectangular portrait, their name in the name
+ *     colour with their trade under it, and the five words that are the whole
+ *     interface: Buy, Sell, Identify, Repair, Special.
  *   · **The goods.** Picking a word fills the *viewport* only. Buy hangs the
  *     stock on the shop's own back wall as large objects at irregular heights —
  *     no slots, no cells, no price tags — over a scrim that drops the room a
@@ -222,7 +222,7 @@ export class ShopPanel extends Panel {
     this.ui.ctx?.events?.emit('shop:opened', { shopId: shop.id, keeper: shop.keeper, type: shop.type });
     // The strip says where you are; the caption says what the keeper said.
     // Two channels, one job each — STYLE.md §5.
-    this._arrival = `You enter ${shop.name}.`;
+    this._arrival = enterLine(shop.name);
     this.ui.log(this._arrival, 'info');
     // You are greeted on the way in, not halfway through picking over a wall.
     if (!this.mode) this._speak(attribute(shop.keeper, sys.greeting(shop)));
@@ -281,7 +281,7 @@ export class ShopPanel extends Panel {
     this.venueEl.textContent = shop.name;
     this.portraitEl.style.backgroundImage = `url("${T.portrait(shop.portrait)}")`;
     // Name and role are two elements, never one wrapped run: the name is the
-    // person, the role is what they do, and only the name is azure (STYLE.md
+    // person, the role is what they do, and only the name is blue (STYLE.md
     // §3). It also stops "Caine the / Blacksmith" splitting an article from
     // its noun, because the break is now where the meaning breaks.
     this.nameEl.textContent = shop.keeper;

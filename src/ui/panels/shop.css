@@ -7,8 +7,9 @@
      margin        the room itself, left uncovered on all four sides
      sidebar       vertical rough-sawn timber, shop name at the very top
      portrait      rectangular ~4:5, thin grey-green bevel, no vignette
-     keeper name   #109AEF azure, upright serif, centred, two lines
-     options       white italic serif, centred, ~32 pitch, Special #E7CF21
+     keeper name   upright serif, centred, in `--name` (STYLE.md §2)
+     keeper role   "the Weaponsmith", body italic in `--ink`, under the name
+     options       white italic serif, centred, 16u on 19u, 9u apart
 
    The one departure from the 1998 screen: MM6 hides the room behind a flat
    plank board while you browse. We have a painted room instead of a flat

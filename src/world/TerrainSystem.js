@@ -113,7 +113,7 @@ const LAYER_TINT = {
  * negative, and it expands proportionally, so a texture's bright grain and its
  * dark grain open up together instead of one end clipping first.
  */
-const LAYER_CONTRAST = { grass: 2.60, dirt: 2.30, rock: 1.60, sand: 1.50 };
+const LAYER_CONTRAST = { grass: 3.10, dirt: 2.60, rock: 1.70, sand: 1.55 };
 
 /**
  * Each layer's mean linear albedo *luminance* — what the curve rotates about.
@@ -121,12 +121,21 @@ const LAYER_CONTRAST = { grass: 2.60, dirt: 2.30, rock: 1.60, sand: 1.50 };
  * These have to be the real means or the curve stops being a contrast control
  * and becomes a brightness control: every texel sits on the same side of a
  * wrong pivot, so `pow` scales them all the same way. That is measurable and
- * it happened — with the grass pivot at 0.140, raising its exponent from 2.0
- * to 2.6 brightened rendered grass from luminance 108.6 to 118.0 while its
- * standard deviation stayed at 15. Back-solving that shift gives the true
- * grass mean at ≈0.175 and the dirt at ≈0.124, which is what is set here.
+ * it happened twice, in both directions. At a grass pivot of 0.140, raising
+ * the exponent from 2.0 to 2.6 brightened rendered grass from luminance 108.6
+ * to 118.0 while its standard deviation stayed at 15. Moving the pivot to
+ * 0.175 at the same exponent took it the other way, down to 87.9, and the
+ * standard deviation fell with it to 11.7 — darkening shrinks an absolute
+ * spread even as it widens the relative one.
+ *
+ * So the two are separated properly: the pivot is solved for, and the exponent
+ * is then free to do the only job it should have. Log-interpolating those two
+ * observations for the luminance MM6's own swatches ask for — `#395129` grass
+ * and `#523021` dirt scaled into our exposure, i.e. 103.7 and 76.9 — puts the
+ * real texture means at ≈0.155 and ≈0.102. Set there, the grade is close to
+ * brightness-neutral and LAYER_CONTRAST controls spread alone.
  */
-const LAYER_PIVOT = { grass: 0.175, dirt: 0.124, rock: 0.145, sand: 0.190 };
+const LAYER_PIVOT = { grass: 0.155, dirt: 0.102, rock: 0.140, sand: 0.185 };
 
 export class TerrainSystem extends System {
   static id = 'terrain';

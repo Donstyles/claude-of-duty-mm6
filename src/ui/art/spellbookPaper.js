@@ -116,16 +116,19 @@ function leafPath(s, grow = 0) {
  */
 function paintCloth(g, w, h, rng, s) {
   const base = g.createLinearGradient(0, 0, w * 0.35, h);
-  base.addColorStop(0, '#3a6f58');
-  base.addColorStop(0.45, '#2e5c48');
-  base.addColorStop(1, '#1e4232');
+  // Measured: the original's lit cloth reads 69 in luminance and ours read 51
+  // at the same place on the same strip, and a book cover that dark stops
+  // being green cloth and starts being the hole the page is standing in.
+  base.addColorStop(0, '#4d9271');
+  base.addColorStop(0.45, '#3e7a5d');
+  base.addColorStop(1, '#295942');
   g.fillStyle = base;
   g.fillRect(0, 0, w, h);
 
   // Cloudy dye unevenness, so no two square inches match.
   for (let i = 0; i < 240; i++) {
     dab(g, rng.range(0, w), rng.range(0, h), rng.range(10 * s, 70 * s), rng.range(8 * s, 44 * s),
-      rng.range(0, TAU), rng.chance(0.5) ? '#39705a' : '#12271e', rng.range(0.05, 0.2), 9 * s);
+      rng.range(0, TAU), rng.chance(0.5) ? '#4c8f70' : '#1b3a2c', rng.range(0.05, 0.2), 9 * s);
   }
 
   // Warp and weft. The weft (horizontal) is the thicker thread and takes the

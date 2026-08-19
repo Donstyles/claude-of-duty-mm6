@@ -120,12 +120,21 @@
   overflow: hidden;
   /* A light raking across the boards from the room's fire: the plank texture is
      shared with every wooden panel, and without this the board reads as a flat
-     brown rectangle rather than a lit surface. */
+     brown rectangle rather than a lit surface.
+   *
+   * Measured, then cut back. The raking light was lifting this board to
+   * L = 0.0253 where the other four venue sidebars sit at 0.019 — so the same
+   * name, in the same colour, at the same size, measured 3.25:1 here against
+   * 4.64:1 on the shop counter. That is STYLE.md §6's own rule turned on this
+   * file: the component had been moved to a different ground and the ink was
+   * never re-checked. The rake stays, at half strength, with the ends deeper;
+   * the board still reads as lit, and it now reads as the same timber as the
+   * other four rather than a paler cousin. */
   background:
     linear-gradient(101deg,
-      rgba(0, 0, 0, 0.44) 0%,
-      rgba(255, 214, 150, 0.09) 44%,
-      rgba(0, 0, 0, 0.40) 100%) center / cover no-repeat,
+      rgba(0, 0, 0, 0.62) 0%,
+      rgba(255, 214, 150, 0.045) 46%,
+      rgba(0, 0, 0, 0.58) 100%) center / cover no-repeat,
     var(--tex-wood-vert) center / 100% calc(var(--u) * 240) repeat-y;
   background-color: #3a1e0e;
   box-shadow:
@@ -194,14 +203,18 @@
 .mm-panel-side[data-panel='dialogue'] .mm-npc-options > *:last-child { margin-bottom: auto; }
 .mm-panel-side[data-panel='dialogue'] .mm-npc-options::-webkit-scrollbar { display: none; }
 
+/* The title step of the ladder (STYLE.md §1), like every other venue screen's
+   action list. It was 14u here alone, which is a step the ladder does not have
+   — and small type is what the §6 mass measurement punishes, because a smaller
+   glyph is proportionally more antialiased edge and less stroke. */
 .mm-panel-side[data-panel='dialogue'] .mm-npc-option {
   flex: none;
-  font-size: calc(var(--u) * 14);
+  font-size: calc(var(--u) * 16);
   font-style: italic;
   text-align: center;
-  line-height: calc(var(--u) * 17);
+  line-height: calc(var(--u) * 19);
   letter-spacing: 0;
-  max-width: calc(var(--u) * 122);
+  max-width: calc(var(--u) * 126);
   color: var(--ink);
   text-shadow: var(--shadow);
 }

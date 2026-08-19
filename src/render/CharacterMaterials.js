@@ -299,14 +299,17 @@ const CHARACTER_DEFS = {
         float net = tCracks(tWarp(uv, 26.0, 0.006, 2), vec2(46.0, 40.0), 0.16, 0.9);
 
         // Coarser lines — the ones that deepen with age around eye and mouth.
-        float lines = tCracks(tWarp(uv, 5.0, 0.03, 2), vec2(9.0, 7.0), 0.10, 0.8)
-                    * smoothstep(0.40, 0.85, tFbm01(uv + 0.7, 3.0, 3));
+        // Sparse on purpose: the crack helper lays a full network, and at face
+        // scale a full network is crazed pottery rather than skin, so most of
+        // it is masked away and what is left runs shallow.
+        float lines = tCracks(tWarp(uv, 5.0, 0.03, 2), vec2(8.0, 6.0), 0.07, 0.8)
+                    * smoothstep(0.58, 0.92, tFbm01(uv + 0.7, 2.5, 3));
 
         // Soft undulation of the flesh beneath: cheek, brow, jaw.
         float flesh = tFbm01(uv, vec2(4.0, 3.5), 3);
 
-        float h = 0.52 + flesh * 0.28 - pore * 0.10 - pore2 * 0.05
-                - net * 0.07 - lines * 0.14;
+        float h = 0.52 + flesh * 0.30 - pore * 0.08 - pore2 * 0.04
+                - net * 0.045 - lines * 0.09;
         return vec3(clamp(h, 0.0, 1.0), flesh, lines);
       }
       Surf mShade(vec2 uv, MSample m) {
@@ -334,9 +337,9 @@ const CHARACTER_DEFS = {
         c = mix(c, shade, speck * 0.30);
 
         // Creases carry shadow and a little more blood than the plane around.
-        c = mix(c, mix(shade, blood, 0.4), m.mask * 0.55);
-        c = mix(c, shade * 0.92, (1.0 - m.ao) * 0.34);
-        c *= 0.88 + 0.20 * m.ao;
+        c = mix(c, mix(shade, blood, 0.4), m.mask * 0.35);
+        c = mix(c, shade * 0.92, (1.0 - m.ao) * 0.26);
+        c *= 0.90 + 0.16 * m.ao;
 
         // Roughness is where a face stops looking like a ball. Oil gathers on
         // the raised planes — brow, nose, cheekbone — and the hollows stay dry.

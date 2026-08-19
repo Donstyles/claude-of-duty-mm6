@@ -1,6 +1,8 @@
 import './dialogue.css';
 import { Panel } from './base.js';
-import { el, setChildren, tooltip, tipMarkup, goldOval, ellipsis } from '../widgets.js';
+import {
+  el, setChildren, tooltip, tipMarkup, goldOval, ellipsis, attribute, roleLine,
+} from '../widgets.js';
 import { DialogueSystem } from '../../game/DialogueSystem.js';
 
 /**
@@ -10,9 +12,9 @@ import { DialogueSystem } from '../../game/DialogueSystem.js';
  * viewport and nothing is laid over it but the speaker's own words; every
  * control lives in the sidebar's upper block, on a plank board inset into the
  * marble — venue title above the board in white upright serif, a small
- * rectangular portrait in a grey-green bevel, the name in azure wrapping to two
- * centred lines, the topics in centred white italic, and one brass oval to
- * leave by.
+ * rectangular portrait in a grey-green bevel, the name in the name colour
+ * wrapping to two centred lines with the trade under it, the topics in centred
+ * white italic, and one brass oval to leave by.
  *
  * The room is the best thing on the screen and is therefore never covered: the
  * spoken line sits in a soft gradient across the bottom of the painting, where
@@ -124,7 +126,7 @@ export class DialoguePanel extends Panel {
     // sentence, and it was one of seven grammars across sixteen screens. What
     // the speaker says is already in the caption over the room, so the strip
     // states where you are, exactly as the four venue screens now do.
-    this.ui.log(`You enter ${s.place}.`, 'info');
+    this.ui.log(enterLine(s.place), 'info');
   }
 
   refresh() {
@@ -173,12 +175,10 @@ export class DialoguePanel extends Panel {
   _choose(id) {
     this.conv?.choose(id);
     this.refresh();
-    // Transactions go to the message strip as well, because that is the channel
-    // the rest of the game reports itself through.
-    const tone = this.conv?.text?.tone;
-    if (tone === 'good' || tone === 'warn') {
-      this.ui.log(this.conv.text.lines?.[0] ?? '', tone === 'warn' ? 'warn' : 'good');
-    }
+    // Nothing goes to the strip here. A transaction used to echo the speaker's
+    // own first line into it, which put one sentence in two channels at once
+    // and put speech in the channel that carries neither (STYLE.md §5). The
+    // caption already shows it, in the tone the model set, over the room.
   }
 
   onKey(e) {
@@ -221,7 +221,7 @@ export class DialoguePanel extends Panel {
 
     shot('ui-dialogue-topic',
       'Conversation, a topic answered: the painted front room behind, the reply across the bottom of it, '
-      + 'and the plank board carrying portrait, azure name and the topic list.',
+      + 'and the plank board carrying portrait, name, trade and the topic list.',
       () => this._seed((s) => !!s.trade),
       (conv) => conv?.choose('trade'));
 
@@ -255,42 +255,46 @@ export class DialoguePanel extends Panel {
 }
 
 /**
- * The role line of the identity block (STYLE.md §3): a short noun phrase
- * beginning "the ", so every venue screen reads `the Weaponsmith`,
- * `the Innkeeper`, `the Drillmaster`, `the Cooper`.
+ * `attribute()` and `roleLine()` now live in `../widgets.js`, beside `fmt` and
+ * `ellipsis`, which is where text helpers belong. They were parked here only
+ * because five venue screens needed them at a moment when `widgets.js` had an
+ * owner and this file did not.
  *
- * Every trade in `DialogueSystem.TRADES` is titled with a noun, so the article
- * simply goes in front. This used to carry a heuristic for the one exception —
- * `housekeeper`, titled "Keeps the House", a verb phrase that "the " in front
- * of would have ruined — and the heuristic is gone because the data was fixed
- * instead. That is the right order: a rule about language belongs in the
- * language, not in a regular expression downstream of it.
+ * Re-exported rather than moved outright: five modules import them from this
+ * path, and a rename plus five import rewrites in one commit is a worse trade
+ * than one line. New code should import from `../widgets.js` directly, and this
+ * line can go once the last of those five is updated.
+ *
+ * Note this file imports them at the top as well, and must. `export … from` is
+ * a pure re-export: it forwards the names to importers without binding them in
+ * this module's scope, so the two call sites in `refresh()` would have thrown
+ * `ReferenceError` at runtime while the build stayed green. Vite has no reason
+ * to object — the construct is valid, the names simply are not local.
  */
-export function roleLine(profession) {
-  const p = String(profession ?? '').trim();
-  if (!p) return '';
-  return /^the\s/i.test(p) ? p : `the ${p}`;
-}
+export { attribute, roleLine } from '../widgets.js';
 
 /**
- * One line of attributed speech, in the house grammar (STYLE.md §5 and §7).
+ * The arrival sentence for the message strip (STYLE.md §5).
  *
- * Everything anyone says anywhere in the interface goes through here, so the
- * marks are curly on every screen and the speaker is always named. Several of
- * the model files hand their lines out already wrapped in straight quotes —
- * `ShopSystem.greeting` does, `TownServices` does not — so the wrapping is
- * stripped first and re-made rather than trusted. Pass `null` as the speaker
- * for a line whose speaker is already established by the screen around it.
+ * `Venues.js` stores a bare name — `Guild of the Ember`, `Hobb's Forge`,
+ * `The Bell and Anchor`, `House on Fishgate` — because a name is a name. The
+ * article is a property of the *sentence*, not of the name, so it is added
+ * here: `You enter Guild of the Ember.` is not English, and `You enter the
+ * The Bell and Anchor.` is worse.
  *
- * It lives in this file because dialogue is the speech screen and this is the
- * only module of the five that is not a venue. It belongs in `ui/widgets.js`
- * with the other text helpers; that file is not ours to edit.
+ * The test is only about determiners, which is the one thing about a venue
+ * name that can be read off the string reliably: a name that already opens
+ * with an article, or with somebody's possessive, takes none.
+ *
+ * It lives here because `dialogue.js` is a file this agent owns and
+ * `widgets.js` is not; it belongs beside `attribute()` and `roleLine()`, and
+ * should be moved there with them.
  */
-export function attribute(speaker, line) {
-  const said = String(line ?? '').trim().replace(/^["“”']+|["“”']+$/g, '').trim();
-  if (!said) return '';
-  const who = String(speaker ?? '').trim();
-  return who ? `${who}: “${said}”` : `“${said}”`;
+export function enterLine(name) {
+  const n = String(name ?? '').trim();
+  if (!n) return 'You enter.';
+  const article = /^(the|a|an)\s/i.test(n) || /^\S+['’]s\s/.test(n) ? '' : 'the ';
+  return `You enter ${article}${n}.`;
 }
 
 /**

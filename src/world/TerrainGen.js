@@ -527,7 +527,15 @@ function computeSplat(data, perm) {
       const wz = iz * CELL - half;
       const h = data.heights[i];
       const slope = data.slopeAt(wx, wz);
-      const n = fbm(perm, wx * 0.004, wz * 0.004, 3);
+      // Patch noise. The base frequency was 0.004 — a 1.6 km period against a
+      // vista that sees roughly 800 m of ground, so its lowest octave was a
+      // regional bias rather than visible patchiness. At 0.011 the octaves land
+      // at ~570 / 285 / 143 m, which is the scale at which MM6's ground reads:
+      // bare earth showing through grass in patches you can see the edges of.
+      // That is also where the mid-tones come from — the ground's histogram is
+      // bunched at the lit-grass value, and scattered earth is what fills in
+      // between it and the shadowed slopes.
+      const n = fbm(perm, wx * 0.011, wz * 0.011, 3);
 
       // Rock takes over on anything steep, and on high ground.
       const rock = clamp(
@@ -557,7 +565,7 @@ function computeSplat(data, perm) {
       const dirt = clamp(
         data.road[i] * 1.25 +
         smoothstep(0.19, 0.42, slope) * 0.60 +
-        Math.max(0, n) * 0.30,
+        Math.max(0, n) * 0.36,
         0, 1,
       ) * (1 - rock) * (1 - sand);
       const grass = clamp(1 - rock - sand - dirt, 0, 1);

@@ -1,7 +1,10 @@
 import './train.css';
 import { Panel } from './base.js';
-import { el, setChildren, tooltip, tipMarkup, fmt, ellipsis, engraved, labelRow, goldOval } from '../widgets.js';
-import { attribute } from './dialogue.js';
+import {
+  el, setChildren, tooltip, tipMarkup, fmt, ellipsis, engraved, labelRow, goldOval,
+  attribute,
+} from '../widgets.js';
+import { enterLine } from './dialogue.js';
 import { GuildSystem, experienceOf } from '../../game/GuildSystem.js';
 import { experienceForLevel } from '../../game/rules.js';
 
@@ -107,7 +110,7 @@ export class TrainPanel extends Panel {
     // one grammar the strip has (§5). `Hall of Arms, Millhaven.` was a label.
     this._notice = attribute(hall.keeper, `We train to level ${hall.maxLevel} in this yard. `
       + 'Bring the experience and the fee and I will make it a level.');
-    this.ui.log(`You enter ${hall.name}.`, 'info');
+    this.ui.log(enterLine(hall.name), 'info');
   }
 
   // ── draw ───────────────────────────────────────────────────────────────────

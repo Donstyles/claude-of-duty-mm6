@@ -138,6 +138,43 @@ export function titleCase(s) {
   return String(s ?? '').replace(/(^|[\s_-])(\w)/g, (_, a, b) => (a === '_' || a === '-' ? ' ' : a) + b.toUpperCase());
 }
 
+/**
+ * One line of attributed speech, in the house grammar (STYLE.md §5 and §7).
+ *
+ * Everything anyone says anywhere in the interface goes through here, so the
+ * marks are curly on every screen and the speaker is always named. Several of
+ * the model files hand their lines out already wrapped in straight quotes —
+ * `ShopSystem` does, `TownServices` does not — so the wrapping is stripped and
+ * re-made rather than trusted. That is why the review found curly quotes on one
+ * screen and straight ones on four: five screens were each deciding for
+ * themselves. Pass `null` as the speaker for a line whose speaker is already
+ * established by the screen around it.
+ */
+export function attribute(speaker, line) {
+  const said = String(line ?? '').trim().replace(/^["“”']+|["“”']+$/g, '').trim();
+  if (!said) return '';
+  const who = String(speaker ?? '').trim();
+  return who ? `${who}: “${said}”` : `“${said}”`;
+}
+
+/**
+ * The role line of the identity block (STYLE.md §3): a short noun phrase
+ * beginning "the ", so every venue screen reads `the Weaponsmith`,
+ * `the Innkeeper`, `the Drillmaster`, `the Cooper`.
+ *
+ * Every trade in `DialogueSystem.TRADES` is titled with a noun, so the article
+ * simply goes in front. This used to carry a heuristic for the one exception —
+ * `housekeeper`, titled "Keeps the House", a verb phrase that "the " in front
+ * of would have ruined — and the heuristic is gone because the data was fixed
+ * instead. That is the right order: a rule about language belongs in the
+ * language, not in a regular expression downstream of it.
+ */
+export function roleLine(profession) {
+  const p = String(profession ?? '').trim();
+  if (!p) return '';
+  return /^the\s/i.test(p) ? p : `the ${p}`;
+}
+
 // ── tooltip ─────────────────────────────────────────────────────────────────
 
 /**

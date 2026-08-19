@@ -1,8 +1,8 @@
 import './services.css';
 import { Panel } from './base.js';
-import { el, setChildren, tooltip, tipMarkup, fmt, goldOval, labelRow } from '../widgets.js';
+import { el, setChildren, tooltip, tipMarkup, fmt, goldOval, labelRow, attribute } from '../widgets.js';
 import { icon } from '../Icons.js';
-import { attribute } from './dialogue.js';
+import { enterLine } from './dialogue.js';
 import { TownServices } from '../../game/TownServices.js';
 
 /**
@@ -11,7 +11,7 @@ import { TownServices } from '../../game/TownServices.js';
  * One screen serves all three because MM6 serves them all the same way. Walking
  * in does not open a menu over the world — the viewport *becomes* the room, and
  * the whole interface is the wooden sidebar beside it: the venue's name across
- * the top, the keeper's portrait, their name in azure, and their offices in
+ * the top, the keeper's portrait, their name and trade, and their offices in
  * white italic. `Panel` paints the room from the venue id, so this file must
  * keep out of the viewport's way; that picture is the screen.
  *
@@ -151,7 +151,7 @@ export class ServicesPanel extends Panel {
     // complete sentence, sentence case, full stop (STYLE.md §5). What the
     // keeper says goes to the caption over the room instead, so the two
     // channels never carry the same line.
-    this.ui.log(`You enter ${venue?.name ?? 'the house'}.`, 'info');
+    this.ui.log(enterLine(venue?.name ?? 'house'), 'info');
     this._speak(this._greeting());
   }
 

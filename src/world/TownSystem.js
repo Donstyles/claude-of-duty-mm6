@@ -177,9 +177,11 @@ export class TownSystem extends System {
 
     const rng = this._seed.fork(town.id);
     const terrain = ctx.get('terrain');
+    this._terrain = terrain;
     const at = townPosition(town, terrain?.worldSize ?? undefined, terrain) ?? [0, 0];
-    this.centreX = at[0];
-    this.centreZ = at[1];
+    const site = this._levelSiteNear(terrain, at[0], at[1], SIZE_SPEC[town.size]?.radius ?? TOWN.radius);
+    this.centreX = site[0];
+    this.centreZ = site[1];
     this.baseY = terrain?.heightAt?.(this.centreX, this.centreZ) ?? 14;
 
     this.profile = profileFor(town, terrain, this, rng);
@@ -206,6 +208,62 @@ export class TownSystem extends System {
     this._ready = true;
     ctx.events.emit('town:built', { town: this.townId, doors: this.doors.length });
     return true;
+  }
+
+  /**
+   * The flattest ground within a short walk of where the town is supposed to be.
+   *
+   * Millhaven is the only town the heightfield levels for: `LANDMARKS` in
+   * `TerrainGen.js` flattens a 250 m disc under it, and `townPosition` returns
+   * that landmark. The other ten get their authored coordinates rescaled onto
+   * whatever the generator happened to make there, and what it made is
+   * sometimes a hillside — Saltmarch's nominal site falls thirty-seven metres
+   * across the width of the town, which puts its boardwalk down a slope like a
+   * dropped blanket.
+   *
+   * The right fix is a landmark apiece, and `LANDMARKS` is not ours; the report
+   * asks for them. Until then a town does what a town does and picks the level
+   * ground next to the crossroads rather than building on the hill. The search
+   * is short, deterministic, and biased hard towards standing still, so
+   * Millhaven — already level — does not move a metre, and no town ends up far
+   * enough from its nominal position for a coach to set the party down outside
+   * its own paving.
+   */
+  _levelSiteNear(terrain, x0, z0, radius) {
+    if (!terrain?.heightAt) return [x0, z0];
+
+    const relief = (cx, cz) => {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        for (const r of [radius * 0.35, radius * 0.7, radius]) {
+          const h = terrain.heightAt(cx + Math.sin(a) * r, cz + Math.cos(a) * r);
+          if (h < lo) lo = h;
+          if (h > hi) hi = h;
+        }
+      }
+      return hi - lo;
+    };
+
+    let bestX = x0;
+    let bestZ = z0;
+    let best = relief(x0, z0);
+    for (const ring of [0.22, 0.42, 0.62]) {
+      const d = radius * ring;
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        const cx = x0 + Math.sin(a) * d;
+        const cz = z0 + Math.cos(a) * d;
+        if (terrain.isWater?.(cx, cz)) continue;
+        // Moving costs. Without the penalty a town slides to the flattest spot
+        // in range even when the gain is a metre, and the arrival point drifts
+        // to the edge of the paving for nothing.
+        const score = relief(cx, cz) + d * 0.09;
+        if (score < best) { best = score; bestX = cx; bestZ = cz; }
+      }
+    }
+    return [bestX, bestZ];
   }
 
   /** Give back everything the last town took: scene, geometry, materials, collider. */
@@ -308,7 +366,7 @@ export class TownSystem extends System {
         const rr = p.groundRadius(a) * t;
         const x = Math.sin(a) * rr;
         const z = Math.cos(a) * rr;
-        const y = (terrain?.heightAt?.(this.centreX + x, this.centreZ + z) ?? this.baseY) - this.baseY;
+        const y = this._padY(this.centreX + x, this.centreZ + z) - this.baseY;
         verts.push(x, y, z);
         uvs.push(x / 1.5, z / 1.5);
         // Opaque across the paved centre, feathering over the outer 28%.
@@ -347,6 +405,21 @@ export class TownSystem extends System {
     mesh.position.set(this.centreX, this.baseY + 0.04, this.centreZ);
     mesh.receiveShadow = true;
     mesh.renderOrder = -1;
+    // Not a collider. The party walks on the terrain underneath this; the
+    // paving is four centimetres of decoration on top of ground that already
+    // has its own collider, so a BVH of it is 3000 triangles of nothing.
+    //
+    // It also has to stay out, for now, because of a fault it is the only
+    // thing in the game that triggers. This fan collapses its innermost ring
+    // to a point — 128 degenerate triangles — and `trianglesFromGeometry` in
+    // `physics/BVH.js` drops degenerates and then trims with
+    // `out.subarray(0, written)`, where `written` counts *triangles* and the
+    // array is in *floats*. The chunk comes back a ninth of its length and no
+    // longer a multiple of nine, `fromObject` accumulates a fractional
+    // triangle total, and the merge overruns its own buffer: Saltmarch got no
+    // collider at all and the console said only "addCollider failed: offset is
+    // out of bounds". That file is not ours to fix; the report names it.
+    mesh.userData.noCollision = true;
     this.group.add(mesh);
   }
 
@@ -412,6 +485,32 @@ export class TownSystem extends System {
   /** Ground height at a town-local offset, as a world Y. */
   _groundAt(terrain, x, z) {
     return terrain?.heightAt?.(x, z) ?? this.baseY;
+  }
+
+  /**
+   * Height of the town's own floor — the terrain, graded level under the square.
+   *
+   * Ten of the eleven towns stand on unflattened ground (only Millhaven has a
+   * `LANDMARKS` entry; the report asks for the rest), and a market square that
+   * follows a hillside faithfully is a market square nobody would have built
+   * there. So the square is filled to the town's datum and ramps back down to
+   * the terrain at its rim.
+   *
+   * Fill only, never cut. The surface is `max(terrain, datum)` in the middle
+   * and exactly the terrain at the rim, so it is continuous, it never floats
+   * over a void at its edge, and — the reason for the max — the hillside can
+   * never come up through the paving, which is what a straight level plane here
+   * would have let it do.
+   */
+  _padY(x, z) {
+    const g = this._terrain?.heightAt?.(x, z) ?? this.baseY;
+    const p = this.profile;
+    if (!p) return g;
+    const rim = p.squareR + 5;
+    const d = Math.hypot(x - this.centreX, z - this.centreZ);
+    if (d >= rim) return g;
+    const k = smoothstep(rim * 0.7, rim, d);
+    return Math.max(g, this.baseY) * (1 - k) + g * k;
   }
 
   /**
@@ -568,8 +667,9 @@ export class TownSystem extends System {
     const plank = lib.get('wood-plank', { repeat: 1.4 });
     const iron = lib.get('iron');
 
+    // Everything in the square stands on the graded floor, not on raw terrain.
     const place = (obj, x, z, yaw = 0) => {
-      obj.position.set(this.centreX + x, this._groundAt(terrain, this.centreX + x, this.centreZ + z), this.centreZ + z);
+      obj.position.set(this.centreX + x, this._padY(this.centreX + x, this.centreZ + z), this.centreZ + z);
       obj.rotation.y = yaw;
       this.group.add(obj);
       return obj;
@@ -817,7 +917,7 @@ export class TownSystem extends System {
       const r = p.squareR + 1.5;
       const x = this.centreX + Math.sin(a) * r;
       const z = this.centreZ + Math.cos(a) * r;
-      const y = this._groundAt(terrain, x, z);
+      const y = this._padY(x, z);
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 3.0, 8), iron);
       post.position.set(x, y + 1.5, z);
       post.castShadow = true;
@@ -986,21 +1086,42 @@ export class TownSystem extends System {
     // town's plateau height. A viewpoint outside the walls sits over open
     // country that may be far higher, and using baseY there buries the camera
     // inside a hill — which is exactly what the first gate capture showed.
-    const eyeY = (x, z) =>
-      Math.max(this.baseY, terrain?.heightAt?.(x, z) ?? this.baseY) + 1.7;
+    const eyeY = (x, z) => this._padY(x, z) + 1.7;
 
     // Yaw convention: forward is (-sin y, 0, -cos y).
     const lookAt = (px, pz, tx, tz) =>
       (Math.atan2(-(tx - px), -(tz - pz)) * 180) / Math.PI;
 
-    // Stand in the OPEN square and look across it. The plots begin a rank out
-    // along each street, so any camera further than the square's own radius
-    // sits inside a building.
-    const b = p.viewBearing;
-    const sqX = cx + Math.sin(b + 2.35) * p.squareR * 0.78;
-    const sqZ = cz + Math.cos(b + 2.35) * p.squareR * 0.78;
-    const tgX = cx + Math.sin(b) * 18;
-    const tgZ = cz + Math.cos(b) * 18;
+    // Which way the town actually is.
+    //
+    // A spoked town is built all round its square and any bearing will do, but
+    // a quay is built along one side of its landing and a ribbon along one
+    // street: aiming those at the layout's nominal bearing photographed an
+    // empty boardwalk with the town off to the left. So take the mean direction
+    // of the buildings themselves, and only fall back to the layout's bearing
+    // when that mean cancels out — which is exactly the case where it does not
+    // matter.
+    let mx = 0;
+    let mz = 0;
+    for (const b of this.buildings) {
+      const dx = b.mesh.position.x - cx;
+      const dz = b.mesh.position.z - cz;
+      const d = Math.hypot(dx, dz) || 1;
+      mx += dx / d;
+      mz += dz / d;
+    }
+    const len = Math.hypot(mx, mz);
+    let lx = Math.sin(p.viewBearing);
+    let lz = Math.cos(p.viewBearing);
+    if (len / Math.max(1, this.buildings.length) > 0.25) { lx = mx / len; lz = mz / len; }
+
+    // Stand on the far side of the open square and look across it at the town.
+    // The plots begin a rank out, so any camera further than the square's own
+    // radius sits inside a building.
+    const sqX = cx - lx * p.squareR * 0.85;
+    const sqZ = cz - lz * p.squareR * 0.85;
+    const tgX = cx + lx * 22;
+    const tgZ = cz + lz * 22;
 
     capture.registerShot('town-square', {
       description: `${this.name} square, mid-morning.`,
@@ -1026,13 +1147,13 @@ export class TownSystem extends System {
 
     // Down the main street from just inside the square, so the shot is the
     // frontages rather than the paving.
-    const stX = cx + Math.sin(b) * (p.squareR * 0.5);
-    const stZ = cz + Math.cos(b) * (p.squareR * 0.5);
+    const stX = cx + lx * (p.squareR * 0.55);
+    const stZ = cz + lz * (p.squareR * 0.55);
     capture.registerShot('town-street', {
       description: `${this.name}: looking down the street between the trades.`,
       camera: {
         position: [stX, eyeY(stX, stZ), stZ],
-        yaw: lookAt(stX, stZ, cx + Math.sin(b) * 60, cz + Math.cos(b) * 60), pitch: -2, fov: 75,
+        yaw: lookAt(stX, stZ, cx + lx * 60, cz + lz * 60), pitch: -2, fov: 75,
       },
       apply(c) { c.state.worldTime = 11.5 * 3600; },
     });
@@ -1190,6 +1311,15 @@ function profileFor(town, terrain, sys, rng) {
   // judged by eye, and 0xb0a49e is the answer that measurement gave.
   if (PAVING_TINT[stock] !== undefined && (layout === 'radial' || layout === 'grid')) {
     p.pavingTint = PAVING_TINT[stock];
+  }
+  // The dead city paved its forum in imperial ashlar and nobody has taken it
+  // up. `marble-checker` was tried here and is wrong at this size: a chequer
+  // reads as a floor, and a forum eighty metres across in black and white is
+  // the only thing anyone looks at in the shot.
+  if (p.ruined) {
+    p.paving = 'marble';
+    p.pavingRepeat = 0.85;
+    p.pavingTint = 0xbcb4a4;
   }
 
   p.awnings = layout === 'quay' ? [0x6a6a58, 0x3a5a86, 0x7a7a6a]
@@ -1401,7 +1531,7 @@ const PAVING_TINT = Object.freeze({
 /** What the ground underfoot is, per layout. */
 const PAVING = Object.freeze({
   radial: { paving: 'cobblestone', pavingRepeat: 1.0, pavingTint: 0xb0a49e },
-  grid: { paving: 'marble-checker', pavingRepeat: 0.5, pavingTint: 0xa8a396 },
+  grid: { paving: 'cobblestone', pavingRepeat: 1.0, pavingTint: 0xa8a396 },
   ribbon: { paving: 'dirt', pavingRepeat: 0.9, pavingTint: 0x9a8a70 },
   quay: { paving: 'wood-plank', pavingRepeat: 0.7, pavingTint: 0x8a7c68 },
   terrace: { paving: 'gravel', pavingRepeat: 0.8, pavingTint: 0x8e8a86 },

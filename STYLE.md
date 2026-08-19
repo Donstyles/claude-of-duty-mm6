@@ -226,6 +226,13 @@ Three sentences cover everything the strip has to say:
 
 `Select the Item to Buy` is wrong twice: title case, and no stop.
 
+**The article belongs to the sentence, not to the name.** `Venues.js` stores
+bare names, correctly — `Guild of the Ember`, `Hobb's Forge`, `The Bell and
+Anchor`, `House on Fishgate` — and `You enter Guild of the Ember.` is not
+English. The arrival sentence adds `the` unless the name already opens with an
+article or with somebody's possessive. `enterLine()` does this; do not
+interpolate a venue name into a sentence by hand.
+
 **Speech does not go in the strip.** The keeper's own words go to the caption
 (§4). If a line must be attributed anywhere, it is attributed —
 `Deri Hobb: “Steel is steel.”` — never floated as a bare quotation with no
@@ -284,8 +291,19 @@ In practice:
 
 - **Curly quotes, everywhere.** `“ ”` and `’`. The review found curly on one
   screen and straight on four. Straight quotes in a data file are fine — they
-  are normalised at render, see `attribute()` in `src/ui/panels/dialogue.js` —
-  but nothing straight reaches the screen.
+  are normalised at render — but nothing straight reaches the screen.
+- **Speech and prose are typeset differently, and only the caller knows which
+  it has.** A model string is one of two things and they must not be confused:
+  - **bare speech** — `"Back again. Mind the floor."` — takes `attribute()`,
+    which strips the wrapping and re-makes it as `Name: “…”`.
+  - **narration containing speech** — `Sella Roon does not look up from the
+    crucible. "The Ember takes apprentices at the forge…"` — takes `curly()`,
+    which only upgrades the marks. Attributing it prints the speaker's name
+    twice and puts quotes inside quotes.
+
+  No helper can tell them apart from the string, so the call site chooses. In
+  `GuildSystem` the `welcome` key is speech and the `door` key is narration;
+  they sit two lines apart in the same object.
 - **Em dash `—` with spaces** for an aside; en dash `–` never appears.
 - **`·` middot** separates the parts of a subtitle. Commas do not.
 - Numbers of four digits or more take a thousands separator: `12,400`.
@@ -480,12 +498,15 @@ Written down here so the owner can pick them up.
 5. **`src/ui/panels/spellbook.*`** — `Select a spell` → `Select a spell.` (§5).
 6. **`src/ui/panels/menu.*`** — every menu button label is gold, which under §2
    is the hover colour. At rest they are `--ink`.
-7. **`src/ui/widgets.js`** — `attribute()` (curly-quote attribution, §7) and
-   `roleLine()` (§3) are parked in `src/ui/panels/dialogue.js` because that file
-   is owned and this one is not. They are text helpers and belong beside `fmt`
-   and `ellipsis`.
+7. **`src/ui/widgets.js`** — two more text helpers are parked in panel files
+   because `widgets.js` is not ours, and both belong beside `attribute()` and
+   `roleLine()`:
+   - `enterLine(name)` in `src/ui/panels/dialogue.js` — the §5 arrival sentence
+     with its article. Used by all five venue screens.
+   - `curly(text)` in `src/ui/panels/guild.js` — straight marks to curly, in
+     place, for narration that must not be attributed (§7).
 8. **`src/game/ShopSystem.js`** — `GREETINGS`, `TERMS` and `VERB_LINES` store
-    their lines pre-wrapped in straight quotes. `attribute()` strips and re-makes
-    them at render, so nothing straight reaches the screen (§7), but the data
-    would read better unquoted, the way `TownServices` and `NPCs.js` store
-    theirs. Cosmetic, not urgent.
+   their lines pre-wrapped in straight quotes. `attribute()` strips and re-makes
+   them at render, so nothing straight reaches the screen (§7), but the data
+   would read better unquoted, the way `TownServices` and `NPCs.js` store
+   theirs. Cosmetic, not urgent.
