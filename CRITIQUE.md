@@ -223,13 +223,32 @@ costs the axis outright" — was derived from sampling dirt across **~40 m** of 
 street shot. True for a street, wrong for a landscape. Corrected there, with the
 vista measurements.
 
-Not implemented yet, deliberately. It means retuning shared fog that the terrain
-pass had just brought to 8 of 13 metrics inside 10%, and our day fog colour is a
-dark navy (`#29458c`) where the reference's haze resolves pale grey-green
-(110.5 · 123.5 · 105.5) — so it needs a haze colour distinct from the sky
-colour, not just more density. Worth doing; worth doing carefully, and worth
-letting the next blind round confirm it is the biggest remaining exterior gap
-before spending the risk.
+**Attempted once and reverted, and the failure narrowed the diagnosis.** The
+obvious fix — a pale grey-green haze colour on the five daylight keys plus fog
+density 0.00015 → 0.00045 — moved the far band the *wrong* way, from 0.475 to
+0.549. Sampling the horizon row by row showed why:
+
+```
+row 352   62 ·  99 · 187    sky
+row 358  106 ·  87 ·  42    <- horizon
+row 370  112 ·  92 ·  49
+row 388  117 ·  93 ·  55
+row 412  112 · 103 ·  71    nearer ground, GREENER and less saturated
+```
+
+Terrain is at its most saturated *at the skyline* and desaturates toward the
+viewer — the exact inverse of aerial perspective. The cause is not the fog: the
+sky shader paints a **ground band** along the horizon, and it is authored to
+match *near* terrain (measured `101.7 · 84.8 · 54.6` against near terrain
+`103.6 · 81.3 · 53.9`). So the most distant thing on screen is painted in the
+colour of the closest thing on screen, and no amount of fog behind it can show
+through.
+
+So this is one piece of work across two subsystems — the ground band has to
+recede *with* the fog, not against it — and both live in files the terrain pass
+had just brought to 8 of 13 metrics inside 10%. It wants a focused pass with the
+six-band saturation gradient as its acceptance test, not an opportunistic patch.
+`GROUND_BAND_GAIN` and the band's fog mix (cut 0.28 → 0.12) are where to start.
 
 ### What we won on, and should not lose
 
