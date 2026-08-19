@@ -26,8 +26,97 @@ const CHUNK_VERTS = 33;                   // at LOD 0 — 32 quads per side
 const LOD_LEVELS = 4;
 const SKIRT_DEPTH = 14;
 
-/** Metres of world covered by one tile of each layer's texture. */
-const LAYER_SCALE = { grass: 5.5, dirt: 6.5, rock: 9.0, sand: 4.5 };
+/**
+ * Metres of world covered by one tile of each layer's texture.
+ *
+ * REFERENCE §2.2 calls this "the single most important terrain number" and
+ * measures MM6's at **3.5–4 m per tile** (≈2.2 eye-heights, five or six
+ * flagstones to a repeat). Grass and dirt were both well outside that, which
+ * costs near-field detail: measured on `shots/round8u/terrain-vista.png`, the
+ * local high-frequency deviation of the *nearest* grass was 2.75 against 6.90
+ * for grass at mid-distance — the near ground is magnified so far past its
+ * texel density that it smooths out. Rock keeps a coarser repeat because it is
+ * projected triplanar onto cliffs, where a 4 m repeat visibly stripes.
+ */
+const LAYER_SCALE = { grass: 4.0, dirt: 4.5, rock: 8.0, sand: 4.0 };
+
+/**
+ * Per-layer albedo grade, applied on top of whatever MaterialLibrary baked.
+ *
+ * The starting complaint was that our ground's green channel ran 25% above the
+ * reference's. Split by hue rather than taken in aggregate, that turns out not
+ * to be a grass problem at all: our grass measured [95, 120, 69] against the
+ * reference's lit hillside grass at [88, 119, 63]. It was already MM6's
+ * olive-khaki, not the "golf-course green" the aggregate implies. What the
+ * aggregate was actually reporting is *composition* — our frame was 71% grass
+ * and 23% dirt where the reference frame is 41% and 44% — which is a splat
+ * question (see TerrainGen.computeSplat), not a colour one.
+ *
+ * Checked against MM6's own swatches rather than against the aggregate, which
+ * is what keeps this honest: with these tints our near-field grass renders at
+ * [92, 116, 54] and our dirt at [122, 68, 39], against REFERENCE §4.1's
+ * canonical `#395129` grass and `#523021` dirt scaled into our exposure —
+ * [81, 115, 58] and [116, 68, 47]. Green and red land within a few percent on
+ * both materials. Blue runs about 15% light in both, which is the one residual
+ * the tints correct here.
+ *
+ * An earlier pass tried to derive the dirt correction from the *distant*
+ * terrain-vista frame, where our dirt population measured luminance 65 against
+ * the reference's 89, and arrived at a 1.6× red multiplier. That was an
+ * artefact and it is worth recording: dirt is placed on slopes, slopes are the
+ * surfaces angled away from the sun, so a dirt population sampled by hue is
+ * systematically the shadowed half of the frame. Measuring the same material
+ * near-field and head-on showed it was already on canon, and the 1.6× would
+ * have pushed it to [162, 76, 49] — a bright terracotta nothing in MM6 has.
+ */
+const LAYER_TINT = {
+  grass: [0.92, 1.00, 1.05],
+  dirt: [1.20, 0.86, 1.18],
+  rock: [1.02, 1.00, 1.02],
+  sand: [1.08, 1.00, 0.96],
+};
+
+/**
+ * Per-layer albedo contrast, as a power curve about `LAYER_PIVOT`.
+ *
+ * This is the single biggest finding of the exposure-matched comparison, and
+ * it is not the one the aggregate numbers suggest. Splitting both frames'
+ * ground luminance into grass and dirt populations and decomposing the
+ * variance gives:
+ *
+ *                    within-material   between-material   total
+ *   ours                    14.1              13.2         19.3
+ *   reference               30.3               0.4         30.3
+ *
+ * The reference's between-material term is **zero** — MM6's dirt and its grass
+ * sit at the *same* luminance (89.0 against 89.8) and are told apart purely by
+ * chroma. Every bit of its value range lives *inside* each material: its grass
+ * carries a standard deviation of 25.1 and its dirt 34.5, against our 11.8 and
+ * 17.2. That matches REFERENCE §2.2, which lists MM6's dirt as ranging
+ * `#311C10 → #73594A` — a threefold luminance range within one texture.
+ *
+ * So the range our ground is missing is *inside* the materials, and that is
+ * what this curve supplies. It also explains why the key/fill rebalance moved
+ * the histogram bodily without widening it, and it is consistent with MM6's
+ * own hillside, whose dome measures a standard deviation of 6.7 luminance
+ * units — essentially unshaded. The range was never coming from directional
+ * light, so no amount of re-pointing the sun was going to produce it.
+ *
+ * The other half of our total, the 13.2 between-material term, is a different
+ * thing and mostly not a defect: our dirt sits on slopes and slopes are the
+ * surfaces angled away from the sun, so the two populations separate in value
+ * in a way MM6's cannot, because MM6 shades nothing. It is reduced by not
+ * over-concentrating dirt on steep ground (TerrainGen.computeSplat) rather
+ * than by re-tinting a material that already measures on canon.
+ *
+ * `pow` about a pivot rather than a linear stretch: it cannot drive a texel
+ * negative, and it expands proportionally, so a texture's bright grain and its
+ * dark grain open up together instead of one end clipping first.
+ */
+const LAYER_CONTRAST = { grass: 2.00, dirt: 1.70, rock: 1.45, sand: 1.40 };
+
+/** Each layer's mean linear albedo *luminance* — what the curve rotates about. */
+const LAYER_PIVOT = { grass: 0.140, dirt: 0.110, rock: 0.130, sand: 0.175 };
 
 export class TerrainSystem extends System {
   static id = 'terrain';
@@ -112,6 +201,15 @@ export class TerrainSystem extends System {
           LAYER_SCALE.grass, LAYER_SCALE.dirt, LAYER_SCALE.rock, LAYER_SCALE.sand,
         ),
       },
+      uLayerTint: {
+        value: names.map((n) => new THREE.Vector3(...LAYER_TINT[n])),
+      },
+      uLayerContrast: {
+        value: new THREE.Vector4(...names.map((n) => LAYER_CONTRAST[n])),
+      },
+      uLayerPivot: {
+        value: new THREE.Vector4(...names.map((n) => LAYER_PIVOT[n])),
+      },
     };
     for (let i = 0; i < 4; i++) {
       uniforms[`uAlbedo${i}`] = { value: sets[i]?.map ?? null };
@@ -142,10 +240,33 @@ export class TerrainSystem extends System {
           uniform sampler2D uSplat;
           uniform float uWorldSize;
           uniform vec4 uLayerScale;
+          uniform vec3 uLayerTint[4];
+          uniform vec4 uLayerContrast;
+          uniform vec4 uLayerPivot;
+
           uniform sampler2D uAlbedo0, uAlbedo1, uAlbedo2, uAlbedo3;
           uniform sampler2D uNormal0, uNormal1, uNormal2, uNormal3;
           uniform sampler2D uOrm0, uOrm1, uOrm2, uOrm3;
           uniform sampler2D uHeight0, uHeight1, uHeight2, uHeight3;
+
+          /**
+           * Expand a layer's own contrast about its mean, then grade it.
+           *
+           * The curve is applied to *luminance* and the result scaled back
+           * onto the original chroma. Running pow() on each channel instead
+           * looks equivalent and is not: a texel's channels sit at very
+           * different distances from a single pivot, so the exponent pulls
+           * them apart and the operation becomes a saturation control. On
+           * ground textures — whose blue channel is far below the pivot on
+           * both grass and dirt — it crushed blue specifically, and the whole
+           * world went poster-green. Measured, that mistake cost 12% of the
+           * frame's blue while barely moving the contrast it was there to fix.
+           */
+          vec3 gradeLayer(vec3 c, float gain, float pivot, vec3 tint) {
+            float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
+            float ye = pivot * pow(max(y, 1e-4) / pivot, gain);
+            return c * (ye / max(y, 1e-4)) * tint;
+          }
 
           /**
            * Height-weighted blend. A linear lerp cross-fades two materials into
@@ -189,11 +310,16 @@ export class TerrainSystem extends System {
           );
           vec4 bw = heightBlend(sw, hh);
 
+          // Each layer is graded on its own before the blend, so a boundary
+          // fades between two *corrected* materials. Grading the blended
+          // result instead would tint grass by however much dirt happened to
+          // be under it, which smears the very grass/dirt separation the
+          // grade exists to widen.
           vec3 albedo =
-              texture2D(uAlbedo0, uv0).rgb * bw.x
-            + texture2D(uAlbedo1, uv1).rgb * bw.y
-            + mix(rockPlanar, rockTri, smoothstep(0.35, 0.8, vertical)) * bw.z
-            + texture2D(uAlbedo3, uv3).rgb * bw.w;
+              gradeLayer(texture2D(uAlbedo0, uv0).rgb, uLayerContrast.x, uLayerPivot.x, uLayerTint[0]) * bw.x
+            + gradeLayer(texture2D(uAlbedo1, uv1).rgb, uLayerContrast.y, uLayerPivot.y, uLayerTint[1]) * bw.y
+            + gradeLayer(mix(rockPlanar, rockTri, smoothstep(0.35, 0.8, vertical)), uLayerContrast.z, uLayerPivot.z, uLayerTint[2]) * bw.z
+            + gradeLayer(texture2D(uAlbedo3, uv3).rgb, uLayerContrast.w, uLayerPivot.w, uLayerTint[3]) * bw.w;
 
           // diffuseColor is declared further up main(); assign, never redeclare.
           // <color_fragment> runs after this and applies vColor itself, so the
@@ -373,18 +499,36 @@ export class TerrainSystem extends System {
    * Large-scale colour drift baked into vertex colour. Without it a tiling
    * texture reads as wallpaper from any distance; with it the land looks like
    * it has weather and history.
+   *
+   * The swing used to be ±5%, which is invisible. It is widened here because
+   * it is standing in for something MM6 does with authored art: MM6 does not
+   * have *a* grass texture, it has several at different values, and the
+   * reference frame shows the difference plainly — its distant hillside grass
+   * measures luminance 108.5 while its foreground grass measures 88.7, a 20%
+   * step between two patches of the same material with no lighting involved.
+   * That between-patch variety is a real part of the reference's value range
+   * (its grass population's standard deviation is 25.1 against our 11.8), and
+   * a low-frequency tint is the honest way to get it from one texture set.
+   *
+   * Kept as a value/warmth drift rather than a hue drift: MM6's ground is olive
+   * and red-brown everywhere, it just is not the *same* olive everywhere.
    */
   _macroTint(wx, wz, h) {
     const n =
       Math.sin(wx * 0.0031 + wz * 0.0017) * 0.5 +
       Math.sin(wx * 0.0009 - wz * 0.0026) * 0.5;
+    // A second, slower band so the drift is not one readable sine across the
+    // whole map — this is what makes separate hillsides differ from each other
+    // rather than the whole world breathing together.
+    const broad = Math.sin(wx * 0.00043 - wz * 0.00051 + 2.1);
     const warm = 0.5 + 0.5 * Math.sin(wx * 0.0007 + 1.3) * Math.cos(wz * 0.0006 - 0.4);
     // Sun-bleached on the tops, cooler and greener in the hollows.
     const alt = Math.min(1, Math.max(0, (h - 10) / 140));
+    const v = n * 0.15 + broad * 0.11;
     return [
-      0.92 + n * 0.055 + warm * 0.05 + alt * 0.03,
-      0.94 + n * 0.045 + warm * 0.02,
-      0.88 + n * 0.05 - warm * 0.02 + alt * 0.04,
+      0.86 + v + warm * 0.10 + alt * 0.06,
+      0.88 + v * 0.92 + warm * 0.05,
+      0.80 + v * 0.86 - warm * 0.04 + alt * 0.08,
     ];
   }
 

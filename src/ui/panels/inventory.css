@@ -2,74 +2,103 @@
 
    The measured screen (REFERENCE.md §3.4): the backpack is 14 x 9 cells of
    32 native pixels at x 14-462, y 16-304, which inside a panel body pinned at
-   x 8 is x 6-454. That leaves exactly 48 pixels underneath for the readout
-   strip and the five wide gold ovals, and nothing above it — MM6's inventory
-   has no title bar, and adding one would push the grid off its measurement. */
+   x 8 is x 6-454. That leaves exactly 48 pixels underneath for the name
+   channel and the five wide gold ovals, and nothing above it — MM6's inventory
+   has no title bar, and adding one would push the grid off its measurement.
 
-/* ── the readout strip, y 305-318 ─────────────────────────────────────────── */
+   What used to sit in those 48 pixels was an unstyled `<button>` and a second
+   copy of the food and gold counters, sixty pixels from the live pair on the
+   sidebar. Both are gone: one control, one typeface, one reading of each
+   number. */
 
-/* 48 native pixels under the grid, and the five 58 x 30 ovals want 32 of them:
-   the strip takes the 13 above and the row sits on the last 2. Both are pinned
-   to the grid's own 448-pixel column rather than to the panel, which is wider
-   than MM6's 460 on any window that is not 4:3. */
+/* ── the name channel, y 304-317 ──────────────────────────────────────────── */
+
+/* 48 native pixels under the grid, and the five 58 x 30 ovals want 30 of them.
+   The channel takes the 13 above, one pixel of granite separates the two, and
+   the row sits on the last 1 — which also lands the ovals on MM6's own
+   measured y 320-350. Both are pinned to the grid's 448-pixel column rather
+   than to the panel, which is wider than MM6's 460 on any non-4:3 window. */
 [data-panel="inventory"] .mm-pack-foot {
   left: 50%;
   right: auto;
-  bottom: calc(var(--u) * 2);
+  bottom: calc(var(--u) * 1);
   width: calc(var(--u) * 448);
   transform: translateX(-50%);
 }
 
+/* A channel cut into the granite the width of the grid above it: the owner's
+   name inscribed at one end, the Arrange tab seated in the other. Recessed,
+   where the ovals below stand proud, so the two rows read at different depths
+   and cannot be confused for one crowded row. */
 .mm-inv-strip {
   position: absolute;
   left: 50%;
-  top: calc(var(--u) * 305);
+  top: calc(var(--u) * 304);
   width: calc(var(--u) * 448);
   height: calc(var(--u) * 13);
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: calc(var(--u) * 12);
+  /* The same 6 pixels the oval row insets by, so the name starts on the left
+     edge of the first oval and the tab ends on the right edge of the last. */
+  padding: 0 calc(var(--u) * 6);
+  background: rgba(14, 13, 12, 0.42);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(12, 14, 12, 0.9),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(174, 170, 168, 0.55);
 }
-/* Titles left, counters right — the character sheet's rule, kept. */
+
+/* One typeface on this screen: the panel's book italic. The name is inscribed
+   into the channel, so it carries the cut's own shadow rather than a glow. */
 .mm-inv-owner {
   flex: 1;
   min-width: 0;
   font-style: italic;
-  font-size: calc(var(--u) * 13);
+  font-size: calc(var(--u) * 11);
+  line-height: calc(var(--u) * 13);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow:
+    calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.85),
+    0 0 calc(var(--u) * 2) rgba(0, 0, 0, 0.6);
 }
-.mm-inv-button {
-  height: calc(var(--u) * 13);
-  padding: 0 calc(var(--u) * 9);
-  font-style: italic;
-  font-size: calc(var(--u) * 11);
-  line-height: calc(var(--u) * 13);
-  background: rgba(18, 17, 16, 0.42);
-}
-.mm-inv-button:hover { color: var(--gold); }
 
-/* Labels flush left of their value, the numerals right-aligned in a dark
-   recessed plate: the sidebar's own supply row is still live below this one, so
-   these are worded rather than given a second apple and a second coin stack. */
-.mm-inv-supply { display: flex; align-items: center; gap: calc(var(--u) * 4); }
-.mm-inv-label { font-style: italic; font-size: calc(var(--u) * 11); }
-.mm-inv-count {
-  width: calc(var(--u) * 32);
-  height: calc(var(--u) * 13);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: calc(var(--u) * 4);
-  background: rgba(99, 89, 82, 0.85);
-  box-shadow:
-    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(24, 22, 22, 0.9),
-    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(200, 194, 188, 0.45);
+/* The Arrange tab.
+ *
+ * Cast brass, the panel's one metal, at an oval's width and aligned to the
+ * right edge of the oval directly below — a deliberate column, not a stray
+ * widget. The label is cut into the face the way the ovals' glyphs are: dark
+ * face, shadowed wall up-left, lit wall down-right. Specificity has to clear
+ * `.mm-ui :where(button)`, which is a class selector too and would otherwise
+ * win on order and hand the control back to the browser default. */
+[data-panel="inventory"] .mm-inv-arrange {
+  flex: none;
+  width: calc(var(--u) * 58);
+  height: calc(var(--u) * 11);
+  background-position: center;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  font-style: italic;
+  font-size: calc(var(--u) * 8);
+  line-height: calc(var(--u) * 11);
+  letter-spacing: 0.02em;
+  color: #241a0e;
+  text-shadow:
+    calc(var(--u) * -0.5) calc(var(--u) * -0.6) 0 rgba(20, 12, 2, 0.5),
+    calc(var(--u) * 0.6) calc(var(--u) * 0.7) 0 rgba(255, 242, 196, 0.6);
+  filter: drop-shadow(0 calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.55));
 }
-.mm-inv-count.is-wide { width: calc(var(--u) * 52); }
-.mm-inv-count .mm-count { font-size: calc(var(--u) * 11); }
+[data-panel="inventory"] .mm-inv-arrange:hover {
+  filter:
+    drop-shadow(0 calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 236, 160, 0.8))
+    brightness(1.1);
+}
+[data-panel="inventory"] .mm-inv-arrange:active {
+  transform: translateY(calc(var(--u) * 1));
+  filter: brightness(0.92);
+}
 
 /* The page you are on is told by the struck oval, as on the character sheet. */
 [data-panel="inventory"] .mm-oval.is-current {
@@ -77,12 +106,36 @@
   filter: brightness(1.22) saturate(1.12) drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 236, 160, 0.85));
 }
 
+/* ── the backpack field ───────────────────────────────────────────────────── */
+
+/* A painted compartmented case (../art/packCase.js) drawn at the grid's exact
+   cell pitch and stretched to the element, so its relief, its tooling and its
+   stitching land on the cell boundaries at any window size and nothing tiles.
+   The ruled hairlines stay underneath as the fallback for a canvas that failed
+   to paint — without them a failure would leave the pack with no cells at all. */
+[data-panel="inventory"] .mm-pack-grid {
+  background-image:
+    var(--tex-pack-case, none),
+    repeating-linear-gradient(90deg, rgba(123, 48, 8, 0.62) 0 calc(var(--u) * 1), transparent calc(var(--u) * 1) calc(var(--u) * 32)),
+    repeating-linear-gradient(180deg, rgba(107, 40, 8, 0.62) 0 calc(var(--u) * 1), transparent calc(var(--u) * 1) calc(var(--u) * 32));
+  background-size: 100% 100%, auto, auto;
+  background-repeat: no-repeat, repeat, repeat;
+  background-position: 0 0;
+}
+
 /* ── item sprites ─────────────────────────────────────────────────────────── */
 
 /* A sprite drawn from a generated plate turns `relative`, which would let the
    pack's hand-placed left/top offsets stack the whole backpack into a
-   diagonal. Every sprite on this screen is positioned by hand, so pin them. */
-[data-panel="inventory"] .mm-pack-items .mm-item { position: absolute; }
+   diagonal. Every sprite on this screen is positioned by hand, so pin them.
+
+   The shadow is what puts an item *in* a compartment rather than on top of a
+   picture of one, and it buys the small silhouettes a little separation from
+   the leather as well. Same light as everything else: down and to the right. */
+[data-panel="inventory"] .mm-pack-items .mm-item {
+  position: absolute;
+  filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 1.5) calc(var(--u) * 1) rgba(0, 0, 0, 0.55));
+}
 
 /* ── item condition ───────────────────────────────────────────────────────── */
 
@@ -113,6 +166,62 @@
 }
 .mm-item.mm-inv-ghost.is-bad {
   filter: drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 0, 0, 0.95)) brightness(0.85);
+}
+
+/* ── the figure in the niche ──────────────────────────────────────────────── */
+
+/* The body plates are 320 x 573 with the figure inside a wide transparent
+   margin; shown `contain` in a 148 x 352 niche they stand 265 tall and leave a
+   quarter of the frame as bare wall over the head. `PLATE.scale` in
+   ./inventory.js fills that, and hands the percentage here through the inline
+   `background-size` it writes — one number, in one place, because the slot
+   boxes are projected through the same constant. */
+
+/* The shadow the body throws back onto the wall: the same plate again, flat
+   black, blurred, and displaced down and to the right of the interface's one
+   light. Without it an armoured figure is grey paint standing in front of grey
+   paint. */
+[data-panel="inventory"] .mm-inv-figshadow {
+  position: absolute;
+  inset: 0;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  transform: translate(calc(var(--u) * 9), calc(var(--u) * 1));
+  filter: brightness(0) blur(calc(var(--u) * 2.2));
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* The pool of shade where the boots meet the floor: a tight dark core under
+   the stance and a wider ambient wash around it, centred on native y 337,
+   where every plate in the set puts the ground. */
+[data-panel="inventory"] .mm-inv-contact {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--u) * 2);
+  width: calc(var(--u) * 120);
+  height: calc(var(--u) * 26);
+  transform: translateX(-50%);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 15% 16% at 46% 50%, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0) 100%),
+    radial-gradient(ellipse 27% 32% at 47% 52%, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0) 100%),
+    radial-gradient(ellipse 50% 48% at 50% 50%, rgba(0, 0, 0, 0.46), rgba(0, 0, 0, 0) 100%);
+}
+
+/* The light in the niche. A faint warm key high on the left, the wall falling
+   away at the top and the corners, and the near floor going dark — which also
+   settles the tiled floor's perspective, since the row that argued hardest
+   with the figure's projection is the one closest to the camera. */
+[data-panel="inventory"] .mm-inv-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 52% at 40% 34%, rgba(255, 244, 220, 0.07) 0%, rgba(255, 244, 220, 0) 66%),
+    radial-gradient(ellipse 88% 72% at 50% 46%, rgba(0, 0, 0, 0) 48%, rgba(7, 6, 5, 0.52) 100%),
+    linear-gradient(180deg, rgba(7, 6, 5, 0.6) 0%, rgba(7, 6, 5, 0) 17%),
+    linear-gradient(0deg, rgba(9, 7, 5, 0.46) 0%, rgba(9, 7, 5, 0) 9%);
 }
 
 /* ── equipment on the figure ──────────────────────────────────────────────── */

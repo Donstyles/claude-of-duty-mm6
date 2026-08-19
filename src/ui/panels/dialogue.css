@@ -58,7 +58,21 @@
 
 /* ── the sidebar block ────────────────────────────────────────────────────── */
 
-.mm-panel-side .mm-npc-side {
+/* Every rule below is scoped to `[data-panel='dialogue']`, and that is not
+   belt-and-braces — it is the fix for the worst defect in the whole interface.
+ *
+ * `.mm-npc-side` is the shared venue-sidebar class; the shop counter carries it
+ * too. These rules used to be written `.mm-panel-side .mm-npc-side`, which ties
+ * on specificity with the shop's own `.mm-npc-side.mm-shop-side` and, since
+ * neither shop.css nor ui.panels.css declares a background there, won
+ * unopposed. So the shop — which asks for `sideSurface = 'wood'` — was served
+ * this screen's pale marble, and its white action list was left standing on it
+ * at 2.85:1 while the identical list on services' timber measured 6.4:1.
+ *
+ * The rule that follows from it is in STYLE.md: a component that can appear on
+ * more than one ground never carries a ground of its own from another screen's
+ * stylesheet. Paint the ground where the screen is declared, and scope it. */
+.mm-panel-side[data-panel='dialogue'] .mm-npc-side {
   position: absolute;
   inset: 0;
   padding: 0;
@@ -68,7 +82,7 @@
 
 /* Venue title: bare marble above the board, white upright serif, centred, and
    on one line — a second line would disappear behind the board. */
-.mm-npc-side .mm-venue {
+.mm-panel-side[data-panel='dialogue'] .mm-npc-side .mm-venue {
   position: absolute;
   top: calc(var(--u) * 4);
   left: calc(var(--u) * 4);

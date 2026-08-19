@@ -537,9 +537,26 @@ function computeSplat(data, perm) {
       // Sand hugs the waterline and the beach band above it.
       const sand = clamp(1 - smoothstep(-1.5, 6.5, h), 0, 1) * (1 - rock);
       // Dirt on the road, on moderate slopes, and in patches.
+      //
+      // The slope term used to top out at 0.55, which left grass running
+      // almost unbroken up hillsides steep enough to be bare earth in every
+      // reference frame — Screenshot 33's hill is grassed on its dome and
+      // eroded brown down its whole flank, and Screenshot 35 is an eroded
+      // brown cliff cut into a green hill. Letting the slope term reach 0.60,
+      // starting a couple of degrees earlier, puts that erosion back.
+      //
+      // It is also the honest fix for the "ground is 25% too green" reading:
+      // that came out of an aggregate over a frame that was 71% grass where
+      // the reference frame is 41%, while the material colours themselves
+      // measure on canon. The green comes down by showing more earth, not by
+      // making the grass browner than MM6's actually is.
+      //
+      // 0.80 was tried first and is too much — it strips whole hillsides to
+      // bare terracotta, which no reference frame shows: MM6's hills keep a
+      // grassed dome and erode on the flanks.
       const dirt = clamp(
         data.road[i] * 1.25 +
-        smoothstep(0.22, 0.44, slope) * 0.55 +
+        smoothstep(0.19, 0.42, slope) * 0.60 +
         Math.max(0, n) * 0.30,
         0, 1,
       ) * (1 - rock) * (1 - sand);

@@ -1,9 +1,11 @@
 /* Styles owned by ./quests.js. Shared chrome stays in ../ui.panels.css.
  *
  * The book is an open spread rather than a single leaf, so the page rules here
- * take over the layout while leaving the identifying materials — the warm
- * parchment, the ivory cartouche, the green cloth binding and its gilt clasps —
- * exactly as the shared sheet paints them.
+ * take over the layout, and they take over the objects the spread needs that a
+ * single leaf does not: a fold with two pages of paper running through it, a
+ * bookmark flap per tab, and a clasp that is a cast object rather than a gold
+ * pip. The identifying materials — warm parchment, the ivory cartouche, the
+ * green cloth binding — stay as the shared sheet paints them.
  *
  * Body text is the one place in the whole interface with no shadow and no
  * outline: black upright sans on paper, as in the original.
@@ -21,27 +23,48 @@
   padding: calc(var(--u) * 6) 0 calc(var(--u) * 6) calc(var(--u) * 8);
 }
 
+/* A page is a sheet of paper, not a card: the leaf carries its own deckled
+   edge, its own thickness and its own shadow, painted into the plate, so the
+   element itself contributes no fill and no border at all. The plate goes in a
+   pseudo-element rather than the background so the deckle is not cut off by
+   the box, and the content sits above it by DOM order. */
 .mm-ui .mm-quest-page {
-  padding: calc(var(--u) * 8) calc(var(--u) * 12) calc(var(--u) * 10);
+  position: relative;
+  padding: calc(var(--u) * 8) calc(var(--u) * 12) calc(var(--u) * 14);
   display: flex;
   flex-direction: column;
   min-width: 0;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
+.mm-ui .mm-quest-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--tex-quest-page) center / 100% 100% no-repeat;
+}
+.mm-ui .mm-quest-page.is-right::before { background-image: var(--tex-quest-page-r); }
+.mm-ui .mm-quest-page > * { position: relative; }
 .mm-ui .mm-quest-page.is-left { flex: 196; }
 /* The right page starts below the tabs that overhang the top of the book. */
 .mm-ui .mm-quest-page.is-right { flex: 214; padding-top: calc(var(--u) * 14); }
 
-/* The gutter: two pages of one sheet, folded — the shadow belongs to the paper
-   on both sides of the fold, not to a gap between two cards. */
+/* The gutter: two pages of one sheet, folded. The paper runs through it, the
+   two leaves throw their shadows into it from both sides, and a thin catch of
+   light marks the crease itself. */
 .mm-ui .mm-qb-gutter {
-  width: calc(var(--u) * 16);
+  width: calc(var(--u) * 10);
+  /* Flat paper, not the leaf plate: the plate carries a deckle and a shadow of
+     its own, and squeezing that into a ten-unit strip would print the edge of a
+     page down the middle of the fold. */
   background:
     linear-gradient(90deg,
-      rgba(60, 48, 30, 0.42) 0%, rgba(80, 66, 44, 0.16) 34%,
-      rgba(255, 250, 235, 0.20) 50%, rgba(80, 66, 44, 0.16) 66%,
-      rgba(60, 48, 30, 0.42) 100%),
-    var(--tex-quest-page) center / 100% 100% no-repeat;
-  background-color: #b5ae94;
+      rgba(34, 24, 10, 0.55) 0%, rgba(52, 40, 22, 0.30) 32%,
+      rgba(255, 250, 235, 0.30) 50%, rgba(52, 40, 22, 0.30) 68%,
+      rgba(34, 24, 10, 0.55) 100%),
+    linear-gradient(180deg, #c6b69c, #b5ae94 60%, #a0977f);
 }
 
 /* The cartouche is smaller here than on a single-page book, because it shares
@@ -295,8 +318,49 @@
   line-height: 1.4;
 }
 
-/* ── tabs and the exit plaque ─────────────────────────────────────────────── */
+/* ── tabs, clasps and the exit plaque ─────────────────────────────────────── */
 
-.mm-ui .mm-quest-tabs { right: calc(var(--u) * 34); top: calc(var(--u) * 2); }
-.mm-ui .mm-quest-tab { width: calc(var(--u) * 44); height: calc(var(--u) * 20); font-size: calc(var(--u) * 10); }
+/* Bookmark tabs are cream flaps of card overhanging the binding, with a
+   swallow-tail notched into the outer edge — not coloured pills. Selection is
+   the original's: the chosen flap is gilt and carries a warm halo, and the
+   others keep their jade ink on bone. */
+.mm-ui .mm-quest-tabs { right: calc(var(--u) * 30); top: calc(var(--u) * 2); gap: calc(var(--u) * 3); }
+.mm-ui .mm-quest-tab {
+  width: calc(var(--u) * 46);
+  height: calc(var(--u) * 22);
+  font-size: calc(var(--u) * 10);
+  color: #26381f;
+  background: linear-gradient(180deg, #f2ead8 0 20%, #d9cfb6 52%, #a89d86 100%);
+  clip-path: polygon(
+    0 0, 88% 0, 100% 16%, 88% 32%, 100% 50%, 88% 68%, 100% 84%, 88% 100%, 0 100%);
+  /* The bevel is inset because `clip-path` cuts an outer box-shadow off at the
+     swallow-tail; anything that has to fall outside the flap goes in `filter`,
+     which is applied after the clip. */
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(255, 255, 255, 0.85),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(88, 78, 58, 0.85);
+  filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.6));
+}
+.mm-ui .mm-quest-tab.is-active {
+  color: #241a08;
+  background: linear-gradient(180deg, #fff6d0 0 20%, #f0cf72 52%, #c19a34 100%);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(255, 255, 255, 0.9),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(120, 92, 26, 0.9);
+  filter:
+    drop-shadow(0 0 calc(var(--u) * 5) rgba(255, 224, 140, 0.9))
+    drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.6));
+}
+
+/* Gilt serpent clasps down the binding — a painted object, not a gold pip. */
+.mm-ui .mm-quest-clasp {
+  left: calc(var(--u) * 3);
+  width: calc(var(--u) * 20);
+  height: calc(var(--u) * 29);
+  border-radius: 0;
+  background: var(--tex-clasp) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.7));
+}
+
 .mm-ui .mm-stone-plaque { right: calc(var(--u) * 34); bottom: calc(var(--u) * 8); }

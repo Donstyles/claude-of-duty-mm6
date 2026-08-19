@@ -148,6 +148,14 @@ float vnoise2(vec2 p) {
  * Grading the cloud shading through this ramp is what puts the cream/straw/
  * mauve palette on the nose instead of the white cumulus of every other
  * engine. Stops are display sRGB, matching this shader's output space.      */
+
+/* Where the cloud shading is expanded from, and by how much — see the note at
+ * the expansion itself. The pivot is the *measured* mean position of our cloud
+ * pixels along the ramp, so widening about it costs no brightness. */
+const float CLOUD_PIVOT = 0.50;
+const float CLOUD_CONTRAST = 1.75;
+const float CLOUD_CONTRAST_B = 1.35;
+
 vec3 mm6Ramp(float t) {
   t = clamp(t, 0.0, 1.0);
   const vec3 c0 = vec3(0.161, 0.271, 0.549); // #29458C base sky
@@ -384,12 +392,35 @@ void main() {
   lumA += rim * uSilver * 0.55;
   lumA *= uCloudBright;
 
+  // Open the shading out across the ramp.
+  //
+  // Measured on a clean open-sky window, our cloud pixels ran luminance 111 to
+  // 171 with a standard deviation of 18, against the exposure-matched
+  // reference's 79 — the puffs were a flat tan wash with the silhouette doing
+  // all the work, which is what makes them read as pasted blobs rather than
+  // lit masses. The cause was not the ramp, which spans #29458C to #E7D38C
+  // (luminance 67 to 208) and is exactly MM6's measured cloud set. It was that
+  // the shading only ever used the middle third of it: the mean landed near
+  // 0.5 and the terms above move it by well under 0.2 either way.
+  //
+  // So this expands the *shading*, about that measured 0.5 midpoint, and does
+  // not touch the palette. Crests climb to the straw at the top of the ramp and
+  // bellies fall to the mauves at the bottom — both of which are MM6 colours
+  // the clouds were simply never reaching. The mean is preserved by
+  // construction, which matters: the cloud mean was already very slightly
+  // *above* the reference, so this must widen without brightening.
+  lumA = CLOUD_PIVOT + (lumA - CLOUD_PIVOT) * CLOUD_CONTRAST;
+
   // Layer B gets a cheaper version of the same model — flatter, because it is
   // read at a much smaller angular size — but it must not be a flat wash.
   vec3 nB = normalize(vec3(-(cB.g * 2.0 - 1.0) * uBump * 0.7, 1.0, -(cB.b * 2.0 - 1.0) * uBump * 0.7));
   float lumB = (0.175 + 0.130 * nB.y) * (1.0 - 0.24 * smoothstep(0.24, 0.88, cB.a))
              + clamp((dot(nB, uSunDir) + 0.34) / 1.34, 0.0, 1.0) * 0.46;
   lumB = lumB * uCloudBright * (0.90 + 0.22 * pow(max(0.0, dot(d, uSunDir)), 4.0));
+  // The upper deck gets a gentler version of the same expansion: it is read at
+  // a much smaller angular size, where a hard light-to-dark sweep across each
+  // wisp turns into speckle rather than into form.
+  lumB = CLOUD_PIVOT + (lumB - CLOUD_PIVOT) * CLOUD_CONTRAST_B;
 
   vec3 colB = mm6Ramp(clamp(lumB, 0.0, 1.0)) * uCloudTintMul + uCloudTintAdd;
   vec3 colA = mm6Ramp(clamp(lumA, 0.0, 1.0)) * uCloudTintMul + uCloudTintAdd;

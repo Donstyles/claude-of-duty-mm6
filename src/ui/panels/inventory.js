@@ -2,6 +2,8 @@ import './inventory.css';
 import { Panel, itemFootprint, itemSprite } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, clamp } from '../widgets.js';
 import { getClass } from '../../game/data/Classes.js';
+import { packCase } from '../art/packCase.js';
+import { brassTab } from '../art/brassTab.js';
 
 const GRID_COLS = 14;
 const GRID_ROWS = 9;
@@ -10,31 +12,71 @@ const CELL = 32;
 /** Under this a press is a click that keeps carrying; over it, it is a drag. */
 const DRAG_SLOP = 6;
 
+/** The brass tab under the grid, in native pixels: an oval's width, flatter. */
+const TAB = { w: 58, h: 11 };
+
+/**
+ * How the painted body lands in the sidebar niche.
+ *
+ * The eighteen body plates are all 320 x 573 with the figure drawn inside a
+ * generous transparent margin, and the niche is 148 x 352 native. Shown
+ * `contain` the plate fits by width at 0.4625 and stands only 265 tall, which
+ * left a quarter of the niche as bare wall above the head — the "big dead
+ * margin" a blind comparison picked out at once. At 0.5 the figure fills the
+ * frame the way MM6's does, and the widest plate in the set (the male
+ * paladin's staff, which reaches plate x 10) still clears the left edge by a
+ * pixel. Anything larger crops a weapon.
+ *
+ * The plate is pinned to the bottom of the niche and centred, so:
+ *
+ *     niche x = -6   + plate x * 0.5
+ *     niche y = 65.5 + plate y * 0.5
+ */
+const PLATE = { w: 320, h: 573, scale: 0.5 };
+const NICHE = { w: 148, h: 352 };
+const FIG = {
+  ox: (NICHE.w - PLATE.w * PLATE.scale) / 2,
+  oy: NICHE.h - PLATE.h * PLATE.scale,
+  /** What `background-size` has to say to reproduce that scale. */
+  css: `${((PLATE.w * PLATE.scale) / NICHE.w * 100).toFixed(3)}% auto`,
+};
+
 /**
  * Where each piece of gear sits on the painted figure.
  *
- * Numbers are native pixels inside the sidebar's 148 x 352 upper block. The
- * body plates are all 320 x 573 and the niche shows them `contain`, pinned to
- * the bottom, so a plate pixel lands at `x * 0.4625` and `87 + y * 0.4625` —
- * which puts every one of the eighteen figures in the same place: crown at
- * y 101, head between x 61 and 88, shoulders at y 148, waist at y 220, the
- * floor at y 340. Boxes are given by their centre so they stay readable against
- * that list, and they sit on the painted gear rather than beside it.
+ * Given in the *plate's* own 320 x 573 pixels rather than in niche pixels, so
+ * the table survives a change of framing: every figure in the set is drawn to
+ * the same skeleton — crown at plate y 29, head between x 132 and 190,
+ * shoulders at y 132, waist at y 288, the floor at y 547 — and `project`
+ * carries that onto the screen. Boxes are given by their centre so they stay
+ * readable against that list, and they sit on the painted gear rather than
+ * beside it.
  */
 const SLOTS = [
-  { id: 'helm', label: 'Helm', x: 74, y: 118, w: 34, h: 30 },
-  { id: 'ranged', label: 'Bow', x: 114, y: 150, w: 26, h: 44 },
-  { id: 'amulet', label: 'Amulet', x: 74, y: 152, w: 20, h: 18 },
-  { id: 'armour', label: 'Armor', x: 74, y: 186, w: 40, h: 46 },
-  { id: 'mainhand', label: 'Weapon', x: 28, y: 190, w: 26, h: 68 },
-  { id: 'offhand', label: 'Shield', x: 118, y: 200, w: 30, h: 40 },
-  { id: 'belt', label: 'Belt', x: 74, y: 224, w: 44, h: 14 },
-  { id: 'gauntlets', label: 'Gloves', x: 30, y: 244, w: 26, h: 24 },
-  { id: 'ring1', label: 'Ring', x: 118, y: 246, w: 18, h: 18 },
-  { id: 'ring2', label: 'Ring', x: 118, y: 272, w: 18, h: 18 },
-  { id: 'cloak', label: 'Cloak', x: 30, y: 282, w: 32, h: 38 },
-  { id: 'boots', label: 'Boots', x: 74, y: 326, w: 60, h: 24 },
+  { id: 'helm', label: 'Helm', x: 160, y: 67, w: 74, h: 65 },
+  { id: 'ranged', label: 'Bow', x: 246, y: 136, w: 56, h: 95 },
+  { id: 'amulet', label: 'Amulet', x: 160, y: 141, w: 43, h: 39 },
+  { id: 'armour', label: 'Armor', x: 160, y: 214, w: 86, h: 99 },
+  { id: 'mainhand', label: 'Weapon', x: 61, y: 223, w: 56, h: 147 },
+  { id: 'offhand', label: 'Shield', x: 255, y: 244, w: 65, h: 86 },
+  { id: 'belt', label: 'Belt', x: 160, y: 296, w: 95, h: 30 },
+  { id: 'gauntlets', label: 'Gloves', x: 65, y: 339, w: 56, h: 52 },
+  { id: 'ring1', label: 'Ring', x: 255, y: 344, w: 39, h: 39 },
+  { id: 'ring2', label: 'Ring', x: 255, y: 400, w: 39, h: 39 },
+  { id: 'cloak', label: 'Cloak', x: 65, y: 422, w: 69, h: 82 },
+  { id: 'boots', label: 'Boots', x: 160, y: 517, w: 130, h: 52 },
 ];
+
+/** A slot box in plate pixels → its native-pixel box inside the niche. */
+function project(def) {
+  const s = PLATE.scale;
+  return {
+    left: FIG.ox + (def.x - def.w / 2) * s,
+    top: FIG.oy + (def.y - def.h / 2) * s,
+    width: def.w * s,
+    height: def.h * s,
+  };
+}
 
 /** What an unappraised find is called before anyone has read its marks. */
 const GENERIC = {
@@ -83,9 +125,17 @@ export class InventoryPanel extends Panel {
 
   build(body, side) {
     this.items = el('div', { className: 'mm-pack-items' });
-    this.pack = el('div', { className: 'mm-pack' },
-      el('div', { className: 'mm-pack-grid' }),
-      this.items);
+    // The compartmented case is painted once at the grid's exact cell pitch and
+    // stretched to the element, so the relief lands on the cell boundaries at
+    // every window size. A failed canvas leaves the variable unset and the
+    // ruled fallback in the stylesheet shows through.
+    const field = packCase(this.ui.textures, GRID_COLS, GRID_ROWS, CELL);
+    this.pack = el('div', {
+      className: 'mm-pack',
+      style: field ? { '--tex-pack-case': `url("${field}")` } : {},
+    },
+    el('div', { className: 'mm-pack-grid' }),
+    this.items);
     body.appendChild(this.pack);
 
     this.ownerEl = el('div', { className: 'mm-inv-owner mm-t-gold' });
@@ -94,24 +144,25 @@ export class InventoryPanel extends Panel {
       flavour: 'Tab turns to the next of the four, and so does their portrait on the bar below. '
         + 'Nothing crosses between packs: what you are holding goes back before the page turns.',
     }));
-    this.foodEl = el('b', { className: 'mm-count' });
-    this.goldEl = el('b', { className: 'mm-count' });
 
-    const arrange = el('button', { className: 'mm-inv-button mm-engraved', type: 'button', text: 'Arrange' });
+    // Cast brass, like the five ovals below it and like nothing else on the
+    // screen — and set into the stone channel rather than floating over it, so
+    // it cannot be mistaken for a caption.
+    const tab = brassTab(this.ui.textures, TAB.w, TAB.h);
+    const arrange = el('button', {
+      className: 'mm-inv-arrange', type: 'button', text: 'Arrange',
+      style: tab ? { backgroundImage: `url("${tab}")` } : {},
+    });
     arrange.addEventListener('click', () => this._act(() => this.ui.sortInventory?.(this.ui.activeIndex)));
     tooltip.attach(arrange, () => tipMarkup({
       title: 'Arrange',
       flavour: 'Repack the whole load largest first, so a dungeon\'s worth of holes closes up.',
     }));
 
-    body.appendChild(el('div', { className: 'mm-inv-strip' },
-      this.ownerEl,
-      arrange,
-      el('div', { className: 'mm-inv-supply' },
-        el('span', { className: 'mm-inv-label', text: 'Food' }),
-        el('div', { className: 'mm-inv-count' }, this.foodEl),
-        el('span', { className: 'mm-inv-label', text: 'Gold' }),
-        el('div', { className: 'mm-inv-count is-wide' }, this.goldEl))));
+    // One line, one typeface, one baseline. The food and gold counters that
+    // used to sit here are still on the sidebar sixty pixels away, and saying
+    // the same numbers twice in one glance is worse than not saying them.
+    body.appendChild(el('div', { className: 'mm-inv-strip' }, this.ownerEl, arrange));
 
     const foot = el('div', { className: 'mm-pack-foot' });
     body.appendChild(foot);
@@ -119,7 +170,15 @@ export class InventoryPanel extends Panel {
 
     // The equipment display. `refreshNiche` paints the figure, so it wants the
     // same handle the shared niche keeps it under.
+    //
+    // Three layers stand between the stone and the gear: the body's own shadow
+    // thrown back onto the wall, the body, and the pool of shade where it meets
+    // the floor. Without them an armoured figure is grey paint on grey paint,
+    // standing on nothing.
+    this.figShadow = el('div', { className: 'mm-inv-figshadow' });
     this.nicheFigure = el('div', { className: 'mm-niche-figure' });
+    this.contact = el('div', { className: 'mm-inv-contact' });
+    this.light = el('div', { className: 'mm-inv-light' });
     this.slotHost = el('div', { className: 'mm-inv-slots' });
     this.glass = el('button', {
       className: 'mm-niche-glass mm-inv-glass', type: 'button', 'aria-label': 'Appraise an item',
@@ -130,7 +189,8 @@ export class InventoryPanel extends Panel {
       flavour: 'Take up the glass and look an unknown find over, or set a bent blade straight — '
         + 'as far as this one\'s own skill runs.',
     }));
-    side.appendChild(el('div', { className: 'mm-niche' }, this.nicheFigure, this.slotHost, this.glass));
+    side.appendChild(el('div', { className: 'mm-niche' },
+      this.figShadow, this.nicheFigure, this.contact, this.light, this.slotHost, this.glass));
 
     // Right-click is the game's "put it back", so the browser menu never gets
     // it, and a left press anywhere resolves whatever is on the cursor.
@@ -192,9 +252,25 @@ export class InventoryPanel extends Panel {
     this._drawPack(vm);
     this._drawSlots(vm);
     this.ownerEl.textContent = `${vm.name} the ${vm.className}`;
-    this.foodEl.textContent = fmt(this.ui.food ?? 0);
-    this.goldEl.textContent = fmt(this.ui.gold ?? 0);
     this.glass.classList.toggle('is-active', this.inspecting);
+  }
+
+  /**
+   * The shared niche shows the body plate `contain`; this screen shows it
+   * larger (see `PLATE`), and casts it a second time behind itself as the
+   * shadow it throws on the back wall. Both have to be re-stated whenever the
+   * plate changes, because the character being looked at changes with Tab.
+   */
+  refreshNiche() {
+    super.refreshNiche();
+    if (!this.nicheFigure) return;
+    const plated = this.nicheFigure.classList.contains('has-plate');
+    this.nicheFigure.style.backgroundSize = plated ? `${FIG.css}, cover` : '';
+    if (!this.figShadow) return;
+    const vm = this.ui.active();
+    const body = plated && vm ? this.ui.textures.figurePlate?.(vm.portraitSpec ?? { classId: vm.classId }) : '';
+    this.figShadow.style.backgroundImage = body ? `url("${body}")` : '';
+    this.figShadow.style.backgroundSize = body ? FIG.css : '';
   }
 
   // ── drawing ───────────────────────────────────────────────────────────────
@@ -220,12 +296,13 @@ export class InventoryPanel extends Panel {
     for (const def of SLOTS) {
       const worn = vm.equipment?.[def.id] ?? null;
       const open = this.held ? this._canEquip(vm, this.held.item, def.id).ok : false;
+      const box3 = project(def);
       const box = el('div', {
         className: `mm-inv-slot${worn ? ' is-worn' : ''}${open ? ' is-open' : ''}`,
         dataset: { slot: def.id },
         style: {
-          left: nu(def.x - def.w / 2), top: nu(def.y - def.h / 2),
-          width: nu(def.w), height: nu(def.h),
+          left: nu(box3.left.toFixed(2)), top: nu(box3.top.toFixed(2)),
+          width: nu(box3.width.toFixed(2)), height: nu(box3.height.toFixed(2)),
         },
       });
       if (worn && !(this.held?.from === 'equip' && this.held.slot === def.id)) {

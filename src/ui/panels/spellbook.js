@@ -8,12 +8,19 @@
  * beyond that, carrying the school ribbons. Put the fold in the middle and the
  * page stops reading as the original at a glance.
  *
+ * The book itself is not built out of CSS. Cloth, block, leaf, gutter, plait
+ * and clasps are one painted plate from `../art/spellbookPaper.js`, because a
+ * book is one object under one light and a stack of gradients never is: the
+ * moment the page has a rounded corner and a drop shadow it is a web card
+ * sitting where a book should be. The DOM on top of that plate carries only the
+ * things that move — the miniatures, the names, the ribbons and the buttons.
+ *
  * The eleven miniatures are the painted plates in `public/art/spells/`, one per
  * spell id, cut out so they sit straight on the paper. Nothing around them is
  * framed except the school's illumination: a spell is a ragged watercolour
- * floating over a soft grey elliptical smudge, and that smudge belongs to the
- * *page*, not to the spell, so it stays visible for spells the caster has not
- * learned — an empty smudge is how you know there is something still to buy.
+ * lying in an engraved oval setting, and the setting belongs to the *page*, not
+ * to the spell, so it stays visible for spells the caster has not learned — an
+ * empty setting is how you know there is something still to buy.
  *
  * Everything the screen says about state it says in ink and position, never in
  * a highlight: an unavailable school is a dulled flap, an unaffordable spell is
@@ -25,6 +32,7 @@ import './spellbook.css';
 import { Panel } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, titleCase } from '../widgets.js';
 import { icon } from '../Icons.js';
+import { bookPlate, slotSetting, illumFrame, tabVellum, bonePlate } from '../art/spellbookPaper.js';
 import { MAGIC_SCHOOLS, MASTERY, MASTERY_LABEL, SKILLS, masteryRank } from '../../game/data/Skills.js';
 import { spellsForSchool, canCast, evaluateSpell } from '../../game/data/Spells.js';
 
@@ -78,62 +86,6 @@ const probedPlates = new Set();
 
 // ── page furniture ──────────────────────────────────────────────────────────
 
-/** A gilt ramp, defined per SVG so nothing depends on another element's defs. */
-function giltRamp(id) {
-  return `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0">`
-    + '<stop offset="0" stop-color="#6a4e12"/><stop offset="0.3" stop-color="#f0dfa2"/>'
-    + '<stop offset="0.62" stop-color="#b8963c"/><stop offset="1" stop-color="#5e440e"/>'
-    + '</linearGradient>';
-}
-
-/**
- * The gilt plait laid along the fold.
- *
- * Two counter-phase strands crossing twice per tile read as Celtic interlace at
- * the thirteen pixels the real border is drawn at. What makes it a plait rather
- * than two ropes is redrawing the first strand over the second through the
- * upper crossing only: alternating over and under is the entire effect.
- */
-function knotworkPlait() {
-  const A = 'M3 0C3 6 17 10 17 16C17 22 3 26 3 32';
-  const B = 'M17 0C17 6 3 10 3 16C3 22 17 26 17 32';
-  const strand = (d) => `<path d="${d}" fill="none" stroke="#3a2a0e" stroke-width="5"/>`
-    + `<path d="${d}" fill="none" stroke="url(#mm-sb-gilt-a)" stroke-width="2.6"/>`;
-  return '<svg class="mm-sb-plait" viewBox="0 0 20 288" preserveAspectRatio="none" aria-hidden="true">'
-    + `<defs>${giltRamp('mm-sb-gilt-a')}`
-    + '<clipPath id="mm-sb-over"><rect x="0" y="1" width="20" height="14"/></clipPath>'
-    + '<pattern id="mm-sb-plait-tile" width="20" height="32" patternUnits="userSpaceOnUse">'
-    + strand(A) + strand(B)
-    + `<g clip-path="url(#mm-sb-over)">${strand(A)}</g>`
-    + '</pattern></defs>'
-    + '<rect width="20" height="288" fill="url(#mm-sb-plait-tile)"/>'
-    + '</svg>';
-}
-
-/** The device that breaks the plait halfway down. */
-function foldDevice() {
-  return '<svg viewBox="0 0 20 34" aria-hidden="true">'
-    + `<defs>${giltRamp('mm-sb-gilt-b')}</defs>`
-    + '<path d="M10 1 18 17 10 33 2 17Z" fill="#d6cdbe" stroke="#3a2a0e" stroke-width="1.4"/>'
-    + '<path d="M10 4.4 15.4 17 10 29.6 4.6 17Z" fill="none" stroke="url(#mm-sb-gilt-b)" stroke-width="2"/>'
-    + '<circle cx="10" cy="17" r="2.4" fill="url(#mm-sb-gilt-b)"/>'
-    + '</svg>';
-}
-
-/** A gilt serpentine clasp on the binding, in two lengths. */
-function serpentClasp(tall) {
-  const id = tall ? 'mm-sb-gilt-c' : 'mm-sb-gilt-d';
-  const d = tall
-    ? 'M13 4C3 10 3 18 13 23C23 28 23 38 13 44C5 48 5 54 12 58'
-    : 'M13 4C4 9 4 16 13 20C22 24 22 31 13 35';
-  return `<svg viewBox="0 0 26 ${tall ? 62 : 39}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">`
-    + `<defs>${giltRamp(id)}</defs>`
-    + `<path d="${d}" fill="none" stroke="#08120c" stroke-width="8.4" stroke-linecap="round"/>`
-    + `<path d="${d}" fill="none" stroke="url(#${id})" stroke-width="4.6" stroke-linecap="round"/>`
-    + `<circle cx="13" cy="4" r="3.6" fill="url(#${id})" stroke="#08120c" stroke-width="1.2"/>`
-    + '</svg>';
-}
-
 /** A four-pointed sparkle, which is how the plates say "magic". */
 function spark(cx, cy, r) {
   const i = r * 0.22;
@@ -144,27 +96,33 @@ function spark(cx, cy, r) {
 /**
  * The bone plates' glyphs.
  *
- * The real buttons carry a wand throwing sparks, a scroll throwing sparks and
- * an arrow going through a doorway. The shared icon set has none of the three,
- * and its question-mark fallback in their place is worse than drawing them.
- * They are laid out wide rather than square because the plate is 54 x 16 and a
- * glyph on a square canvas would be twelve pixels of it.
+ * The originals are a wand throwing sparks and an arrow going through a
+ * doorway, drawn about fourteen pixels tall, and at that size neither of them
+ * survives: two blind reviewers read ours off the screen as `/+·+` and `S+·+`,
+ * which is a fair transcription of what a fourteen-pixel wand looks like. So
+ * each plate is drawn twice its old size on a square canvas, the strokes are
+ * heavy enough to hold at that size, and the thing the button does is also
+ * engraved next to it in words. A button that has to be guessed at is a defect
+ * however handsome the tablet it is cut into.
  */
 const PLATE_GLYPH = {
-  cast: '<path d="M4.4 13.4 15 4.2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>'
-    + '<circle cx="3.6" cy="14.2" r="1.8"/>'
-    + `<path d="${spark(23, 8, 4.4)}${spark(31, 4.6, 2.8)}${spark(36.5, 11.2, 3.2)}"/>`,
-  quick: '<path d="M20.5 4.2C14.6 2.2 9.6 3.4 9.6 6.1c0 3.2 10 2.4 10 5.2 0 2.5-5 3.1-9.6 1.2"'
-    + ' fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>'
-    + `<path d="${spark(26.8, 7.6, 3.6)}${spark(33.4, 4.2, 2.4)}${spark(37.8, 11.4, 2.8)}"/>`,
-  exit: '<path d="M7 8h10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
-    + '<path d="M14.4 3.4 19.6 8l-5.2 4.6z"/>'
-    + '<path d="M25.4 2.4h9.4v11.2h-9.4z" fill="none" stroke="currentColor" stroke-width="1.9"/>'
-    + '<circle cx="27.6" cy="8" r="1"/>',
+  cast: '<path d="M4.6 20.4 15.2 9.8" fill="none" stroke="currentColor" stroke-width="3"'
+    + ' stroke-linecap="round"/>'
+    + '<path d="M13.4 8 17 11.6" fill="none" stroke="currentColor" stroke-width="4.4"'
+    + ' stroke-linecap="round"/>'
+    + `<path d="${spark(18.4, 5.4, 5.0)}${spark(9.2, 3.4, 2.8)}${spark(22.2, 13.6, 3.2)}"/>`,
+  quick: '<path fill-rule="evenodd" d="M5.4 2.6h13.2v18.8l-6.6-5.2-6.6 5.2z'
+    + 'M12 5.6 13.4 8.9 17 9.2 14.3 11.6 15.1 15.1 12 13.2 8.9 15.1 9.7 11.6 7 9.2 10.6 8.9z"/>',
+  exit: '<path d="M12.6 2.4h9v19.2h-9" fill="none" stroke="currentColor" stroke-width="2.2"'
+    + ' stroke-linejoin="round"/>'
+    + '<path d="M14.8 4.6h4.6v14.8h-4.6z" fill="currentColor" opacity="0.28"/>'
+    + '<path d="M1.8 12h7.4" fill="none" stroke="currentColor" stroke-width="2.8"'
+    + ' stroke-linecap="round"/>'
+    + '<path d="M7.4 7.2 12.8 12l-5.4 4.8z"/>',
 };
 
 function plateGlyph(kind) {
-  return '<svg class="mm-icon" viewBox="0 0 44 16" width="100%" height="100%" fill="currentColor"'
+  return '<svg class="mm-icon" viewBox="0 0 24 24" width="100%" height="100%" fill="currentColor"'
     + ` role="img" aria-hidden="true" focusable="false">${PLATE_GLYPH[kind] ?? ''}</svg>`;
 }
 
@@ -223,11 +181,7 @@ export class SpellbookPanel extends Panel {
     this.colophonSchool = el('span', { className: 'mm-sb-rank' });
     this.colophonSP = el('span', { className: 'mm-sb-sp' });
 
-    const fold = el('div', { className: 'mm-sb-fold', html: knotworkPlait() });
-    fold.appendChild(el('div', { className: 'mm-sb-device', html: foldDevice() }));
-
     const page = el('div', { className: 'mm-sb-page' },
-      fold,
       this.grid,
       el('div', { className: 'mm-sb-colophon' },
         this.colophonName, this.colophonSchool, this.colophonSP));
@@ -246,22 +200,33 @@ export class SpellbookPanel extends Panel {
       this.tabsEl.appendChild(tab);
     }
 
-    this.castBtn = this._plate('cast', 'Cast the readied spell', () => this.castSelected());
-    this.quickBtn = this._plate('quick', 'Set as the quick spell', () => this.readySelected());
-    const exit = this._plate('exit', 'Close the book', () => this.ui.closePanel());
+    this.castBtn = this._plate('cast', 'Cast', 'Cast the readied spell', () => this.castSelected());
+    this.quickBtn = this._plate('quick', 'Ready', 'Set as the quick spell', () => this.readySelected());
+    const exit = this._plate('exit', 'Close', 'Close the book', () => this.ui.closePanel());
 
-    body.appendChild(el('div', { className: 'mm-sb' },
+    // The whole book — cover cloth, block, leaf, gutter, plait, clasps — is one
+    // painted plate behind everything, so every shadow on the screen belongs to
+    // the same light and nothing has to be faked with a border radius.
+    const root = el('div', { className: 'mm-sb' },
+      el('div', { className: 'mm-sb-book' }),
       page,
-      el('div', { className: 'mm-sb-clasp is-head', html: serpentClasp(false) }),
-      el('div', { className: 'mm-sb-clasp is-foot', html: serpentClasp(true) }),
       this.tabsEl,
-      el('div', { className: 'mm-sb-btns' }, this.castBtn, this.quickBtn, exit)));
+      el('div', { className: 'mm-sb-btns' }, this.castBtn, this.quickBtn, exit));
+    root.style.setProperty('--sb-book', bookPlate(2));
+    root.style.setProperty('--sb-slot', slotSetting());
+    root.style.setProperty('--sb-frame', illumFrame());
+    root.style.setProperty('--sb-tab', tabVellum('idle'));
+    root.style.setProperty('--sb-tab-on', tabVellum('active'));
+    root.style.setProperty('--sb-tab-off', tabVellum('locked'));
+    root.style.setProperty('--sb-bone', bonePlate('idle'));
+    root.style.setProperty('--sb-bone-off', bonePlate('off'));
+    body.appendChild(root);
   }
 
-  _plate(kind, label, onClick) {
-    const button = el('button', {
-      className: 'mm-sb-btn', type: 'button', html: plateGlyph(kind), 'aria-label': label,
-    });
+  _plate(kind, caption, label, onClick) {
+    const button = el('button', { className: 'mm-sb-btn', type: 'button', 'aria-label': label },
+      el('span', { className: 'mm-sb-btn-glyph', html: plateGlyph(kind) }),
+      el('span', { className: 'mm-sb-btn-cap', text: caption }));
     button.addEventListener('click', onClick);
     tooltip.attach(button, () => tipMarkup({ title: label }));
     return button;
@@ -351,7 +316,16 @@ export class SpellbookPanel extends Panel {
     this.ui.log(selected ? `Select ${selected.name}` : 'Select a spell', 'info');
   }
 
-  /** Cell (0,0): the school's cover painting, in the page's one gilt frame. */
+  /**
+   * Cell (0,0): the school's cover painting, in the page's one gilt frame.
+   *
+   * The original leaves this plate uncaptioned, and it costs it: the biggest,
+   * most worked thing on the page is the one thing that does not say what it
+   * is, and the grid appears to break at its most prominent cell. Setting the
+   * school's name in the same band every other caption in the row sits in
+   * turns the break into a heading — the plate stops being an oversized icon
+   * and becomes the page's title piece.
+   */
   _illumination(school, state) {
     const art = el('div', { className: 'mm-sb-illum-art' });
     // The cover fills the mount. The chrome's procedural plate, which is the
@@ -362,12 +336,12 @@ export class SpellbookPanel extends Panel {
       const url = this.ui.textures?.illuminatedPlate?.(school.id);
       art.style.backgroundImage = url ? `url("${url}")` : 'none';
       art.style.backgroundSize = '126% 126%';
-      art.style.transform = 'none';
     });
 
-    const cell = el('div', { className: `mm-sb-cell${state.open ? '' : ' is-locked'}` },
+    const cell = el('div', { className: `mm-sb-cell is-illum${state.open ? '' : ' is-locked'}` },
       el('div', { className: 'mm-sb-illum' },
-        el('div', { className: 'mm-sb-illum-frame' }, art)));
+        el('div', { className: 'mm-sb-illum-frame' }, art)),
+      el('div', { className: 'mm-sb-name is-title', text: school.name }));
     tooltip.attach(cell, () => this._schoolTip(school));
     cell.addEventListener('mouseenter', () => this.ui.log(school.name, 'info'));
     return cell;
@@ -386,14 +360,23 @@ export class SpellbookPanel extends Panel {
     else if (!check.ok) classes.push(/spell points/i.test(check.reason) ? 'is-costly' : 'is-locked');
     if (spell.id === this.spellId) classes.push('is-selected');
 
+    // The painting goes into the setting whether or not the caster has bought
+    // the spell. Unlearned, it is left at the strength of an underdrawing —
+    // the ghost a scribe rules in before he lays the colour — which says the
+    // same thing an empty setting says, that there is something here still to
+    // buy, and says it without leaving a third of the page blank. Nothing is
+    // given away that the page did not already give away: the name stays off,
+    // exactly as the original leaves it off.
     const ink = el('div', { className: 'mm-sb-ink' });
-    if (learned) {
-      this._paint(ink, plateUrl(spell.id), () => {
-        // The procedural watercolour the rest of the interface paints with.
-        const url = this.ui.textures?.spellVignette?.(spell.school, index);
-        ink.style.backgroundImage = url ? `url("${url}")` : 'none';
-      });
-    }
+    this._paint(ink, plateUrl(spell.id), () => {
+      // The procedural watercolour the rest of the interface paints with.
+      const url = this.ui.textures?.spellVignette?.(spell.school, index);
+      ink.style.backgroundImage = url ? `url("${url}")` : 'none';
+      // A procedural vignette is already cut cleanly, so it gets an opaque
+      // stand-in mask rather than itself: intersecting a layer with `none`
+      // would mask the whole element away.
+      ink.style.setProperty('--sb-plate', 'linear-gradient(#000, #000)');
+    });
 
     const cell = el('div', { className: classes.join(' ') },
       el('div', { className: 'mm-sb-art' }, ink),
@@ -435,6 +418,12 @@ export class SpellbookPanel extends Panel {
   _paint(node, url, onMissing) {
     if (!url || missingPlates.has(url)) { onMissing(); return; }
     node.style.backgroundImage = `url("${url}")`;
+    // The same file again as the element's own alpha mask. Several plates were
+    // cut off a pale ground and kept a bright rim in their part-transparent
+    // pixels, which reads as a white halo once it is on paper; masking a plate
+    // with itself squares the alpha, so a rim pixel at half opacity drops to a
+    // quarter and the halo goes while every solid pixel is left exactly alone.
+    node.style.setProperty('--sb-plate', `url("${url}")`);
     if (probedPlates.has(url)) return;
     probedPlates.add(url);
     const probe = new Image();

@@ -5,10 +5,27 @@
  * is the camp plaque and the calendar, which need room the original layout did
  * not have to find. Everything is still bevel and marble — no new material.
  *
+ * Two things this screen has to get right that no other screen does:
+ *
+ *   · **Every key is cut from the slab.** In the reference the veining runs
+ *     straight through each button without a break, because the buttons are
+ *     not applied plates — they are the same stone with an edge worked into
+ *     it. So nothing here paints a fill over the marble; a button is a bevel
+ *     and nothing else.
+ *   · **A bevel is the material's own colour, lifted and dropped.** The shared
+ *     `--bevel-light` is a neutral grey, which on terracotta reads as a
+ *     borrowed 1px border rather than as light falling on stone, so this
+ *     screen retunes the two variables and every bevel on it follows.
+ *
  * Every rule is prefixed with .mm-ui so it outranks the shared sheet: the
  * bundler emits a panel's own CSS before ui.panels.css, so equal specificity
  * would silently lose to it.
  */
+
+.mm-ui .mm-surface-rest {
+  --bevel-light: #e6bda6;
+  --bevel-dark: #2c1008;
+}
 
 .mm-ui .mm-rest { inset: calc(var(--u) * 12) calc(var(--u) * 14); }
 
@@ -25,11 +42,28 @@
 .mm-ui .mm-rest-left { flex: 250; gap: calc(var(--u) * 5); min-height: 0; }
 .mm-ui .mm-rest-right { flex: 176; gap: calc(var(--u) * 8); min-height: 0; }
 
+/* A key cut from the slab: no fill, so the veining crosses it unbroken, and a
+   two-level bevel — a bright lip and a dark counter-line on each side — so it
+   is unmistakably raised at the size the screen is actually seen at. */
 .mm-ui .mm-rest-btn {
   height: calc(var(--u) * 22);
   flex: 0 0 auto;
   justify-content: space-between;
   font-size: calc(var(--u) * 13);
+  background: none;
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 var(--bevel-light),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--bevel-dark),
+    inset calc(var(--u) * 2) calc(var(--u) * 2) 0 rgba(255, 236, 220, 0.30),
+    inset calc(var(--u) * -2) calc(var(--u) * -2) 0 rgba(58, 22, 12, 0.55);
+}
+.mm-ui .mm-rest-btn:hover {
+  color: #fff2c0;
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 #fbe0cf,
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--bevel-dark),
+    inset calc(var(--u) * 2) calc(var(--u) * 2) 0 rgba(255, 244, 232, 0.42),
+    inset calc(var(--u) * -2) calc(var(--u) * -2) 0 rgba(58, 22, 12, 0.55);
 }
 .mm-ui .mm-rest-btn > span:first-child { flex: 1; text-align: center; }
 .mm-ui .mm-rest-btn.is-barred { color: #f0c0b0; }
@@ -43,8 +77,30 @@
   opacity: 0.75;
 }
 
-.mm-ui .mm-rest-group-head { height: calc(var(--u) * 18); flex: 0 0 auto; font-size: calc(var(--u) * 12); }
-.mm-ui .mm-rest-group { flex: 0 0 auto; gap: calc(var(--u) * 4); padding: calc(var(--u) * 4); }
+/* The one applied plate on the screen, and the reference agrees: the wait
+   header is a near-black green plaque let into the marble, with the same
+   recessed polarity as the group box under it. */
+.mm-ui .mm-rest-group-head {
+  height: calc(var(--u) * 18);
+  flex: 0 0 auto;
+  font-size: calc(var(--u) * 12);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.9),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(140, 170, 150, 0.45),
+    0 calc(var(--u) * 1) calc(var(--u) * 3) rgba(46, 16, 8, 0.6);
+}
+/* The group box is the opposite polarity: it is a recess cut into the slab
+   with the three keys standing up inside it. */
+.mm-ui .mm-rest-group {
+  flex: 0 0 auto;
+  gap: calc(var(--u) * 4);
+  padding: calc(var(--u) * 4);
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 var(--bevel-dark),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--bevel-light),
+    inset calc(var(--u) * 2) calc(var(--u) * 2) 0 rgba(58, 22, 12, 0.45),
+    inset calc(var(--u) * -2) calc(var(--u) * -2) 0 rgba(255, 236, 220, 0.24);
+}
 
 /* ── the camp plaque ──────────────────────────────────────────────────────── */
 
@@ -55,7 +111,14 @@
   padding: calc(var(--u) * 5) calc(var(--u) * 2) calc(var(--u) * 4);
   display: flex;
   flex-direction: column;
-  background: rgba(120, 62, 44, 0.24);
+  /* Cut into the slab like everything else on this screen: no fill, so the
+     seams cross the plaque and it stays the same stone. */
+  background: none;
+  box-shadow:
+    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 var(--bevel-dark),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--bevel-light),
+    inset calc(var(--u) * 2) calc(var(--u) * 2) 0 rgba(58, 22, 12, 0.45),
+    inset calc(var(--u) * -2) calc(var(--u) * -2) 0 rgba(255, 236, 220, 0.24);
   font-size: calc(var(--u) * 11);
 }
 .mm-ui .mm-rest-camp .mm-row { line-height: calc(var(--u) * 15); flex: 0 0 auto; }

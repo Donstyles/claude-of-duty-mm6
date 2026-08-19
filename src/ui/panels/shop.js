@@ -5,6 +5,7 @@ import { ITEM_PLATE_ASPECT } from '../itemPlates.js';
 import {
   el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, goldOval,
 } from '../widgets.js';
+import { attribute } from './dialogue.js';
 import { MASTERY_LABEL } from '../../game/data/Skills.js';
 import {
   ShopSystem, SHOPS, SHOP_TYPES, displayName, isIdentified,
@@ -33,11 +34,13 @@ import {
  * over a piece, so the figure is always in front of you before you click.
  */
 
+/* Prompts are sentence case and end in a full stop, which is the house grammar
+   for the message strip — see STYLE.md §5. */
 const MODES = [
-  ['buy', 'Buy', 'Select the Item to Buy'],
-  ['sell', 'Sell', 'Select the Item to Sell'],
-  ['identify', 'Identify', 'Select the Item to Identify'],
-  ['repair', 'Repair', 'Select the Item to Repair'],
+  ['buy', 'Buy', 'Select the item to buy.'],
+  ['sell', 'Sell', 'Select the item to sell.'],
+  ['identify', 'Identify', 'Select the item to identify.'],
+  ['repair', 'Repair', 'Select the item to repair.'],
 ];
 
 /** The pack, at the inventory screen's own measurements. */
@@ -158,19 +161,31 @@ export class ShopPanel extends Panel {
     this.packEl = el('div', { className: 'mm-pack mm-shop-pack' },
       el('div', { className: 'mm-pack-grid' }), this.packItemsEl);
 
-    body.append(this.wallEl, this.packEl);
+    // The keeper's own line, in the one caption treatment the interface has:
+    // a soft gradient across the foot of the painting (STYLE.md §4). The room
+    // is still the best thing on the screen and is not boxed over.
+    this.sayEl = el('div', { className: 'mm-venue-say' });
+    body.append(this.wallEl, this.packEl, this.sayEl);
 
     // ── the keeper's side ───────────────────────────────────────────────────
+    // Order and measurements are the house venue sidebar (STYLE.md §3): sign,
+    // portrait, name, role, the counter's numbers, the action list, the oval.
     this.venueEl = el('div', { className: 'mm-venue' });
     this.portraitEl = el('div', { className: 'mm-npc-portrait' });
     this.nameEl = el('div', { className: 'mm-npc-name' });
+    this.roleEl = el('div', { className: 'mm-npc-role' });
     this.optionsEl = el('div', { className: 'mm-npc-options' });
     this.exitEl = goldOval({
       glyph: 'exitDoor', label: 'Leave', textures: this.ui.textures,
       onClick: () => this.leave(), className: 'mm-npc-exit',
     });
+    // No numbers block here, unlike the training hall and the guild: sign,
+    // portrait, identity, five actions and the oval already fill 352 native
+    // pixels at the house sizes, and STYLE.md's ladder is not negotiable to
+    // make room for a table. The counter's spread lives on the verb tooltips.
     side.appendChild(el('div', { className: 'mm-npc-side mm-shop-side' },
-      this.venueEl, this.portraitEl, this.nameEl, this.optionsEl, this.exitEl));
+      this.venueEl, this.portraitEl, this.nameEl, this.roleEl,
+      this.optionsEl, this.exitEl));
 
     // Bound once: the portrait outlives every redraw, and `tooltip.attach`
     // stacks a listener each time it is called.
@@ -205,8 +220,12 @@ export class ShopPanel extends Panel {
     if (!shop) return;
     this.shopId = shop.id;
     this.ui.ctx?.events?.emit('shop:opened', { shopId: shop.id, keeper: shop.keeper, type: shop.type });
+    // The strip says where you are; the caption says what the keeper said.
+    // Two channels, one job each — STYLE.md §5.
+    this._arrival = `You enter ${shop.name}.`;
+    this.ui.log(this._arrival, 'info');
     // You are greeted on the way in, not halfway through picking over a wall.
-    if (!this.mode) this._speak(sys.greeting(shop));
+    if (!this.mode) this._speak(attribute(shop.keeper, sys.greeting(shop)));
   }
 
   onClose() {
@@ -233,7 +252,7 @@ export class ShopPanel extends Panel {
     if (!this.opened) return;
     const sys = this.system;
     const shop = sys?.shop(this.shopId);
-    if (this.mode && sys && shop) this._speak(sys.verbLine(shop, this.mode));
+    if (this.mode && sys && shop) this._speak(attribute(shop.keeper, sys.verbLine(shop, this.mode)));
     this.refresh();
   }
 
@@ -261,9 +280,13 @@ export class ShopPanel extends Panel {
 
     this.venueEl.textContent = shop.name;
     this.portraitEl.style.backgroundImage = `url("${T.portrait(shop.portrait)}")`;
-    setChildren(this.nameEl,
-      el('div', { text: shop.keeper }),
-      el('div', { text: `the ${type?.trade ?? 'Merchant'}` }));
+    // Name and role are two elements, never one wrapped run: the name is the
+    // person, the role is what they do, and only the name is azure (STYLE.md
+    // §3). It also stops "Caine the / Blacksmith" splitting an article from
+    // its noun, because the break is now where the meaning breaks.
+    this.nameEl.textContent = shop.keeper;
+    this.roleEl.textContent = `the ${type?.trade ?? 'Merchant'}`;
+
     this._buildOptions(sys, shop, trader);
     if (this.mode === 'buy') this._buildWall(sys, shop, trader);
     else if (this.mode) this._buildPack(sys, shop, trader);
@@ -271,18 +294,20 @@ export class ShopPanel extends Panel {
     this._prompt();
   }
 
-  /** The instruction line, in the one strip the whole game speaks through. */
+  /**
+   * The instruction line. The strip carries where you are and what to do next
+   * and nothing else; the keeper's own words go to the caption over the room.
+   */
   _prompt() {
-    if (this._quiet) { this._quiet = false; return; }
     const line = MODES.find(([id]) => id === this.mode)?.[2];
-    this.ui.hud?.setMessage(line ?? '');
+    this.ui.hud?.setMessage(line ?? this._arrival ?? '');
   }
 
-  /** Say something and keep the next refresh from talking over it. */
-  _speak(text, kind = 'info') {
-    if (!text) return;
-    this.ui.log(text, kind);
-    this._quiet = true;
+  /** The keeper speaks, in the caption across the foot of the room. */
+  _speak(text) {
+    if (!this.sayEl) return;
+    this.sayEl.textContent = text ?? '';
+    this.sayEl.classList.toggle('is-empty', !text);
   }
 
   // ── the five words ────────────────────────────────────────────────────────
@@ -518,10 +543,10 @@ export class ShopPanel extends Panel {
     });
     shot('shop-counter', 'town_thornwick_weaponsmith', null,
       'The counter: the painted forge filling the viewport, and the keeper on vertical figured '
-      + 'timber with their name in azure over Buy, Sell, Identify, Repair and Special.');
+      + 'timber — name, then trade, then Buy, Sell, Identify, Repair and Special.');
     shot('shop-wall', 'town_thornwick_weaponsmith', 'buy',
       'The goods: stock hung large on the forge wall at irregular heights behind a scrim, with '
-      + '"Select the Item to Buy" in the message strip.');
+      + '\u201cSelect the item to buy.\u201d in the message strip.');
     shot('shop-sell', 'town_millhaven_alchemist', 'sell',
       'Sell: the party\'s own 14x9 leather pack laid on the apothecary\'s counter, with the goods '
       + 'this counter will not take faded back.');

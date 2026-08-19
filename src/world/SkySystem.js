@@ -32,8 +32,74 @@ import { System } from '../core/Engine.js';
 import { SKY_VERT, SKY_FRAG } from './sky.shader.js';
 import { WORLD_SIZE } from './TerrainGen.js';
 
-/** Ground-lighting gain, calibrated against MM6's sunlit grass value. */
-const DAYLIGHT_GAIN = 1.95;
+/* ══════════════════════ the ground-lighting gains ════════════════════════
+ * These were one number (`DAYLIGHT_GAIN = 1.95`) applied to key and fill
+ * alike, which made the hemisphere fill (1.68 · 1.95 = 3.28) *stronger than
+ * the key* (1.44 · 1.95 = 2.81). A hemisphere light is near-omnidirectional
+ * over gently sloping ground, so it swamped the sun's cosine term and the
+ * whole heightfield rendered as flat paint — a hill's near and far faces came
+ * out at the same value and relief only survived as silhouette.
+ *
+ * The old comment justified the high fill by citing MM6's own ±3% hillside
+ * spread. That is a true measurement of MM6 and the wrong thing to copy from:
+ * it describes a game with *no* per-face shading at all, so it argues for
+ * having no sun rather than for having a bright sky.
+ *
+ * So the two are split and re-derived:
+ *
+ *  - KEY_GAIN keeps the sun the dominant term. On flat ground with the key at
+ *    ~44° it now supplies about three quarters of the irradiance instead of
+ *    half, so tilting a slope 25° away from the sun is a real value step
+ *    rather than a rounding error.
+ *  - FILL_GAIN is cut hard. The hemisphere is still what stops a turned-away
+ *    face going to black — REFERENCE §2.7's floor — but it is a fill again,
+ *    not a second key.
+ *  - Their sum is deliberately *below* the old total, because the same
+ *    exposure-matched comparison put our ground 18% brighter than the
+ *    reference. That single change took the ground's mean from 104.5 to within
+ *    a few percent of the reference's 88.6, and its p5 and median onto the
+ *    reference's almost exactly.
+ *
+ * One thing this rebalance did *not* do, which is worth recording because it
+ * was the reason it was attempted: it did not widen the ground's value range.
+ * Low-frequency relief spread measured 13.26 before and 13.30 after. The range
+ * our ground was missing turned out to live inside the terrain materials, not
+ * in the light — see LAYER_CONTRAST in TerrainSystem, which is where that was
+ * eventually fixed. Re-pointing the sun was never going to produce it, and
+ * MM6's own hillside (standard deviation 6.7 across the dome) says why.
+ */
+const KEY_GAIN = 1.78;
+const FILL_GAIN = 0.62;
+
+/**
+ * Flat ambient floor, as a fraction of the hemisphere fill.
+ *
+ * Raised as the fill came down, because it is this term — not the hemisphere —
+ * that sets where the darkest face in a lit exterior lands, and REFERENCE §2.7
+ * is explicit that nothing in an MM6 exterior crushes to black. Widening the
+ * value range must not be achieved by letting the shadow end fall off a cliff.
+ */
+const FLOOR_RATIO = 0.30;
+
+/**
+ * Display-space gain applied to the *daytime* sky field, and to the fog that
+ * has to agree with it.
+ *
+ * REFERENCE §2.4's `#29458C` is measured off MM6's own stills, and those
+ * stills are globally 1.42× darker than our captures — measured on the message
+ * strip, the one UI asset present in both. Writing `#29458C` verbatim into our
+ * framebuffer therefore reproduces MM6's *byte value* while missing MM6's
+ * *appearance* by the whole exposure difference, which is exactly what the
+ * capture shows: our open sky sits at RGB [49, 72, 135] where the reference's,
+ * scaled into our exposure, sits at [76, 109, 196] — and the reference's modal
+ * sky bucket is [56, 96, 192], i.e. `#29458C` × 1.42 to within a bit.
+ *
+ * The sky is a shader that ignores every scene light, which is what makes this
+ * safe to do on its own: lifting it moves the sky and nothing else. Applied
+ * only to the day keys — dawn, dusk and night were graded by eye against a
+ * different problem and are not part of this measurement.
+ */
+const SKY_DAY_GAIN = 1.45;
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
@@ -211,6 +277,30 @@ const KEYS = [
     stars: 0.95, night: 0.95, moonDisc: 1.0, moonTint: C(0xd2dcf0),
   },
 ];
+
+/* Lift the daytime sky into our exposure — see SKY_DAY_GAIN above.
+ *
+ * Done here rather than by rewriting the hex literals so the palette keeps
+ * showing MM6's *measured* colours, which is what REFERENCE §2.4 is written
+ * against and what anyone checking this file will look for. The two shoulder
+ * keys get a partial lift so the ramp into dawn and dusk stays smooth; the
+ * warm horizon colours are left alone entirely, because the gold is graded
+ * against a different reference and is not what this measurement covers. */
+const SKY_LIFT = { 6.4: 0.28, 7.6: 1.0, 10.0: 1.0, 12.0: 1.0, 15.0: 1.0, 16.6: 1.0, 17.7: 0.28 };
+/** Warm keys keep their painted horizon band; only the blue half is lifted. */
+const SKY_LIFT_HORIZON = { 6.4: 0, 7.6: 1.0, 10.0: 1.0, 12.0: 1.0, 15.0: 1.0, 16.6: 1.0, 17.7: 0 };
+for (const k of KEYS) {
+  const t = SKY_LIFT[k.h];
+  if (!t) continue;
+  const g = 1 + (SKY_DAY_GAIN - 1) * t;
+  const gh = 1 + (SKY_DAY_GAIN - 1) * (SKY_LIFT_HORIZON[k.h] ?? 0);
+  const scale = (c, m) => { c[0] = Math.min(1, c[0] * m); c[1] = Math.min(1, c[1] * m); c[2] = Math.min(1, c[2] * m); };
+  scale(k.zen, g);
+  scale(k.hor, gh);
+  // Fog is the sky seen through distance; if it does not move with the sky it
+  // paints a differently-coloured strip along the skyline.
+  scale(k.fog, g);
+}
 
 const KEY_FIELDS = Object.keys(KEYS[0]).filter((k) => k !== 'h');
 
@@ -883,26 +973,28 @@ export class SkySystem extends System {
   /**
    * Build the scene's whole light rig.
    *
-   * The exposure brief is REFERENCE §2.7 read against the actual captures:
-   * MM6's open sunlit grass measures `#385028`–`#405028` (luminance 63–77 of
-   * 255) and its dirt `#503020`. Nothing in a lit MM6 exterior sits at black.
-   * Three things have to be true at once and each one is a separate light:
+   * Three lights, each doing one job (see KEY_GAIN / FILL_GAIN above for the
+   * measurement that sets the ratio between the first two):
    *
-   *  - a **key** bright and warm enough that open ground lands in that band —
-   *    which at ACES exposure 1.0 and a ~0.12 grass albedo means an intensity
-   *    around 2.0, not the 0.88 of a naive "sun is 1.0" rig;
-   *  - a **hemisphere fill** nearly as strong as the key, because MM6's
-   *    lit-to-shadow spread across a whole hillside is ±3% and our own ceiling
-   *    is 40% — a physically plausible 1:8 sun-to-sky ratio reads as overcast
-   *    dusk in this palette;
-   *  - a small **flat floor**, so a cliff face turned fully away from both the
-   *    sun and the sky still resolves as rock instead of a hole. MM6's own
-   *    floor is `#101010` in mortar joints; ours must not go under it.
+   *  - a **key** that is unambiguously the dominant term, so the sun's cosine
+   *    survives onto gently sloping ground and the heightfield reads as relief
+   *    rather than as a painted silhouette;
+   *  - a **hemisphere fill** well below it. It exists to keep a turned-away
+   *    face legible, not to re-light it. When this was the stronger of the two
+   *    the sun vector was effectively erased;
+   *  - a small **flat floor**, so a cliff face turned away from both the sun
+   *    and the sky still resolves as rock instead of a hole. MM6's own floor is
+   *    `#101010` in mortar joints; ours must not go under it, which is why the
+   *    floor went *up* as the fill came down.
+   *
+   * The intensities set here are only the first frame's — `_evaluate` drives
+   * all three from the palette immediately afterwards — but they are kept in
+   * step with it so a failure to evaluate does not light the world wrongly.
    */
   _buildLights(ctx) {
     const shadows = ctx.config?.shadows !== false;
 
-    const key = new THREE.DirectionalLight(0xfff4dc, 1.44);
+    const key = new THREE.DirectionalLight(0xfff4dc, 1.44 * KEY_GAIN);
     key.name = 'sky-key';
     key.castShadow = shadows;
     if (shadows) {
@@ -922,12 +1014,12 @@ export class SkySystem extends System {
     this.keyLight = key;
     this._keyTarget = target;
 
-    const fill = new THREE.HemisphereLight(0x93aedd, 0x847a58, 1.68);
+    const fill = new THREE.HemisphereLight(0x93aedd, 0x847a58, 1.68 * FILL_GAIN);
     fill.name = 'sky-fill';
     ctx.scene.add(fill);
     this.fillLight = fill;
 
-    const floor = new THREE.AmbientLight(0x8e8f8c, 0.39);
+    const floor = new THREE.AmbientLight(0x8e8f8c, 1.68 * FILL_GAIN * FLOOR_RATIO);
     floor.name = 'sky-floor';
     ctx.scene.add(floor);
     this.floorLight = floor;
@@ -1055,7 +1147,15 @@ export class SkySystem extends System {
     const gk = clamp(0.30 + 0.70 * w.lightMul, 0.25, 1.0);
     const fogDisplay = mixOvercast(p.fog, desat, 0.95 * heavy);
     const gNear = mixOvercast(scaleRGB(p.gNear, gk), desat * 0.8, 0.55 * heavy);
-    const gFar = mixRGB(mixOvercast(scaleRGB(p.gFar, gk), desat * 0.8, 0.70 * heavy), fogDisplay, 0.28);
+    // The far band was mixed 28% toward the fog blue, which painted a distinct
+    // grey-green strip along the skyline: measured at [63,80,75] against the
+    // terrain's own [95,120,68] just below it — desaturated, and with its blue
+    // nearly up to its red. REFERENCE §2.7 caps aerial perspective at 12%
+    // toward the sky colour, and the band has to read as the same land the
+    // heightfield is drawing, so the mix comes down to match that cap. It also
+    // has to: the fog blue is now considerably brighter (SKY_DAY_GAIN), so the
+    // old 28% would have turned a dull strip into a bright one.
+    const gFar = mixRGB(mixOvercast(scaleRGB(p.gFar, gk), desat * 0.8, 0.70 * heavy), fogDisplay, 0.12);
 
     const u = this._u;
     if (u) {
@@ -1136,19 +1236,19 @@ export class SkySystem extends System {
       srgbToLinear(p.lightCol[0]), srgbToLinear(p.lightCol[1]), srgbToLinear(p.lightCol[2]),
       THREE.LinearSRGBColorSpace,
     );
-    // Measured against the reference: sunlit grass was landing near #3C5027
-    // where MM6's is #6f7a3a, i.e. about half as bright. The sky is a shader
-    // that ignores scene lights, so lifting the rig brightens the GROUND only
-    // and leaves the measured sky blue untouched -- exposure would have moved
-    // both and blown the sky out.
-    this.sunIntensity = p.lightI * w.lightMul * DAYLIGHT_GAIN;
+    // The rig moves the GROUND only — the sky is a shader that ignores scene
+    // lights, so ground exposure and sky value are independent knobs here and
+    // each is set from its own measurement. (Touching the renderer's exposure
+    // instead would move both, and the sky is not the thing that is too
+    // bright.) Key and fill carry separate gains: see KEY_GAIN / FILL_GAIN.
+    this.sunIntensity = p.lightI * w.lightMul * KEY_GAIN;
     this.ambientColor.setRGB(
       srgbToLinear(p.ambSky[0]), srgbToLinear(p.ambSky[1]), srgbToLinear(p.ambSky[2]),
       THREE.LinearSRGBColorSpace,
     );
     // Overcast raises the fill and kills the key — that is what makes a grey
     // day read as a grey day rather than a dimmer sunny one.
-    this.ambientIntensity = DAYLIGHT_GAIN * p.ambI * lerp(1, 1.18, desat) * lerp(1, 0.55, clamp(1 - w.lightMul, 0, 1) * 0.4);
+    this.ambientIntensity = FILL_GAIN * p.ambI * lerp(1, 1.18, desat) * lerp(1, 0.55, clamp(1 - w.lightMul, 0, 1) * 0.4);
 
     if (this._ownsLighting && this.keyLight) {
       this.keyLight.color.copy(this.sunColor);
@@ -1173,7 +1273,7 @@ export class SkySystem extends System {
           srgbToLinear(lerp(p.ambSky[2], p.ambGnd[2], 0.45)),
           THREE.LinearSRGBColorSpace,
         );
-        floor.intensity = this.ambientIntensity * 0.22 + this._flash * 0.5;
+        floor.intensity = this.ambientIntensity * FLOOR_RATIO + this._flash * 0.5;
       }
       if (this._boltLight) this._boltLight.intensity = this._flash * 3.8;
     }

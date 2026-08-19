@@ -231,6 +231,91 @@ function hipRoof(w, d, wallTop, pitch, overhang, slot) {
   return { parts, rise };
 }
 
+/**
+ * Flat roof behind a parapet — imperial masonry, not northern European.
+ *
+ * Duskorn is eight hundred years of Cindric stonework with nobody in it, and
+ * the fastest way to say "this was built by a different civilisation" is to
+ * take the steep pitch away: a parapet with a cornice under it reads as
+ * classical from the far side of the forum.
+ */
+function flatRoof(w, d, wallTop, overhang, slot) {
+  const parts = [];
+  const ow = w + overhang * 2;
+  const od = d + overhang * 2;
+  // Cornice course, then a low parapet standing on it.
+  parts.push(box(ow, 0.22, od, 0, wallTop + 0.11, 0, SLOT.STONE));
+  parts.push(box(w, 0.16, d, 0, wallTop + 0.30, 0, slot));
+  const p = 0.26, ph = 0.55;
+  parts.push(box(w, ph, p, 0, wallTop + 0.22 + ph / 2, (d - p) / 2, SLOT.STONE));
+  parts.push(box(w, ph, p, 0, wallTop + 0.22 + ph / 2, -(d - p) / 2, SLOT.STONE));
+  parts.push(box(p, ph, d - p * 2, (w - p) / 2, wallTop + 0.22 + ph / 2, 0, SLOT.STONE));
+  parts.push(box(p, ph, d - p * 2, -(w - p) / 2, wallTop + 0.22 + ph / 2, 0, SLOT.STONE));
+  return { parts, rise: 0.77 };
+}
+
+/**
+ * A broken wall head, for a town the roof came off eight centuries ago.
+ *
+ * Without this a roofless building is a box with a clean rectangular top,
+ * which reads as unfinished geometry rather than as a ruin. The crest is a run
+ * of short merlons at falling heights — cheap, and it is the silhouette that
+ * does the work.
+ */
+function ruinCrest(w, d, wallTop, rng) {
+  const parts = [];
+  const t = 0.34;
+  for (const [len, along, axis] of [[w, (d - t) / 2, 'x'], [w, -(d - t) / 2, 'x'],
+    [d - t * 2, (w - t) / 2, 'z'], [d - t * 2, -(w - t) / 2, 'z']]) {
+    const n = Math.max(2, Math.round(len / 1.1));
+    for (let i = 0; i < n; i++) {
+      if (rng.chance(0.34)) continue;                 // a gap where a course fell
+      const h = rng.range(0.12, 0.75);
+      const seg = len / n;
+      const u = -len / 2 + seg * (i + 0.5);
+      parts.push(axis === 'x'
+        ? box(seg * 0.94, h, t, u, wallTop + h / 2, along, SLOT.WALL)
+        : box(t, h, seg * 0.94, along, wallTop + h / 2, u, SLOT.WALL));
+    }
+  }
+  return parts;
+}
+
+/**
+ * Stilts, a deck and a stair up to it.
+ *
+ * Greywater is on stilts for two good reasons and Saltmarch's warehouses stand
+ * on piles over the flats — both are in the region text, and both look wrong
+ * with the building sitting flat on the mud. The stair matters as much as the
+ * posts: the character controller steps 0.5 m, so the deck has to be reachable
+ * in two treads or the door becomes unenterable.
+ */
+function pileFrame(w, d, height) {
+  const parts = [];
+  const post = 0.26;
+  const nx = Math.max(2, Math.round(w / 2.6));
+  const nz = Math.max(2, Math.round(d / 2.6));
+  for (let i = 0; i <= nx; i++) {
+    for (let j = 0; j <= nz; j++) {
+      if (i > 0 && i < nx && j > 0 && j < nz) continue;   // perimeter only
+      const x = -w / 2 + (w * i) / nx;
+      const z = -d / 2 + (d * j) / nz;
+      parts.push(box(post, height, post, x, height / 2, z, SLOT.TIMBER));
+    }
+  }
+  // Deck, and the bracing that stops it reading as a floating slab.
+  parts.push(box(w + 0.5, 0.18, d + 0.5, 0, height - 0.09, 0, SLOT.WOOD));
+  parts.push(box(w + 0.4, 0.14, 0.14, 0, height - 0.34, (d + 0.4) / 2, SLOT.TIMBER));
+  parts.push(box(w + 0.4, 0.14, 0.14, 0, height - 0.34, -(d + 0.4) / 2, SLOT.TIMBER));
+  // Two treads down to the mud on the door side (+Z).
+  const treads = 2;
+  for (let i = 0; i < treads; i++) {
+    const y = (height * (i + 1)) / (treads + 1);
+    parts.push(box(1.6, 0.14, 0.5, 0, y, (d + 0.5) / 2 + 0.45 + (treads - 1 - i) * 0.52, SLOT.WOOD));
+  }
+  return parts;
+}
+
 /** Hanging shop sign on a wrought-iron bracket. */
 function shopSign(x, y, z, facing, slot = SLOT.WOOD) {
   const parts = [];
@@ -250,10 +335,16 @@ function shopSign(x, y, z, facing, slot = SLOT.WOOD) {
  * @param {number} spec.width      footprint X, metres
  * @param {number} spec.depth      footprint Z, metres
  * @param {number} spec.storeys
- * @param {'gable'|'hip'|'cone'} spec.roof
- * @param {'timbered'|'stone'|'plain'} spec.style
+ * @param {'gable'|'hip'|'cone'|'flat'|'none'} spec.roof
+ * @param {'timbered'|'stone'|'plain'|'board'|'masonry'|'imperial'} spec.style
  * @param {boolean} spec.shop      add a signboard and a wide shopfront
  * @param {boolean} spec.jetty     first floor overhangs the ground floor
+ * @param {number}  [spec.pitch]   roof rise per half-span; default by roof kind
+ * @param {number}  [spec.overhang] eaves projection in metres
+ * @param {number}  [spec.piles]   stand the building this high on stilts
+ * @param {boolean} [spec.ruin]    roofless, with a broken wall head
+ * @param {boolean} [spec.chimney] default true; false for sheds and ruins
+ * @param {number}  [spec.storeyH] floor-to-floor height
  * @param {import('../core/RNG.js').RNG} rng
  * @returns {{ geometry: THREE.BufferGeometry, height: number, doorAt: THREE.Vector3 }}
  */
@@ -261,13 +352,17 @@ export function buildBuilding(spec, rng) {
   const {
     width: W, depth: D, storeys = 2, roof = 'gable',
     style = 'timbered', shop = false, jetty = false,
+    piles = 0, ruin = false, chimney = true,
   } = spec;
 
   const parts = [];
-  const storeyH = 2.55;
-  const plinthH = 0.55;
+  const storeyH = spec.storeyH ?? 2.55;
+  const plinthH = piles > 0 ? 0.18 : 0.55;
   const wallT = 0.32;
   const jettyOut = jetty ? 0.34 : 0;
+  // Half-timbering is the framing on the upper storeys; the board and masonry
+  // styles carry none, so the framing test asks the style rather than assuming.
+  const framed = style === 'timbered';
 
   // Stone plinth the whole building sits on — grounds it and hides any small
   // mismatch between the flat footprint and the terrain under it.
@@ -283,8 +378,9 @@ export function buildBuilding(spec, rng) {
     const w = W + out * 2;
     const d = D + out * 2;
     // Ground floor is stone on timbered buildings; upper floors are the
-    // plastered infill that carries the framing.
-    const wallSlot = (isGround && style === 'timbered') ? SLOT.STONE : SLOT.WALL;
+    // plastered infill that carries the framing. A building on piles has no
+    // ground to build a stone base off, so it stays board all the way down.
+    const wallSlot = (isGround && framed && piles <= 0) ? SLOT.STONE : SLOT.WALL;
 
     if (jetty && !isGround && s === 1) {
       // Underside of the overhang, so the jetty is not a floating slab.
@@ -317,7 +413,7 @@ export function buildBuilding(spec, rng) {
       for (const o of openings) {
         furniture.push(...(o.kind === 'door' ? doorFurniture(o, wallT) : windowFurniture(o, wallT)));
       }
-      if (!isGround && style === 'timbered') {
+      if (!isGround && framed) {
         furniture.push(...timberFrame(len, storeyH, wallT, rng, style));
       }
 
@@ -341,30 +437,51 @@ export function buildBuilding(spec, rng) {
   const outW = W + jettyOut * 2;
   const outD = D + jettyOut * 2;
 
+  const overhang = spec.overhang ?? 0.42;
   let rise = 0;
-  if (roof === 'cone') {
+  const kind = ruin ? 'none' : roof;
+  if (kind === 'none') {
+    parts.push(...ruinCrest(outW, outD, wallTop, rng));
+    rise = 0.75;
+  } else if (kind === 'cone') {
     const r = Math.max(outW, outD) * 0.72;
-    rise = r * 1.5;
+    rise = r * (spec.pitch ?? 1.5);
     parts.push(cone(r, 0.06, rise, 14, 0, wallTop + rise / 2, 0, SLOT.ROOF));
+  } else if (kind === 'flat') {
+    const built = flatRoof(outW, outD, wallTop, overhang * 0.5, SLOT.ROOF);
+    parts.push(...built.parts);
+    rise = built.rise;
   } else {
-    const built = roof === 'hip'
-      ? hipRoof(outW, outD, wallTop, 1.15, 0.42, SLOT.ROOF)
-      : gableRoof(outW, outD, wallTop, 1.25, 0.42, SLOT.ROOF);
+    const built = kind === 'hip'
+      ? hipRoof(outW, outD, wallTop, spec.pitch ?? 1.15, overhang, SLOT.ROOF)
+      : gableRoof(outW, outD, wallTop, spec.pitch ?? 1.25, overhang, SLOT.ROOF);
     parts.push(...built.parts);
     rise = built.rise;
   }
 
-  // Chimney, offset from the ridge so it reads as a real stack.
-  const cx = (rng.chance(0.5) ? 1 : -1) * outW * 0.28;
-  const chH = rise * 0.75 + 0.9;
-  parts.push(box(0.62, chH, 0.62, cx, wallTop + chH / 2, outD * 0.16, SLOT.STONE));
-  parts.push(box(0.78, 0.16, 0.78, cx, wallTop + chH, outD * 0.16, SLOT.STONE));
+  // Chimney, offset from the ridge so it reads as a real stack. A ruin has
+  // nobody to light a fire and a flat imperial roof never carried one.
+  if (chimney && !ruin && kind !== 'flat' && kind !== 'none') {
+    const cx = (rng.chance(0.5) ? 1 : -1) * outW * 0.28;
+    const chH = rise * 0.75 + 0.9;
+    parts.push(box(0.62, chH, 0.62, cx, wallTop + chH / 2, outD * 0.16, SLOT.STONE));
+    parts.push(box(0.78, 0.16, 0.78, cx, wallTop + chH, outD * 0.16, SLOT.STONE));
+  }
 
-  if (shop) parts.push(...shopSign(0.95, plinthH + 2.35, outD / 2 + 0.12, 1));
+  if (shop && !ruin) parts.push(...shopSign(0.95, plinthH + 2.35, outD / 2 + 0.12, 1));
+
+  // Stilts go on last and lift everything already built, so the walls, the
+  // roof and the door all rise together and only the posts stay on the ground.
+  if (piles > 0) {
+    for (const g of parts) g.translate(0, piles, 0);
+    parts.push(...pileFrame(W + 0.3, D + 0.3, piles));
+    doorAt = doorAt.clone();
+    doorAt.y += piles;
+  }
 
   // Merge to a single geometry, grouped so one mesh can carry six materials.
   const geometry = mergeByslot(parts);
-  return { geometry, height: wallTop + rise, doorAt };
+  return { geometry, height: wallTop + rise + piles, doorAt };
 }
 
 /**
@@ -433,6 +550,14 @@ export const BUILDING_TYPES = {
   // edge of town rather than as another timbered house on the square.
   dock: { width: 11.0, depth: 6.0, storeys: 1, roof: 'gable', style: 'timbered', shop: true },
   coachStop: { width: 12.0, depth: 7.5, storeys: 1, roof: 'hip', style: 'timbered', shop: true, jetty: true },
+  // Scenery roles. Nothing behind these doors — `TownSystem` places them
+  // without registering a door, so they fill a skyline without teaching the
+  // player that half the buildings in a town are locked.
+  warehouse: { width: 13.0, depth: 8.0, storeys: 1, roof: 'gable', style: 'timbered', chimney: false },
+  boathouse: { width: 9.0, depth: 6.5, storeys: 1, roof: 'gable', style: 'timbered', chimney: false },
+  barn: { width: 11.0, depth: 7.0, storeys: 1, roof: 'gable', style: 'plain', chimney: false },
+  watchtower: { width: 4.4, depth: 4.4, storeys: 4, roof: 'cone', style: 'stone', chimney: false },
+  shrine: { width: 3.8, depth: 3.8, storeys: 1, roof: 'cone', style: 'stone', chimney: false },
 };
 
 /** Which material each slot resolves to, by building style. */
@@ -460,5 +585,35 @@ export const STYLE_MATERIALS = {
     [SLOT.ROOF]: 'roof-tile',
     [SLOT.WOOD]: 'wood-plank',
     [SLOT.TRIM]: 'iron',
+  },
+  // Board-and-thatch: the fen and the tide flats. No plaster infill and no
+  // half-timbering — the wall *is* the boarding, which is why `framed` above
+  // asks the style rather than assuming every upper storey carries a frame.
+  board: {
+    [SLOT.WALL]: 'wood-plank',
+    [SLOT.TIMBER]: 'wood-beam',
+    [SLOT.STONE]: 'rubble',
+    [SLOT.ROOF]: 'thatch',
+    [SLOT.WOOD]: 'wood-plank',
+    [SLOT.TRIM]: 'rusted-iron',
+  },
+  // Dressed masonry under slate: the cold and the high ground, where a
+  // half-timbered upper storey would not survive a winter.
+  masonry: {
+    [SLOT.WALL]: 'granite-block',
+    [SLOT.TIMBER]: 'wood-beam',
+    [SLOT.STONE]: 'granite-block',
+    [SLOT.ROOF]: 'roof-slate',
+    [SLOT.WOOD]: 'oak-door',
+    [SLOT.TRIM]: 'iron',
+  },
+  // Cindric ashlar and bronze — the dead city, and nothing else in Caerwen.
+  imperial: {
+    [SLOT.WALL]: 'sandstone-block',
+    [SLOT.TIMBER]: 'marble',
+    [SLOT.STONE]: 'marble',
+    [SLOT.ROOF]: 'roof-tile',
+    [SLOT.WOOD]: 'oak-door',
+    [SLOT.TRIM]: 'bronze',
   },
 };

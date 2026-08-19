@@ -114,7 +114,11 @@ export class ServicesPanel extends Panel {
     // The viewport holds the painted room and nothing else until an office
     // needs a counter, so the board is the only child and it hides itself.
     this.boardEl = el('div', { className: 'mm-svc-board' });
-    body.appendChild(el('div', { className: 'mm-svc' }, this.boardEl));
+    // The keeper's line, in the house caption: a soft gradient across the foot
+    // of the painting (STYLE.md §4). It shows only while the room is bare —
+    // once a counter is up, the board is the screen.
+    this.sayEl = el('div', { className: 'mm-venue-say' });
+    body.appendChild(el('div', { className: 'mm-svc' }, this.boardEl, this.sayEl));
 
     this.titleEl = el('div', { className: 'mm-svc-title' });
     this.portraitEl = el('div', { className: 'mm-svc-portrait' });
@@ -574,9 +578,9 @@ export class ServicesPanel extends Panel {
   }
 
   /**
-   * Everything the buildings have to say goes to the one message strip, which
-   * is the only channel MM6 has for a sentence — no floating text, no toasts
-   * over the board.
+   * What the house just did goes to the message strip, which carries plain
+   * event sentences (STYLE.md §5). What the keeper *says* goes to the caption
+   * over the room instead, so the two channels never carry the same line.
    */
   _say(result) {
     if (!result) return;
@@ -584,22 +588,37 @@ export class ServicesPanel extends Panel {
     this.refresh();
   }
 
+  /** The keeper speaks, in the caption across the foot of the room (§4). */
+  _speak(text) {
+    if (!this.sayEl) return;
+    this.sayEl.textContent = text ?? '';
+    this.sayEl.classList.toggle('is-empty', !text);
+  }
+
+  /**
+   * The keeper's own words, attributed and in curly quotes — one grammar for
+   * everything anybody says anywhere in the interface (STYLE.md §7).
+   */
   _greeting() {
     const v = this.venue;
-    const keeper = v?.keeper ?? 'The house';
-    if (this.service === 'bank') return `${keeper}: "The Ledger holds, the Ledger pays, and the Ledger does not lend."`;
+    const keeper = v?.keeper ?? null;
+    if (this.service === 'bank') {
+      return attribute(keeper ?? 'The house',
+        'The Ledger holds, the Ledger pays, and the Ledger does not lend.');
+    }
     if (this.service === 'temple') {
       const refusal = this.model.refusal(v);
       if (refusal) return refusal.text;
-      if (!v?.keeper) return 'Nobody keeps this house. The lamps are lit all the same.';
-      // The strip is 460 native pixels and truncates about eighty characters
+      if (!keeper) return 'Nobody keeps this house. The lamps are lit all the same.';
+      // The caption is 460 native pixels and truncates about eighty characters
       // in, so the price goes in the sentence rather than after it.
       const bill = this.model.templeBill(v);
-      return bill > 0
-        ? `${keeper}: "Sit down. Mending the four of you is ${fmt(bill)} gold."`
-        : `${keeper}: "The lamp is lit, and none of you needs it. Long may that last."`;
+      return attribute(keeper, bill > 0
+        ? `Sit down. Mending the four of you is ${fmt(bill)} gold.`
+        : 'The lamp is lit, and none of you needs it. Long may that last.');
     }
-    return `${keeper}: "Bed, board, beer and gossip, and the gossip is free."`;
+    return attribute(keeper ?? 'The house',
+      'Bed, board, beer and gossip, and the gossip is free.');
   }
 
   dispose() {
@@ -844,7 +863,17 @@ export class ServicesPanel extends Panel {
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
-const ROLE = { bank: 'of the Ledger', temple: 'of the Kindled Lamp', tavern: 'innkeeper' };
+/**
+ * The role line of the identity block (STYLE.md §3): a short noun phrase
+ * beginning "the ", Title Case. Not a lowercase fragment ("innkeeper"), not a
+ * prepositional tail ("of the Ledger") — those were two of the five different
+ * treatments the review found for one component.
+ */
+const ROLE = {
+  bank: 'the Ledger-keeper',
+  temple: 'the Lampkeeper',
+  tavern: 'the Innkeeper',
+};
 
 const DOOR_LABEL = { bank: 'Counting house', temple: 'Temple', tavern: 'Tavern' };
 

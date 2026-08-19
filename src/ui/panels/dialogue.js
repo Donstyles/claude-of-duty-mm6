@@ -248,6 +248,26 @@ export class DialoguePanel extends Panel {
 }
 
 /**
+ * One line of attributed speech, in the house grammar (STYLE.md §5 and §7).
+ *
+ * Everything anyone says anywhere in the interface goes through here, so the
+ * marks are curly on every screen and the speaker is always named. Several of
+ * the model files hand their lines out already wrapped in straight quotes —
+ * `ShopSystem.greeting` does, `TownServices` does not — so the wrapping is
+ * stripped first and re-made rather than trusted.
+ *
+ * It lives in this file because dialogue is the speech screen and this is the
+ * only module of the five that is not a venue. It belongs in `ui/widgets.js`
+ * with the other text helpers; that file is not ours to edit.
+ */
+export function attribute(speaker, line) {
+  const said = String(line ?? '').trim().replace(/^["“”']+|["“”']+$/g, '').trim();
+  if (!said) return '';
+  const who = String(speaker ?? '').trim();
+  return who ? `${who}: “${said}”` : `“${said}”`;
+}
+
+/**
  * The painted plate for a sitter.
  *
  * `UITextures.portrait` cuts its faces by class and has no route to the two
