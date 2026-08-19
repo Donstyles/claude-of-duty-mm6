@@ -25,6 +25,25 @@ import { RNG, hashSeed } from '../core/RNG.js';
 
 const TAU = Math.PI * 2;
 
+/**
+ * Resolve a repo-relative art path against the document.
+ *
+ * Every plate path below is relative, and a relative URL is only safe while it
+ * is consumed from a place that resolves against `document.baseURI`. The moment
+ * one is handed to a CSS custom property it resolves against the *stylesheet's*
+ * base instead, 404s at `/assets/…`, and the layer is dropped without an error
+ * anywhere — which is how the spellbook lost eleven masks and read as a slightly
+ * wrong image rather than a broken one. Resolving here makes the paths absolute
+ * at the source, so it cannot matter who consumes them.
+ */
+function artUrl(path) {
+  try {
+    return new URL(path, document.baseURI).href;
+  } catch {
+    return path;
+  }
+}
+
 /** Linear-interpolate two hex colours given as `#rrggbb`. */
 function mixHex(a, b, t) {
   const pa = [parseInt(a.slice(1, 3), 16), parseInt(a.slice(3, 5), 16), parseInt(a.slice(5, 7), 16)];
@@ -3173,7 +3192,7 @@ export class UITextures {
   /** The painted gravestone that replaces a dead character's portrait. */
   tombstonePlate() {
     return PORTRAIT_PLATES.has('tombstone')
-      ? `${PORTRAIT_PLATES.base}tombstone.jpg`
+      ? artUrl(`${PORTRAIT_PLATES.base}tombstone.jpg`)
       : null;
   }
 
@@ -3842,12 +3861,12 @@ const PORTRAIT_PLATES = {
     // An explicit plate wins outright. Without this the elder faces were
     // unreachable: `pick` maps class to role, no class maps to `elder`, and
     // two committed plates could never be chosen by anything.
-    if (spec.plate && this.has(spec.plate)) return `${this.base}${spec.plate}.jpg`;
+    if (spec.plate && this.has(spec.plate)) return artUrl(`${this.base}${spec.plate}.jpg`);
 
     const role = BASE[spec.classId] ?? 'rogue';
     const want = sex === 'f' && role === 'sorcerer' ? 'f-sorceress' : `${sex}-${role}`;
 
-    if (this.has(want)) return `${this.base}${want}.jpg`;
+    if (this.has(want)) return artUrl(`${this.base}${want}.jpg`);
 
     // No plate for that exact role: fall back within the same sex, chosen by a
     // stable hash of the character's key so it never changes between sessions.
@@ -3856,7 +3875,7 @@ const PORTRAIT_PLATES = {
     const seed = String(spec.key ?? spec.classId ?? 'x');
     let hsh = 0;
     for (let i = 0; i < seed.length; i++) hsh = (hsh * 31 + seed.charCodeAt(i)) >>> 0;
-    return `${this.base}${pool[hsh % pool.length]}.jpg`;
+    return artUrl(`${this.base}${pool[hsh % pool.length]}.jpg`);
   },
 };
 
@@ -3885,7 +3904,7 @@ const FIGURE_PLATES = {
     const sex = (spec.gender ?? spec.sex ?? 'm') === 'f' ? 'f' : 'm';
     const role = FIGURE_BASE_CLASS[spec.classId] ?? 'thief';
     const want = `${sex}-${role}`;
-    return this.has(want) ? `${this.base}${want}.plate.png` : null;
+    return this.has(want) ? artUrl(`${this.base}${want}.plate.png`) : null;
   },
 };
 

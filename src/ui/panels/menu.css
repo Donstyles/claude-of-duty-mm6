@@ -78,11 +78,13 @@
     #fff8d8 0 12%, #ffe08c 30%, #e8b545 52%, #a87c22 74%, #f0d894 100%);
   -webkit-background-clip: text;
   background-clip: text;
+  /* `background-clip: text` paints the fill in the background layer, which is
+     *behind* text-shadow, so `--shadow` cannot be used directly here — one
+     drop-shadow at the same offset and colour is the same mark by another
+     route. One, not a stack: four of them build an outline, and STYLE.md §12
+     allows the interface exactly one text shadow. */
   text-shadow: none;
-  filter:
-    drop-shadow(var(--u) 0 0 #140e04) drop-shadow(calc(var(--u) * -1) 0 0 #140e04)
-    drop-shadow(0 var(--u) 0 #140e04) drop-shadow(0 calc(var(--u) * -1) 0 #140e04)
-    drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) 0 rgba(0, 0, 0, 0.6));
+  filter: drop-shadow(var(--u) var(--u) 0 #000);
 }
 /* Off the title page the logo is a header, not the point of the screen. */
 .mm-panel[data-panel='menu'][data-page]:not([data-page='root']) .mm-menu-logo {
@@ -94,7 +96,7 @@
   font-size: calc(var(--u) * 11);
   letter-spacing: 0.30em;
   color: #f0cf72;
-  text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #000;
+  text-shadow: var(--shadow);
 }
 
 /* The root page keeps MM6's centred column; every other page is a working
@@ -121,12 +123,7 @@
   padding: 0 calc(var(--u) * 6);
   font-size: calc(var(--u) * 17);
   color: #ffdf94;
-  /* Still a drop shadow, as everywhere but the quest cartouche — but the plates
-     are pale now, and warm gold on pale stone needs a dark seat on its lit
-     sides too or the letterforms dissolve into the marble behind them. */
-  text-shadow:
-    calc(var(--u) * 1) calc(var(--u) * 1) 0 #000, calc(var(--u) * -1) 0 0 rgba(0, 0, 0, 0.8),
-    0 calc(var(--u) * -1) 0 rgba(0, 0, 0, 0.8);
+  text-shadow: var(--shadow);
 }
 /* Rest is `#ffdf94`, the value REFERENCE.md §4.6 measures for main-menu
    options; hover is `--gold`, which STYLE.md §2 reserves for the live control.
@@ -140,13 +137,7 @@
    sat at 1.25:1 where the original reaches 1.61:1. The original buys that back
    the same way it letters everything else: a pale catch along the lit edge of
    the glyph, which lifts the letterform without desaturating the red. */
-.mm-panel[data-panel='menu'] .mm-menu-item.is-quit {
-  color: #ff4a30;
-  text-shadow:
-    calc(var(--u) * 1) calc(var(--u) * 1) 0 #000,
-    calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(255, 206, 160, 0.85),
-    0 calc(var(--u) * -1) 0 rgba(255, 190, 150, 0.6);
-}
+.mm-panel[data-panel='menu'] .mm-menu-item.is-quit { color: #ff5a44; }
 .mm-panel[data-panel='menu'] .mm-menu-item.is-quit:hover { color: #ff7a62; }
 .mm-panel[data-panel='menu'] .mm-menu-item small {
   font-size: calc(var(--u) * 9);
@@ -213,7 +204,7 @@
   place-items: center;
   font-size: calc(var(--u) * 13);
   color: #ffdf94;
-  text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #000;
+  text-shadow: var(--shadow);
 }
 .mm-panel[data-panel='menu'] .mm-menu-plaque:hover { color: var(--gold); }
 .mm-panel[data-panel='menu'] .mm-menu-plaque.is-lead { color: #fff4c8; }
@@ -346,7 +337,7 @@
   font-size: calc(var(--u) * 11);
   color: #f0e4c4;
   background-size: calc(var(--u) * 160) calc(var(--u) * 26);
-  text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #000;
+  text-shadow: var(--shadow);
 }
 .mm-panel[data-panel='menu'] .mm-opt-toggle:hover,
 .mm-panel[data-panel='menu'] .mm-opt-choice:hover { color: var(--gold); }

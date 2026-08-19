@@ -126,7 +126,7 @@ const CHARACTER_DEFS = {
    * then worn until the crown of every thread is rubbed pale.
    */
   'npc-wool': {
-    normalStrength: 0.042, ao: { radius: 0.020, amplitude: 0.60 },
+    normalStrength: 0.058, ao: { radius: 0.020, amplitude: 0.60 },
     physical: { sheen: 0.55, sheenRoughness: 0.95 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
@@ -215,7 +215,7 @@ const CHARACTER_DEFS = {
    * surface takes a low sheen, which is the whole visual difference from wool.
    */
   'npc-cloth': {
-    normalStrength: 0.026, ao: { radius: 0.016, amplitude: 0.45 },
+    normalStrength: 0.040, ao: { radius: 0.016, amplitude: 0.45 },
     physical: { sheen: 0.85, sheenRoughness: 0.62 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {

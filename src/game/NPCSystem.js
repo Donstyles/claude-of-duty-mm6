@@ -392,9 +392,15 @@ export class NPCSystem extends System {
     const lean = (x, y, z) => -hunch * (y / Math.max(headY, 0.01)) * 0.5;
 
     // Folds are per-person: the same robe hangs differently on two people.
-    const folds = 6 + Math.floor(rng.range(0, 3));
+    const folds = 7 + Math.floor(rng.range(0, 4));
     const phase = rng.range(0, Math.PI * 2);
-    const foldAmp = DRESS.metal ? 0.020 : 0.055;
+    // Drapery amplitude. 0.055 gave a robe with a gentle ripple in it, which
+    // measured as a smooth surface: local detail on the cloth came out at a
+    // sixth of what the brick wall behind it managed. Real hanging wool folds
+    // three to six centimetres deep, and at 0.10 of a 30 cm radius that is what
+    // this is — the self-shading across those folds is the single largest
+    // source of legible variation on a garment at any distance.
+    const foldAmp = DRESS.metal ? 0.028 : 0.100;
 
     /**
      * Where a garment is worn. A tiling map cannot know where the hem is, so
@@ -407,7 +413,7 @@ export class NPCSystem extends System {
       m *= 1 - 0.24 * sstep(0.09, 0.0, t);          // hem drags in the mud
       m *= 1 + 0.16 * (sstep(0.06, 0.20, t) * sstep(0.38, 0.18, t));  // bleached above it
       m *= 1 + 0.11 * sstep(0.74, 1.0, t);          // shoulders rubbed pale
-      m *= 1 + 0.14 * foldAt(Math.atan2(z, x), folds, phase);
+      m *= 1 + 0.20 * foldAt(Math.atan2(z, x), folds, phase);
       return m;
     };
     const flat = (v) => () => v;
@@ -434,7 +440,7 @@ export class NPCSystem extends System {
       // A floor-length robe carries far more cloth at the hem than a knee-length
       // tunic does, so the flare follows the hemline rather than being constant.
       const rHem = (0.255 + 0.10 * DRESS.skirt) * W, rWaist = 0.205 * W;
-      const skirt = lathe(hemY, waistY, rHem, rWaist, 16, 7);
+      const skirt = lathe(hemY, waistY, rHem, rWaist, 22, 8);
       flute(skirt, folds, foldAmp, phase);
       // A person is an oval in plan, not a circle. This single scale is most of
       // what stopped the figure reading as a bollard from behind.
@@ -445,7 +451,7 @@ export class NPCSystem extends System {
     }
 
     {
-      const torso = lathe(waistY, shoulderY, 0.205 * W, 0.215 * W, 16, 4);
+      const torso = lathe(waistY, shoulderY, 0.205 * W, 0.215 * W, 22, 4);
       flute(torso, folds, foldAmp * 0.55, phase);
       torso.scale(1.08, 1, 0.84);
       torso.translate(0, 0, lean(0, shoulderY, 0));
@@ -622,11 +628,11 @@ export class NPCSystem extends System {
     } else {
       // 0.42π stops the cap at 76° from the crown — above the eye line, which
       // is at 86°. Anything past 80° puts hair over the eyes.
-      const cap = new THREE.SphereGeometry(0.126, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.42);
+      const cap = new THREE.SphereGeometry(0.126, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.47);
       cap.scale(1.02, 1.10, 1.02);
       cap.translate(0, headY + 0.004, hz);
       // Hair wants its strands running down the head, so v is the short axis.
-      uvRepeat(cap, (2 * Math.PI * 0.126) / TILE['npc-hair'], (Math.PI * 0.055) / TILE['npc-hair']);
+      uvRepeat(cap, (2 * Math.PI * 0.126) / TILE['npc-hair'], (Math.PI * 0.062) / TILE['npc-hair']);
       push(paint(cap, hairCol), hair);
 
       // The back and sides of the mass hang lower than the crown does — that

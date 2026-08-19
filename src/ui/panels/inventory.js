@@ -134,8 +134,8 @@ export class InventoryPanel extends Panel {
     this.items);
     body.appendChild(this.pack);
 
-    // A party member's proper name, which STYLE.md §2 gives its own colour —
-    // it is not a control, so it is not gold.
+    // A party member's proper name. It is not a control, so it is not gold —
+    // see ./inventory.css for what colour it is instead and why.
     this.ownerEl = el('div', { className: 'mm-inv-owner' });
     tooltip.attach(this.ownerEl, () => tipMarkup({
       title: 'Whose pack this is',

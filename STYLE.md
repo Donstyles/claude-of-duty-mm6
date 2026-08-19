@@ -474,9 +474,64 @@ Written down here so the owner can pick them up.
 
 1. **`src/ui/ui.panels.css`** — the five venue sidebars are five near-identical
    components under four class prefixes (`mm-npc-*`, `mm-svc-*`, `mm-guild-*`,
-   `mm-train-*`). They should collapse to one `mm-venue-side` here. The
-   measurements in §3 and §8 are already identical across all five, so the
-   collapse is mechanical.
+   `mm-train-*`). They should collapse to one `mm-venue-side` here.
+
+   **Deliberately deferred, not dropped.** By the time the five were brought
+   into line the collapse bought maintainability and not one visible pixel —
+   they already read as one family in a contact sheet. Against that it touches
+   five screens that pass 22/22 doors, so it is the wrong thing to spend risk
+   on while anything visible is still outstanding. Do it when the branch is
+   quiet, in one commit, with `npm run check -- --full` either side.
+
+   Everything needed is here. Left column is the role in the collapsed
+   component; the rest is what each file calls it today.
+
+   | role | shop | services | guild | train | dialogue |
+   | --- | --- | --- | --- | --- | --- |
+   | root | `.mm-npc-side.mm-shop-side` | `.mm-svc-side` | `.mm-guild-side` | `.mm-train-side` | `.mm-npc-side` › `.mm-npc-board` |
+   | sign | `.mm-venue` | `.mm-svc-title` | *(viewport head)* | *(viewport head)* | `.mm-venue` |
+   | portrait | `.mm-npc-portrait` | `.mm-svc-portrait` | `.mm-guild-portrait` | `.mm-train-portrait` | `.mm-npc-portrait` |
+   | name | `.mm-npc-name` | `.mm-svc-name` | `.mm-guild-master` | `.mm-train-trainer` | `.mm-npc-name` |
+   | role | `.mm-npc-role` | `.mm-svc-role` | `.mm-guild-role` | `.mm-train-role` | `.mm-npc-trade` |
+   | numbers | — | — | `.mm-guild-account` › `-who` | `.mm-train-account` › `-who` | — |
+   | list | `.mm-npc-options` | `.mm-svc-options` | `.mm-guild-options` | `.mm-train-options` | `.mm-npc-options` |
+   | action | `.mm-npc-option` | `.mm-svc-option` | `.mm-guild-option` | `.mm-train-option` | `.mm-npc-option` |
+   | exit | `.mm-npc-exit` | `.mm-svc-exit` | `.mm-guild-exit` | `.mm-train-exit` | `.mm-npc-exit` |
+   | caption | `.mm-venue-say` | `.mm-venue-say` | `.mm-guild-notice` › `-text` | `.mm-train-notice` › `-text` | `.mm-talk-say` › `.mm-talk-line` |
+
+   The measurements, identical across all five, in native `u`:
+
+   - root — `position: absolute; inset: 0; display: flex; flex-direction:
+     column; background: transparent;` padding `4 8 38…44`
+   - portrait — `60 × 74`, `margin: 6…8 auto 0`, bevel `0 0 0 1u #10120f,
+     0 0 0 3u #75806f, 0 0 0 4u #23261f, 0 2u 5u rgba(0,0,0,.55)`
+   - name — `14/17`, `var(--name)`, centred, `letter-spacing: 0`
+   - role — `12/15` italic, `var(--ink)`, centred
+   - numbers — `margin-top: 12`, `padding: 3 0`; `.mm-row` `12/15` at
+     `padding: 0 6u`, label `var(--dim)`, subject `12/16` italic `var(--name)`
+   - list — `flex: 1 1 auto; min-height: 0; overflow: visible;
+     margin-top: 12…14; justify-content: center; gap: 9`
+   - action — `16/19` italic `var(--ink)`, `max-width: 124…130`; `:hover` and
+     `.is-current` → `var(--gold)`
+   - exit — absolute, `left: 50%; bottom: 6u; transform: translateX(-50%)`
+   - caption — `bottom: 0`, `padding: 26 14 10`, the §4 four-stop gradient,
+     text `12/15` italic `var(--ink)` with `var(--shadow), 0 0 6u rgba(0,0,0,.9)`
+
+   **Three things that will bite whoever does it:**
+
+   1. **`overflow: visible` on the list is load-bearing, not sloppy.** The guild
+      grows a fourth action once you leave the hall view, and the column then
+      exceeds 352u by a few pixels. Clipping an action is unacceptable; a
+      tighter gap above the brass oval is not. Do not tidy it to `hidden`.
+   2. **Dialogue is the odd one and must stay odd.** Its sidebar is marble with
+      a plank board inset, not a slab, and the sign sits on bare marble *above*
+      the board. Same component, different ground — and it is the ground that
+      failed §6 at 3.25:1 while the other four passed. Measure the board after
+      the collapse; never assume it inherited.
+   3. **The numbers slot is optional, not universal.** Guild and training hall
+      have one; shop, services and dialogue cannot. The shop's sign, portrait,
+      identity, five actions and oval already fill 352u at the ladder's sizes,
+      and the ladder should win over the table.
 2. **The leftover type stacks.** `--face` now exists and Pagella is bundled, but
    four hard-coded stacks still bypass it and should become `var(--face)`:
 
