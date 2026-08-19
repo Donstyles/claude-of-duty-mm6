@@ -137,8 +137,36 @@ export class Engine {
       _fpsAccum: 0, _fpsFrames: 0,
     };
 
-    this._onResize = this._handleResize.bind(this);
+    /**
+     * Resizing on a phone is not the same problem as resizing a window.
+     *
+     * Two things go wrong that never go wrong on a desktop:
+     *
+     *  - **iOS reports stale dimensions during a rotate.** The `resize` that
+     *    arrives with `orientationchange` frequently still carries the *old*
+     *    width and height, so measuring once leaves the canvas the wrong shape
+     *    until something else happens to resize it. The fix is to re-measure a
+     *    few times over the following half second rather than trust the first
+     *    number.
+     *  - **The viewport is not the window.** Outside the installed app, mobile
+     *    browsers overlay a URL bar that comes and goes, and `visualViewport`
+     *    is the only thing that reports the space actually available. In the
+     *    installed app there is no bar and the two agree, which is exactly why
+     *    reading `visualViewport` when it exists is safe.
+     *
+     * Everything is coalesced into one rAF so a burst of events costs one
+     * resize, not eight.
+     */
+    this._onResize = () => this._scheduleResize();
     window.addEventListener('resize', this._onResize);
+    window.addEventListener('orientationchange', this._onOrientation = () => {
+      // The rotate is not finished when the event fires. Re-measure across the
+      // settle rather than once, and let the coalescer drop the duplicates.
+      for (const ms of [0, 60, 160, 320, 520]) setTimeout(this._onResize, ms);
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this._onResize);
+    }
 
     /** Render hook — the post-processing system replaces this with its pipeline. */
     this.renderPipeline = null;
@@ -303,9 +331,25 @@ export class Engine {
     }
   }
 
+  /** Coalesce a burst of resize events into one measure on the next frame. */
+  _scheduleResize() {
+    if (this._resizePending) return;
+    this._resizePending = requestAnimationFrame(() => {
+      this._resizePending = 0;
+      this._handleResize();
+    });
+  }
+
   _handleResize() {
-    const w = window.innerWidth;
-    const h = Math.max(1, window.innerHeight);
+    // `visualViewport` is the space actually available; `innerWidth/Height`
+    // includes anything a mobile browser is overlaying. They agree in the
+    // installed app, and differ under a URL bar.
+    const vv = window.visualViewport;
+    const w = Math.max(1, Math.round(vv?.width ?? window.innerWidth));
+    const h = Math.max(1, Math.round(vv?.height ?? window.innerHeight));
+    if (w === this._lastW && h === this._lastH) return;
+    this._lastW = w;
+    this._lastH = h;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.config.pixelRatioCap));
@@ -320,6 +364,9 @@ export class Engine {
   dispose() {
     this.stop();
     window.removeEventListener('resize', this._onResize);
+    window.removeEventListener('orientationchange', this._onOrientation);
+    window.visualViewport?.removeEventListener('resize', this._onResize);
+    if (this._resizePending) cancelAnimationFrame(this._resizePending);
     for (const sys of [...this._ordered].reverse()) {
       try { sys.dispose(); } catch { /* teardown is best-effort */ }
     }

@@ -1,0 +1,218 @@
+/* ==========================================================================
+   Touch controls — the phone-only overlay owned by src/core/TouchInput.js.
+
+   Everything here is scoped under `#tc-root`, which exists only after a touch
+   has been seen and never under `?capture=1`. That is stronger than the
+   per-panel `[data-panel=]` discipline of STYLE.md §11 and for the same reason:
+   this file must be provably unable to reach any other screen, by inspection,
+   from inside itself.
+
+   Palette is the chrome's own — brass on near-black — because these sit on top
+   of the 3-D view and have to read against a noon sky and a dark dungeon
+   alike. Nothing here uses `--u`: `--u` scales the MM6 frame to keep its 640x480
+   proportions, and a control sized that way would shrink below the thumb it is
+   drawn for. Touch targets are quoted in real CSS pixels and the smallest is 46.
+   ========================================================================== */
+
+#tc-root {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  /* The root is inert and only the live controls take pointer events, or this
+     layer would eat the taps meant for the ovals and the party cells beneath
+     it. `#ui-root > *` sets `auto`, so this has to say otherwise. */
+  pointer-events: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  contain: layout style;
+}
+
+#tc-root.is-hidden { display: none; }
+
+/* The play field: the 3-D view, measured from the chrome by TouchInput and
+   published as these four insets. Controls never leave it — the sidebar and
+   the party bar are already full of buttons. */
+#tc-root .tc-field {
+  position: absolute;
+  left: var(--pf-l, 0px);
+  top: var(--pf-t, 0px);
+  right: var(--pf-r, 0px);
+  bottom: var(--pf-b, 0px);
+  pointer-events: none;
+
+  /* Only the part of the safe area the chrome does not already cover. Adding
+     the raw inset would shove the cluster 59px inboard of a sidebar that is
+     already 155px wide, for a notch nowhere near it. */
+  --pad-l: max(0px, calc(var(--safe-l, 0px) - var(--pf-l, 0px)));
+  --pad-t: max(0px, calc(var(--safe-t, 0px) - var(--pf-t, 0px)));
+  --pad-r: max(0px, calc(var(--safe-r, 0px) - var(--pf-r, 0px)));
+  --pad-b: max(0px, calc(var(--safe-b, 0px) - var(--pf-b, 0px)));
+}
+
+/* ── the thumbstick ───────────────────────────────────────────────────────── */
+
+/* Positioned by TouchInput at the point the thumb landed, so `left`/`top` are
+   its centre and everything below is drawn around that. It is allowed to clip
+   at the edge of the view: shifting it inboard to keep the ring whole would
+   move the stick off the thumb, which is the one thing a floating stick exists
+   to prevent. */
+#tc-root .tc-stick {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+}
+
+#tc-root .tc-stick.is-on { opacity: 1; }
+
+#tc-root .tc-ring {
+  position: absolute;
+  left: -54px;
+  top: -54px;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(216, 178, 92, 0.55);
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(10, 8, 6, 0.10) 0 42%,
+      rgba(10, 8, 6, 0.34) 68%,
+      rgba(10, 8, 6, 0.06) 100%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+#tc-root .tc-knob {
+  position: absolute;
+  left: -21px;
+  top: -21px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(244, 217, 138, 0.85);
+  background:
+    radial-gradient(circle at 38% 32%, #f4d98a 0%, #d8b25c 44%, #6b4a1c 100%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  will-change: transform;
+}
+
+/* ── buttons ──────────────────────────────────────────────────────────────── */
+
+#tc-root .tc-btn {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  /* Two rings: a dark one so the control has an edge against a bright sky, and
+     a brass one inside it so it still has an edge against a dark dungeon. */
+  border: 1.5px solid rgba(216, 178, 92, 0.72);
+  color: #f4d98a;
+  background:
+    radial-gradient(circle at 50% 34%,
+      rgba(58, 44, 26, 0.86) 0%,
+      rgba(16, 13, 9, 0.88) 72%,
+      rgba(8, 6, 4, 0.9) 100%);
+  box-shadow:
+    0 0 0 1.5px rgba(0, 0, 0, 0.55),
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(244, 217, 138, 0.28);
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.06s ease-out, background-color 0.1s ease-out;
+}
+
+#tc-root .tc-btn > svg { display: block; }
+
+#tc-root .tc-btn.is-down {
+  transform: scale(0.92);
+  background-color: rgba(216, 178, 92, 0.3);
+}
+
+/* Something is in range. The lit state is the answer to the tap that does
+   nothing: the player can see, before touching anything, whether there is a
+   door under the reticle. */
+#tc-root .tc-btn.is-live {
+  border-color: #ffe9a8;
+  color: #fff6d0;
+  box-shadow:
+    0 0 0 1.5px rgba(0, 0, 0, 0.55),
+    0 0 14px rgba(244, 217, 138, 0.55),
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 246, 208, 0.4);
+}
+
+/* The right thumb's arc, anchored to the bottom-right of the 3-D view: the
+   interact key large and closest to the thumb because it is the one the game's
+   core loop is made of, attack and jump within a roll of the same thumb. */
+#tc-root .tc-cluster,
+#tc-root .tc-modes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#tc-root .tc-btn[data-action='interact'] {
+  width: 68px;
+  height: 68px;
+  right: calc(var(--pad-r) + 14px);
+  bottom: calc(var(--pad-b) + 14px);
+}
+
+#tc-root .tc-btn[data-action='attack'] {
+  width: 56px;
+  height: 56px;
+  right: calc(var(--pad-r) + 92px);
+  bottom: calc(var(--pad-b) + 22px);
+}
+
+#tc-root .tc-btn[data-action='jump'] {
+  width: 56px;
+  height: 56px;
+  right: calc(var(--pad-r) + 22px);
+  bottom: calc(var(--pad-b) + 92px);
+}
+
+/* The two the chrome has no button for at all. Top corner rather than the
+   thumb arc: they change mode or open a screen, and neither is worth a
+   mis-tap during a fight. */
+#tc-root .tc-btn[data-action='turnBased'] {
+  width: 46px;
+  height: 46px;
+  right: calc(var(--pad-r) + 14px);
+  top: calc(var(--pad-t) + 14px);
+}
+
+#tc-root .tc-btn[data-action='inventory'] {
+  width: 46px;
+  height: 46px;
+  right: calc(var(--pad-r) + 68px);
+  top: calc(var(--pad-t) + 14px);
+}
+
+/* A very short view — a squat window, or a phone whose chrome has eaten most
+   of the height — cannot carry the full arc. Shrink rather than overlap, and
+   never below the 46px that a thumb can actually hit. */
+@media (max-height: 380px) {
+  #tc-root .tc-btn[data-action='interact'] { width: 58px; height: 58px; }
+  #tc-root .tc-btn[data-action='attack'],
+  #tc-root .tc-btn[data-action='jump'] { width: 48px; height: 48px; }
+  #tc-root .tc-btn[data-action='attack'] { right: calc(var(--pad-r) + 80px); }
+  #tc-root .tc-btn[data-action='jump'] { bottom: calc(var(--pad-b) + 80px); }
+}
+
+/* A device that reports a fine pointer never sees any of this — the overlay is
+   not built at all — but a hybrid laptop with a touchscreen can arm it, and
+   there the hover state is worth having. */
+@media (hover: hover) {
+  #tc-root .tc-btn:hover { border-color: #f4d98a; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tc-root .tc-stick,
+  #tc-root .tc-btn { transition: none; }
+}

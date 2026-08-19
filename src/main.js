@@ -83,6 +83,29 @@ async function main() {
     shadows: params.get('shadows') !== '0',
   });
 
+  // Android, launched from the browser rather than the home screen: take
+  // fullscreen at the first touch.
+  //
+  // Installed from the manifest, `display: fullscreen` already did this and
+  // the call is a no-op. Opened as a normal page it is the difference between
+  // borderless and a URL bar eating the top of the sky. It must be inside a
+  // user gesture — a request at load is rejected — and it is deliberately not
+  // retried, because a browser that refused once (every iOS build, which has
+  // no Fullscreen API on iPhone at all) will refuse forever, and the home
+  // screen is the answer there.
+  if (!params.has('capture')) {
+    const goFullscreen = () => {
+      const el = document.documentElement;
+      const req = el.requestFullscreen ?? el.webkitRequestFullscreen;
+      if (req && !document.fullscreenElement) {
+        try { req.call(el, { navigationUI: 'hide' })?.catch?.(() => {}); } catch { /* refused */ }
+      }
+      // Landscape where the API exists; Android honours it, iOS has no lock.
+      try { screen.orientation?.lock?.('landscape')?.catch?.(() => {}); } catch { /* refused */ }
+    };
+    window.addEventListener('pointerdown', goFullscreen, { once: true, passive: true });
+  }
+
   // Register the offline shell, but never during a capture.
   //
   // A service worker serving a cached build under a screenshot run is how a
