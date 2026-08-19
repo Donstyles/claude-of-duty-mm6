@@ -89,7 +89,12 @@
   /* Seven roles, one job each — STYLE.md §2. A colour that means two things
    * means nothing, and the blind review caught gold doing four. */
   --ink: #ffffff;
-  --name: #5fbcff;
+  /* Lifted from #5fbcff, which cleared §6 on the venue timber (7.47:1) and
+   * failed it on panel granite (3.91:1) — and §2 asks the same token to carry a
+   * person's name on both. #8fd0ff clears both with margin: granite 4.87:1,
+   * timber 9.32:1. No blue clears on pale marble at any lightness (this one
+   * manages 1.75:1), which is why a name must never be put there. */
+  --name: #8fd0ff;
   --gold: #ffff9c;
   --gold-deep: #e7cf21;
   --up: #00fe00;
@@ -116,9 +121,29 @@
 }
 
 .mm-ui * { box-sizing: border-box; }
-/* `:where` keeps the reset at zero specificity so a component rule further down
-   can still give a button a background, a padding or a border. */
-.mm-ui :where(button) {
+
+/* The whole selector goes inside `:where`, and that is the point.
+ *
+ * This was `.mm-ui :where(button)`, written to be a zero-specificity reset, and
+ * it is not one: `:where()` zeroes only what is *inside* it, so the `.mm-ui`
+ * outside it still counts and the rule lands at (0,1,0) — a **tie** with any
+ * single-class component rule, resolved by whichever the bundler emitted last.
+ *
+ * A reset that ties with the rules it is meant to yield to silently wins about
+ * half the time. That is what happened to the inventory's `Arrange` control: the
+ * panel styled it, the reset took the styling back, and the computed style came
+ * out `background: rgba(0,0,0,0); border: 0px none; font-style: normal` with the
+ * font-size 27% larger than declared. A blind reviewer called it "a bare white
+ * rectangle with a 1px black border… the one element in sixteen images that
+ * looks like it was never designed at all" — which is exactly what an unstyled
+ * UA button overflowing its box looks like. Nobody suspected the reset.
+ *
+ * `:where(.mm-ui button)` is (0,0,0) for real, so every component rule wins
+ * regardless of emission order. Others were latently affected: `create.css`
+ * (`.mm-create-arrow`, `-sex-opt`, `-roll`, `-step`, `-tool`) and `services.css`
+ * (`.mm-svc-chip`) all style `<button>` through single-class selectors.
+ */
+:where(.mm-ui button) {
   font: inherit;
   color: inherit;
   background: none;

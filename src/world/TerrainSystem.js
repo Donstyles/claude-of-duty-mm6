@@ -52,28 +52,40 @@ const LAYER_SCALE = { grass: 4.0, dirt: 4.5, rock: 8.0, sand: 4.0 };
  * and 23% dirt where the reference frame is 41% and 44% — which is a splat
  * question (see TerrainGen.computeSplat), not a colour one.
  *
- * Checked against MM6's own swatches rather than against the aggregate, which
- * is what keeps this honest: with these tints our near-field grass renders at
- * [92, 116, 54] and our dirt at [122, 68, 39], against REFERENCE §4.1's
- * canonical `#395129` grass and `#523021` dirt scaled into our exposure —
- * [81, 115, 58] and [116, 68, 47]. Green and red land within a few percent on
- * both materials. Blue runs about 15% light in both, which is the one residual
- * the tints correct here.
+ * These are aimed at MM6's own swatches rather than at the aggregate, which is
+ * what keeps them honest. Scaled into our exposure, REFERENCE §4.1's canonical
+ * `#395129` grass is [81, 115, 58] and its `#523021` dirt is [116, 68, 47];
+ * those are the targets, and the multipliers here are whatever it took to land
+ * the rendered result on them given everything else in the pipeline.
  *
- * An earlier pass tried to derive the dirt correction from the *distant*
- * terrain-vista frame, where our dirt population measured luminance 65 against
- * the reference's 89, and arrived at a 1.6× red multiplier. That was an
- * artefact and it is worth recording: dirt is placed on slopes, slopes are the
- * surfaces angled away from the sun, so a dirt population sampled by hue is
- * systematically the shadowed half of the frame. Measuring the same material
- * near-field and head-on showed it was already on canon, and the 1.6× would
- * have pushed it to [162, 76, 49] — a bright terracotta nothing in MM6 has.
+ * Treat the numbers as calibration against the current light rig and
+ * LAYER_PIVOT, not as meaningful on their own — they were re-derived whenever
+ * either of those moved.
+ *
+ * Two things learned the hard way, recorded so they are not repeated:
+ *
+ *  - **Do not derive a dirt correction from a hue-split population.** Dirt is
+ *    placed on slopes and slopes are the surfaces angled away from the sun, so
+ *    sampling "reddish pixels" in a wide shot returns the shadowed half of the
+ *    frame. Doing that once suggested our dirt was 35% too dark; measuring the
+ *    same material near-field and head-on showed it was already close to
+ *    canon, and acting on the first reading produced a bright terracotta
+ *    nothing in MM6 has. Check a material where the sun actually hits it.
+ *
+ *  - **Blue is the one place canon and the reference frame disagree.** MM6's
+ *    `#395129` grass has a blue-to-green ratio of 0.506, and our grass rendered
+ *    at 0.500 — on the swatch. The reference *frame's* grass population
+ *    measures 0.666, markedly bluer than the documented palette, most likely
+ *    because its foreground is a cooler grass variant. Matching the frame
+ *    exactly would take us off canon; matching the swatch leaves that frame's
+ *    aggregate blue about 20% away. These land between the two, nearer the
+ *    swatch, and the residual is a known and deliberate miss.
  */
 const LAYER_TINT = {
-  grass: [0.92, 1.00, 1.05],
-  dirt: [1.26, 0.90, 1.24],
-  rock: [1.02, 1.00, 1.02],
-  sand: [1.08, 1.00, 0.96],
+  grass: [0.92, 1.00, 1.32],
+  dirt: [1.60, 1.00, 1.62],
+  rock: [1.02, 1.00, 1.10],
+  sand: [1.08, 1.00, 1.04],
 };
 
 /**
@@ -113,7 +125,7 @@ const LAYER_TINT = {
  * negative, and it expands proportionally, so a texture's bright grain and its
  * dark grain open up together instead of one end clipping first.
  */
-const LAYER_CONTRAST = { grass: 3.10, dirt: 2.60, rock: 1.70, sand: 1.55 };
+const LAYER_CONTRAST = { grass: 2.70, dirt: 2.60, rock: 1.70, sand: 1.55 };
 
 /**
  * Each layer's mean linear albedo *luminance* — what the curve rotates about.
@@ -556,11 +568,32 @@ export class TerrainSystem extends System {
     const warm = 0.5 + 0.5 * Math.sin(wx * 0.0032 + 1.3) * Math.cos(wz * 0.0027 - 0.4);
     // Sun-bleached on the tops, cooler and greener in the hollows.
     const alt = Math.min(1, Math.max(0, (h - 10) / 140));
-    const v = fine * 0.055 + mid * 0.115 + broad * 0.085 + region * 0.06;
+
+    // Amplitudes, and why they are what they are.
+    //
+    // Independent sines sum to a standard deviation of sqrt(Σa²/2), so this
+    // term's spread is arithmetic rather than a matter of taste. At the
+    // previous amplitudes that came to 0.116 on a base of 0.86 — 13.5% — and
+    // rendered grass measured a relative standard deviation of 13.4%. The two
+    // agreeing to a tenth of a point is the finding: **this term is where
+    // essentially all of our grass's value variation comes from.** The albedo
+    // texture contributes almost none of its own, which is why raising
+    // LAYER_CONTRAST for grass from 2.0 through 3.1 moved its relative spread
+    // by well under a point while the same treatment visibly widened the dirt.
+    //
+    // The reference's grass sits at 28% relative, so these are scaled to put
+    // the sum near 0.20 — not the full 0.24 that would match it exactly,
+    // because the worst case is the sum of all four and pushing for the last
+    // few points starts producing patches dark enough to read as shadow. The
+    // clamp is a guard on that tail, not a working part of the range.
+    const v = fine * 0.094 + mid * 0.196 + broad * 0.145 + region * 0.102;
+    const lo = 0.30;
+    const hi = 1.55;
+    const cl = (x) => (x < lo ? lo : x > hi ? hi : x);
     return [
-      0.84 + v + warm * 0.12 + alt * 0.07,
-      0.86 + v * 0.92 + warm * 0.06,
-      0.78 + v * 0.86 - warm * 0.05 + alt * 0.09,
+      cl(0.84 + v + warm * 0.12 + alt * 0.07),
+      cl(0.86 + v * 0.92 + warm * 0.06),
+      cl(0.78 + v * 0.86 - warm * 0.05 + alt * 0.09),
     ];
   }
 

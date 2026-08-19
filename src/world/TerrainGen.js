@@ -564,8 +564,8 @@ function computeSplat(data, perm) {
       // grassed dome and erode on the flanks.
       const dirt = clamp(
         data.road[i] * 1.25 +
-        smoothstep(0.19, 0.42, slope) * 0.60 +
-        Math.max(0, n) * 0.36,
+        smoothstep(0.19, 0.42, slope) * 0.66 +
+        Math.max(0, n) * 0.42,
         0, 1,
       ) * (1 - rock) * (1 - sand);
       const grass = clamp(1 - rock - sand - dirt, 0, 1);

@@ -517,9 +517,12 @@ export class NPCSystem extends System {
 
     if (DRESS.shoulder > 0) {
       for (const sgn of [-1, 1]) {
-        const p = new THREE.SphereGeometry(0.105 * W, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2);
-        p.scale(1, 0.78, 1);
-        p.translate(sgn * 0.248 * W, shoulderY - 0.040, lean(0, shoulderY, 0));
+        // Flatter and longer front-to-back than a hemisphere: a pauldron is a
+        // shaped plate lying over the shoulder, and a true dome reads as a
+        // brass mushroom sitting on one.
+        const p = new THREE.SphereGeometry(0.108 * W, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2);
+        p.scale(0.94, 0.50, 1.18);
+        p.translate(sgn * 0.246 * W, shoulderY - 0.030, lean(0, shoulderY, 0));
         uvRepeat(p, (2 * Math.PI * 0.105 * W) / TILE.metal, (0.16 * W) / TILE.metal);
         push(paint(p, trimCol), metal);
       }
@@ -947,8 +950,12 @@ export class NPCSystem extends System {
   }
 
   dispose() {
+    // Geometry only. Every material a townsperson wears belongs to the shared
+    // character library and is very likely still on someone else's back, so
+    // disposing them here would blank the next town's population.
     this.group?.traverse((o) => o.geometry?.dispose?.());
     this.group?.parent?.remove(this.group);
     this.npcs.length = 0;
+    this.mats = null;
   }
 }

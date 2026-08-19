@@ -137,6 +137,13 @@
    sat at 1.25:1 where the original reaches 1.61:1. The original buys that back
    the same way it letters everything else: a pale catch along the lit edge of
    the glyph, which lifts the letterform without desaturating the red. */
+/* Seven items in a two-column grid leaves the seventh alone in the left cell
+ * with a hole beside it, and the hole falls next to the one destructive action
+ * on the screen. A blind reviewer called it out and it is the last of its
+ * complaints standing. Spanning both columns closes the hole, squares the block
+ * off, and — because it is now the only full-width plaque — gives Quit a
+ * position that reads as deliberate rather than left over. */
+.mm-panel[data-panel='menu'] .mm-menu-item.is-quit { grid-column: 1 / -1; }
 .mm-panel[data-panel='menu'] .mm-menu-item.is-quit { color: #ff5a44; }
 .mm-panel[data-panel='menu'] .mm-menu-item.is-quit:hover { color: #ff7a62; }
 .mm-panel[data-panel='menu'] .mm-menu-item small {

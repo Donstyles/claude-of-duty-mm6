@@ -98,7 +98,7 @@ things means nothing; the review found gold doing four.
 | token | value | its one job |
 | --- | --- | --- |
 | `--ink` | `#ffffff` | body text, and every control at rest |
-| `--name` | `#5fbcff` | **a person's proper name** — the NPC you are dealing with, and the party member a block is about |
+| `--name` | `#8fd0ff` | **a person's proper name** — the NPC you are dealing with, and the party member a block is about |
 | `--gold` | `#ffff9c` | **the live control** — hover, and the option you are currently inside |
 | `--gold-deep` | `#e7cf21` | **money** — any figure denominated in gold, and nothing else |
 | `--up` | `#00fe00` | a figure **better** than its baseline, or a condition met |
@@ -120,6 +120,20 @@ Consequences worth spelling out, because each one was a live conflict:
   tree; `--azure` survives only as `var(--name)`, a bridge for the six files
   that still reference it. Do not reach for `--azure` in new work, and do not
   put `#109AEF` back.
+- **`--name` had to be lifted twice, and the second time is instructive.** At
+  `#5fbcff` it cleared on venue timber (7.47:1) and failed on panel granite
+  (3.91:1) — and this table asks one token to carry a person's name on both.
+  A rule that cannot hold on every ground it is written for is not a rule, so
+  the token moved rather than the rule gaining an exception. `#8fd0ff` clears
+  both with margin: granite **4.87:1**, timber **9.32:1**.
+- **No blue clears §6 on pale marble at any lightness.** `--name` manages
+  1.75:1 there, and lifting it far enough to clear would stop it being blue. So
+  a person's name never goes on marble. That is not a preference — it is why
+  the shop counter's whole sidebar had to move to timber rather than have its
+  ink recoloured.
+- A screen's **title** takes `--ink` even when it contains a name (§3a). The
+  party member at the head of their own sheet is a heading, not an identity;
+  the distinction is who is being addressed, not whose name appears.
 
 ---
 
@@ -249,6 +263,30 @@ speaker.
 | any control the player must be able to read and click | **4.5:1** |
 | body text, labels, values | **4.5:1** |
 | decorative or redundant text (a motto, a watermark) | 3:1 |
+| outlined display type (see below) | measure the lobes separately |
+
+**The mass method does not work on outlined display type, and this rule was
+wrong as first written.** Applied literally to MM6's own menu it scores the
+reference at **1.44:1** and its logo at **1.92:1** — because averaging a bright
+glyph together with the hard black outline drawn around it lands the result near
+the ground whatever the design does. A method that fails the thing it is
+modelled on is measuring the wrong quantity.
+
+For type that carries a deliberate outline or hard shadow, measure the two lobes
+separately — the glyph against the ground, and the shadow against the ground —
+and compare each to the reference's own figures rather than to 4.5:1. Everything
+without an outline stays on the mass method, which is what caught the shop
+counter at 1.21:1 and is not in doubt.
+
+**One case genuinely cannot be fixed: red on stone.** Red is the darkest hue at
+full chroma, so against a stone ground at linear 0.224 no recognisably red ink
+reaches 4.5:1 — it would need ink at or below 0.011 (black) or at or above 1.18
+(impossible). MM6 has the identical problem and measures 1.61:1 on its own Quit.
+So `Quit` is red at `#ff5a44` and carried by its shadow, and that is accepted
+rather than worked around: meeting the floor literally would need a darker plate
+under one button alone, which breaks the single-slab reading the whole screen is
+built on. **Colour is never the only carrier of that meaning** — Quit is also
+the sole full-width plaque, positioned apart from the six.
 
 Measured as: mean luminance of every pixel the text disturbs — glyph,
 antialiased edge and its hard shadow — against the median luminance of the
