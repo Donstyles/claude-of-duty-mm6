@@ -49,6 +49,15 @@ export class CaptureSystem extends System {
         const shot = this.shots.get(name);
         if (!shot) throw new Error(`unknown shot "${name}" (have: ${[...this.shots.keys()].join(', ')})`);
 
+        // Close whatever the last shot left open. Only `ui-hud` used to do
+        // this for itself, so a run that photographed a screen and then a
+        // landscape got the screen again — three of sixteen world views in one
+        // review round were actually a leftover panel, and the comparison
+        // built on them was worthless. A shot that wants a panel opens it in
+        // its own `apply`.
+        ctx.events?.emit('ui:forcePanel', { id: null });
+        ctx.get('venue')?.leave?.({ silent: true });
+
         if (opts.time !== undefined) api.setTimeOfDay(opts.time);
         if (opts.weather !== undefined) api.setWeather(opts.weather);
 
