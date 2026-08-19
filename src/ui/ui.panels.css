@@ -17,6 +17,64 @@
      character cells     pitch 113
    ========================================================================== */
 
+/* ── The face ──────────────────────────────────────────────────────────────
+ *
+ * Bundled, not requested by name, and that distinction cost three rounds of
+ * review to learn.
+ *
+ * This file used to ask for `'Palatino Linotype', 'Book Antiqua', Palatino,
+ * Georgia, 'Times New Roman', serif`. None of those five exists in the capture
+ * environment — the only serifs installed are DejaVu, FreeSerif, Liberation and
+ * Charter — so every screenshot fell through the whole stack to generic
+ * `serif`, which resolves to DejaVu Serif: wider, larger on the body, and with
+ * a *synthesised* oblique instead of a drawn italic.
+ *
+ * Roughly half of this interface is italic — every option, label, value and
+ * caption — so that was not a subtle substitution. It also sent a blind
+ * reviewer chasing "~0.15em tracking" and word spacing narrower than
+ * letterspacing on components that have no `letter-spacing` within reach of
+ * them. Those findings described the fallback, not our design.
+ *
+ * `--face` is a token rather than a literal so the whole interface moves
+ * together: see `public/fonts/README.md` for the subset and the licence.
+ */
+@font-face {
+  font-family: 'Pagella';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/pagella-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pagella';
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/pagella-400i.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pagella';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('/fonts/pagella-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pagella';
+  font-style: italic;
+  font-weight: 700;
+  font-display: block;
+  src: url('/fonts/pagella-700i.woff2') format('woff2');
+}
+
+/* `font-display: block` on purpose. A screenshot harness that photographs the
+ * fallback and then swaps is worse than one that waits — the whole point of
+ * bundling was to stop measuring a face we are not shipping. */
+
+:root {
+  --face: 'Pagella', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+}
+
 #ui-root .mm-ui {
   position: absolute;
   inset: 0;
@@ -38,7 +96,7 @@
   --bevel-dark: #0f1210;
   --bevel-light: #c4c0c4;
 
-  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, 'Times New Roman', serif;
+  font-family: var(--face);
   font-size: calc(var(--u) * 14);
   line-height: 1.18;
   color: var(--ink);

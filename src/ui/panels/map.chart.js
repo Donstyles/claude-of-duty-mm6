@@ -343,7 +343,7 @@ function drawTowns(panel, g, towns, toX, toZ, s) {
     }
 
     if (seen) {
-      g.font = `${Math.round(clamp(s / 26, 11, 19))}px 'Palatino Linotype', Georgia, serif`;
+      g.font = `${Math.round(clamp(s / 26, 11, 19))}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
       g.textAlign = 'center';
       g.lineWidth = 3;
       g.strokeStyle = 'rgba(232,224,200,0.9)';
@@ -361,7 +361,7 @@ function drawRegionLabels(panel, g, regions, toX, toZ, s) {
     // Above the province, clear of the town name that sits under its glyph.
     const x = toX(r.x);
     const z = toZ(r.z) - (r.kind === 'under' ? -r.rz * s - 14 : r.rz * s * 0.78);
-    g.font = `italic ${Math.round(clamp(s / 30, 10, 17))}px 'Palatino Linotype', Georgia, serif`;
+    g.font = `italic ${Math.round(clamp(s / 30, 10, 17))}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
     g.textAlign = 'center';
     g.lineWidth = 3;
     g.strokeStyle = 'rgba(236,228,206,0.85)';
@@ -437,7 +437,7 @@ function drawRose(g, W, H) {
     g.restore();
   }
   g.fillStyle = '#2E2418';
-  g.font = `${Math.round(r * 0.7)}px 'Palatino Linotype', Georgia, serif`;
+  g.font = `${Math.round(r * 0.7)}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
   g.textAlign = 'center';
   g.fillText('N', 0, -r * 1.32);
   g.restore();

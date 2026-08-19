@@ -12,7 +12,8 @@
     "check": "node tools/check.mjs"
   },
   "dependencies": {
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "typeface-tex-gyre-pagella": "^1.1.13"
   },
   "devDependencies": {
     "playwright": "^1.62.1",

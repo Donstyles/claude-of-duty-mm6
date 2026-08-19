@@ -575,7 +575,7 @@ export class MapPanel extends Panel {
         const label = venue ? ellipsis(venue.name, 22)
           : (kind === 'house' ? '' : VENUE_KINDS[kind]?.label ?? PLOT_LABEL[d.type] ?? '');
         if (!label) continue;
-        g.font = `${Math.round(clamp(s * 2.6, 10, 15))}px 'Palatino Linotype', Georgia, serif`;
+        g.font = `${Math.round(clamp(s * 2.6, 10, 15))}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
         g.textAlign = 'center';
         g.fillStyle = venue && venue.id === near?.id ? C.note : '#D8D2C6';
         g.strokeStyle = 'rgba(0,0,0,0.85)';
@@ -669,7 +669,7 @@ export class MapPanel extends Panel {
     g.lineTo(x + px, y + 4);
     g.stroke();
     g.fillStyle = '#E7DFD6';
-    g.font = "12px 'Palatino Linotype', Georgia, serif";
+    g.font = "12px 'Pagella', 'Palatino Linotype', Georgia, serif";
     g.textAlign = 'left';
     g.fillText(`${metres} m`, x + px + 8, y + 4);
   }
@@ -717,7 +717,7 @@ export class MapPanel extends Panel {
       g.lineWidth = 1;
       g.stroke();
       g.restore();
-      g.font = "12px 'Palatino Linotype', Georgia, serif";
+      g.font = "12px 'Pagella', 'Palatino Linotype', Georgia, serif";
       g.textAlign = 'left';
       g.lineWidth = 3;
       g.strokeStyle = 'rgba(0,0,0,0.85)';

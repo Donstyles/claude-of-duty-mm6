@@ -24,7 +24,8 @@ html, body {
   overflow: hidden;
   background: #000;
   color: var(--ink);
-  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  /* One token, declared with the @font-face rules in ui.panels.css. */
+  font-family: var(--face, 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif);
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
