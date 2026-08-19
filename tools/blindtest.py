@@ -63,6 +63,30 @@ def side_for(name):
     return hashlib.sha256(name.encode()).digest()[0] & 1
 
 
+def check_distinct(paths):
+    """Refuse to build a sheet out of duplicate captures.
+
+    Two differently-framed shots that come out byte-identical mean the capture
+    leaked — a panel stayed open over the viewport, so every frame photographed
+    the same overlay. This has now happened twice, and both times a reviewer
+    spent an hour judging images that could not tell us anything. It is one
+    hash per file to catch, so catch it here rather than in the verdict.
+    """
+    seen = {}
+    for p in paths:
+        with open(p, 'rb') as f:
+            digest = hashlib.sha256(f.read()).hexdigest()
+        seen.setdefault(digest, []).append(os.path.basename(p))
+    dupes = [names for names in seen.values() if len(names) > 1]
+    if dupes:
+        joined = '; '.join(', '.join(sorted(n)) for n in dupes)
+        raise SystemExit(
+            f'[blindtest] refusing to build: identical captures ({joined}).\n'
+            '            The capture leaked — a panel was left open over the '
+            'viewport.\n'
+            '            Re-shoot before pairing anything against the reference.')
+
+
 def fit(path, height):
     im = Image.open(path).convert('RGB')
     w, h = im.size
@@ -71,6 +95,10 @@ def fit(path, height):
 
 def build(ours_dir, out_dir, pairs):
     os.makedirs(out_dir, exist_ok=True)
+
+    present = [os.path.join(ours_dir, f'{s}.png') for s in sorted(pairs)]
+    check_distinct([p for p in present if os.path.exists(p)])
+
     key = {}
     made = []
     for screen, ref_name in sorted(pairs.items()):

@@ -49,14 +49,33 @@ export class CaptureSystem extends System {
         const shot = this.shots.get(name);
         if (!shot) throw new Error(`unknown shot "${name}" (have: ${[...this.shots.keys()].join(', ')})`);
 
-        // Close whatever the last shot left open. Only `ui-hud` used to do
-        // this for itself, so a run that photographed a screen and then a
-        // landscape got the screen again — three of sixteen world views in one
-        // review round were actually a leftover panel, and the comparison
-        // built on them was worthless. A shot that wants a panel opens it in
-        // its own `apply`.
+        // Return the world to a known state before framing the next shot.
+        //
+        // A capture run is the one place the game jumps between unrelated
+        // situations with no player in the loop to undo the last one, so every
+        // piece of state a shot enters, this has to leave. Two rounds of blind
+        // review were thrown away learning that, one layer at a time:
+        //
+        //  - The panel. Only `ui-hud` used to close an open screen, so a run
+        //    that photographed a shop and then a landscape photographed the
+        //    shop again. Three of sixteen world views were a painted interior.
+        //  - The dungeon. `DungeonSystem.enter` hides the sun, the sky fill and
+        //    the ambient floor so torchlight reads, and only `exit` puts them
+        //    back. The re-shoot that fixed the panel still ran the dungeon shot
+        //    before the outdoor ones, so the sun stayed switched off and 41% of
+        //    a nine-in-the-morning hillside came out at luminance 12. The sky
+        //    is a shader and ignores scene lights, so it stayed bright blue
+        //    over black ground — which reads as a grading choice, not a bug,
+        //    and that is exactly why it survived a round of review.
+        //
+        // A shot that wants a panel or a dungeon enters it in its own `apply`,
+        // which runs after this.
         ctx.events?.emit('ui:forcePanel', { id: null });
         ctx.get('venue')?.leave?.({ silent: true });
+        ctx.get('dungeon')?.exit?.(ctx);
+        // The message strip holds the last line until something replaces it, so
+        // a hillside was still announcing the vault the dungeon shot entered.
+        ctx.get('ui')?.hud?.setMessage?.('');
 
         if (opts.time !== undefined) api.setTimeOfDay(opts.time);
         if (opts.weather !== undefined) api.setWeather(opts.weather);

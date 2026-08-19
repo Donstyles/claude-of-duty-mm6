@@ -30,20 +30,48 @@ stills into unlabelled A/B sheets by `tools/blindtest.py`, and judged by
 reviewers who were not told which panel was ours and were told explicitly not
 to try to work it out.
 
-**Result on the twelve valid comparisons: we won eight, lost four.** Three
-more were void (see below) and one was compromised.
+Two reviewers judged the same sixteen sheets independently, without seeing each
+other's verdicts.
 
-### Two faults in the test itself
+**Reviewer one, on the twelve valid comparisons: we won eight, lost four.**
+**Reviewer two, on the thirteen it called: we won nine, lost four.** Three
+comparisons were void for both (see below) and one was compromised.
+
+The two agree on the four screens that matter most and disagree elsewhere,
+which is the useful part — where independent reviewers converge, the defect is
+real; where they split, it is taste.
+
+| Screen | Reviewer one | Reviewer two |
+| --- | --- | --- |
+| `ui-menu` | **loss** | **loss** |
+| `ui-spellbook` | **loss** | **loss** |
+| `ui-hud` | — | **loss** |
+| `ui-inventory` | — | **loss** |
+| `ui-quests` | **loss** | win |
+| `ui-rest` | **loss** | win |
+| `ui-skills` | win | win |
+| `ui-character`, `ui-dialogue`, `ui-guild`, `ui-train`, `ui-services`, `ui-shop-counter` | win | win |
+
+**Menu and spellbook lost to both.** Those are the two highest-confidence
+defects in the game and are being fixed first.
+
+### Three faults in the test itself
 
 1. **Three "world" comparisons were photographing a leftover panel.** The
    capture harness only closed an open screen for `ui-hud`, so a run that shot
    a screen and then a landscape shot the screen again. `town-square`,
-   `terrain-vista` and `dungeon-corridor` were all a painted interior. The
-   reviewer judged them as rooms, correctly, and every verdict built on them is
-   void. Fixed: `CaptureSystem.goto` now closes whatever the last shot left
-   open.
-2. **`ui-menu` prints both games' titles on screen**, so that pair could never
-   have been blind. The reviewer disclosed it rather than exploiting it, which
+   `terrain-vista` and `dungeon-corridor` were all the same painted interior —
+   byte-identical PNGs. Both reviewers judged them as rooms, correctly, and
+   every verdict built on them is void. Fixed: `CaptureSystem.goto` now closes
+   whatever the last shot left open.
+2. **The "corrected" re-shoot never happened.** `shots/round7/` was captured at
+   00:31; the harness fix landed at 00:45. The blind sheets were rebuilt from
+   the *same stale images*, and a third reviewer spent an hour judging them
+   before the duplicate checksums gave it away. **Always checksum a shot set
+   before building a sheet from it** — identical PNGs across differently-framed
+   shots mean the capture leaked, not that the scene is boring.
+3. **`ui-menu` prints both games' titles on screen**, so that pair could never
+   have been blind. Reviewer one disclosed it rather than exploiting it, which
    is the right behaviour, but the comparison is worth less than the others.
 
 ### What we lost, and why
@@ -78,11 +106,21 @@ more were void (see below) and one was compromised.
 - **The stained-glass hireling panes read as encaustic tile,** not glass: every
   pane sits at a similar mid-to-high value, so no pane is lit against a dark
   one. They are on every single screen.
-- **Our interiors and our exterior are two different games.** The painted
-  rooms are richly and directionally lit, with dirt and wear. The hillside has
-  no sun vector — a hill's near and far faces share one value — no texel
-  compression with distance, a hard blobby seam where grass meets earth, and
-  hard-edged clouds on a flat blue. Nothing bridges them.
+- ~~**Our interiors and our exterior are two different games.**~~ **Withdrawn —
+  this was never about our exterior.** The bullet used to read: no sun vector,
+  a hill's near and far faces sharing one value, no texel compression with
+  distance, a hard blobby seam where grass meets earth, hard-edged clouds on a
+  flat blue. Decoding the answer key afterwards showed our panel in that pair
+  was the leaked interior, so **every word of it describes MM6's terrain, not
+  ours** — faceted low-poly mesh, jagged texture cut, billboard trees, no
+  aerial perspective. It was one dispatch away from sending an agent to
+  reproduce the reference's own faults in our engine. Our exterior has not been
+  reviewed yet; `shots/round8w/` is the first capture that actually contains
+  it.
+
+  The general lesson, and it is the important one: **decode the key before
+  acting on a blind verdict.** A reviewer describing "panel A" is not
+  describing us until the key says so.
 
 ### What we won on, and should not lose
 
