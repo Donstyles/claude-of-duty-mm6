@@ -231,14 +231,53 @@ export class UISystem extends System {
    * The sidebar is sized from height (which keeps the automap arch, the book
    * spines and the ovals at their true aspect) and clamped so a very wide or a
    * very short window never lets the chrome eat the viewport.
+   *
+   * ── the floor, and why a phone does not get one ───────────────────────────
+   *
+   * On a mouse the floor is the flat `0.9` it has always been: a desktop window
+   * can be squashed to any silly height, the type has to stay readable, and if
+   * the frame stops fitting the answer is to drag the window bigger.
+   *
+   * A phone has no window to drag, so the same constant is a trap, and it is
+   * one we shipped. At `u = 0.9` the sidebar's painted stack is 459 × 0.9 =
+   * 413 px tall, so on any landscape phone shorter than that the four brass
+   * ovals — spellbook, rest, quick reference, menu — hang off the bottom of the
+   * glass. Measured: 23 px off on an iPhone 14 (844 × 390) and 38 px off on an
+   * SE (667 × 375), with the panel body squeezed to 305u against the 352u the
+   * character sheet is drawn for. A floor cannot help a device; it can only
+   * push the frame off it.
+   *
+   * ── and the floor cannot be raised either, which is the surprise ──────────
+   *
+   * The obvious move on the 932 × 430 target is the other way: `height/480` is
+   * 0.8958 there, the floor lifts it to 0.9, and MM6 paints nothing below
+   * native y = 459, so there look to be 21 native pixels of blank marble to
+   * spend. There are not. The panel body is `height − 128u`, so every extra
+   * pixel of `u` comes straight out of it, and the tightest screen is the
+   * backpack: `Arrange` clears the row of five ovals underneath it by
+   * **0.30 px** at u = 0.9, and by −0.72 px at u = 0.9021. Sweeping `u` in
+   * 0.002 steps puts the ceiling at 0.9006 — six ten-thousandths above the
+   * floor we already have.
+   *
+   * So the frame is *already* at its limit on this glass and there is nothing
+   * to win; `height/480` it is, which restores 2.3 px of that clearance and
+   * keeps every phone whole. (`inventory.css` giving `Arrange` 6u of air would
+   * hand the whole interface about 2% — that is where to go looking if the
+   * touch targets ever need to be bigger than this.)
    */
   _applyScale(width, height) {
     if (!this.root) return;
+    // Read at call time rather than cached: `resize` fires on rotation, which is
+    // when this matters, and a cached match would miss a device that gains or
+    // loses a pointer mid-session.
+    const coarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      && window.matchMedia('(pointer: coarse)').matches;
+
     let u = height / 480;
     // The sidebar is 172 native px and the bar 128: cap both as a share of the
     // window so an extreme aspect ratio still leaves a usable 3-D view.
     u = Math.min(u, (width * 0.30) / 172);
-    u = Math.max(u, 0.9);
+    if (!coarse) u = Math.max(u, 0.9);
     this.root.style.setProperty('--u', `${u.toFixed(4)}px`);
     this.root.style.setProperty('--ui-scale', (u / 1.875).toFixed(3));
   }

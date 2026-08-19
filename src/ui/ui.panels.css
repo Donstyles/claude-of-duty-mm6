@@ -1565,3 +1565,254 @@
   -webkit-mask-size: contain;
   mask-size: contain;
 }
+
+/* ══ touch ═══════════════════════════════════════════════════════════════════
+ *
+ * Everything from here to the end of the file is inside `@media (pointer:
+ * coarse)` and **paints nothing**. On a mouse none of it exists; on a phone it
+ * adds an invisible hit area to controls that are too small to hit with a
+ * thumb, and moves no pixel of the visible chrome.
+ *
+ * ── the number ────────────────────────────────────────────────────────────
+ * Apple asks for 44 pt in both axes and Google for 48 dp. On a phone one CSS
+ * pixel is one point, so 44 is the figure to clear. At the 932 × 430 target
+ * (`--u` = 0.8958) the sidebar's four tall ovals measure 25.1 × 53.7 px, the
+ * automap's zoom studs 13.4 px square and a venue's `Buy` 24 × 17: between a
+ * half and a third of the guideline on the axis that matters.
+ *
+ * ── why a pseudo-element and not a bigger control ─────────────────────────
+ * MM6's proportions are this interface's whole visual identity and the tall
+ * oval is a measured 1 : 2.14. Scaling it to 44 px wide would make it 94 px
+ * tall, which eats the 3-D view; so the *paint* stays exactly where it is and
+ * an empty absolutely positioned `::after` — no background, no border, no
+ * content — carries the touch region past it. A capture before and after this
+ * block is byte-identical.
+ *
+ * ── why every control is listed rather than swept up by `button::after` ────
+ * A blanket rule enlarging every control to 44 px silently overlaps the ones
+ * that sit in a tight row, and an overlapping hit area is worse than a small
+ * one: the later sibling wins the overlap, so a tap landing on the *painted*
+ * label of one control fires its neighbour. The venue action lists (25 px
+ * pitch), the skill rows (12 px) and the backpack grid (26 px) are all denser
+ * than 44, so each component below is given the largest box that cannot cross
+ * into its neighbour, and the figure it reaches is stated where it falls short.
+ *
+ * ── what could not be reached, and why ────────────────────────────────────
+ * Four side-by-side controls need 4 × 44 = 176 px of row. The sidebar is 172u
+ * wide, so that needs `--u` ≥ 1.023, and `--u` is capped at 0.9006 on this
+ * glass — see `UISystem._applyScale`, where the backpack's `Arrange` plate runs
+ * out of clearance. The four tall ovals and the four book spines therefore
+ * cannot both fit and clear 44 px across; they are partitioned edge to edge
+ * instead, which is the most a four-across row can give. Reached: 31–49 px
+ * across on the ovals against 26 before, and 30–37 on the spines.
+ *
+ * ── safe areas ────────────────────────────────────────────────────────────
+ * The page is `viewport-fit=cover`, so the painted chrome keeps bleeding under
+ * the Dynamic Island and the home indicator — that is what borderless means.
+ * What must not sit under them is a *hit area*, so every box below grows away
+ * from the glass edges rather than toward them, and the party bar is padded by
+ * `--safe-l`/`--safe-r` (both, because in landscape the island is on whichever
+ * short edge the phone was turned to).
+ */
+@media (pointer: coarse) {
+  #ui-root .mm-ui {
+    /* One token so the whole interface moves together if the guideline does. */
+    --tap: 44px;
+  }
+
+  /* The controls whose box is `position: static` need a containing block for
+   * the pseudo-element. `:where()` makes this rule specificity zero, so every
+   * component that positions itself — `.mm-npc-exit`, `.mm-zoom`, the tall
+   * ovals — keeps its own `position` and is not dragged back to `relative`.
+   * `.mm-oval` is absent on purpose: it carries a `filter`, which already makes
+   * it a containing block for absolutely positioned descendants. */
+  :where(.mm-ui .mm-spine, .mm-ui .mm-npc-option, .mm-ui .mm-svc-option,
+         .mm-ui .mm-guild-option, .mm-ui .mm-train-option, .mm-ui .mm-rest-btn,
+         .mm-ui .mm-menu-item) {
+    position: relative;
+  }
+
+  /* The hit area. Empty and unpainted; the four offsets are set per component
+   * below, because every one of them is bounded by something different. */
+  .mm-ui .mm-zoom::after,
+  .mm-ui .mm-spine::after,
+  .mm-ui .mm-oval::after,
+  .mm-ui .mm-npc-option::after,
+  .mm-ui .mm-svc-option::after,
+  .mm-ui .mm-guild-option::after,
+  .mm-ui .mm-train-option::after,
+  .mm-ui .mm-rest-btn::after,
+  .mm-ui .mm-menu-item::after {
+    content: '';
+    position: absolute;
+  }
+
+  /* The quest book's three tabs are the one control this technique cannot
+   * reach, and it is worth saying why rather than leaving a rule that does
+   * nothing: `quests.css` gives `.mm-quest-tab` a `clip-path`, and a clip-path
+   * clips an element's pseudo-elements too — for hit-testing as well as for
+   * paint — so any box put on `::after` comes back the size of the tab. They
+   * measure 42 × 20 px and stay there until the tab's owner moves the notched
+   * outline onto an inner element. */
+
+  /* ── the four tall brass ovals ─────────────────────────────────────────────
+   * Painted 28 × 60u. The row is 131u of art with 7u, 6u and 6u between the
+   * ovals, inside a 172u sidebar — so each box takes half the gap to each
+   * neighbour and the outer two take the sidebar's own margin as well, which
+   * partitions the whole width with nothing left over and nothing overlapping.
+   * Vertically the box grows UP into the dead marble between the food/gold
+   * strip (ends 372u) and the row (starts 399u), and never down: the row's
+   * painted bottom edge lands 18.8 px above the glass and the home indicator's
+   * band is the last 21 px, so downward is the one direction where the pixels
+   * are already spoken for. 52 px tall becomes 72. */
+  .mm-ovals .mm-oval.is-tall::after {
+    top: calc(var(--u) * -22);
+    bottom: 0;
+  }
+  .mm-ovals .mm-oval:nth-child(1)::after { left: calc(var(--u) * -23); right: calc(var(--u) * -3.5); }
+  .mm-ovals .mm-oval:nth-child(2)::after { left: calc(var(--u) * -3.5); right: calc(var(--u) * -3); }
+  .mm-ovals .mm-oval:nth-child(3)::after { left: calc(var(--u) * -3); right: calc(var(--u) * -3); }
+  .mm-ovals .mm-oval:nth-child(4)::after { left: calc(var(--u) * -3); right: calc(var(--u) * -18); }
+
+  /* ── the automap's zoom studs ──────────────────────────────────────────────
+   * 15u square, and the plus stud's right edge sits 15u from the right of the
+   * glass — so a box centred on it would hang off the screen. Each box is
+   * anchored to its own shoulder of the arch and runs inward across the stone
+   * instead, which also keeps them 100u apart with no chance of a mis-hit. */
+  .mm-arch .mm-zoom::after {
+    top: 50%;
+    width: var(--tap);
+    height: var(--tap);
+    transform: translateY(-50%);
+  }
+  .mm-arch .mm-zoom.is-minus::after { left: calc(var(--u) * -6); }
+  .mm-arch .mm-zoom.is-plus::after { right: calc(var(--u) * -6); }
+
+  /* ── the four book spines ──────────────────────────────────────────────────
+   * 91u tall clears 44 already; only the 34u width fails, and four spines fill
+   * a 136u shelf exactly, so there is nothing between them to take. All that is
+   * left is the shelf's own margin inside the sidebar field — 7u on the left,
+   * 5u on the right — which goes to the outer two. */
+  .mm-shelf .mm-spine::after { inset: 0; }
+  .mm-shelf .mm-spine:first-child::after { left: calc(var(--u) * -7); }
+  .mm-shelf .mm-spine:last-child::after { right: calc(var(--u) * -5); }
+
+  /* ── the five wide ovals ───────────────────────────────────────────────────
+   * 58 × 30u: the width passes, the height does not, and the height is the one
+   * that cannot be fixed. Every one of these rows sits on the floor of its
+   * panel with another control immediately above it — `Arrange` clears the
+   * inventory's row by 1.2 px, and on the training hall the third action's
+   * descenders already touch the oval — so the box grows DOWN into the panel's
+   * own bottom inset and not up.
+   *
+   * That was measured the hard way: a box centred on the oval reached the full
+   * 44 px and swallowed `Arrange` and `The Muster Roll` whole, which is the
+   * failure this file's opening comment warns about. Sideways is free, though:
+   * the nearest oval is 33u away on the tightest row, so ±14u costs nothing and
+   * buys back most of the area.
+   *
+   * Reached: 78 × 32 px on the character sheet, 78 × 29 in the backpack and
+   * 78 × 33–37 on a venue sidebar, against 53 × 28 before. Recovering the last
+   * 10 px of height needs 8u of clear stone under the row, which is
+   * `character.css` and `inventory.css`, not this file. */
+  .mm-ui .mm-oval.is-wide::after {
+    left: calc(var(--u) * -14);
+    right: calc(var(--u) * -14);
+    top: 0;
+    /* 12u is every pixel any of these five rows has under it; asking for more
+     * gains nothing (the panel clips it) and costs something (see below). */
+    bottom: calc(var(--u) * -12);
+  }
+
+  /* `clip`, not `hidden`, and only here.
+   *
+   * A hit box that hangs past the bottom of a panel is clipped either way, but
+   * with `hidden` it also *enlarges the panel's scrollable area* — measured at
+   * +21 px on the character sheet — and a `hidden` box with somewhere to scroll
+   * is one `focus()` away from shunting the whole screen sideways. `clip` paints
+   * identically and makes the element not a scroll container at all, so there is
+   * nothing to shunt. A browser that does not know the keyword drops the
+   * declaration and keeps the `hidden` above it. */
+  .mm-ui .mm-panel,
+  .mm-ui .mm-panel-side {
+    overflow: clip;
+  }
+
+  /* ── the venue action lists ────────────────────────────────────────────────
+   * One rule for all four names because they are one component under four
+   * prefixes (see STYLE.md, "Not mine to fix" 1). Each is a single italic word,
+   * centred, so the painted target is as narrow as the word: `Buy` measured
+   * 24 × 17 px. The box takes the full width of the sidebar — `.mm-panel-side`
+   * clips it, so the reach can be written generously and left to land where the
+   * sidebar ends — and 4u of the 9u gap above and below.
+   * It cannot reach 44 px tall and no arrangement of this screen can: five rows
+   * at 44 px need 220 px and the list has 131 px between the keeper's name and
+   * the brass oval. 25 px is the pitch, and the pitch is the ceiling. Reached:
+   * 117–134 × 25 px against 23–47 × 18. */
+  .mm-ui .mm-npc-option::after,
+  .mm-ui .mm-svc-option::after,
+  .mm-ui .mm-guild-option::after,
+  .mm-ui .mm-train-option::after {
+    left: calc(var(--u) * -160);
+    right: calc(var(--u) * -160);
+    top: calc(var(--u) * -4);
+    bottom: calc(var(--u) * -4);
+  }
+
+  /* ── rest and wait, and the game menu ──────────────────────────────────────
+   * Wide plates in a single column with room around them: the two loose rest
+   * buttons have 29 px of clear stone under them and the menu's grid sits on a
+   * 43.2 px pitch, so a 44 px box overlaps nothing on the first and 0.8 px of
+   * *gap* on the second — dead stone either way, no painted label is stolen. */
+  .mm-ui .mm-rest-btn::after,
+  .mm-ui .mm-menu-item::after {
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: var(--tap);
+    transform: translateY(-50%);
+  }
+
+  /* Inside a wait group the pitch is 24 px, not 44, and a 44 px box there put
+   * the bottom 8 px of `Wait until Dawn`'s own plate on top of `Wait 1 Hour`.
+   * So the box is the pitch: 20 px of plate plus the 4u of engraved stone
+   * between plates, which is every pixel the group has and not one more. */
+  .mm-ui .mm-rest-group .mm-rest-btn::after {
+    top: calc(var(--u) * -2);
+    bottom: calc(var(--u) * -2);
+    height: auto;
+    transform: none;
+  }
+
+  /* ── the party bar ─────────────────────────────────────────────────────────
+   * Each cell is already 137 × 98 px, so this is not about size: it is the one
+   * row of controls that a landscape Dynamic Island can actually sit on top of.
+   * Both insets are honoured because which short edge the island lands on
+   * depends on which way the phone was turned, and the bar centres its four
+   * cells, so this re-centres them inside what is left rather than shoving them
+   * sideways. The marble underneath is untouched and still runs to the glass. */
+  .mm-ui .mm-party {
+    padding-left: var(--safe-l);
+    padding-right: var(--safe-r);
+  }
+
+  /* The sidebar has the same problem and it is worse, because it is the side
+   * the island lands on in one of the two landscape orientations — and it
+   * carries the automap zoom studs and the four brass ovals, which are the only
+   * route to the spellbook, rest, the character sheet and the menu.
+   *
+   * Extending a hit area cannot help when the *paint* is under the island, so
+   * the whole sidebar moves inboard by the inset and the marble field is pushed
+   * back out past it. Borderless survives — the marble still runs to the glass —
+   * and the controls come out from under the island.
+   *
+   * A margin on the children does not work: the ovals, the spines and the zoom
+   * studs are all absolutely positioned by `left`, so they ignore it and only
+   * move when their containing block does. Measured, with the margin, five of
+   * them were still under the island.
+   *
+   * Only the right inset, deliberately. The sidebar is on the right and the
+   * left one is the 3-D view's business. */
+  .mm-ui .mm-sidebar { right: var(--safe-r); }
+  .mm-ui .mm-side-field { right: calc(var(--u) * 10 - var(--safe-r)); }
+}

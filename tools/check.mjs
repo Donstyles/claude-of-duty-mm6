@@ -48,7 +48,7 @@ const GATES = [
   { name: 'playtest', slow: true, cmd: 'node', args: ['tools/playtest.mjs'],
     why: 'every door in the town opens the screen it should' },
   { name: 'mobile', slow: true, cmd: 'node', args: ['tools/mobiletest.mjs'],
-    blurb: 'the app still installs, and still fills a phone edge to edge' },
+    why: 'the app still installs, and still fills a phone edge to edge' },
   { name: 'spells', slow: true, cmd: 'node', args: ['tools/spelltest.mjs'],
     why: 'the travel spells move the party, and relight the world on the way out' },
 ];

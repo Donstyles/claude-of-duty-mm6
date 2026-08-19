@@ -41,7 +41,7 @@
  * The rules this file lives by:
  *
  *   · Multi-touch throughout. Move and look are separate `pointerId`s tracked
- *     in a map; there is never an "the touch".
+ *     in a map; there is no such thing here as "the" touch.
  *   · Touch devices only. Nothing is built and no gesture is claimed until a
  *     `pointerdown` with `pointerType === 'touch'` arrives, so a desktop mouse
  *     sees the game exactly as it was and no screenshot grows a thumbstick.
@@ -97,11 +97,11 @@ const TAP_SLOP = 12;
  * the panels already use, so nothing new is drawn (STYLE.md §12).
  */
 const BUTTONS = [
-  { action: 'interact', glyph: 'hand', label: 'Interact', group: 'act', cls: 'is-primary', size: 30 },
-  { action: 'attack', glyph: 'sword', label: 'Attack', group: 'act', cls: '', size: 24 },
-  { action: 'jump', glyph: 'arrow-up', label: 'Jump', group: 'act', cls: '', size: 24 },
-  { action: 'turnBased', glyph: 'hourglass', label: 'Turn-based combat', group: 'mode', cls: '', size: 20 },
-  { action: 'inventory', glyph: 'chest', label: 'Inventory', group: 'mode', cls: '', size: 20 },
+  { action: 'interact', glyph: 'hand', label: 'Interact', group: 'act', size: 30 },
+  { action: 'attack', glyph: 'sword', label: 'Attack', group: 'act', size: 24 },
+  { action: 'jump', glyph: 'arrow-up', label: 'Jump', group: 'act', size: 24 },
+  { action: 'turnBased', glyph: 'hourglass', label: 'Turn-based combat', group: 'mode', size: 20 },
+  { action: 'inventory', glyph: 'chest', label: 'Inventory', group: 'mode', size: 20 },
 ];
 
 export class TouchInput {
@@ -200,11 +200,11 @@ export class TouchInput {
   endFrame() {
     this.look.dx = 0;
     this.look.dy = 0;
-    // A coarse-pointer device arms during the engine's constructor, long before
-    // UISystem has built the chrome there is nothing to measure against yet.
-    // Keep looking, slowly, until the sidebar and the party bar exist — then
-    // stop, because a `getBoundingClientRect` every frame is a forced layout
-    // every frame for a number that only changes on resize.
+    // A coarse-pointer device arms inside the engine's constructor, which is
+    // long before UISystem has built the chrome there is anything to measure
+    // against. Keep looking, slowly, until the sidebar and the party bar exist
+    // — then stop, because a `getBoundingClientRect` every frame is a forced
+    // layout every frame for a number that only changes on resize.
     if (!this._measured && (this._frames++ % 20) === 0) this._measure();
     // `uiCaptured` and `ctx.state.modal` are set together by UISystem, so this
     // is the modal signal without reaching for the context to ask.
@@ -219,6 +219,23 @@ export class TouchInput {
   /** Drop every in-flight gesture — focus loss, a panel opening, teardown. */
   cancelAll() {
     for (const id of [...this._gestures.keys()]) this._release(id);
+  }
+
+  /**
+   * Forget any gesture whose finger is gone.
+   *
+   * `pointerup` and `pointercancel` between them should always arrive, and on
+   * every browser tested they do. The consequence of the one that does not is
+   * out of all proportion to its likelihood: the role stays claimed, the next
+   * touch finds nothing free, and the controls are dead for the rest of the
+   * session with no way for the player to clear it. Capture is released
+   * implicitly when a pointer ends, so asking whether we still hold it is a
+   * reliable liveness test, and doing it on the next touch costs nothing.
+   */
+  _pruneStranded() {
+    for (const id of [...this._gestures.keys()]) {
+      if (!this.canvas.hasPointerCapture?.(id)) this._release(id);
+    }
   }
 
   // ── gesture tracking ──────────────────────────────────────────────────────
@@ -253,6 +270,7 @@ export class TouchInput {
     // Cheap, and it keeps the field honest when the chrome rescales or the
     // phone is turned between one touch and the next.
     this._measure();
+    this._pruneStranded();
 
     const mid = this._field.l + (window.innerWidth - this._field.l - this._field.r) / 2;
     const leftSide = e.clientX < mid;
@@ -273,7 +291,12 @@ export class TouchInput {
       role,
       x: e.clientX, y: e.clientY,
       ox: e.clientX, oy: e.clientY,   // stick origin / last look sample
-      t0: performance.now(),
+      // The event's own timestamp, not `performance.now()`: that is when the
+      // digitiser saw the finger, and it is what makes a tap a tap. Reading the
+      // clock in the handler instead measures how far behind the main thread
+      // was, so a genuine tap during a stalled frame — streaming a dungeon in,
+      // say — is misread as a long press and the door does not open.
+      t0: e.timeStamp,
       travel: 0,
     };
     this._gestures.set(e.pointerId, g);
@@ -326,7 +349,7 @@ export class TouchInput {
     const g = this._gestures.get(e.pointerId);
     if (!g) return;
     const tap = clean
-      && performance.now() - g.t0 <= TAP_MS
+      && e.timeStamp - g.t0 <= TAP_MS
       && g.travel <= TAP_SLOP;
     this._release(e.pointerId);
     // A tap anywhere on the world interacts. VenueSystem and NPCSystem both
@@ -384,12 +407,15 @@ export class TouchInput {
   _arm() {
     if (this.armed || !this.canvas) return;
     this.armed = true;
+    // A hook on the root element for anyone who needs to know. The chrome's own
+    // controls were drawn for a mouse and some of them want to be larger under
+    // a thumb; that is ui.panels.css's business, and this is how it can ask.
     document.documentElement.classList.add('has-touch-controls');
 
+    // The root is inert and only the buttons take pointer events, so this layer
+    // can never swallow a tap meant for the chrome underneath it.
     const root = document.createElement('div');
     root.id = 'tc-root';
-    // Every child is inert but the live controls, so this layer can never
-    // swallow a tap meant for the chrome underneath it.
     const field = document.createElement('div');
     field.className = 'tc-field';
 
@@ -410,7 +436,7 @@ export class TouchInput {
     for (const def of BUTTONS) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = `tc-btn ${def.cls}`.trim();
+      b.className = 'tc-btn';
       b.dataset.action = def.action;
       b.setAttribute('aria-label', def.label);
       b.innerHTML = icon(def.glyph, { size: def.size });
@@ -499,6 +525,7 @@ export class TouchInput {
    * whether or not this ever binds, which is why it is allowed to give up.
    */
   _bindWorldSignals() {
+    if (!this.armed) return;   // disposed while a retry was pending
     const events = window.__ENGINE?.ctx?.events;
     if (!events) {
       if (this._reticleTries++ > 12) return;

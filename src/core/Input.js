@@ -87,10 +87,10 @@ export class Input {
     /**
      * Touch controls, or null on anything that is not a touch device.
      *
-     * Constructed eagerly but *armed* lazily: with a mouse this object binds
-     * three listeners that return on their first line and builds no DOM at all,
-     * so a desktop run is byte-for-byte the game it was. `available()` also
-     * refuses outright under `?capture=1`.
+     * Constructed eagerly but *armed* lazily: with a mouse it holds a handful
+     * of listeners that return on their first line, builds no DOM, claims no
+     * gesture and publishes nothing, so a desktop run is the game it always
+     * was. `available()` refuses outright under `?capture=1`.
      */
     this.touch = TouchInput.available() ? new TouchInput(this) : null;
 

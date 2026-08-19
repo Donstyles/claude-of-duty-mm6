@@ -40,6 +40,10 @@
   right: var(--pf-r, 0px);
   bottom: var(--pf-b, 0px);
   pointer-events: none;
+  /* A stick placed under a thumb near the bottom of the view would otherwise
+     draw its ring across the party bar. Clipping at the edge of the 3-D view
+     keeps the painted chrome intact and reads as deliberate. */
+  overflow: hidden;
 
   /* Only the part of the safe area the chrome does not already cover. Adding
      the raw inset would shove the cluster 59px inboard of a sidebar that is
@@ -76,13 +80,17 @@
   width: 108px;
   height: 108px;
   border-radius: 50%;
-  border: 1.5px solid rgba(216, 178, 92, 0.55);
+  /* Brass on a dark outer line, because the ring has to be findable over a
+     noon sky and over a dungeon floor, and neither colour alone manages both. */
+  border: 2px solid rgba(216, 178, 92, 0.62);
   background:
     radial-gradient(circle at 50% 50%,
-      rgba(10, 8, 6, 0.10) 0 42%,
-      rgba(10, 8, 6, 0.34) 68%,
-      rgba(10, 8, 6, 0.06) 100%);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+      rgba(10, 8, 6, 0.12) 0 42%,
+      rgba(10, 8, 6, 0.40) 70%,
+      rgba(10, 8, 6, 0.08) 100%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
 
 #tc-root .tc-knob {
