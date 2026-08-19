@@ -1,7 +1,10 @@
 import './travel.css';
 import { Panel } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, engraved, labelRow, fmt } from '../widgets.js';
-import { icon } from '../Icons.js';
+// `iconEl`, not `icon`: the latter returns an SVG *string*, and handing a
+// string to `el()` as a child makes it a text node — the whole of the markup
+// printed itself down the side of the screen.
+import { iconEl } from '../Icons.js';
 import { TRAVEL_MODES } from '../../game/data/Travel.js';
 import { TOWNS } from '../../game/data/Regions.js';
 
@@ -102,7 +105,7 @@ export class TravelPanel extends Panel {
     go.addEventListener('click', () => this._depart(offer));
 
     row.append(
-      el('div', { className: 'mm-travel-sign' }, icon(this.mode === 'ship' ? 'compass' : 'boot', { size: 22 })),
+      el('div', { className: 'mm-travel-sign' }, iconEl(this.mode === 'ship' ? 'compass' : 'boot', { size: 22 })),
       el('div', { className: 'mm-travel-where' },
         el('div', { className: 'mm-travel-dest mm-engraved', text: dest?.name ?? offer.destinationId }),
         el('div', { className: 'mm-travel-note', text: offer.blocked || offer.note })),
