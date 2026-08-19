@@ -385,6 +385,33 @@ the numbers the player actually wants (§9) is the better answer.
 
 ---
 
+## 8a. A blocked action stays clickable and says why
+
+**Deliberate, and reviewers keep filing it as a bug — so it is written down.**
+
+When the party cannot afford a thing, the plate above states it: the blocking
+figure goes `--down` while the rest of the numbers stay in their own colours.
+The action itself is *not* disabled. Clicking it returns the refusal in the
+caption, in the keeper's own voice, naming what is missing.
+
+A round-10 reviewer read this as a contradiction — "the colour system says stop
+and the button system says go" — on both the guild and the training hall. It
+isn't. A dead button tells you that you cannot, and nothing else. `GuildSystem`
+and the trainer both return `{ ok, message }`, and the message is the useful
+half: *which* term you failed, not merely that you failed one. The guild's own
+terms sheet already ticks and crosses every condition at once for the same
+reason — a hall that reveals one obstacle at a time is a hall nobody finishes
+joining.
+
+The dimmed *commit* button inside the terms sheet (`is-dim` when the terms are
+unmet) is a different control and is correctly dimmed: by then the reasons are
+already on screen beside it.
+
+So: state the blocker in the numbers, keep the verb live, and answer in words.
+Do not "fix" this by disabling the action.
+
+---
+
 ## 9. Stating a set of numbers
 
 There is one way, and it is the training hall's — the reviewer called it "the

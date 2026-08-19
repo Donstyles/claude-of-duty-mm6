@@ -197,6 +197,48 @@ The reviewer's closing observation is the one to keep: the reference set is
 "uniformly plain; it does not disagree with itself about its own rules," and on
 internal consistency alone it wins. We are losing on discipline, not on craft.
 
+## Round 10 — two reviewers, decoded
+
+Thirteen screens, re-shot after the style pass, judged blind by two reviewers
+with different lenses.
+
+- **Information and layout: 13–0 to us.** It picked our panel on every sheet.
+  (Its own summary says "8–5" — a bookkeeping slip: it identified our system
+  correctly, picked it correctly thirteen times, then counted the five sheets
+  where we happened to sit on the B side as losses. Its verdict table and its
+  system-membership list both match the key exactly.)
+- **Material and light: 7–6 to us.**
+
+The split is the finding. Our information design and our painted scenes are
+strong; our **permanent chrome** is not, and it is on every screen at once:
+
+> "Its scene art — the hearth room, the library, the tavern, the drill hall, the
+> forge — is dense, worn, physically lit and materially rich, five images that
+> would ship. Its interface chrome is smooth, unworn, unlit and texture-free.
+> These are two different worlds."
+>
+> "**Beautiful pictures in a frame that is made of nothing.**"
+
+Four of its five worst defects are ours and all four are chrome: the all-round
+outer glow on every brass control (so it reads as a light *emitter* with no
+light direction), pure-black 1px keylines around every rounded form,
+texture-free column shafts, and the exterior. Its sharpest note: the reference
+wins the brass comparison **at a quarter of our resolution**, so this is a
+lighting-model problem, not a detail budget.
+
+### Checked and rejected
+
+**"Blocked actions aren't disabled."** Filed against the guild and the training
+hall. Read the code before acting on it: both return `{ ok, message }` and
+answer a refused click with the reason in the keeper's voice. A dead button
+says only that you cannot. This is deliberate and is now STYLE.md §8a, so the
+next reviewer's objection can be answered rather than re-litigated.
+
+That is the third round-10 finding that did not survive checking — after the
+"un-keyed matte" (which was real, but was the entire potion liquid rather than
+a stray matte) and the quest fade (real, but a symptom of a leaf holding 666px
+of content in 589px of space). **Decode, then read the code, then fix.**
+
 ## Open, measured, not yet acted on: aerial perspective at vista range
 
 Our distant ground does not recede. Measured over six ground bands from the
