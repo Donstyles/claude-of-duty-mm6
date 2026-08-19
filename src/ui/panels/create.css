@@ -491,9 +491,13 @@
   font-style: italic;
   background: rgba(8, 14, 8, 0.4);
 }
-.mm-create-plaque.is-bad { color: #ff6a5a; }
-.mm-create-plaque.is-warn { color: var(--gold); }
-.mm-create-plaque.is-good { color: #cfe0c4; }
+/* Scoped, and on the tokens: a blocking condition is `--down`, a caution is
+ * the live-control gold only because it is the thing you must act on, and a
+ * satisfied condition is `--up` — STYLE.md §2. The three were previously
+ * unscoped and two of them were hand-mixed hexes. */
+.mm-create .mm-create-plaque.is-bad { color: var(--down); }
+.mm-create .mm-create-plaque.is-warn { color: var(--gold); }
+.mm-create .mm-create-plaque.is-good { color: var(--up); }
 
 .mm-create-actions {
   display: flex;
@@ -555,5 +559,13 @@
   100% { filter: drop-shadow(0 0 calc(var(--u) * 13) rgba(255, 175, 60, 0.45)) brightness(1.06); }
 }
 
-/* A tooltip that is reporting a refusal says so in its heading. */
-.mm-tip.is-bad .mm-tip-head { color: #ff6a5a; }
+/* Deleted: `.mm-tip.is-bad .mm-tip-head { color: #ff6a5a }`.
+ *
+ * `.mm-tooltip` is `position: fixed` at the document root, so it renders
+ * outside every panel and no `[data-panel]` selector can reach it — it is the
+ * one component a per-panel stylesheet cannot style correctly, and this rule
+ * was colouring the heading of every tooltip in the game from the party
+ * creation screen's file. It was also dead: `is-bad` here is a plaque state,
+ * never applied to a tooltip. Dead and global is the worst pair, because it
+ * fires the moment some other screen tags a tooltip `is-bad` and the cause is
+ * in a file nobody would think to open. STYLE.md §11. */

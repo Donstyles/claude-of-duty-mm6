@@ -260,7 +260,11 @@ const TRADES = Object.freeze([
     'Twenty-two years with the Chapter and a knee that tells me when the weather turns. That is the pension.',
     'I hold the door at the tavern on market days. It is not soldiering. It is the same skills applied more politely.',
   ] },
-  { id: 'housekeeper', title: 'Keeps the House', tags: ['any'], hire: null, work: [
+  // A noun, like every other trade here. It was "Keeps the House", a verb
+  // phrase, which forced `roleLine()` to carry a heuristic for one row: STYLE.md
+  // §3 puts "the " in front of a role, and "the Keeps the House" is not a
+  // sentence. One word here deletes the special case there.
+  { id: 'housekeeper', title: 'Housekeeper', tags: ['any'], hire: null, work: [
     'Fire, bread, water, and four people who cannot find anything without me. It is a trade. Nobody calls it one.',
     'I have buried a husband and raised two, and I am still here in the same three rooms. Draw what conclusion you like.',
   ] },

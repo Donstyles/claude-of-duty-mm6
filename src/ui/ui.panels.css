@@ -86,12 +86,23 @@
   --bar-h: calc(var(--u) * 128);
   --shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #000;
 
+  /* Seven roles, one job each — STYLE.md §2. A colour that means two things
+   * means nothing, and the blind review caught gold doing four. */
   --ink: #ffffff;
+  --name: #5fbcff;
   --gold: #ffff9c;
   --gold-deep: #e7cf21;
-  --azure: #109aef;
   --up: #00fe00;
   --down: #ff0000;
+  --dim: #cfcac2;
+
+  /* MM6's own name blue, kept only so nothing that still references it goes
+   * illegible mid-refactor. It measured **2.46:1** on our dark venue timber —
+   * the least legible text on the panel, on the one string that is the NPC's
+   * identity — so it now resolves to `--name`, which is the same hue lifted
+   * until it clears the 4.5:1 floor. Do not put #109AEF back, and do not reach
+   * for this token in new work. */
+  --azure: var(--name);
 
   --bevel-dark: #0f1210;
   --bevel-light: #c4c0c4;
@@ -819,7 +830,10 @@
   padding: 0 calc(var(--u) * 8);
   line-height: calc(var(--u) * 20);
   font-style: italic;
-  color: var(--gold);
+  /* A column head names data, so it must be quieter than the data — STYLE.md
+   * §2. It was gold, which is the live-control colour, so every static heading
+   * on every screen was wearing the highlight. */
+  color: var(--dim);
 }
 .mm-block-scroll { overflow-y: auto; max-height: 100%; }
 .mm-block-scroll::-webkit-scrollbar { width: calc(var(--u) * 5); }
