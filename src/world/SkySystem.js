@@ -79,7 +79,7 @@ const FILL_GAIN = 0.58;
  * is explicit that nothing in an MM6 exterior crushes to black. Widening the
  * value range must not be achieved by letting the shadow end fall off a cliff.
  */
-const FLOOR_RATIO = 0.30;
+const FLOOR_RATIO = 0.40;
 
 /**
  * Display-space gain applied to the *daytime* sky field, and to the fog that
@@ -190,8 +190,27 @@ const WEATHER_FOG_LEVERAGE = 0.5;
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
 
-/** §2.7: MM6's baked key sits high — 55–65° at its peak. */
-const MAX_SUN_ELEVATION = 62 * DEG;
+/**
+ * How high the sun gets at noon — and it is the *verticals* this number is for,
+ * not the ground.
+ *
+ * It was 62°, chosen because §2.7 measures MM6's baked key at 55–65°. But a
+ * vertical surface catches `cos(elevation)` of the key while flat ground
+ * catches `sin(elevation)`, so at 62° a sun-facing wall gets 0.469 against the
+ * ground's 0.883 — a ratio of 0.53 before fill. Measured across six samples,
+ * our verticals read at **0.73** of their adjacent ground where MM6's read at
+ * **1.06**; a human figure came out at 0.42 against the reference's 1.59, and a
+ * log gable measured *darker than the cobbles it stands on*, at noon.
+ *
+ * At 50° the same geometry gives 0.643 / 0.766 — a ratio of 0.84, which lands
+ * in the reference's band once the fill is added. Everything gains: the ground
+ * loses only 13% of its key while every wall, tree and person gains 37%.
+ *
+ * Deliberately fixed by moving the sun rather than raising `FILL_GAIN`. Our
+ * terrain turns 10.1% across a hill form where the reference manages 1.3–6.4%,
+ * so we are *ahead* on landform relief and more hemisphere would flatten it.
+ */
+const MAX_SUN_ELEVATION = 50 * DEG;
 /** Never let the key light graze below this; MM6 has no raking shadows. */
 const MIN_KEY_ELEVATION = 8 * DEG;
 /** Synodic month, in days, for the moon's phase drift. */

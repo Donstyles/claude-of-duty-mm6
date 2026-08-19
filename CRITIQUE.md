@@ -246,7 +246,7 @@ horizon down, saturation `(max−min)/max`:
 
 | | band 0 (far) | 1 | 2 | 3 | 4 | 5 (near) |
 | --- | --- | --- | --- | --- | --- | --- |
-| reference ×1.42 | **0.145** | 0.311 | 0.446 | 0.353 | **0.523** | 0.478 |
+| reference | **0.145** | 0.311 | 0.446 | 0.353 | **0.523** | 0.478 |
 | ours | 0.475 | 0.423 | 0.495 | 0.461 | 0.493 | 0.504 |
 
 MM6's distant ground is **3.6× less saturated** than its near ground and its

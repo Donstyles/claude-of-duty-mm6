@@ -316,7 +316,10 @@ Screenshot 32 and found 54.6 · 55.9 · 55.4 · 53.7 · 54.9 · 52.3 — flat wi
 metres of a street is not a landscape.
 
 Re-measured on Screenshot 33, a wide vista, in six ground bands from the horizon
-down (exposure-matched ×1.42), saturation `(max−min)/max`:
+down, saturation `(max−min)/max` — a ratio *within* each pixel, so it is
+immune to any exposure difference between the two sets and this table stands
+regardless of calibration (see STYLE.md §0 on why the old ×1.42 figure was
+wrong):
 
 | band | horizon → foreground | RGB | saturation |
 | --- | --- | --- | --- |

@@ -31,8 +31,37 @@ real capture — never guessed from hex values, never judged by looking. Half th
 wrong "fixes" in this project's history came from someone deciding a thing
 looked fine.
 
-The reference stills in `reference/mm6-web/` are globally **1.42× darker** than
-our captures. Divide any luminance read off one by 1.42 before comparing.
+### The reference is NOT 1.42× darker. That figure was wrong — do not use it.
+
+It stood for most of this project's life and went into a dozen briefs, so it is
+worth stating plainly how it failed. It was derived by comparing the message
+strip, "the same UI asset present in both images". **It is not the same asset.**
+Ours is flat cool grey with two hairline cracks; the reference's is warm
+brown-veined marble with a double bevel. Comparing them measures two art
+choices, not exposure.
+
+The falsifiable check, and it is decisive: a global 1.42× dimming cannot produce
+a pixel above 255/1.42 = 179.6. Measured on the reference stills —
+
+| | max L | ≥200 | p99 |
+| --- | --- | --- | --- |
+| `screenshot-33` | **255.0** | 0.88% | 197.3 |
+| `screenshot-17` | **255.0** | 0.82% | 196.0 |
+| ours | 255.0 | 2.67% | 222.9 |
+
+The real relationship, from quantile-matching millions of spatially-matched UI
+pixels: **1.00 below L≈35, peaking at 1.20–1.24 through the low midtones, back
+to 1.00 by L≈150–170.** It is a contrast curve, not a scalar. Dividing by 1.42
+understates reference midtones by up to 2× — it says MM6's ground sits at L≈40
+when it sits at L≈65–71, which makes our own frames look correctly matched when
+they are too bright.
+
+**So: prefer measurements that are calibration-free.** Ratios *within* one image
+cannot be wrong this way — saturation `(max−min)/max`, the value ratio between
+two things in the same frame, local contrast relative to local mean, a
+percentile ratio like p05/p50. Every conclusion this project reached with one of
+those still stands. Conclusions that compared an absolute luminance across the
+two sets need re-checking against the quantile mapping above.
 
 ---
 
