@@ -78,8 +78,25 @@ async function main() {
   const canvas = document.getElementById('viewport');
   const params = new URLSearchParams(location.search);
 
+  // A phone should not boot into `ultra`.
+  //
+  // The tiers are not cosmetic: ultra asks for a 4096 shadow map over a 190 m
+  // extent, SMAA and bloom at full resolution, 100 active monsters and 16000
+  // rain particles. That is a desktop budget, and it was the default for every
+  // device because nothing ever asked what it was running on. On a phone it
+  // buys a 4096 map and pays for it in frame time and battery, which is the
+  // wrong trade on a device whose whole appeal is picking it up for ten
+  // minutes.
+  //
+  // `high` rather than `medium` because the visual step down from ultra is
+  // small — 3072 map, pcf 3, grass 0.85, bloom 0.28 — while the cost step is
+  // not. Deliberately not a GPU-class guess: core counts and memory hints do
+  // not predict mobile GPU throughput, and a wrong guess is worse than a plain
+  // default. `?quality=medium` and `?quality=low` are there for a weaker
+  // handset, and both are checked by the tier work in CRITIQUE.md.
+  const coarse = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
   const engine = new Engine(canvas, {
-    quality: params.get('quality') ?? 'ultra',
+    quality: params.get('quality') ?? (coarse ? 'high' : 'ultra'),
     shadows: params.get('shadows') !== '0',
   });
 

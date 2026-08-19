@@ -94,7 +94,9 @@ try {
     return {
       veilDisplay: cs?.display,
       coarse: matchMedia('(pointer: coarse)').matches,
-      u: getComputedStyle(root).getPropertyValue('--u').trim(),
+      u: (getComputedStyle(document.querySelector('.mm-ui') ?? root)
+            .getPropertyValue('--u') || '').trim(),
+      quality: window.__ENGINE?.config?.quality ?? null,
       w: innerWidth, h: innerHeight,
       bootErr: window.__GAME?.error ?? null,
     };
@@ -105,6 +107,25 @@ try {
   ok(!L.bootErr, 'game booted', L.bootErr ? L.bootErr.slice(0, 90) : '');
   console.log(`       --u = ${L.u}  viewport ${L.w}x${L.h}`);
   await land.close();
+
+  // ── the default tier, which is not what the pages above are loading ────
+  //
+  // Everything else here passes `?quality=low` so the gate boots quickly, which
+  // means none of it exercises the default. `Engine` is constructed before any
+  // system loads, so the resolved config is readable long before the game is
+  // ready — no need to sit through a `high` boot under a software rasteriser.
+  for (const [label, opts, want] of [
+    ['phone', { viewport: { width: 932, height: 430 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }, 'high'],
+    ['desktop', { viewport: { width: 1200, height: 900 } }, 'ultra'],
+  ]) {
+    const c = await browser.newContext(opts);
+    const p = await c.newPage();
+    await p.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(() => !!window.__ENGINE, null, { timeout: 120000 });
+    const q = await p.evaluate(() => window.__ENGINE?.config?.quality ?? null);
+    ok(q === want, `${label} defaults to the ${want} tier`, String(q));
+    await c.close();
+  }
 
   // ── same device, portrait ──────────────────────────────────────────────
   const port2 = await browser.newContext({
