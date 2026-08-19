@@ -300,9 +300,39 @@ brights upper-left; every sprite is lit front-upper-left. The implied key is
 **high, slightly left of camera, frontal** — baked, uniform, never changing
 with orientation.
 
-**Aerial perspective is absent.** Dirt luminance sampled every 20 px of depth
-across ~40 m in Screenshot 32 runs 54.6 · 55.9 · 55.4 · 53.7 · 54.9 · 52.3 —
-flat within ±5%. No desaturation, no blue shift, no fade toward the sky colour.
+**Aerial perspective is absent *at street range*, and strong at vista range.**
+The original measurement here sampled dirt every 20 px across ~40 m in
+Screenshot 32 and found 54.6 · 55.9 · 55.4 · 53.7 · 54.9 · 52.3 — flat within
+±5%. That is correct, and it is the wrong screenshot to generalise from: forty
+metres of a street is not a landscape.
+
+Re-measured on Screenshot 33, a wide vista, in six ground bands from the horizon
+down (exposure-matched ×1.42), saturation `(max−min)/max`:
+
+| band | horizon → foreground | RGB | saturation |
+| --- | --- | --- | --- |
+| 0 | most distant | 110.5 · 123.5 · 105.5 | **0.145** |
+| 1 | | 105.8 · 112.4 · 77.4 | 0.311 |
+| 2 | | 100.4 · 80.2 · 55.6 | 0.446 |
+| 3 | | 98.9 · 79.1 · 64.0 | 0.353 |
+| 4 | | 106.4 · 71.5 · 50.7 | **0.523** |
+| 5 | nearest | 78.6 · 87.8 · 45.8 | 0.478 |
+
+Distant ground is **3.6× less saturated** than near ground, and its blue channel
+more than doubles (45.8 → 105.5) as it lifts toward the sky. That is aerial
+perspective, unambiguously, and it is one of the strongest depth cues in the
+frame.
+
+So the rule below — "at most 12% desaturation toward sky colour" — holds for a
+street and is badly wrong for a landscape. Judge it by the depth on screen, not
+by a single number. A town street should stay flat; a hillside seen across
+kilometres should lift and desaturate toward the horizon or it reads as painted
+scenery, which is exactly what ours did: measured over the same six bands our
+saturation ran 0.475 · 0.423 · 0.495 · 0.461 · 0.493 · 0.504 — no gradient at
+all.
+
+The lesson is the same one §6 of STYLE.md learned independently: a rule derived
+from one unrepresentative sample will confidently forbid the right answer.
 
 **Contrast is low and the whole image is darker than memory suggests.** Terrain
 sits at 20–29% luminance, stone at 25%, canopies at 5–12%. The only genuinely

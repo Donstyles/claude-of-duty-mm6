@@ -197,6 +197,40 @@ The reviewer's closing observation is the one to keep: the reference set is
 "uniformly plain; it does not disagree with itself about its own rules," and on
 internal consistency alone it wins. We are losing on discipline, not on craft.
 
+## Open, measured, not yet acted on: aerial perspective at vista range
+
+Our distant ground does not recede. Measured over six ground bands from the
+horizon down, saturation `(max−min)/max`:
+
+| | band 0 (far) | 1 | 2 | 3 | 4 | 5 (near) |
+| --- | --- | --- | --- | --- | --- | --- |
+| reference ×1.42 | **0.145** | 0.311 | 0.446 | 0.353 | **0.523** | 0.478 |
+| ours | 0.475 | 0.423 | 0.495 | 0.461 | 0.493 | 0.504 |
+
+MM6's distant ground is **3.6× less saturated** than its near ground and its
+blue channel more than doubles (45.8 → 105.5). Ours has no gradient at all.
+
+Checked whether that is haze or merely more grass in the distance, because
+mistaking composition for material has already burned this project twice. It is
+haze: material separability (the R−G spread between the 10th and 90th
+percentiles within a band) collapses monotonically toward the horizon —
+150.5 → 115.0 → 90.9 → 76.7. Two materials stop being distinguishable, which
+composition cannot do.
+
+**`REFERENCE.md` was actively forbidding the fix.** Its rule — "at most 12%
+desaturation toward sky colour", "distance fog or aerial perspective beyond 12%
+costs the axis outright" — was derived from sampling dirt across **~40 m** of a
+street shot. True for a street, wrong for a landscape. Corrected there, with the
+vista measurements.
+
+Not implemented yet, deliberately. It means retuning shared fog that the terrain
+pass had just brought to 8 of 13 metrics inside 10%, and our day fog colour is a
+dark navy (`#29458c`) where the reference's haze resolves pale grey-green
+(110.5 · 123.5 · 105.5) — so it needs a haze colour distinct from the sky
+colour, not just more density. Worth doing; worth doing carefully, and worth
+letting the next blind round confirm it is the biggest remaining exterior gap
+before spending the risk.
+
 ### What we won on, and should not lose
 
 The venue interiors, the guild library, the training yard, the character
