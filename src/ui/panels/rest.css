@@ -17,35 +17,37 @@
  *     borrowed 1px border rather than as light falling on stone, so this
  *     screen retunes the two variables and every bevel on it follows.
  *
- * Every rule is prefixed with .mm-ui so it outranks the shared sheet: the
- * bundler emits a panel's own CSS before ui.panels.css, so equal specificity
- * would silently lose to it.
+ * Every selector is scoped to `.mm-panel[data-panel='rest']` (STYLE.md §11).
+ * That is what makes "nothing in this file can reach another screen" true by
+ * inspection, and it also settles the cascade: the bundler emits a panel's own
+ * CSS before ui.panels.css, so a rule of equal specificity would silently lose
+ * to the shared sheet, and the attribute hook puts this file above it.
  */
 
-.mm-ui .mm-surface-rest {
+.mm-panel[data-panel='rest'] {
   --bevel-light: #e6bda6;
   --bevel-dark: #2c1008;
 }
 
-.mm-ui .mm-rest { inset: calc(var(--u) * 12) calc(var(--u) * 14); }
+.mm-panel[data-panel='rest'] .mm-rest { inset: calc(var(--u) * 12) calc(var(--u) * 14); }
 
 /* The landscape plate gives up height to the camp plaque below it: the screen
    has to fit inside the viewport exactly, with nothing running under the bar. */
-.mm-ui .mm-rest-plate { height: calc(var(--u) * 74); }
+.mm-panel[data-panel='rest'] .mm-rest-plate { height: calc(var(--u) * 74); }
 
-.mm-ui .mm-rest-cols {
+.mm-panel[data-panel='rest'] .mm-rest-cols {
   gap: calc(var(--u) * 12);
   margin-top: calc(var(--u) * 8);
   height: calc(100% - var(--u) * 84);
   min-height: 0;
 }
-.mm-ui .mm-rest-left { flex: 250; gap: calc(var(--u) * 5); min-height: 0; }
-.mm-ui .mm-rest-right { flex: 176; gap: calc(var(--u) * 8); min-height: 0; }
+.mm-panel[data-panel='rest'] .mm-rest-left { flex: 250; gap: calc(var(--u) * 5); min-height: 0; }
+.mm-panel[data-panel='rest'] .mm-rest-right { flex: 176; gap: calc(var(--u) * 8); min-height: 0; }
 
 /* A key cut from the slab: no fill, so the veining crosses it unbroken, and a
    two-level bevel — a bright lip and a dark counter-line on each side — so it
    is unmistakably raised at the size the screen is actually seen at. */
-.mm-ui .mm-rest-btn {
+.mm-panel[data-panel='rest'] .mm-rest-btn {
   height: calc(var(--u) * 22);
   flex: 0 0 auto;
   justify-content: space-between;
@@ -57,7 +59,7 @@
     inset calc(var(--u) * 2) calc(var(--u) * 2) 0 rgba(255, 236, 220, 0.30),
     inset calc(var(--u) * -2) calc(var(--u) * -2) 0 rgba(58, 22, 12, 0.55);
 }
-.mm-ui .mm-rest-btn:hover {
+.mm-panel[data-panel='rest'] .mm-rest-btn:hover {
   color: #fff2c0;
   box-shadow:
     inset calc(var(--u) * 1) calc(var(--u) * 1) 0 #fbe0cf,
@@ -65,12 +67,12 @@
     inset calc(var(--u) * 2) calc(var(--u) * 2) 0 rgba(255, 244, 232, 0.42),
     inset calc(var(--u) * -2) calc(var(--u) * -2) 0 rgba(58, 22, 12, 0.55);
 }
-.mm-ui .mm-rest-btn > span:first-child { flex: 1; text-align: center; }
-.mm-ui .mm-rest-btn.is-barred { color: #f0c0b0; }
-.mm-ui .mm-rest-btn.is-barred:hover { color: #ff9c8c; }
+.mm-panel[data-panel='rest'] .mm-rest-btn > span:first-child { flex: 1; text-align: center; }
+.mm-panel[data-panel='rest'] .mm-rest-btn.is-barred { color: #f0c0b0; }
+.mm-panel[data-panel='rest'] .mm-rest-btn.is-barred:hover { color: #ff9c8c; }
 
 /* The hour a wait ends, sitting where the apple sits on the rest button. */
-.mm-ui .mm-rest-when {
+.mm-panel[data-panel='rest'] .mm-rest-when {
   font-size: calc(var(--u) * 10);
   font-style: italic;
   color: #f4e0d2;
@@ -80,7 +82,7 @@
 /* The one applied plate on the screen, and the reference agrees: the wait
    header is a near-black green plaque let into the marble, with the same
    recessed polarity as the group box under it. */
-.mm-ui .mm-rest-group-head {
+.mm-panel[data-panel='rest'] .mm-rest-group-head {
   height: calc(var(--u) * 18);
   flex: 0 0 auto;
   font-size: calc(var(--u) * 12);
@@ -91,7 +93,7 @@
 }
 /* The group box is the opposite polarity: it is a recess cut into the slab
    with the three keys standing up inside it. */
-.mm-ui .mm-rest-group {
+.mm-panel[data-panel='rest'] .mm-rest-group {
   flex: 0 0 auto;
   gap: calc(var(--u) * 4);
   padding: calc(var(--u) * 4);
@@ -104,7 +106,7 @@
 
 /* ── the camp plaque ──────────────────────────────────────────────────────── */
 
-.mm-ui .mm-rest-camp {
+.mm-panel[data-panel='rest'] .mm-rest-camp {
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -121,25 +123,25 @@
     inset calc(var(--u) * -2) calc(var(--u) * -2) 0 rgba(255, 236, 220, 0.24);
   font-size: calc(var(--u) * 11);
 }
-.mm-ui .mm-rest-camp .mm-row { line-height: calc(var(--u) * 15); flex: 0 0 auto; }
+.mm-panel[data-panel='rest'] .mm-rest-camp .mm-row { line-height: calc(var(--u) * 15); flex: 0 0 auto; }
 
 /* Interruption, as a bar that fills from safe green into danger — the only
    place on the screen where colour carries a number. */
-.mm-ui .mm-rest-risk {
+.mm-panel[data-panel='rest'] .mm-rest-risk {
   height: calc(var(--u) * 6);
   flex: 0 0 auto;
   margin: calc(var(--u) * 3) calc(var(--u) * 8);
   background: rgba(40, 20, 14, 0.7);
   box-shadow: inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(20, 10, 8, 0.9);
 }
-.mm-ui .mm-rest-risk i {
+.mm-panel[data-panel='rest'] .mm-rest-risk i {
   display: block;
   height: 100%;
   min-width: calc(var(--u) * 2);
   background: linear-gradient(90deg, #00b208, #b5c700 45%, #de2831);
 }
 
-.mm-ui .mm-rest-verdict {
+.mm-panel[data-panel='rest'] .mm-rest-verdict {
   margin: calc(var(--u) * 2) calc(var(--u) * 8) 0;
   font-size: calc(var(--u) * 10);
   font-style: italic;
@@ -151,29 +153,29 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.mm-ui .mm-rest-verdict.is-bad { color: #ffc0b0; }
+.mm-panel[data-panel='rest'] .mm-rest-verdict.is-bad { color: #ffc0b0; }
 
 /* ── the clock ────────────────────────────────────────────────────────────── */
 
-.mm-ui .mm-clock { padding: calc(var(--u) * 8) calc(var(--u) * 8); gap: calc(var(--u) * 8); }
-.mm-ui .mm-clock-instruments {
+.mm-panel[data-panel='rest'] .mm-clock { padding: calc(var(--u) * 8) calc(var(--u) * 8); gap: calc(var(--u) * 8); }
+.mm-panel[data-panel='rest'] .mm-clock-instruments {
   width: calc(var(--u) * 46);
   display: flex;
   flex-direction: column;
   gap: calc(var(--u) * 6);
 }
-.mm-ui .mm-clock-glass { width: 100%; flex: 1; }
-.mm-ui .mm-moon {
+.mm-panel[data-panel='rest'] .mm-clock-glass { width: 100%; flex: 1; }
+.mm-panel[data-panel='rest'] .mm-moon {
   width: calc(var(--u) * 34);
   height: calc(var(--u) * 34);
   margin: 0 auto;
   filter: drop-shadow(0 0 calc(var(--u) * 4) rgba(220, 230, 200, 0.35));
 }
-.mm-ui .mm-moon svg { display: block; }
+.mm-panel[data-panel='rest'] .mm-moon svg { display: block; }
 
-.mm-ui .mm-clock-rows { gap: calc(var(--u) * 1); font-size: calc(var(--u) * 12); }
-.mm-ui .mm-clock-rows .mm-row { padding: 0 calc(var(--u) * 4); line-height: calc(var(--u) * 17); }
-.mm-ui .mm-clock-time {
+.mm-panel[data-panel='rest'] .mm-clock-rows { gap: calc(var(--u) * 1); font-size: calc(var(--u) * 12); }
+.mm-panel[data-panel='rest'] .mm-clock-rows .mm-row { padding: 0 calc(var(--u) * 4); line-height: calc(var(--u) * 17); }
+.mm-panel[data-panel='rest'] .mm-clock-time {
   margin-bottom: calc(var(--u) * 4);
   padding-right: calc(var(--u) * 4);
   text-align: right;

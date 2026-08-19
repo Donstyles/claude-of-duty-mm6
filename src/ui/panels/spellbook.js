@@ -56,6 +56,24 @@ const PLATE_BASE = 'art/spells/';
 const plateUrl = (spellId) => `${PLATE_BASE}${spellId}.plate.png`;
 
 /**
+ * The same url, made absolute against the document.
+ *
+ * A relative url handed to a custom property is resolved against the sheet the
+ * `var()` is *written* in, not against the element it lands on, and this file's
+ * stylesheet is built into `/assets/`. So `art/spells/x.png` set on an element
+ * loads as a background — inline styles resolve against the document — and 404s
+ * as a mask, which silently drops the mask layer and takes the halo fix with
+ * it. Absolute is the only form that means the same thing in both places.
+ */
+const absolute = (url) => {
+  try {
+    return new URL(url, document.baseURI).href;
+  } catch {
+    return url;
+  }
+};
+
+/**
  * The nine school cover paintings.
  *
  * Cell (0,0) is a school illustration and not a spell — a fire-wreathed figure
@@ -423,7 +441,7 @@ export class SpellbookPanel extends Panel {
     // pixels, which reads as a white halo once it is on paper; masking a plate
     // with itself squares the alpha, so a rim pixel at half opacity drops to a
     // quarter and the halo goes while every solid pixel is left exactly alone.
-    node.style.setProperty('--sb-plate', `url("${url}")`);
+    node.style.setProperty('--sb-plate', `url("${absolute(url)}")`);
     if (probedPlates.has(url)) return;
     probedPlates.add(url);
     const probe = new Image();

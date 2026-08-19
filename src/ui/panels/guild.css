@@ -23,14 +23,18 @@
 .mm-guild-title {
   text-align: center;
   font-size: calc(var(--u) * 16);
-  line-height: calc(var(--u) * 18);
+  line-height: calc(var(--u) * 19);
+  letter-spacing: 0;
 }
+/* The house's terms under its name. A subtitle names the room, so it takes
+   the label colour — gold is the live control (STYLE.md §2). */
 .mm-guild-sub {
   text-align: center;
   font-style: italic;
   font-size: calc(var(--u) * 12);
-  line-height: calc(var(--u) * 14);
-  color: var(--gold);
+  line-height: calc(var(--u) * 15);
+  letter-spacing: 0;
+  color: var(--dim);
 }
 
 /* ── the working board ────────────────────────────────────────────────────── */
@@ -111,10 +115,12 @@
   line-height: 0;
   filter: drop-shadow(0 calc(var(--u) * 2) calc(var(--u) * 3) rgba(0, 0, 0, 0.8));
 }
+/* A group heading names what follows, so it takes the label colour (§2). */
 .mm-guild-terms-head {
   font-style: italic;
-  font-size: calc(var(--u) * 13);
-  color: var(--gold);
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 15);
+  color: var(--dim);
 }
 .mm-guild-terms { width: 100%; padding: calc(var(--u) * 2) calc(var(--u) * 6); }
 .mm-guild-term {
@@ -134,16 +140,17 @@
   margin-top: calc(var(--u) * 4);
   min-width: calc(var(--u) * 180);
   padding: calc(var(--u) * 4) calc(var(--u) * 14);
-  font-size: calc(var(--u) * 15);
+  font-size: calc(var(--u) * 14);
   text-align: center;
-  color: var(--gold);
+  /* At rest, a control is ink; gold is what the cursor does to it (§2). */
+  color: var(--ink);
   /* Raised, the polarity MM6 gives anything you press. */
   background: rgba(122, 118, 110, 0.55);
   box-shadow:
     inset calc(var(--u) * 1.5) calc(var(--u) * 1.5) 0 var(--bevel-light),
     inset calc(var(--u) * -1.5) calc(var(--u) * -1.5) 0 var(--bevel-dark);
 }
-.mm-guild-join:hover { color: #fff; }
+.mm-guild-join:hover { color: var(--gold); }
 .mm-guild-join.is-dim { color: #a49e96; }
 
 /* ── the shelf ────────────────────────────────────────────────────────────── */
@@ -246,8 +253,9 @@
   flex: 0 0 auto;
 }
 .mm-guild-row .is-num { text-align: right; }
+/* A column head names data, so it is dim — quieter than the data (§2). */
 .mm-guild-row.is-head {
-  color: var(--gold);
+  color: var(--dim);
   font-size: calc(var(--u) * 12);
   border-bottom: calc(var(--u) * 1) solid rgba(8, 12, 8, 0.7);
   margin-bottom: calc(var(--u) * 2);
@@ -265,87 +273,141 @@
 .mm-guild-row:not(.is-head):hover,
 .mm-guild-row:not(.is-head):hover span { color: var(--down); }
 
-/* ── the strip that explains every refusal ────────────────────────────────── */
+/* ── the caption that explains every refusal ──────────────────────────────── */
 
+/* The one caption treatment the interface has (STYLE.md §4): a soft gradient
+   across the foot of the painting, fading upward to nothing.
+ *
+ * This was a hard black box with a pale rule around it — one of three different
+ * caption treatments across the venue screens, against a screen whose whole
+ * argument is that the painted room is never covered. The gradient is the
+ * conversation screen's, to the digit. */
 .mm-guild-notice {
   position: absolute;
-  left: calc(var(--u) * 8);
-  right: calc(var(--u) * 8);
-  bottom: calc(var(--u) * 4);
-  min-height: calc(var(--u) * 46);
-  padding: calc(var(--u) * 5) calc(var(--u) * 10);
-  background: rgba(10, 12, 10, 0.72);
-  box-shadow:
-    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(15, 18, 16, 0.9),
-    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(196, 192, 196, 0.5);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: calc(var(--u) * 26) calc(var(--u) * 14) calc(var(--u) * 10);
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 5, 3, 0) 0%,
+    rgba(8, 5, 3, 0.42) 30%,
+    rgba(8, 5, 3, 0.78) 62%,
+    rgba(8, 5, 3, 0.90) 100%);
 }
 .mm-guild-notice-text {
   font-style: italic;
   font-size: calc(var(--u) * 12);
-  line-height: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 15);
+  letter-spacing: 0;
+  color: var(--ink);
+  text-shadow: var(--shadow), 0 0 calc(var(--u) * 6) rgba(0, 0, 0, 0.9);
 }
 
 /* ── the master's panel ───────────────────────────────────────────────────── */
 
-/* Rough-sawn timber, a framed rectangular painting, the name in MM6's azure,
-   then the offices of the house in white italic. Styled here rather than
-   borrowed from the shop's chrome so the two screens stay independent. */
-.mm-guild-side { position: absolute; inset: 0; padding: calc(var(--u) * 7); }
+/* Rough-sawn timber, a framed rectangular painting, the name in the name
+   colour, then the offices of the house in white italic. Measurements are the
+   house venue sidebar (STYLE.md §3, §8) — identical, to the pixel, to the
+   shop's, the tavern's and the training hall's, which is what "one family"
+   means. Styled here rather than borrowed so the screens stay independent.
+ *
+ * `background: transparent` is §6 rule 2: this component stands on whatever
+ * ground the panel declares — `sideSurface = 'wood'` — and says so. */
+.mm-guild-side {
+  position: absolute;
+  inset: 0;
+  padding: calc(var(--u) * 4) calc(var(--u) * 8) calc(var(--u) * 38);
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
 
 .mm-guild-portrait {
-  width: calc(var(--u) * 62);
-  height: calc(var(--u) * 76);
-  margin: calc(var(--u) * 10) auto 0;
+  flex: none;
+  width: calc(var(--u) * 60);
+  height: calc(var(--u) * 74);
+  margin: calc(var(--u) * 6) auto 0;
   background: center / cover no-repeat;
+  cursor: help;
   box-shadow:
     0 0 0 calc(var(--u) * 1) #10120f,
     0 0 0 calc(var(--u) * 3) #75806f,
     0 0 0 calc(var(--u) * 4) #23261f,
     0 calc(var(--u) * 2) calc(var(--u) * 5) rgba(0, 0, 0, 0.55);
 }
+
+/* The identity block (STYLE.md §3). The role line used to be the house motto —
+   a white italic flavour sentence where the other four venue screens put a
+   trade. The motto is on the portrait's plaque now, where a hall without one
+   costs nothing. */
 .mm-guild-master {
-  margin-top: calc(var(--u) * 7);
+  flex: none;
+  margin-top: calc(var(--u) * 9);
   text-align: center;
   font-size: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 17);
+  letter-spacing: 0;
+  color: var(--name);
+}
+.mm-guild-role {
+  flex: none;
+  text-align: center;
+  font-size: calc(var(--u) * 12);
+  font-style: italic;
   line-height: calc(var(--u) * 15);
-  color: var(--azure);
+  letter-spacing: 0;
+  color: var(--ink);
 }
-.mm-guild-motto {
-  margin-top: calc(var(--u) * 4);
-  padding: 0 calc(var(--u) * 2);
-  text-align: center;
-  font-style: italic;
-  font-size: calc(var(--u) * 11);
-  line-height: calc(var(--u) * 13);
-  color: #e6e0d4;
-}
-.mm-guild-options {
-  margin-top: calc(var(--u) * 10);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(var(--u) * 9);
-}
-.mm-guild-option {
-  font-size: calc(var(--u) * 15);
-  font-style: italic;
-  text-align: center;
-  line-height: calc(var(--u) * 16);
-  max-width: calc(var(--u) * 130);
-}
-.mm-guild-option:hover { color: var(--gold); }
 
-.mm-guild-pupil {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--u) * 44);
+/* Who is here, what it costs, what you hold — the training hall's table, which
+   is the house way of stating a set of numbers (STYLE.md §9). This replaces
+   `At the door: Sir Edran Vaile / 200 gold`, a centred two-line run-on that
+   floated above a quarter of a panel of empty timber. */
+.mm-guild-account {
+  flex: none;
+  margin-top: calc(var(--u) * 12);
+  padding: calc(var(--u) * 3) 0;
+}
+.mm-guild-account .mm-row {
+  padding: 0 calc(var(--u) * 6);
+  line-height: calc(var(--u) * 15);
+  font-size: calc(var(--u) * 12);
+}
+.mm-guild-account .mm-row-label { color: var(--dim); }
+.mm-guild-who {
   text-align: center;
   font-style: italic;
   font-size: calc(var(--u) * 12);
-  line-height: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 16);
+  color: var(--name);
 }
-.mm-guild-purse { display: block; color: var(--gold-deep); }
+
+/* STYLE.md §8: the gap inside the list is fixed and smaller than the gap
+   around it, and the slack is centred rather than dumped at the foot. */
+.mm-guild-options {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: visible;
+  margin-top: calc(var(--u) * 12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 9);
+}
+.mm-guild-option {
+  flex: none;
+  font-size: calc(var(--u) * 16);
+  font-style: italic;
+  text-align: center;
+  line-height: calc(var(--u) * 19);
+  letter-spacing: 0;
+  max-width: calc(var(--u) * 130);
+  color: var(--ink);
+}
+.mm-guild-option:hover { color: var(--gold); }
 
 .mm-guild-exit {
   position: absolute;

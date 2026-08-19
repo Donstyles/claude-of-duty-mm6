@@ -15,14 +15,6 @@
    board, so the goods hang in it behind a scrim and the hearth keeps burning.
 */
 
-/* STYLE.md §2. MM6's own name blue, #109AEF, measures 2.46:1 against our dark
-   venue timber — the least legible text on the panel, on the one string that is
-   the NPC's identity. This is that hue lifted until it clears 4.5:1, measured
-   off a real capture rather than chosen by eye. It is declared per panel
-   because `ui.panels.css` is not ours; it belongs there beside `--azure`. */
-.mm-panel[data-panel='shop'],
-.mm-panel-side[data-panel='shop'] { --name: #5fbcff; }
-
 /* ── which of the shop's three faces is showing ───────────────────────────── */
 
 .mm-panel[data-panel='shop'] .mm-shop-wall,
@@ -194,17 +186,21 @@
 /* ── the keeper's panel ───────────────────────────────────────────────────── */
 
 /* A column, so the five words always land between the keeper's name and the
-   brass oval however long a name Venues.js hands us. The doubled class is not
-   decoration: `.mm-npc-side` in the shared chrome sets the same properties at
-   the same specificity, and panel stylesheets are separate chunks whose load
-   order is the bundler's business, so a tie here is a coin toss.
+   brass oval however long a name Venues.js hands us.
+ *
+ * Scoped by `[data-panel='shop']` rather than by the `.mm-shop-side` class it
+ * also carries, per STYLE.md §11: `.mm-npc-side` is a *shared* class, and a
+ * compound of a shared class and a private one is still a rule that can tie
+ * with another screen's. Panel stylesheets are separate chunks whose load order
+ * is the bundler's business, so a tie is a coin toss — and this component lost
+ * that toss for months.
  *
  * `background: transparent` is load-bearing and is STYLE.md §6 rule 2 written
  * out: this component stands on whatever ground the *panel* declares — here
  * `sideSurface = 'wood'` — and says so, so that no other screen's stylesheet
  * can quietly hand it a different one. It was handed marble for months, and
  * the white action list standing on it was the worst defect in the review. */
-.mm-npc-side.mm-shop-side {
+.mm-panel-side[data-panel='shop'] .mm-npc-side {
   display: flex;
   flex-direction: column;
   padding: calc(var(--u) * 4) calc(var(--u) * 8) calc(var(--u) * 44);
@@ -215,7 +211,7 @@
    sign like "The Scavenged Cabinet" is wider than the panel, so it wraps
    rather than being cut off mid-word — with real leading, because a wrapped
    line set solid is what put "the" into "Blacksmith". */
-.mm-npc-side.mm-shop-side .mm-venue {
+.mm-panel-side[data-panel='shop'] .mm-npc-side .mm-venue {
   position: static;
   flex: none;
   margin: calc(var(--u) * 3) 0 0;
@@ -229,10 +225,10 @@
 
 /* A framed painting, not a cut-out: rectangular, ~4:5, thin grey-green bevel
    over a black card, with the keeper's own room behind them. */
-.mm-npc-side.mm-shop-side .mm-npc-portrait {
+.mm-panel-side[data-panel='shop'] .mm-npc-side .mm-npc-portrait {
   flex: none;
-  width: calc(var(--u) * 62);
-  height: calc(var(--u) * 76);
+  width: calc(var(--u) * 60);
+  height: calc(var(--u) * 74);
   margin: calc(var(--u) * 8) auto 0;
   cursor: help;
   box-shadow:
@@ -245,7 +241,7 @@
 /* The identity block: "Deri Hobb" over "the Weaponsmith" (STYLE.md §3).
    Two elements, never one wrapped run — the name is the person, the role is
    the job, and only the name takes the name colour. */
-.mm-npc-side.mm-shop-side .mm-npc-name {
+.mm-panel-side[data-panel='shop'] .mm-npc-side .mm-npc-name {
   flex: none;
   margin-top: calc(var(--u) * 9);
   text-align: center;
@@ -254,7 +250,7 @@
   letter-spacing: 0;
   color: var(--name);
 }
-.mm-npc-side.mm-shop-side .mm-npc-role {
+.mm-panel-side[data-panel='shop'] .mm-npc-side .mm-npc-role {
   flex: none;
   text-align: center;
   font-size: calc(var(--u) * 12);
@@ -272,14 +268,14 @@
  * so the list stopped reading as a list. STYLE.md §8: the gap inside a group is
  * fixed and smaller than the gap around it, and the slack is centred rather
  * than injected between the rows. */
-.mm-npc-side.mm-shop-side .mm-npc-options {
+.mm-panel-side[data-panel='shop'] .mm-npc-side .mm-npc-options {
   flex: 1 1 auto;
   min-height: 0;
   margin-top: calc(var(--u) * 14);
   justify-content: center;
   gap: calc(var(--u) * 9);
 }
-.mm-npc-side.mm-shop-side .mm-npc-option {
+.mm-panel-side[data-panel='shop'] .mm-npc-side .mm-npc-option {
   flex: none;
   font-size: calc(var(--u) * 16);
   line-height: calc(var(--u) * 19);
@@ -289,7 +285,7 @@
 /* Gold is the live control and nothing else (STYLE.md §2): the verb you are
    inside, and whatever the cursor is on. `Special` used to be gold-deep, which
    is the money colour — a fifth action is not money. */
-.mm-npc-side.mm-shop-side .mm-npc-option.is-current,
-.mm-npc-side.mm-shop-side .mm-npc-option:hover { color: var(--gold); }
-.mm-npc-side.mm-shop-side .mm-npc-option.is-special { color: var(--ink); }
-.mm-npc-side.mm-shop-side .mm-npc-option.is-special:hover { color: var(--gold); }
+.mm-panel-side[data-panel='shop'] .mm-npc-side .mm-npc-option.is-current,
+.mm-panel-side[data-panel='shop'] .mm-npc-side .mm-npc-option:hover { color: var(--gold); }
+.mm-panel-side[data-panel='shop'] .mm-npc-side .mm-npc-option.is-special { color: var(--ink); }
+.mm-panel-side[data-panel='shop'] .mm-npc-side .mm-npc-option.is-special:hover { color: var(--gold); }

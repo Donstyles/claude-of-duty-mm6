@@ -5,6 +5,11 @@
  * panel-relative: the spellbook replaces the viewport only, so the frame's 8 px
  * left column comes off every x.
  *
+ * Every selector in this file is scoped to `[data-panel='spellbook']` (STYLE.md
+ * section 11). The `mm-sb-` names look private, but a name is a bet rather than
+ * a boundary, and the shop counter standing on the conversation screen's marble
+ * is what that bet costs when it loses.
+ *
  * The one thing to hold on to: this is not a symmetric two-page spread. MM6
  * shows the right-hand leaf of a very thick book — fold and gilt plait down the
  * LEFT margin, fore-edge stack past the right, dark green cloth binding beyond
@@ -23,7 +28,7 @@
    rectangle is only that wide at 4:3, and on a wider window the extra is bare
    binding cloth to either side rather than a page stretched out of its own
    proportions. */
-.mm-sb {
+.mm-panel[data-panel='spellbook'] .mm-sb {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -37,7 +42,7 @@
 /* The painted object itself. It is drawn at the panel's exact 460 x 352 native
    proportion, so stretching it to the box costs nothing and every native figure
    in this file lands where the paint put it. */
-.mm-sb-book {
+.mm-panel[data-panel='spellbook'] .mm-sb-book {
   position: absolute;
   inset: 0;
   background: var(--sb-book) center / 100% 100% no-repeat;
@@ -46,7 +51,7 @@
 /* The leaf is now only a coordinate frame: the paper it used to draw is on the
    plate behind it, with a gutter, a fore-edge, a sag and a curl that no stack
    of gradients was ever going to produce. */
-.mm-sb-page {
+.mm-panel[data-panel='spellbook'] .mm-sb-page {
   position: absolute;
   left: calc(var(--u) * 14);
   right: calc(var(--u) * 56);
@@ -58,8 +63,8 @@
 
 /* 3 columns x 4 rows. Cell (0,0) is the school's illumination; the other eleven
    are its spells in level order. The grid starts clear of the gilt plait, which
-   the plate tools down the fold at native x 13..35. */
-.mm-sb-grid {
+   the plate tools down the fold at native x 27..41. */
+.mm-panel[data-panel='spellbook'] .mm-sb-grid {
   position: absolute;
   left: calc(var(--u) * 32);
   right: calc(var(--u) * 4);
@@ -69,7 +74,7 @@
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(4, calc(var(--u) * 67));
 }
-.mm-sb-cell {
+.mm-panel[data-panel='spellbook'] .mm-sb-cell {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -79,12 +84,12 @@
 
 /* The setting a miniature lies in, and an unlearned spell leaves empty.
  *
- * The original prints a soft airbrushed ellipse here, and with eleven of them
+ * The original prints a soft airbrushed ellipse here, and with six of eleven
  * empty the page reads as unfinished — a reviewer called them exactly that. An
  * oval let into the paper with a lip, a hairline rule and a ghost rosette in
  * the well reads instead as a place a painting is *meant* to go. It belongs to
  * the page and not to the spell, so it stays when the spell is missing. */
-.mm-sb-cell::before {
+.mm-panel[data-panel='spellbook'] .mm-sb-cell::before {
   content: '';
   position: absolute;
   top: calc(var(--u) * 4);
@@ -94,14 +99,18 @@
   margin-left: calc(var(--u) * -39);
   background: var(--sb-slot) center / 100% 100% no-repeat;
 }
-.mm-sb-cell.is-illum::before { display: none; }
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-illum::before { display: none; }
 
-.mm-sb-art { position: relative; width: 100%; height: calc(var(--u) * 44); }
+.mm-panel[data-panel='spellbook'] .mm-sb-art {
+  position: relative;
+  width: 100%;
+  height: calc(var(--u) * 44);
+}
 
 /* The plate is a square file that is mostly margin, so it hangs out of its own
    box on every side: what has to measure ~70 px on the page is the ink, not the
    PNG. Nothing is clipped — the whole point of an alpha matte is soft edges. */
-.mm-sb-ink {
+.mm-panel[data-panel='spellbook'] .mm-sb-ink {
   position: absolute;
   left: 50%;
   top: calc(var(--u) * -18);
@@ -131,7 +140,7 @@
 /* Labels are small dark brown-black serif, centred under the art, wrapping to
    two centred lines. Ink on paper carries no drop shadow — that rule belongs to
    the white text on the chrome. */
-.mm-sb-name {
+.mm-panel[data-panel='spellbook'] .mm-sb-name {
   position: relative;
   max-width: calc(var(--u) * 112);
   text-align: center;
@@ -149,33 +158,35 @@
    is what made a reviewer call the slots unfinished. A ghost fills the page and
    still withholds everything the original withholds: the name stays off, so an
    unbought spell is a shape you cannot read rather than a spell you can. */
-.mm-sb-cell.is-unknown .mm-sb-name { display: none; }
-.mm-sb-cell.is-unknown .mm-sb-ink {
-  filter: grayscale(0.88) contrast(0.72) opacity(0.17);
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-unknown .mm-sb-name { display: none; }
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-unknown .mm-sb-ink {
+  filter: grayscale(0.88) contrast(0.72) opacity(0.22);
 }
-.mm-sb-cell.is-unknown { cursor: default; }
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-unknown { cursor: default; }
 
 /* Learned but beyond this caster's rank in the school: the painting stays on
-   the page, drained of its colour, because that is a wall and not a delay. */
-.mm-sb-cell.is-locked { cursor: default; }
-.mm-sb-cell.is-locked .mm-sb-ink {
+   the page, drained of its colour, because that is a wall and not a delay. The
+   name is dimmed only as far as 4.5:1 on paper will carry — a spell you cannot
+   cast is still a spell you have to be able to read (STYLE.md section 6). */
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-locked { cursor: default; }
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-locked .mm-sb-ink {
   filter: grayscale(0.82) contrast(0.86) opacity(0.34)
     drop-shadow(calc(var(--u) * 2) calc(var(--u) * 3) calc(var(--u) * 2) rgba(64, 46, 24, 0.25));
 }
-.mm-sb-cell.is-locked .mm-sb-name { color: rgba(52, 40, 26, 0.46); }
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-locked .mm-sb-name { color: rgba(52, 40, 26, 0.72); }
 
 /* Learned, in rank, and simply unaffordable right now. A night's rest fixes it,
    so the painting only dims rather than draining. */
-.mm-sb-cell.is-costly .mm-sb-ink {
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-costly .mm-sb-ink {
   filter: saturate(0.5) opacity(0.6)
     drop-shadow(calc(var(--u) * 2) calc(var(--u) * 3) calc(var(--u) * 2) rgba(64, 46, 24, 0.3));
 }
-.mm-sb-cell.is-costly .mm-sb-name { color: rgba(58, 44, 28, 0.62); }
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-costly .mm-sb-name { color: rgba(58, 44, 28, 0.78); }
 
 /* Selection is the page catching the light under the chosen spell, and its name
    in the deep red-brown the game marks a choice with. No box, no tint. */
-.mm-sb-cell.is-selected .mm-sb-name { color: #6b1008; }
-.mm-sb-cell.is-selected .mm-sb-art::after {
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-selected .mm-sb-name { color: #6b1008; }
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-selected .mm-sb-art::after {
   content: '';
   position: absolute;
   left: 50%;
@@ -195,8 +206,12 @@
    with the window punched through it, so the moulding has a lit side, a
    shadowed side and corner bosses holding the mitres — which is what makes it a
    frame rather than four identical sticks. */
-.mm-sb-illum { position: relative; width: 100%; height: calc(var(--u) * 53); }
-.mm-sb-illum-frame {
+.mm-panel[data-panel='spellbook'] .mm-sb-illum {
+  position: relative;
+  width: 100%;
+  height: calc(var(--u) * 53);
+}
+.mm-panel[data-panel='spellbook'] .mm-sb-illum-frame {
   position: absolute;
   left: 50%;
   top: calc(var(--u) * -11);
@@ -208,7 +223,7 @@
 /* The mount goes on last, over the painting: it is a plate with the window
    punched out of it, so the rebate and the corner bosses overlap the art the
    way a real frame overlaps a canvas. */
-.mm-sb-illum-frame::after {
+.mm-panel[data-panel='spellbook'] .mm-sb-illum-frame::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -217,31 +232,35 @@
 /* The covers are photographs of paintings, several of them still carrying the
    mount, the deckle or the studio frame they were shot in, so the art is pushed
    past the rebate and the surround falls off the edge. */
-.mm-sb-illum-art {
+.mm-panel[data-panel='spellbook'] .mm-sb-illum-art {
   position: absolute;
   inset: calc(var(--u) * 7);
   background: center / cover no-repeat;
 }
-.mm-sb-cell.is-locked .mm-sb-illum-art { filter: grayscale(0.75) opacity(0.55); }
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-locked .mm-sb-illum-art {
+  filter: grayscale(0.75) opacity(0.55);
+}
 
 /* The plate's caption. Not a spell name: it is the page's heading, so it is set
    in the gilt-brown the tooling is in, letter-spaced and in small caps, and it
    sits in the same band every caption in the row sits in. */
-.mm-sb-name.is-title {
+.mm-panel[data-panel='spellbook'] .mm-sb-name.is-title {
   color: #4a3208;
   font-variant: small-caps;
   letter-spacing: calc(var(--u) * 1.1);
   font-size: calc(var(--u) * 12);
 }
-.mm-sb-cell.is-locked .mm-sb-name.is-title { color: rgba(74, 50, 8, 0.45); }
+.mm-panel[data-panel='spellbook'] .mm-sb-cell.is-locked .mm-sb-name.is-title {
+  color: rgba(74, 50, 8, 0.72);
+}
 
 /* ── the caster's line ────────────────────────────────────────────────────── */
 
 /* An engraved rule of tiny diamonds and then the one thing on this page the
    original does not have, kept as quiet as ink can be. */
-.mm-sb-colophon {
+.mm-panel[data-panel='spellbook'] .mm-sb-colophon {
   position: absolute;
-  left: calc(var(--u) * 30);
+  left: calc(var(--u) * 22);
   right: calc(var(--u) * 8);
   bottom: calc(var(--u) * 3);
   display: flex;
@@ -254,13 +273,13 @@
   text-shadow: none;
 }
 /* Whatever the name and the rank come to, the line ends inside the page. */
-.mm-sb-colophon > span {
+.mm-panel[data-panel='spellbook'] .mm-sb-colophon > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mm-sb-colophon::before {
+.mm-panel[data-panel='spellbook'] .mm-sb-colophon::before {
   content: '';
   position: absolute;
   left: 0;
@@ -274,8 +293,8 @@
     linear-gradient(180deg, rgba(96, 80, 56, 0.18), rgba(96, 80, 56, 0) 60%);
   mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
 }
-.mm-sb-rank { color: #5a3a1c; }
-.mm-sb-sp { color: #3a2a18; }
+.mm-panel[data-panel='spellbook'] .mm-sb-rank { color: #5a3a1c; }
+.mm-panel[data-panel='spellbook'] .mm-sb-sp { color: #3a2a18; }
 
 /* ── binding, ribbons and plates ──────────────────────────────────────────── */
 
@@ -285,7 +304,7 @@
    The group carries one drop shadow instead of nine: the flaps never overlap,
    so the result is identical and the compositor is handed a single filtered
    layer rather than one per ribbon. */
-.mm-sb-tabs {
+.mm-panel[data-panel='spellbook'] .mm-sb-tabs {
   position: absolute;
   right: calc(var(--u) * 6);
   top: calc(var(--u) * 30);
@@ -295,34 +314,39 @@
   gap: calc(var(--u) * 3);
   filter: drop-shadow(calc(var(--u) * -1) calc(var(--u) * 1.5) calc(var(--u) * 2) rgba(0, 0, 0, 0.62));
 }
-/* Scoped through the book: the shared skin resets every button's background and
-   colour at `.mm-ui :where(button)`, which carries the same specificity as a
-   bare class and loads after this file, so a one-class selector loses the tie. */
-.mm-sb .mm-sb-tab {
+/* Scoped through the panel and the book both: the shared skin resets every
+   button's background and colour at `.mm-ui :where(button)`, which carries the
+   same specificity as a bare class and loads after this file, so a one-class
+   selector loses the tie. */
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-tab {
   position: relative;
   height: calc(var(--u) * 27);
   margin-left: calc(var(--u) * 14);
   display: flex;
   align-items: center;
   padding-left: calc(var(--u) * 7);
-  color: #7d6a4a;
+  color: #6b5838;
   background: var(--sb-tab) center / 100% 100% no-repeat;
   clip-path: polygon(0 0, 100% 0, 86% 26%, 100% 50%, 86% 74%, 100% 100%, 0 100%);
   transition: margin-left 0.12s ease-out;
 }
 /* The sigil is sized in native pixels like everything else on the page, not in
    the CSS pixels the shared icon helper defaults to. */
-.mm-sb-tab svg { width: calc(var(--u) * 15); height: calc(var(--u) * 15); }
-.mm-sb .mm-sb-tab.is-active {
+.mm-panel[data-panel='spellbook'] .mm-sb-tab svg {
+  width: calc(var(--u) * 15);
+  height: calc(var(--u) * 15);
+}
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-tab.is-active {
   margin-left: calc(var(--u) * -8);
   background-image: var(--sb-tab-on);
 }
 /* A school this character was never taught: the flap is there, dulled to old
    card, and it does not open. Never hidden — you are meant to see what you are
-   missing. */
-.mm-sb .mm-sb-tab.is-locked {
+   missing. The vellum carries the state; the sigil stays legible, because a
+   glyph at 2:1 on its own ground is not dulled, it is broken. */
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-tab.is-locked {
   background-image: var(--sb-tab-off);
-  color: rgba(58, 48, 32, 0.45);
+  color: rgba(58, 48, 32, 0.8);
   cursor: default;
 }
 
@@ -331,14 +355,14 @@
    pixels tall, and at that size a reviewer reads them off the screen as `/+·+`
    and `S+·+`. A control nobody can name is a defect no matter how well the
    tablet it is cut into is painted. */
-.mm-sb-btns {
+.mm-panel[data-panel='spellbook'] .mm-sb-btns {
   position: absolute;
   right: calc(var(--u) * 54);
   bottom: calc(var(--u) * 2);
   display: flex;
   gap: calc(var(--u) * 5);
 }
-.mm-sb .mm-sb-btn {
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-btn {
   width: calc(var(--u) * 72);
   height: calc(var(--u) * 20);
   display: flex;
@@ -349,25 +373,26 @@
   background: var(--sb-bone) center / 100% 100% no-repeat;
   filter: drop-shadow(calc(var(--u) * 1.4) calc(var(--u) * 2) calc(var(--u) * 2.4) rgba(0, 0, 0, 0.55));
 }
-.mm-sb .mm-sb-btn .mm-sb-btn-glyph {
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-btn .mm-sb-btn-glyph {
   display: block;
   width: calc(var(--u) * 13);
   height: calc(var(--u) * 13);
 }
-.mm-sb .mm-sb-btn svg { display: block; width: 100%; height: 100%; }
-/* Engraved, not printed: the letter is cut in dark and the shoulder under the
-   cut catches the light, which is the same trick the blind tooling on the cover
-   is drawn with. */
-.mm-sb .mm-sb-btn .mm-sb-btn-cap {
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-btn svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-btn .mm-sb-btn-cap {
   font-size: calc(var(--u) * 10);
   font-variant: small-caps;
   letter-spacing: calc(var(--u) * 0.8);
   line-height: 1;
-  text-shadow: 0 calc(var(--u) * 0.7) 0 rgba(255, 252, 236, 0.75);
 }
-.mm-sb .mm-sb-btn.is-off {
-  color: rgba(42, 30, 14, 0.36);
+/* Unavailable, not invisible: a solid muted brown on the dulled tablet holds
+   5:1, where the half-transparent ink it replaces measured 2.1:1. */
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-btn.is-off {
+  color: #584a36;
   background-image: var(--sb-bone-off);
   cursor: default;
 }
-.mm-sb .mm-sb-btn.is-off .mm-sb-btn-cap { text-shadow: 0 calc(var(--u) * 0.7) 0 rgba(255, 252, 236, 0.4); }

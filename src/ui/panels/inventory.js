@@ -3,7 +3,6 @@ import { Panel, itemFootprint, itemSprite } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, clamp } from '../widgets.js';
 import { getClass } from '../../game/data/Classes.js';
 import { packCase } from '../art/packCase.js';
-import { brassTab } from '../art/brassTab.js';
 
 const GRID_COLS = 14;
 const GRID_ROWS = 9;
@@ -11,9 +10,6 @@ const GRID_ROWS = 9;
 const CELL = 32;
 /** Under this a press is a click that keeps carrying; over it, it is a drag. */
 const DRAG_SLOP = 6;
-
-/** The brass tab under the grid, in native pixels: an oval's width, flatter. */
-const TAB = { w: 58, h: 11 };
 
 /**
  * How the painted body lands in the sidebar niche.
@@ -138,20 +134,21 @@ export class InventoryPanel extends Panel {
     this.items);
     body.appendChild(this.pack);
 
-    this.ownerEl = el('div', { className: 'mm-inv-owner mm-t-gold' });
+    // A party member's proper name, which STYLE.md §2 gives its own colour —
+    // it is not a control, so it is not gold.
+    this.ownerEl = el('div', { className: 'mm-inv-owner' });
     tooltip.attach(this.ownerEl, () => tipMarkup({
       title: 'Whose pack this is',
       flavour: 'Tab turns to the next of the four, and so does their portrait on the bar below. '
         + 'Nothing crosses between packs: what you are holding goes back before the page turns.',
     }));
 
-    // Cast brass, like the five ovals below it and like nothing else on the
-    // screen — and set into the stone channel rather than floating over it, so
-    // it cannot be mistaken for a caption.
-    const tab = brassTab(this.ui.textures, TAB.w, TAB.h);
+    // A stone-inset pill: `mm-engraved` is the house's one recess treatment,
+    // the same cut the panel uses everywhere else, at the width of the oval
+    // directly beneath it. Not a new casting invented for one control — that
+    // was the original defect, in its other direction.
     const arrange = el('button', {
-      className: 'mm-inv-arrange', type: 'button', text: 'Arrange',
-      style: tab ? { backgroundImage: `url("${tab}")` } : {},
+      className: 'mm-inv-arrange mm-engraved', type: 'button', text: 'Arrange',
     });
     arrange.addEventListener('click', () => this._act(() => this.ui.sortInventory?.(this.ui.activeIndex)));
     tooltip.attach(arrange, () => tipMarkup({
@@ -390,6 +387,11 @@ export class InventoryPanel extends Panel {
     };
     this.ui.drag = this.held;
     this.ghost = this._sprite(item, nu(fp.w * CELL - 3), nu(fp.h * CELL - 3), 'mm-item mm-inv-ghost');
+    // The ghost hangs off the root so it can cross the divider column without
+    // being clipped, which puts it outside every panel-scoped selector. It
+    // carries the panel's own hook instead, so this screen's stylesheet can
+    // still reach it and no other screen's ever can.
+    this.ghost.dataset.panel = 'inventory';
     this.ui.root?.appendChild(this.ghost);
     window.addEventListener('mousemove', this._onMove);
     window.addEventListener('mouseup', this._onUp);
@@ -592,7 +594,8 @@ export class InventoryPanel extends Panel {
   _toggleInspect() {
     this.inspecting = !this.inspecting;
     // Instructions live in the message strip, exactly as the shop's do.
-    this._say(this.inspecting ? 'Select the Item to Appraise' : '');
+    // The strip's grammar (STYLE.md §5): one sentence, sentence case, full stop.
+    this._say(this.inspecting ? 'Select the item to appraise.' : '');
     this.glass.classList.toggle('is-active', this.inspecting);
   }
 
@@ -653,10 +656,14 @@ export class InventoryPanel extends Panel {
     }
     if (item.weight) lines.push({ k: 'Weight', v: `${item.weight} lb` });
     lines.push({ k: 'Value', v: unknown ? '?' : `${fmt(item.value ?? 0)} gold` });
+    // `--down` is the one colour STYLE.md §2 gives a blocking condition, and it
+    // is already declared once, shared, in ../ui.panels.css. "Not identified"
+    // is not a blocking condition and is not a name, so it takes no colour at
+    // all rather than minting a role for itself.
     lines.push({
       k: 'Condition',
       v: item.broken ? '<span class="mm-t-down">Broken</span>'
-        : unknown ? '<span class="mm-t-azure">Not identified</span>'
+        : unknown ? 'Not identified'
           : 'Good',
     });
     if (item.bonus) lines.push(`<span class="mm-tip-magic">${item.bonus}</span>`);
@@ -673,10 +680,15 @@ export class InventoryPanel extends Panel {
           : slot ? 'Click to lift · drop on the figure to wear'
             : 'Click to lift · right-click to use';
 
+    // The tooltip is `position: fixed` at the document root, so a panel file
+    // cannot style it without repainting every tooltip in the game (STYLE.md
+    // §11). A broken find says so in the shared `mm-t-down` and nothing here
+    // reaches into `.mm-tip`.
     return tipMarkup({
-      title: this._name(item),
+      title: item.broken
+        ? `<span class="mm-t-down">${this._name(item)}</span>`
+        : this._name(item),
       subtitle: src.from === 'equip' ? `Worn — ${this._kind(item)}` : this._kind(item),
-      kind: item.broken ? 'is-broken' : unknown ? 'is-unknown' : '',
       lines,
       flavour: unknown ? 'The maker\'s marks mean nothing to you yet.' : (item.desc || ''),
       footer,

@@ -126,36 +126,46 @@ const CHARACTER_DEFS = {
    * then worn until the crown of every thread is rubbed pale.
    */
   'npc-wool': {
-    normalStrength: 0.055, ao: { radius: 0.020, amplitude: 0.60 },
+    normalStrength: 0.042, ao: { radius: 0.020, amplitude: 0.60 },
     physical: { sheen: 0.55, sheenRoughness: 0.95 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // A chunky plain weave. 30 threads to the tile with a tile set at
-        // roughly a hand's breadth puts a thread at about 4 mm, which is what
-        // hand-spun homespun actually measures and — more to the point — is
-        // still resolvable at conversation range instead of mipping to mud.
+        // A chunky plain weave. 44 threads to the tile, with the tile set at
+        // roughly a hand's breadth, puts a thread at about 7 mm — coarse
+        // homespun, and about two pixels at conversation range.
+        //
+        // The amplitudes below matter more than the counts. A thread that lands
+        // near one pixel beats against the pixel grid and the normal map turns
+        // the garment into corduroy, which is exactly what the first pass did.
+        // So most of the relief lives in the mesoscale — drape, crease, slub —
+        // where features are five to fifteen pixels and survive minification,
+        // and the weave itself only whispers.
         float threadMask;
-        float weave = tWeave(uv, 30.0, threadMask);
+        float weave = tWeave(uv, 44.0, threadMask);
 
         // Hand-spun yarn runs thick and thin along its length. Modulating warp
         // and weft separately is what stops the weave reading as graph paper.
-        float slubW = tFbm01(uv,        vec2(30.0,  4.0), 3);
-        float slubF = tFbm01(uv + 0.37, vec2( 4.0, 30.0), 3);
+        float slubW = tFbm01(uv,        vec2(44.0,  5.0), 3);
+        float slubF = tFbm01(uv + 0.37, vec2( 5.0, 44.0), 3);
         float slub = slubW * slubF;
 
         // Fulling mats the surface: loose fibre ends lying every which way.
         float nap = cFibres(uv, vec2(70.0, 120.0), 6.0, 0.04, 3);
+
+        // How heavy cloth actually falls: broad soft undulations, elongated
+        // downward because gravity has a direction.
+        float drape = tFbm01(tWarp(uv, vec2(2.0), 0.07, 2), vec2(2.5, 4.5), 4);
 
         // Pills — balled-up fibre that catches light on a well-used garment.
         float pill = 1.0 - smoothstep(0.0, 0.09, tWorley(uv + 0.7, 24.0, 1.0).x);
         float pillWhere = smoothstep(0.55, 0.88, tFbm01(uv + 0.2, 6.0, 3));
 
         // Creases worn in by folding. Sparse: cloth this heavy holds few.
-        float crease = tCracks(tWarp(uv, 3.0, 0.06, 2), vec2(3.0, 4.0), 0.11, 0.85)
+        float crease = tCracks(tWarp(uv, 3.0, 0.06, 2), vec2(3.0, 4.0), 0.12, 0.85)
                      * smoothstep(0.44, 0.80, tFbm01(uv + 0.61, 2.5, 3));
 
-        float h = 0.30 + weave * 0.27 + slub * 0.20 + nap * 0.11
-                + pill * pillWhere * 0.09 - crease * 0.11;
+        float h = 0.26 + weave * 0.16 + slub * 0.15 + nap * 0.08
+                + drape * 0.24 + pill * pillWhere * 0.07 - crease * 0.15;
         return vec3(clamp(h, 0.0, 1.0), slub, weave);
       }
       Surf mShade(vec2 uv, MSample m) {
@@ -165,24 +175,29 @@ const CHARACTER_DEFS = {
         vec3 deep = col8(112, 105,  94);
 
         // A dye lot is never even. Blotching at roughly a hand's breadth is the
-        // single most convincing thing about hand-dyed cloth.
-        float lot = tFbm01(tWarp(uv, vec2(3.0), 0.05, 2), 7.0, 4);
+        // single most convincing thing about hand-dyed cloth — and it is the
+        // term that still reads at ten paces, once the weave has mipped away.
+        float lot = tFbm01(tWarp(uv, vec2(3.0), 0.05, 2), 6.0, 4);
+        float lotB = tFbm01(uv + 0.55, vec2(3.0, 2.0), 3);
 
         vec3 c = mix(deep, mid, smoothstep(0.16, 0.60, m.h));
         c = mix(c, pale, smoothstep(0.52, 1.0, m.h) * (0.35 + m.id * 0.50));
 
         // Uneven take-up: some threads drank the vat, some barely wetted.
-        c *= 0.82 + 0.32 * lot;
-        c = hueShift(c, (lot - 0.5) * 0.14);
-        c = saturation(c, 0.80 + m.id * 0.45);
+        c *= 0.72 + 0.44 * lot;
+        c *= 0.88 + 0.24 * lotB;
+        c = hueShift(c, (lot - 0.5) * 0.16);
+        c = saturation(c, 0.74 + m.id * 0.55);
 
         // Wear rubs the crown of every thread pale and grey.
-        float wear = smoothstep(0.58, 1.0, m.h) * tFbm01(uv + 0.9, 5.0, 4);
-        c = mix(c, mix(pale, vec3(lum(pale)), 0.55), wear * 0.42);
+        float wear = smoothstep(0.52, 1.0, m.h) * tFbm01(uv + 0.9, 4.0, 4);
+        c = mix(c, mix(pale, vec3(lum(pale)), 0.55), wear * 0.46);
 
-        // Road dirt settles in the cavities of the weave, never on the crowns.
+        // Road dirt: in the cavities of the weave, and in the broad smears
+        // where a garment that gets worked in actually gets dirty.
         vec3 grime = col8(96, 84, 68);
-        c = mix(c, grime, (1.0 - m.ao) * 0.30);
+        float smear = smoothstep(0.55, 0.95, tFbm01(tWarp(uv, 2.0, 0.10, 2), vec2(3.0, 5.0), 4));
+        c = mix(c, grime, (1.0 - m.ao) * 0.30 + smear * 0.22);
         c *= 0.80 + 0.30 * m.ao;
 
         // Rough where the nap stands, a little polished where it is worn away.
@@ -200,29 +215,34 @@ const CHARACTER_DEFS = {
    * surface takes a low sheen, which is the whole visual difference from wool.
    */
   'npc-cloth': {
-    normalStrength: 0.034, ao: { radius: 0.016, amplitude: 0.45 },
+    normalStrength: 0.026, ao: { radius: 0.016, amplitude: 0.45 },
     physical: { sheen: 0.85, sheenRoughness: 0.62 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Fine ground weave, twice the count of the homespun.
+        // Fine ground weave, twice the count of the homespun. It is meant to be
+        // felt rather than counted: a broadcloth thread is three millimetres,
+        // which is below a pixel at any distance a player stands, so it sits
+        // low in the height field and the fold structure carries the surface.
         float threadMask;
-        float weave = tWeave(uv, 68.0, threadMask);
+        float weave = tWeave(uv, 88.0, threadMask);
 
         // The twill line: a shallow diagonal ridge running up to the right.
         // Broadcloth is sheared after fulling, so this is a whisper, not a rib.
-        float twill = tAnisoFbm(uv, vec2(1.0, 1.0), vec2(1.0, -1.0), vec2(34.0, 104.0), 2);
+        float twill = tAnisoFbm(uv, vec2(1.0, 1.0), vec2(1.0, -1.0), vec2(22.0, 64.0), 2);
 
         // Sheared nap — very fine, and lying in one combed direction.
         float nap = cFibres(uv, vec2(110.0, 210.0), 8.0, 0.02, 3);
 
-        // Heavy cloth falls in long soft folds rather than crumpling.
-        float drape = tFbm01(tWarp(uv, vec2(2.0), 0.07, 2), vec2(2.5, 5.0), 4);
+        // Heavy cloth falls in long soft folds rather than crumpling. This is
+        // the whole silhouette of a good coat, so it takes the largest share.
+        float drape = tFbm01(tWarp(uv, vec2(2.0), 0.07, 2), vec2(2.2, 4.5), 4);
+        float dragFold = tRidged(tWarp(uv, vec2(2.0), 0.05, 2), vec2(2.0, 6.0), 3);
 
         // Pressing leaves faint parallel sheen bands where the plate bore down.
-        float press = tFbm01(uv, vec2(1.0, 14.0), 2);
+        float press = tFbm01(uv, vec2(1.0, 7.0), 2);
 
-        float h = 0.33 + weave * 0.15 + twill * 0.21 + nap * 0.08
-                + drape * 0.24 + press * 0.05;
+        float h = 0.30 + weave * 0.08 + twill * 0.12 + nap * 0.05
+                + drape * 0.30 + dragFold * 0.12 + press * 0.06;
         return vec3(clamp(h, 0.0, 1.0), twill, weave);
       }
       Surf mShade(vec2 uv, MSample m) {
@@ -232,20 +252,20 @@ const CHARACTER_DEFS = {
         vec3 deep = col8(138, 132, 124);
 
         // A good dyer's lot varies far less than a village vat, but it varies.
-        float lot = tFbm01(tWarp(uv, vec2(2.0), 0.04, 2), 5.0, 4);
+        float lot = tFbm01(tWarp(uv, vec2(2.0), 0.04, 2), 4.5, 4);
 
         vec3 c = mix(deep, mid, smoothstep(0.20, 0.64, m.h));
         c = mix(c, pale, smoothstep(0.56, 1.0, m.h) * (0.45 + m.id * 0.35));
-        c *= 0.90 + 0.18 * lot;
-        c = hueShift(c, (lot - 0.5) * 0.07);
+        c *= 0.84 + 0.30 * lot;
+        c = hueShift(c, (lot - 0.5) * 0.09);
 
         // Rub at the raised twill, gently — this cloth is looked after.
-        float wear = smoothstep(0.70, 1.0, m.h) * tFbm01(uv + 0.5, 4.0, 4);
-        c = mix(c, pale, wear * 0.28);
+        float wear = smoothstep(0.66, 1.0, m.h) * tFbm01(uv + 0.5, 3.5, 4);
+        c = mix(c, pale, wear * 0.34);
 
         // Cavity dirt, but a fraction of the homespun's.
-        c = mix(c, col8(112, 104, 92), (1.0 - m.ao) * 0.16);
-        c *= 0.86 + 0.22 * m.ao;
+        c = mix(c, col8(112, 104, 92), (1.0 - m.ao) * 0.18);
+        c *= 0.84 + 0.26 * m.ao;
 
         // The sheared face is smooth; the fold hollows keep their nap.
         float rough = 0.74 - wear * 0.16 + (1.0 - m.ao) * 0.14;
@@ -268,8 +288,10 @@ const CHARACTER_DEFS = {
     physical: { sheen: 0.35, sheenRoughness: 0.55, sheenColor: 0xff8f6a },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Pores: dense, shallow, irregular. Worley at two scales so they do not
-        // fall into a lattice the eye can pick out.
+        // The skin tile is set at 30 cm — a little larger than a face — so the
+        // frequencies below read directly as "times across a head". Pores stay
+        // sub-pixel on purpose; what has to be legible is the flesh undulation
+        // and the lines, at roughly ten and twenty across the head.
         float pore = 1.0 - smoothstep(0.0, 0.16, tWorley(uv, 118.0, 1.0).x);
         float pore2 = 1.0 - smoothstep(0.0, 0.12, tWorley(uv + 0.44, 210.0, 1.0).x);
 
@@ -277,14 +299,14 @@ const CHARACTER_DEFS = {
         float net = tCracks(tWarp(uv, 26.0, 0.006, 2), vec2(46.0, 40.0), 0.16, 0.9);
 
         // Coarser lines — the ones that deepen with age around eye and mouth.
-        float lines = tCracks(tWarp(uv, 5.0, 0.03, 2), vec2(9.0, 7.0), 0.09, 0.8)
+        float lines = tCracks(tWarp(uv, 5.0, 0.03, 2), vec2(9.0, 7.0), 0.10, 0.8)
                     * smoothstep(0.40, 0.85, tFbm01(uv + 0.7, 3.0, 3));
 
         // Soft undulation of the flesh beneath: cheek, brow, jaw.
         float flesh = tFbm01(uv, vec2(4.0, 3.5), 3);
 
-        float h = 0.52 + flesh * 0.24 - pore * 0.10 - pore2 * 0.05
-                - net * 0.07 - lines * 0.12;
+        float h = 0.52 + flesh * 0.28 - pore * 0.10 - pore2 * 0.05
+                - net * 0.07 - lines * 0.14;
         return vec3(clamp(h, 0.0, 1.0), flesh, lines);
       }
       Surf mShade(vec2 uv, MSample m) {
@@ -338,19 +360,23 @@ const CHARACTER_DEFS = {
     physical: { sheen: 0.7, sheenRoughness: 0.35 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
-        // Individual strands: very long in v, very narrow in u, flowing gently.
-        vec2 flow = tWarpField(uv, vec2(3.0, 2.0), 3) * vec2(0.055, 0.012);
-        float strand = tAnisoFbm(uv + flow, vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(170.0, 9.0), 3);
-        float strandB = tAnisoFbm(uv + flow * 1.7 + 0.3, vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(96.0, 6.0), 2);
+        // Frequencies chosen against the head, not against the texture. With
+        // the hair tile at 42 cm a scalp wraps about 1.8 tiles, so 30 cycles to
+        // the tile is roughly 55 strands around a head — two pixels each at
+        // conversation range. The first pass ran this at 170 and every strand
+        // fell below a texel: the result was a smooth brown helmet.
+        vec2 flow = tWarpField(uv, vec2(3.0, 2.0), 3) * vec2(0.06, 0.014);
+        float strand = tAnisoFbm(uv + flow, vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(30.0, 5.0), 3);
+        float strandB = tAnisoFbm(uv + flow * 1.7 + 0.3, vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(16.0, 3.0), 2);
 
         // Locks: strands bundle into ropes about a finger's width across.
-        float lock = tAnisoFbm(uv + flow, vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(17.0, 3.0), 3);
+        float lock = tAnisoFbm(uv + flow, vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(7.0, 2.0), 3);
 
         // A few strays standing off the mass — the thing that stops hair
         // reading as a moulded helmet.
-        float stray = 1.0 - smoothstep(0.0, 0.05, tWorley(uv * vec2(1.0, 0.12) + 0.6, 40.0, 1.0).x);
+        float stray = 1.0 - smoothstep(0.0, 0.06, tWorley(uv * vec2(1.0, 0.14) + 0.6, 13.0, 1.0).x);
 
-        float h = 0.22 + strand * 0.34 + strandB * 0.16 + lock * 0.26 + stray * 0.06;
+        float h = 0.20 + strand * 0.32 + strandB * 0.16 + lock * 0.30 + stray * 0.07;
         return vec3(clamp(h, 0.0, 1.0), lock, strand);
       }
       Surf mShade(vec2 uv, MSample m) {

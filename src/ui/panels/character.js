@@ -66,6 +66,16 @@ const RESISTANCE_NOTE = {
   dark: 'Curses, drain and everything the night schools throw.',
 };
 
+/**
+ * What the title bar calls each page (STYLE.md §10). Two screens never share a
+ * title bar, and this screen is three screens.
+ */
+const PAGE_TITLE = Object.freeze({
+  stats: 'Statistics',
+  skills: 'Skills',
+  awards: 'Awards',
+});
+
 /** Left column, then right — the split MM6 uses on the skills page. */
 const SKILL_COLUMNS = [
   [['weapon', 'Weapons'], ['magic', 'Magic']],
@@ -109,8 +119,16 @@ export class CharacterPanel extends Panel {
   }
 
   build(body, side) {
-    this.titleLeft = el('span', { className: 'mm-t-gold' });
-    this.titleRight = el('span', {});
+    // The title bar names the subject on the left and the page on the right
+    // (STYLE.md §10). It used to read `Sir Edran Vaile the Knight | Skill
+    // Points: 0` on the stats page *and* the skills page, so two screens shared
+    // one title and the bar never said which of them you were looking at.
+    //
+    // Neither half is gold any more: gold is the live control (§2), and a title
+    // bar is not a control. The hierarchy is carried by size and by the
+    // engraved plaque it sits in, which is how MM6 carries it.
+    this.titleLeft = el('span', {});
+    this.titleRight = el('span', { className: 'mm-sheet-page' });
     this.colLeft = el('div', { className: 'mm-sheet-col is-left' });
     this.colRight = el('div', { className: 'mm-sheet-col is-right' });
     this.sheet = el('div', { className: 'mm-sheet' },
@@ -185,12 +203,21 @@ export class CharacterPanel extends Panel {
     this.sheet.classList.toggle('is-skills', this.page === 'skills');
     this.sheet.classList.toggle('is-awards', this.page === 'awards');
 
-    // One title serves all three pages: the name in gold, the points on the
-    // right — green only on the page where they can actually be spent.
+    // Subject on the left, page on the right, and the page carries the one
+    // figure that belongs to it (STYLE.md §10). Skill points only mean anything
+    // on the page where they can be spent, so only that page states them —
+    // green when there are some, because that is a figure better than its
+    // baseline (§2).
     this.titleLeft.textContent = `${c.name} the ${c.className}`;
     const points = c.skillPoints ?? 0;
-    this.titleRight.textContent = `Skill Points: ${points}`;
-    this.titleRight.className = this.page === 'skills' && points > 0 ? 'mm-t-up' : '';
+    setChildren(this.titleRight,
+      el('span', { className: 'mm-sheet-pagename', text: PAGE_TITLE[this.page] ?? 'Statistics' }),
+      this.page === 'skills'
+        ? el('span', {
+          className: `mm-sheet-pagefig${points > 0 ? ' mm-t-up' : ''}`,
+          text: ` · Skill Points: ${points}`,
+        })
+        : null);
 
     const pressed = { stats: 0, skills: 1, awards: 3 }[this.page] ?? 0;
     [...(this.ovals?.children ?? [])].forEach((b, i) => b.classList.toggle('is-current', i === pressed));

@@ -298,7 +298,7 @@ void main() {
   // confetti rather than cloud.
   float wB = clamp(fwidth(hB) * 1.05, 0.004, 0.36);
   float aB = smoothstep(0.030 - wB, 0.030 + wB, hB) * uOpacityB;
-  aB *= smoothstep(0.008, 0.062, up) / (1.0 + tB / 26000.0);
+  aB *= smoothstep(0.014, 0.095, up) / (1.0 + tB / 26000.0);
 
   float tA = uAltA * proj;
   vec2 pA = uCamPos.xz + d.xz * tA;
@@ -336,7 +336,13 @@ void main() {
   // or where the compression runs away in the last degree of sky (upper).
   float wA = clamp(fwidth(hA) * 0.75, 0.0022, 0.30);
   float aA = smoothstep(0.018 - wA, 0.018 + wA, hA);
-  aA *= smoothstep(0.006, 0.055, up) / (1.0 + tA / 26000.0);
+  // Fade the deck out of the last few degrees of sky. The plane is compressed
+  // 20× and more down there, so one puff spans a couple of rows of texels and
+  // the field turns into the mackerel stipple REFERENCE §2.4 warns about —
+  // clearly visible as a speckled band above the skyline in the round-3
+  // capture. Clearing it early costs nothing MM6 has: its own horizon carries
+  // thin compressed bands, not a rash of individual dots.
+  aA *= smoothstep(0.011, 0.085, up) / (1.0 + tA / 26000.0);
   aA *= uOpacityA;
 
   // Surface relief from the baked gradient.

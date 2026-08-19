@@ -1,21 +1,25 @@
 /* Styles owned by ./inventory.js. Shared chrome stays in ../ui.panels.css.
 
+   Every selector here is anchored on `[data-panel="inventory"]` (STYLE.md §11),
+   including the carried sprite, which lives on the document root and so wears
+   the panel's hook as an attribute of its own.
+
    The measured screen (REFERENCE.md §3.4): the backpack is 14 x 9 cells of
    32 native pixels at x 14-462, y 16-304, which inside a panel body pinned at
-   x 8 is x 6-454. That leaves exactly 48 pixels underneath for the name
-   channel and the five wide gold ovals, and nothing above it — MM6's inventory
-   has no title bar, and adding one would push the grid off its measurement.
+   x 8 is x 6-454. That leaves exactly 48 pixels underneath for the name line
+   and the five wide gold ovals, and nothing above it — MM6's inventory has no
+   title bar, and adding one would push the grid off its measurement.
 
    What used to sit in those 48 pixels was an unstyled `<button>` and a second
    copy of the food and gold counters, sixty pixels from the live pair on the
    sidebar. Both are gone: one control, one typeface, one reading of each
    number. */
 
-/* ── the name channel, y 304-317 ──────────────────────────────────────────── */
+/* ── the name line, y 304-317 ─────────────────────────────────────────────── */
 
 /* 48 native pixels under the grid, and the five 58 x 30 ovals want 30 of them.
-   The channel takes the 13 above, one pixel of granite separates the two, and
-   the row sits on the last 1 — which also lands the ovals on MM6's own
+   The name line takes the 13 above, three pixels of granite separate the two,
+   and the row sits on the last 1 — which also lands the ovals on MM6's own
    measured y 320-350. Both are pinned to the grid's 448-pixel column rather
    than to the panel, which is wider than MM6's 460 on any non-4:3 window. */
 [data-panel="inventory"] .mm-pack-foot {
@@ -26,11 +30,10 @@
   transform: translateX(-50%);
 }
 
-/* A channel cut into the granite the width of the grid above it: the owner's
-   name inscribed at one end, the Arrange tab seated in the other. Recessed,
-   where the ovals below stand proud, so the two rows read at different depths
-   and cannot be confused for one crowded row. */
-.mm-inv-strip {
+/* Bare granite, as MM6 leaves it: the owner's name at the left edge of the
+   first oval, the Arrange control ending on the right edge of the last. Two
+   things on one line, one typeface, one baseline, and nothing between them. */
+[data-panel="inventory"] .mm-inv-strip {
   position: absolute;
   left: 50%;
   top: calc(var(--u) * 304);
@@ -39,66 +42,55 @@
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  /* The same 6 pixels the oval row insets by, so the name starts on the left
-     edge of the first oval and the tab ends on the right edge of the last. */
+  /* The same 6 pixels the oval row insets by, so both ends of this line sit on
+     the outer edges of the oval row below it. */
   padding: 0 calc(var(--u) * 6);
-  background: rgba(14, 13, 12, 0.42);
-  box-shadow:
-    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(12, 14, 12, 0.9),
-    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(174, 170, 168, 0.55);
 }
 
-/* One typeface on this screen: the panel's book italic. The name is inscribed
-   into the channel, so it carries the cut's own shadow rather than a glow. */
-.mm-inv-owner {
+/* A party member's proper name. STYLE.md §2 gives that its own colour and it
+   is not gold: gold means the live control, and this is not one. The token is
+   declared here the way the venue sidebars declare theirs, until §2's palette
+   moves into ../ui.panels.css. */
+[data-panel="inventory"] .mm-inv-owner {
   flex: 1;
   min-width: 0;
+  color: var(--name, #5fbcff);
   font-style: italic;
   font-size: calc(var(--u) * 11);
   line-height: calc(var(--u) * 13);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow:
-    calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.85),
-    0 0 calc(var(--u) * 2) rgba(0, 0, 0, 0.6);
+  text-shadow: var(--shadow);
 }
 
-/* The Arrange tab.
+/* The Arrange control.
  *
- * Cast brass, the panel's one metal, at an oval's width and aligned to the
- * right edge of the oval directly below — a deliberate column, not a stray
- * widget. The label is cut into the face the way the ovals' glyphs are: dark
- * face, shadowed wall up-left, lit wall down-right. Specificity has to clear
- * `.mm-ui :where(button)`, which is a class selector too and would otherwise
- * win on order and hand the control back to the browser default. */
+ * A stone-inset pill: `mm-engraved` from ../ui.panels.css, which is the one
+ * recess treatment the interface has, at the width of the oval directly below
+ * and aligned to its right edge. No new casting, no new bevel — inventing a
+ * treatment for one control is how this ended up a browser default in the
+ * first place.
+ *
+ * `--ink` at rest and `--gold` on hover is §2's rule for a control, and the
+ * shadow is `--shadow`, the interface's only one.
+ *
+ * Specificity has to clear `.mm-ui :where(button)`: that is a class selector
+ * too, so a bare `.mm-inv-arrange` ties with it and loses on emission order —
+ * which is exactly what handed this control back to the browser. */
 [data-panel="inventory"] .mm-inv-arrange {
   flex: none;
   width: calc(var(--u) * 58);
-  height: calc(var(--u) * 11);
-  background-position: center;
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
+  height: calc(var(--u) * 12);
+  color: var(--ink);
   font-style: italic;
-  font-size: calc(var(--u) * 8);
-  line-height: calc(var(--u) * 11);
-  letter-spacing: 0.02em;
-  color: #241a0e;
-  text-shadow:
-    calc(var(--u) * -0.5) calc(var(--u) * -0.6) 0 rgba(20, 12, 2, 0.5),
-    calc(var(--u) * 0.6) calc(var(--u) * 0.7) 0 rgba(255, 242, 196, 0.6);
-  filter: drop-shadow(0 calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.55));
+  font-size: calc(var(--u) * 9);
+  line-height: calc(var(--u) * 12);
+  text-align: center;
+  text-shadow: var(--shadow);
 }
-[data-panel="inventory"] .mm-inv-arrange:hover {
-  filter:
-    drop-shadow(0 calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.55))
-    drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 236, 160, 0.8))
-    brightness(1.1);
-}
-[data-panel="inventory"] .mm-inv-arrange:active {
-  transform: translateY(calc(var(--u) * 1));
-  filter: brightness(0.92);
-}
+[data-panel="inventory"] .mm-inv-arrange:hover { color: var(--gold); }
+[data-panel="inventory"] .mm-inv-arrange:active { color: var(--gold-deep); }
 
 /* The page you are on is told by the struck oval, as on the character sheet. */
 [data-panel="inventory"] .mm-oval.is-current {
@@ -141,30 +133,39 @@
 
 /* MM6 draws the same sprite whatever state an item is in and says the rest in
    the description, but a 126-cell grid needs the difference to survive a glance,
-   so the metal goes dull rather than the outline changing. */
-.mm-item.is-broken > svg,
-.mm-item.is-broken > .mm-item-plate,
-.mm-item.is-broken > .mm-item-fill { filter: saturate(0.22) brightness(0.6); }
-.mm-item.is-unknown > svg,
-.mm-item.is-unknown > .mm-item-plate,
-.mm-item.is-unknown > .mm-item-fill { filter: saturate(0.5) brightness(0.84); }
-.mm-item.is-lifted { visibility: hidden; }
+   so the metal goes dull rather than the outline changing.
 
-.mm-tip.is-broken .mm-tip-head { color: var(--down); }
-.mm-tip.is-unknown .mm-tip-head { color: var(--azure); }
+   `.mm-item` is shared with the shop, so both halves of every selector below
+   are anchored: once for a sprite inside this panel, once for the carried
+   sprite, which hangs off the root wearing this panel's own hook. */
+[data-panel="inventory"] .mm-item.is-broken > svg,
+[data-panel="inventory"] .mm-item.is-broken > .mm-item-plate,
+[data-panel="inventory"] .mm-item.is-broken > .mm-item-fill,
+[data-panel="inventory"].mm-item.is-broken > svg,
+[data-panel="inventory"].mm-item.is-broken > .mm-item-plate,
+[data-panel="inventory"].mm-item.is-broken > .mm-item-fill { filter: saturate(0.22) brightness(0.6); }
+[data-panel="inventory"] .mm-item.is-unknown > svg,
+[data-panel="inventory"] .mm-item.is-unknown > .mm-item-plate,
+[data-panel="inventory"] .mm-item.is-unknown > .mm-item-fill,
+[data-panel="inventory"].mm-item.is-unknown > svg,
+[data-panel="inventory"].mm-item.is-unknown > .mm-item-plate,
+[data-panel="inventory"].mm-item.is-unknown > .mm-item-fill { filter: saturate(0.5) brightness(0.84); }
+[data-panel="inventory"] .mm-item.is-lifted { visibility: hidden; }
 
 /* ── the item on the cursor ───────────────────────────────────────────────── */
 
 /* Lives on the root rather than in the panel so it crosses the divider column
-   between the backpack and the figure without being clipped. */
-.mm-item.mm-inv-ghost {
+   between the backpack and the figure without being clipped — which puts it
+   outside every panel-scoped selector, so ./inventory.js stamps the panel's
+   own hook onto it and the rules below anchor on that instead. */
+[data-panel="inventory"].mm-inv-ghost {
   position: fixed;
   z-index: 30;
   pointer-events: none;
   opacity: 0.95;
   filter: drop-shadow(calc(var(--u) * 2) calc(var(--u) * 4) calc(var(--u) * 3) rgba(0, 0, 0, 0.8));
 }
-.mm-item.mm-inv-ghost.is-bad {
+[data-panel="inventory"].mm-inv-ghost.is-bad {
   filter: drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 0, 0, 0.95)) brightness(0.85);
 }
 
@@ -227,26 +228,26 @@
 /* ── equipment on the figure ──────────────────────────────────────────────── */
 
 
-.mm-inv-slots { position: absolute; inset: 0; }
-.mm-inv-slot { position: absolute; }
+[data-panel="inventory"] .mm-inv-slots { position: absolute; inset: 0; }
+[data-panel="inventory"] .mm-inv-slot { position: absolute; }
 
 /* Worn pieces are composited onto a painted body, so each one gets a soft
    pool of shade under it: without that they read as stickers laid on a poster
    rather than as gear the figure is actually wearing. */
-.mm-inv-slot.is-worn {
+[data-panel="inventory"] .mm-inv-slot.is-worn {
   background: radial-gradient(ellipse at 50% 56%, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0) 72%);
 }
 
 /* An empty slot is invisible until you are holding something it will take —
    the niche is a painting of a person, not a form to fill in. */
-.mm-inv-slot.is-open {
+[data-panel="inventory"] .mm-inv-slot.is-open {
   background: rgba(255, 236, 170, 0.12);
   box-shadow:
     inset 0 0 0 calc(var(--u) * 1) rgba(255, 240, 170, 0.75),
     0 0 calc(var(--u) * 4) rgba(255, 236, 170, 0.35);
 }
-.mm-inv-hint { display: none; }
-.mm-inv-slot.is-open .mm-inv-hint {
+[data-panel="inventory"] .mm-inv-hint { display: none; }
+[data-panel="inventory"] .mm-inv-slot.is-open .mm-inv-hint {
   display: block;
   position: absolute;
   left: calc(var(--u) * -12);
@@ -255,23 +256,25 @@
   text-align: center;
   font-style: italic;
   font-size: calc(var(--u) * 9);
+  /* The slot the held item is about to land in: the live control. */
   color: var(--gold);
+  text-shadow: var(--shadow);
 }
 
 /* Worn gear carries its own baked highlights and reads markedly brighter than
    the masonry behind it. */
-.mm-item.mm-inv-worn {
+[data-panel="inventory"] .mm-item.mm-inv-worn {
   position: absolute;
   left: 0;
   top: 0;
   filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.85));
 }
-.mm-item.mm-inv-worn:hover {
+[data-panel="inventory"] .mm-item.mm-inv-worn:hover {
   filter: drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 240, 180, 0.9)) brightness(1.14);
 }
 
-.mm-inv-glass { cursor: pointer; }
-.mm-inv-glass:hover,
-.mm-inv-glass.is-active {
+[data-panel="inventory"] .mm-inv-glass { cursor: pointer; }
+[data-panel="inventory"] .mm-inv-glass:hover,
+[data-panel="inventory"] .mm-inv-glass.is-active {
   filter: drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 240, 170, 0.95));
 }

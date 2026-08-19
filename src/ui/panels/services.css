@@ -14,6 +14,35 @@
 
 .mm-svc { position: absolute; inset: 0; }
 
+/* ── the keeper's caption ─────────────────────────────────────────────────── */
+
+/* The one caption treatment the interface has (STYLE.md §4): a soft gradient
+   across the foot of the painting, fading upward to nothing. Never a box,
+   never a rule. It goes when a counter comes up — the board is the screen
+   then, and a gradient behind it would read as grime. */
+.mm-panel[data-panel='services'] .mm-venue-say {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: calc(var(--u) * 26) calc(var(--u) * 14) calc(var(--u) * 10);
+  font-size: calc(var(--u) * 12);
+  font-style: italic;
+  line-height: calc(var(--u) * 15);
+  letter-spacing: 0;
+  color: var(--ink);
+  text-shadow: var(--shadow), 0 0 calc(var(--u) * 6) rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 5, 3, 0) 0%,
+    rgba(8, 5, 3, 0.42) 30%,
+    rgba(8, 5, 3, 0.78) 62%,
+    rgba(8, 5, 3, 0.90) 100%);
+}
+.mm-panel[data-panel='services'] .mm-venue-say.is-empty,
+.mm-panel[data-panel='services'] .mm-venue-say.is-covered { display: none; }
+
 .mm-svc-board {
   position: absolute;
   left: calc(var(--u) * 18);
@@ -115,8 +144,9 @@
 }
 .mm-svc-row.is-well { opacity: 0.72; }
 .mm-svc-who { flex: 0 0 34%; font-size: calc(var(--u) * 13); overflow: hidden; white-space: nowrap; }
-.mm-svc-who b { color: var(--gold); font-weight: normal; }
-.mm-svc-who i { color: #cfc6b2; }
+/* A person's name (STYLE.md §2), not a live control. */
+.mm-svc-who b { color: var(--name); font-weight: normal; }
+.mm-svc-who i { color: var(--dim); }
 .mm-svc-chips { flex: 1; display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); justify-content: flex-end; }
 
 .mm-svc-chip {
@@ -129,9 +159,10 @@
   background: rgba(20, 10, 6, 0.78);
   box-shadow: inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.9);
 }
-.mm-svc-chip b { color: var(--gold); font-weight: normal; }
+/* A price. Money is gold-deep and nothing else is (§2). */
+.mm-svc-chip b { color: var(--gold-deep); font-weight: normal; }
 .mm-svc-chip:hover { color: var(--gold); }
-.mm-svc-chip:hover b { color: #fff; }
+.mm-svc-chip:hover b { color: var(--gold); }
 .mm-svc-chip.is-well { color: #a8c8a0; background: rgba(16, 26, 14, 0.6); }
 
 /* ── plaques ─────────────────────────────────────────────────────────────── */
@@ -160,8 +191,8 @@
 }
 .mm-svc-cost i { display: block; width: calc(var(--u) * 12); height: calc(var(--u) * 12); color: #ffd342; }
 .mm-svc-cost i svg { display: block; width: 100%; height: 100%; }
-.mm-svc-cost b { color: var(--gold); font-weight: normal; }
-.mm-svc-cost u { color: #cfc6b2; text-decoration: none; font-style: italic; font-size: calc(var(--u) * 11); }
+.mm-svc-cost b { color: var(--gold-deep); font-weight: normal; }
+.mm-svc-cost u { color: var(--dim); text-decoration: none; font-style: italic; font-size: calc(var(--u) * 11); }
 
 .mm-svc-steps { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); }
 .mm-svc-step {
@@ -174,7 +205,8 @@
   background: rgba(150, 106, 66, 0.28);
 }
 .mm-svc-step:hover { color: var(--gold); }
-.mm-svc-step.is-current { color: var(--gold-deep); }
+/* The step you are currently on is a live control, not money (§2). */
+.mm-svc-step.is-current { color: var(--gold); }
 
 /* ── the ledger sheet ────────────────────────────────────────────────────── */
 
@@ -227,11 +259,11 @@
   background: rgba(24, 14, 6, 0.42);
 }
 .mm-svc-quote { font-size: calc(var(--u) * 15); font-style: italic; line-height: 1.35; }
-.mm-svc-earlier-head { font-size: calc(var(--u) * 12); font-style: italic; color: var(--gold-deep); }
+.mm-svc-earlier-head { font-size: calc(var(--u) * 12); font-style: italic; color: var(--dim); }
 .mm-svc-earlier {
   font-size: calc(var(--u) * 12);
   font-style: italic;
-  color: #cfc6b2;
+  color: var(--dim);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -258,79 +290,121 @@
 /* `min-width: 0` or the name refuses to shrink and pushes "Pay off" off the
    edge of the board — the classic flexbox floor. */
 .mm-svc-hire-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.mm-svc-hire-name b { color: var(--gold); font-weight: normal; }
-.mm-svc-hire-name i { color: #cfc6b2; }
-.mm-svc-hire:hover .mm-svc-hire-name b { color: #fff; }
-.mm-svc-slot-pay { font-size: calc(var(--u) * 12); font-style: italic; color: #cfc6b2; }
-.mm-svc-slot-go { color: var(--gold-deep); font-style: italic; }
+.mm-svc-hire-name b { color: var(--name); font-weight: normal; }
+.mm-svc-hire-name i { color: var(--dim); }
+.mm-svc-hire:hover .mm-svc-hire-name b { color: var(--gold); }
+.mm-svc-slot-pay { font-size: calc(var(--u) * 12); font-style: italic; color: var(--dim); }
+.mm-svc-slot-go { color: var(--dim); font-style: italic; }
 
 /* ── the keeper's side of the counter ────────────────────────────────────── */
 
 /* A column, not a stack of absolutely-placed pieces: a venue with a long name
    and two neighbours must never push an entry under the exit oval. */
+/* `background: transparent` is STYLE.md §6 rule 2 written out: this component
+   stands on whatever ground the *panel* declares — `sideSurface = 'wood'` — and
+   says so, so no other screen's stylesheet can quietly hand it another. */
 .mm-svc-side {
   position: absolute;
   inset: 0;
-  padding: calc(var(--u) * 6) calc(var(--u) * 8) calc(var(--u) * 8);
+  padding: calc(var(--u) * 4) calc(var(--u) * 8) calc(var(--u) * 8);
   display: flex;
   flex-direction: column;
+  background: transparent;
 }
 
 /* The venue's name runs across the top of the wood, white upright serif and
    centred, exactly where MM6 puts "The Knife Shoppe". */
 .mm-svc-title {
+  flex: none;
   text-align: center;
   font-size: calc(var(--u) * 14);
-  line-height: calc(var(--u) * 16);
+  line-height: calc(var(--u) * 17);
+  letter-spacing: 0;
   /* "The Ledger, Crown Branch" does not fit a 148px sidebar on one line, and
-     MM6 wraps its own two-word names the same way rather than clipping them. */
-  max-height: calc(var(--u) * 32);
+     MM6 wraps its own two-word names the same way rather than clipping them.
+     Real leading, so a wrapped second line is not set solid against the
+     first. */
+  max-height: calc(var(--u) * 34);
   overflow: hidden;
 }
 .mm-svc-portrait {
   flex: none;
-  width: calc(var(--u) * 66);
-  height: calc(var(--u) * 82);
-  margin: calc(var(--u) * 6) auto 0;
+  width: calc(var(--u) * 60);
+  height: calc(var(--u) * 74);
+  margin: calc(var(--u) * 8) auto 0;
   background: center / cover no-repeat;
   background-color: #211a12;
-  box-shadow: 0 0 0 calc(var(--u) * 2) #6e7a6e, 0 0 0 calc(var(--u) * 3) #2a2e2a;
+  box-shadow:
+    0 0 0 calc(var(--u) * 1) #10120f,
+    0 0 0 calc(var(--u) * 3) #75806f,
+    0 0 0 calc(var(--u) * 4) #23261f,
+    0 calc(var(--u) * 2) calc(var(--u) * 5) rgba(0, 0, 0, 0.55);
 }
+
+/* The identity block (STYLE.md §3): name then role, two elements, only the
+   name in the name colour, the role a Title Case noun phrase in white — not
+   the grey lowercase "innkeeper" it used to be. */
 .mm-svc-name {
-  margin-top: calc(var(--u) * 6);
+  flex: none;
+  margin-top: calc(var(--u) * 9);
   text-align: center;
-  font-size: calc(var(--u) * 15);
-  line-height: 1.1;
-  color: var(--azure);
+  font-size: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 17);
+  letter-spacing: 0;
+  color: var(--name);
 }
-.mm-svc-role { text-align: center; font-size: calc(var(--u) * 12); font-style: italic; color: #cfc6b2; }
+.mm-svc-role {
+  flex: none;
+  text-align: center;
+  font-size: calc(var(--u) * 12);
+  font-style: italic;
+  line-height: calc(var(--u) * 15);
+  letter-spacing: 0;
+  color: var(--ink);
+}
 /* An unattended house still gets its frame, but the face behind the glass is
    dimmed rather than replaced — there is nobody there to paint. */
 .mm-svc-portrait.is-vacant { filter: grayscale(0.85) brightness(0.5); }
+
+/* STYLE.md §8: the gap inside the list is fixed and smaller than the gap
+   around it, and the slack is centred rather than pushed to the foot. */
 .mm-svc-options {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
-  margin-top: calc(var(--u) * 8);
+  overflow: visible;
+  margin-top: calc(var(--u) * 14);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(var(--u) * 8);
+  justify-content: center;
+  gap: calc(var(--u) * 9);
 }
 .mm-svc-option {
+  flex: none;
   font-size: calc(var(--u) * 16);
   font-style: italic;
   text-align: center;
-  line-height: calc(var(--u) * 16);
+  line-height: calc(var(--u) * 19);
+  letter-spacing: 0;
   max-width: calc(var(--u) * 124);
+  color: var(--ink);
 }
+/* Gold is the live control and nothing else (STYLE.md §2). The neighbouring
+   doors used to be gold-deep, which is the money colour; a control at rest is
+   ink, and the tier is carried by size, which is what size is for. */
 .mm-svc-option:hover { color: var(--gold); }
 .mm-svc-option.is-current { color: var(--gold); }
-.mm-svc-option.is-door { font-size: calc(var(--u) * 13); line-height: calc(var(--u) * 14); color: var(--gold-deep); }
+.mm-svc-option.is-door {
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 15);
+  color: var(--ink);
+}
 .mm-svc-option.is-door:hover { color: var(--gold); }
 .mm-svc-doors {
-  font-size: calc(var(--u) * 11);
+  flex: none;
+  font-size: calc(var(--u) * 10);
   font-style: italic;
-  color: #b8ae98;
+  line-height: calc(var(--u) * 12);
+  color: var(--dim);
 }
 .mm-svc-exit { flex: none; margin: calc(var(--u) * 6) auto 0; }

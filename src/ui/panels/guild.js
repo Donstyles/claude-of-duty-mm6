@@ -1,8 +1,9 @@
 import './guild.css';
 import { Panel } from './base.js';
 import {
-  el, setChildren, tooltip, tipMarkup, fmt, ellipsis, goldOval,
+  el, setChildren, tooltip, tipMarkup, fmt, ellipsis, goldOval, engraved, labelRow,
 } from '../widgets.js';
+import { attribute } from './dialogue.js';
 import { icon } from '../Icons.js';
 import { MASTERY_LABEL, masteryRank } from '../../game/data/Skills.js';
 import { GuildSystem } from '../../game/GuildSystem.js';
@@ -102,18 +103,46 @@ export class GuildPanel extends Panel {
       this.boardEl,
       el('div', { className: 'mm-guild-notice' }, this.noticeEl)));
 
+    // The house sidebar, in the order every venue screen uses (STYLE.md §3):
+    // portrait, name, role, the numbers, the actions, the oval.
+    //
+    // The motto used to sit in the role's place — a white italic flavour
+    // sentence where the other four screens put a trade — and the pupil's
+    // details were a centred two-line run-on, `At the door: Sir Edran Vaile /
+    // 200 gold`, floating above 25% of empty timber. The motto is a good line
+    // and it keeps its place on the portrait's plaque; the numbers are now
+    // stated the way the training hall states them, which is the house table
+    // (§9), and stating them fills the panel.
     this.portraitEl = el('div', { className: 'mm-guild-portrait' });
     this.nameEl = el('div', { className: 'mm-guild-master' });
-    this.mottoEl = el('div', { className: 'mm-guild-motto' });
+    this.roleEl = el('div', { className: 'mm-guild-role' });
+    this.accountEl = engraved('mm-guild-account');
     this.optionsEl = el('div', { className: 'mm-guild-options' });
-    this.pupilEl = el('div', { className: 'mm-guild-pupil' });
     const exit = goldOval({
       glyph: 'exitDoor', label: 'Leave the hall', textures: this.ui.textures,
       onClick: () => this.ui.closePanel(), className: 'mm-guild-exit',
       tip: () => tipMarkup({ title: 'Leave the hall' }),
     });
     side.appendChild(el('div', { className: 'mm-guild-side' },
-      this.portraitEl, this.nameEl, this.mottoEl, this.optionsEl, this.pupilEl, exit));
+      this.portraitEl, this.nameEl, this.roleEl,
+      this.accountEl, this.optionsEl, exit));
+
+    // The motto, which the identity block no longer carries, and the rest of
+    // what is known about the master. Bound once: the portrait outlives every
+    // redraw and `tooltip.attach` stacks a listener each time it is called.
+    tooltip.attach(this.portraitEl, () => {
+      const hall = this.hall();
+      if (!hall) return '';
+      return tipMarkup({
+        title: hall.keeper,
+        subtitle: `${hall.order.name} · ${hall.townName}`,
+        lines: [
+          { k: 'Teaches to', v: MASTERY_LABEL[hall.teaches] },
+          { k: 'Entry', v: `${fmt(hall.fee)} gold` },
+        ],
+        flavour: this.guilds()?.say(hall, 'motto'),
+      });
+    });
   }
 
   onOpen(opts = {}) {
@@ -124,8 +153,13 @@ export class GuildPanel extends Panel {
     if (!hall) return;
     const member = guilds.isMember(hall);
     this.view = opts.view ?? 'hall';
-    this._notice = member ? guilds.say(hall, 'welcome') : guilds.say(hall, 'door');
-    this.ui.log(`${hall.name}, ${hall.townName}.`, 'info');
+    // Attributed, in curly quotes — one grammar for everything anybody says
+    // anywhere in the interface (STYLE.md §7).
+    this._notice = attribute(hall.keeper, guilds.say(hall, member ? 'welcome' : 'door'));
+    // One grammar for the strip: a complete sentence, sentence case, full stop
+    // (STYLE.md §5). `Guild of the Ember, Millhaven.` was a label, not a
+    // sentence, and it was one of seven different grammars in the set.
+    this.ui.log(`You enter ${hall.name}.`, 'info');
   }
 
   // ── draw ───────────────────────────────────────────────────────────────────
@@ -150,13 +184,25 @@ export class GuildPanel extends Panel {
       : `${hall.townName} · ${licence}`;
     this.portraitEl.style.backgroundImage = `url("${T.portrait(hall.portrait)}")`;
     this.nameEl.textContent = hall.keeper;
-    this.mottoEl.textContent = guilds.say(hall, 'motto');
+    this.roleEl.textContent = 'the Guildmaster';
 
-    const { vm } = this.pupil();
-    setChildren(this.pupilEl,
-      el('span', { text: member ? 'Teaching: ' : 'At the door: ' }),
-      el('span', { className: 'mm-t-gold', text: ellipsis(vm?.name ?? '—', 15) }),
-      el('span', { className: 'mm-guild-purse', text: `${fmt(guilds.gold())} gold` }));
+    // Who is here, what it costs and what you hold — the training hall's
+    // table, which is now the house way of stating a set of numbers
+    // (STYLE.md §9): label flush left, figure flush right, the subject's name
+    // in the name colour, money in the money colour, and the figure that is
+    // *blocking* in red. The fee only blocks a stranger who cannot cover it.
+    const { vm, char } = this.pupil();
+    const purse = guilds.gold();
+    const fee = member ? 0 : (guilds.joinTerms(hall, char)?.fee ?? hall.fee);
+    const short = !member && purse < fee;
+    setChildren(this.accountEl,
+      el('div', { className: 'mm-guild-who', text: ellipsis(vm?.name ?? '—', 17) }),
+      labelRow('Standing', member ? 'member' : 'at the door',
+        { tone: member ? 'mm-t-up' : 'mm-t-down' }),
+      labelRow('Teaches to', MASTERY_LABEL[hall.teaches] ?? '—'),
+      labelRow('Entry', member ? '—' : fmt(fee),
+        { tone: short ? 'mm-t-down' : 'mm-t-golddeep' }),
+      labelRow('In the purse', fmt(purse), { tone: 'mm-t-golddeep' }));
 
     this._drawOptions(hall, member);
     if (this.view === 'door') this._drawDoor(hall);
@@ -194,7 +240,7 @@ export class GuildPanel extends Panel {
     add('door', member ? 'Membership' : 'Join the Guild', () => {
       if (!member) {
         this.view = 'door';
-        this._notice = guilds.say(hall, 'door');
+        this._notice = attribute(hall.keeper, guilds.say(hall, 'door'));
         this.refresh();
         return;
       }
@@ -386,12 +432,19 @@ export class GuildPanel extends Panel {
   /** What a stranger gets for touching the stock. */
   _shutOut(hall) {
     this.view = 'door';
-    this._say(this.guilds().say(hall, 'door'), false);
+    this._say(attribute(hall.keeper, this.guilds().say(hall, 'door')), false);
   }
 
-  _say(text, good) {
+  /**
+   * The master answers, in the caption across the foot of the hall.
+   *
+   * It used to go to the caption *and* the message strip, which put one
+   * sentence in two channels at once and truncated it in the narrower of them.
+   * STYLE.md §5: the strip says where you are and what to do next; the caption
+   * is what the person in the room is saying. Never the same line in both.
+   */
+  _say(text) {
     this._notice = text;
-    this.ui.log(text, good ? 'good' : 'warn');
     this.ui.hud?.setGold(this.ui.gold, this.ui.food);
     this.refresh();
   }

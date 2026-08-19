@@ -13,11 +13,30 @@
   padding: 0 calc(var(--u) * 6);
   gap: calc(var(--u) * 6);
 }
+/* A group heading names data, so it is dim — quieter than the data under it.
+   The shared rule paints it gold, and gold is the live-control colour
+   (STYLE.md §2). One job each. */
 [data-panel="character"] .mm-block-head {
   line-height: calc(var(--u) * 15);
   font-size: calc(var(--u) * 13);
   padding: 0 calc(var(--u) * 6);
+  color: var(--dim);
 }
+
+/* ── the title bar ─────────────────────────────────────────────────────────
+   Subject left, page right (STYLE.md §10). The two halves used to read the
+   same on the stats page and the skills page, so the bar never said which of
+   the three screens you were on. */
+
+/* The title step of the ladder (STYLE.md §1): 16u on 19u. The shared rule sets
+   17u, which is between two steps. */
+[data-panel="character"] .mm-sheet-title {
+  font-size: calc(var(--u) * 16);
+  line-height: calc(var(--u) * 19);
+  letter-spacing: 0;
+}
+[data-panel="character"] .mm-sheet-page { color: var(--dim); }
+[data-panel="character"] .mm-sheet-pagefig { color: var(--ink); }
 
 /* The pressed oval is the only thing telling you which of the three pages you
    are on, so it reads as struck brass sunk a pixel into the stone. */
@@ -45,7 +64,9 @@
   white-space: nowrap;
 }
 .mm-skill-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-.mm-skill-rank { color: var(--gold); }
+/* The mastery word *names* the level beside it rather than being it, so it
+   takes the label colour, not gold (STYLE.md §2). */
+.mm-skill-rank { color: var(--dim); }
 .mm-skill-level { width: calc(var(--u) * 26); text-align: right; }
 .mm-skill-cost { width: calc(var(--u) * 28); text-align: right; }
 /* The two column heads ride at the row's own size, or their words overflow the
@@ -78,7 +99,8 @@
   font-style: italic;
   line-height: calc(var(--u) * 15);
 }
-.mm-award-mark { color: var(--gold-deep); font-size: calc(var(--u) * 9); }
+/* A bullet, not a sum: gold-deep is the money colour (STYLE.md §2). */
+.mm-award-mark { color: var(--dim); font-size: calc(var(--u) * 9); }
 .mm-award-text { flex: 1; }
 .mm-award:hover .mm-award-text { color: var(--gold); }
 .mm-award.is-empty { color: #9d968c; }

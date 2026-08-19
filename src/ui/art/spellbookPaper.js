@@ -264,9 +264,9 @@ function paintSpine(g, s, rng) {
       rng.range(0, TAU), rng.chance(0.5) ? '#ddd2b8' : '#7f7460', rng.range(0.05, 0.18), 4 * s);
   }
   // The leaves of the far block, stacked along the fold.
-  g.strokeStyle = 'rgba(70,58,40,0.30)';
-  g.lineWidth = Math.max(1, 0.6 * s);
-  for (let x = -2 * s; x < L; x += 2.6 * s) {
+  g.strokeStyle = 'rgba(70,58,40,0.16)';
+  g.lineWidth = Math.max(1, 0.55 * s);
+  for (let x = -2 * s; x < L; x += 2.0 * s) {
     g.beginPath();
     g.moveTo(x, T - 4 * s);
     g.lineTo(x + 1.4 * s, B + 4 * s);
@@ -382,17 +382,23 @@ function paintGutter(g, s) {
   // 213 by pixel thirty-six, which is why the page read as a card — the entire
   // tonal event was happening under the plait where nobody could see it. The
   // ramp is deliberately longer than it looks like it should be.
+  //
+  // One pigment, varying only in strength. Changing the colour and the alpha
+  // together from stop to stop is what turned the first attempt into a flat
+  // brown stripe with an edge down it — a shadow is one thing getting deeper
+  // and then letting go. Every stop below is a point measured off the
+  // original, converted back through multiply against paper at 215.
   const gut = g.createLinearGradient(L - 4 * s, 0, L + 140 * s, 0);
-  gut.addColorStop(0.00, 'rgba(156,138,110,0.50)');
-  gut.addColorStop(0.05, 'rgba(100,82,54,0.86)');
-  gut.addColorStop(0.09, 'rgba(92,76,50,0.88)');
-  gut.addColorStop(0.15, 'rgba(120,100,70,0.74)');
-  gut.addColorStop(0.22, 'rgba(150,130,98,0.60)');
-  gut.addColorStop(0.32, 'rgba(176,158,126,0.48)');
-  gut.addColorStop(0.45, 'rgba(196,180,150,0.36)');
-  gut.addColorStop(0.62, 'rgba(216,202,176,0.22)');
-  gut.addColorStop(0.82, 'rgba(238,228,208,0.10)');
-  gut.addColorStop(1.00, 'rgba(255,255,255,0)');
+  gut.addColorStop(0.000, 'rgba(86,70,46,0.41)');   // native  10 → 152
+  gut.addColorStop(0.056, 'rgba(86,70,46,0.71)');   // native  18 → 105
+  gut.addColorStop(0.111, 'rgba(86,70,46,0.77)');   // native  26 →  96
+  gut.addColorStop(0.181, 'rgba(86,70,46,0.60)');   // native  36 → 122
+  gut.addColorStop(0.264, 'rgba(86,70,46,0.37)');   // native  48 → 158
+  gut.addColorStop(0.361, 'rgba(86,70,46,0.23)');   // native  62 → 180
+  gut.addColorStop(0.500, 'rgba(86,70,46,0.14)');   // native  82 → 194
+  gut.addColorStop(0.667, 'rgba(86,70,46,0.08)');   // native 106 → 203
+  gut.addColorStop(0.847, 'rgba(86,70,46,0.03)');   // native 132 → 211
+  gut.addColorStop(1.000, 'rgba(86,70,46,0)');
   g.fillStyle = gut;
   g.fillRect(L - 8 * s, T - 8 * s, 150 * s, (B - T) + 16 * s);
   g.restore();
@@ -506,18 +512,21 @@ function paintPlait(g, s, cx, y0, y1) {
   const step = Math.max(1, 0.6 * s);
 
   // The band's ground: paper let into a shallow trough, ruled either side.
+  // Kept faint on purpose. The gutter is already doing all the tonal work here
+  // and a second dark band on top of it stops reading as a shadow and starts
+  // reading as a printed stripe with an edge.
   g.save();
   g.globalCompositeOperation = 'multiply';
   const trough = g.createLinearGradient(cx - hw - 4 * s, 0, cx + hw + 4 * s, 0);
-  trough.addColorStop(0, 'rgba(110,92,64,0.55)');
-  trough.addColorStop(0.35, 'rgba(196,180,150,0.22)');
-  trough.addColorStop(1, 'rgba(122,102,72,0.40)');
+  trough.addColorStop(0, 'rgba(150,132,102,0.26)');
+  trough.addColorStop(0.35, 'rgba(228,216,192,0.10)');
+  trough.addColorStop(1, 'rgba(160,142,110,0.20)');
   g.fillStyle = trough;
   g.fillRect(cx - hw - 4.6 * s, y0 - 3 * s, hw * 2 + 9.2 * s, y1 - y0 + 6 * s);
   g.restore();
   g.save();
-  g.strokeStyle = 'rgba(58,44,20,0.55)';
-  g.lineWidth = Math.max(1, 0.8 * s);
+  g.strokeStyle = 'rgba(58,44,20,0.30)';
+  g.lineWidth = Math.max(1, 0.7 * s);
   for (const dx of [-hw - 4 * s, hw + 4 * s]) {
     g.beginPath();
     g.moveTo(cx + dx, y0 - 2 * s);
@@ -530,11 +539,11 @@ function paintPlait(g, s, cx, y0, y1) {
   // about ten native pixels across, and gilding it up to full metal at this
   // size turns the fold into a brass chain running down the page.
   const gold = g.createLinearGradient(cx - hw - 2 * s, 0, cx + hw + 2 * s, 0);
-  gold.addColorStop(0, '#6a5322');
-  gold.addColorStop(0.24, '#b49a58');
-  gold.addColorStop(0.44, '#e2d3a0');
-  gold.addColorStop(0.66, '#a68c46');
-  gold.addColorStop(1, '#5d4820');
+  gold.addColorStop(0, '#6b5730');
+  gold.addColorStop(0.24, '#a08c56');
+  gold.addColorStop(0.44, '#c8b989');
+  gold.addColorStop(0.66, '#948046');
+  gold.addColorStop(1, '#5e4c26');
 
   const strandX = (y, sign) => cx + sign * hw * Math.sin((TAU * (y - y0)) / P);
 
@@ -542,16 +551,16 @@ function paintPlait(g, s, cx, y0, y1) {
     g.beginPath();
     for (let y = from; y <= to; y += step) g.lineTo(strandX(y, sign), y);
     g.lineTo(strandX(to, sign), to);
-    g.strokeStyle = 'rgba(58,44,18,0.72)';
-    g.lineWidth = 3.6 * s;
+    g.strokeStyle = 'rgba(64,50,24,0.5)';
+    g.lineWidth = 3.0 * s;
     g.lineCap = 'round';
     g.stroke();
     g.strokeStyle = gold;
-    g.lineWidth = 2.1 * s;
+    g.lineWidth = 1.9 * s;
     g.stroke();
     // The specular that makes it metal rather than mustard.
-    g.strokeStyle = 'rgba(255,250,224,0.35)';
-    g.lineWidth = 0.6 * s;
+    g.strokeStyle = 'rgba(255,250,224,0.22)';
+    g.lineWidth = 0.55 * s;
     g.stroke();
   };
 

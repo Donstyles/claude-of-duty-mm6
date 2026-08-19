@@ -15,7 +15,7 @@
 
 /* ── the room, and the words over the bottom of it ─────────────────────────── */
 
-.mm-talk-say {
+.mm-panel[data-panel='dialogue'] .mm-talk-say {
   position: absolute;
   left: 0;
   right: 0;
@@ -30,31 +30,38 @@
     rgba(8, 5, 3, 0.90) 100%);
 }
 
-.mm-talk-lines { max-width: calc(var(--u) * 400); }
+.mm-panel[data-panel='dialogue'] .mm-talk-lines { max-width: calc(var(--u) * 400); }
 
-.mm-talk-line {
+.mm-panel[data-panel='dialogue'] .mm-talk-line {
   margin: 0 0 calc(var(--u) * 3);
-  font-size: calc(var(--u) * 13);
+  font-size: calc(var(--u) * 12);
   font-style: italic;
-  line-height: calc(var(--u) * 17);
-  color: #f4ecd8;
-  text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #000, 0 0 calc(var(--u) * 6) rgba(0, 0, 0, 0.9);
+  line-height: calc(var(--u) * 15);
+  letter-spacing: 0;
+  color: var(--ink);
+  text-shadow: var(--shadow), 0 0 calc(var(--u) * 6) rgba(0, 0, 0, 0.9);
 }
 
 /* The ledger line: what an errand pays, who a packet is for, where the party
-   stands. Never a sentence — a caption. */
-.mm-talk-note {
+   stands. Never a sentence — a caption.
+ *
+ * The tracking is gone. STYLE.md §1: body text is set solid, and the only
+ * permitted tracking is on display caps. */
+.mm-panel[data-panel='dialogue'] .mm-talk-note {
   margin-top: calc(var(--u) * 5);
-  font-size: calc(var(--u) * 11);
-  letter-spacing: calc(var(--u) * 0.4);
-  color: #bfae8e;
-  text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #000;
+  font-size: calc(var(--u) * 10);
+  line-height: calc(var(--u) * 12);
+  letter-spacing: 0;
+  color: var(--dim);
+  text-shadow: var(--shadow);
 }
 
-.mm-talk-note.is-empty { display: none; }
-.mm-talk-say[data-tone='quest'] .mm-talk-note { color: var(--gold); }
-.mm-talk-say[data-tone='good'] .mm-talk-note { color: #d8b25c; }
-.mm-talk-say[data-tone='warn'] .mm-talk-note { color: #c9803f; }
+.mm-panel[data-panel='dialogue'] .mm-talk-note.is-empty { display: none; }
+/* Gold-deep is money and gold is the live control (§2), so a note about coin
+   takes the money colour and a note about anything else stays a note. */
+.mm-panel[data-panel='dialogue'] .mm-talk-say[data-tone='quest'] .mm-talk-note { color: var(--gold-deep); }
+.mm-panel[data-panel='dialogue'] .mm-talk-say[data-tone='good'] .mm-talk-note { color: var(--up); }
+.mm-panel[data-panel='dialogue'] .mm-talk-say[data-tone='warn'] .mm-talk-note { color: var(--down); }
 
 /* ── the sidebar block ────────────────────────────────────────────────────── */
 
@@ -88,8 +95,9 @@
   left: calc(var(--u) * 4);
   right: calc(var(--u) * 4);
   text-align: center;
-  font-size: calc(var(--u) * 12);
-  line-height: calc(var(--u) * 15);
+  font-size: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 17);
+  letter-spacing: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -98,9 +106,9 @@
 }
 
 /* The plank board, inset into the marble with rounded corners. */
-.mm-npc-side .mm-npc-board {
+.mm-panel-side[data-panel='dialogue'] .mm-npc-board {
   position: absolute;
-  top: calc(var(--u) * 21);
+  top: calc(var(--u) * 23);
   left: calc(var(--u) * 4);
   right: calc(var(--u) * 4);
   bottom: calc(var(--u) * 3);
@@ -128,7 +136,7 @@
 
 /* Rectangular, 4:5, in a thin grey-green bevel — never an oval. The party's own
    portraits are the eggs; a shopkeeper's is a framed picture on a wall. */
-.mm-npc-board .mm-npc-portrait {
+.mm-panel-side[data-panel='dialogue'] .mm-npc-portrait {
   width: calc(var(--u) * 60);
   height: calc(var(--u) * 75);
   margin: calc(var(--u) * 4) 0 0;
@@ -141,69 +149,80 @@
     inset 0 0 calc(var(--u) * 8) rgba(0, 0, 0, 0.55);
 }
 
-.mm-npc-board .mm-npc-name {
+/* The identity block (STYLE.md §3), at the same measurements as the shop's,
+   the tavern's, the guild's and the training hall's. The role was a white
+   Title Case line in a cool grey-blue; it is now plain ink like the other
+   four, and only the name carries the name colour. */
+.mm-panel-side[data-panel='dialogue'] .mm-npc-name {
   margin-top: calc(var(--u) * 7);
   text-align: center;
   font-size: calc(var(--u) * 14);
-  line-height: calc(var(--u) * 15);
-  color: var(--azure);
+  line-height: calc(var(--u) * 17);
+  letter-spacing: 0;
+  color: var(--name);
   text-shadow: var(--shadow);
 }
 
-.mm-npc-board .mm-npc-trade {
-  margin-top: calc(var(--u) * 2);
+.mm-panel-side[data-panel='dialogue'] .mm-npc-trade {
   text-align: center;
-  font-size: calc(var(--u) * 10);
-  line-height: calc(var(--u) * 12);
-  color: #a8b6c4;
+  font-size: calc(var(--u) * 12);
+  font-style: italic;
+  line-height: calc(var(--u) * 15);
+  letter-spacing: 0;
+  color: var(--ink);
   text-shadow: var(--shadow);
 }
 
 /* Options: centred white italic, wrapping to centred second lines. Centred with
    auto margins rather than `justify-content`, which clips the first row when a
-   long list has to scroll. */
-.mm-npc-board .mm-npc-options {
+   long list has to scroll. STYLE.md §8: the gap inside the list is fixed and
+   smaller than the gap that separates the list from the identity block. */
+.mm-panel-side[data-panel='dialogue'] .mm-npc-options {
   flex: 1;
   min-height: 0;
   width: 100%;
-  margin-top: calc(var(--u) * 5);
+  margin-top: calc(var(--u) * 14);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(var(--u) * 8);
+  gap: calc(var(--u) * 9);
   overflow-y: auto;
   scrollbar-width: none;
 }
 
-.mm-npc-board .mm-npc-options > *:first-child { margin-top: auto; }
-.mm-npc-board .mm-npc-options > *:last-child { margin-bottom: auto; }
-.mm-npc-board .mm-npc-options::-webkit-scrollbar { display: none; }
+.mm-panel-side[data-panel='dialogue'] .mm-npc-options > *:first-child { margin-top: auto; }
+.mm-panel-side[data-panel='dialogue'] .mm-npc-options > *:last-child { margin-bottom: auto; }
+.mm-panel-side[data-panel='dialogue'] .mm-npc-options::-webkit-scrollbar { display: none; }
 
-.mm-npc-board .mm-npc-option {
+.mm-panel-side[data-panel='dialogue'] .mm-npc-option {
   flex: none;
   font-size: calc(var(--u) * 14);
   font-style: italic;
   text-align: center;
-  line-height: calc(var(--u) * 15);
+  line-height: calc(var(--u) * 17);
+  letter-spacing: 0;
   max-width: calc(var(--u) * 122);
   color: var(--ink);
   text-shadow: var(--shadow);
 }
 
-.mm-npc-board .mm-npc-option:hover,
-.mm-npc-board .mm-npc-option:focus-visible { color: var(--gold); outline: none; }
-.mm-npc-board .mm-npc-option.is-special { color: var(--gold-deep); }
-.mm-npc-board .mm-npc-option.is-special:hover { color: var(--gold); }
+/* Gold is the live control and nothing else (STYLE.md §2). A "special" topic
+   used to be gold-deep, which is the money colour. */
+.mm-panel-side[data-panel='dialogue'] .mm-npc-option:hover,
+.mm-panel-side[data-panel='dialogue'] .mm-npc-option:focus-visible { color: var(--gold); outline: none; }
+.mm-panel-side[data-panel='dialogue'] .mm-npc-option.is-special { color: var(--ink); }
+.mm-panel-side[data-panel='dialogue'] .mm-npc-option.is-special:hover { color: var(--gold); }
 
-.mm-npc-board .mm-npc-closed {
+.mm-panel-side[data-panel='dialogue'] .mm-npc-closed {
   font-size: calc(var(--u) * 12);
   font-style: italic;
-  color: #d8cbb0;
+  line-height: calc(var(--u) * 15);
+  color: var(--dim);
   text-align: center;
 }
 
 /* The one brass oval, sitting on the boards at the foot of the list. */
-.mm-npc-board .mm-npc-exit {
+.mm-panel-side[data-panel='dialogue'] .mm-npc-exit {
   position: static;
   transform: none;
   flex: none;

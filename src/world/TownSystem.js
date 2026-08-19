@@ -290,7 +290,10 @@ export class TownSystem extends System {
    */
   _buildGround(lib, terrain) {
     const p = this.profile;
-    const RINGS = 10;
+    // One ring per six metres of radius. Ten was enough for a disc on a
+    // flattened plateau; on unflattened ground the chord between two rings cuts
+    // straight through anything the terrain does in between.
+    const RINGS = Math.max(10, Math.round(p.radius / 6));
     const SEGS = 128;
 
     const verts = [];
@@ -866,8 +869,11 @@ export class TownSystem extends System {
         x: this.centreX + slot.x + slot.nx * back,
         z: this.centreZ + slot.z + slot.nz * back,
         f: Math.atan2(-slot.nx, -slot.nz),
-        hw: (spec.width + 1.2) / 2,
-        hd: (spec.depth + 1.2) / 2,
+        // Half a metre of daylight between neighbours; eaves overhang by 0.42
+        // and two buildings whose footprints merely touch have interpenetrating
+        // roofs.
+        hw: (spec.width + 0.9) / 2,
+        hd: (spec.depth + 0.9) / 2,
       });
 
       // Take the first free plot this building actually fits on.
@@ -930,7 +936,7 @@ export class TownSystem extends System {
     }
   }
 
-    /**
+  /**
    * Grow the outline until it encloses every building that was actually built.
    *
    * Asked of the shape function rather than of a bare radius, because a strip
@@ -1203,7 +1209,15 @@ function profileFor(town, terrain, sys, rng) {
         return 1 / Math.max(s, c, 1e-3);
       }
       case 'ribbon': return ellipse(a - spin, 1.0, 0.42);
-      case 'quay': return ellipse(a - seaBearing, 0.78, 1.0);
+      // An egg, not an ellipse: the town fronts the water and runs back from
+      // it, so there is a short apron on the seaward side and the full depth
+      // inland. Symmetrical, it paved forty metres of empty quay to reach the
+      // back lane, and grew the wall-line to 128 m to do it.
+      case 'quay': {
+        const c = Math.cos(a - seaBearing);
+        const s = Math.sin(a - seaBearing);
+        return 1 / Math.hypot(c / (c > 0 ? 0.42 : 1.0), s);
+      }
       // Pulled in on the downhill side, where the ground falls away and there
       // is nothing to pave.
       case 'terrace': return 1 - 0.24 * Math.max(0, Math.cos(a - seaBearing));
@@ -1509,8 +1523,12 @@ function radialSlots(p, rng, want) {
     });
   }
 
+  // Ranks are spaced along the spoke, and a building turned to face the spoke
+  // puts its *width* along it — up to thirteen metres for a hall. Anything
+  // tighter than that and every other plot is rejected by the fitting pass and
+  // shunted outwards, which quietly undoes the prominence ordering.
   const first = p.squareR + 6;
-  const step = Math.max(9.5, (p.radius - 12 - first) / Math.max(1, p.ranks));
+  const step = Math.max(11.5, (p.radius - 12 - first) / Math.max(1, p.ranks));
   const rows = Math.max(p.ranks, Math.ceil((want - slots.length) / (n * 2)));
 
   for (let r = 0; r < rows; r++) {
@@ -1533,7 +1551,9 @@ function radialSlots(p, rng, want) {
 
 /** Orthogonal blocks around a rectangular forum: Duskorn, Netherby. */
 function gridSlots(p, rng, want) {
-  const pitch = 23;
+  // Block pitch has to clear the street plus the two frontages that back onto
+  // each other across it: 2 × STREET_HALF plus two building depths.
+  const pitch = 27;
   const cs = Math.cos(p.spin);
   const sn = Math.sin(p.spin);
   const toWorld = (u, v) => ({ x: u * cs + v * sn, z: -u * sn + v * cs });
@@ -1571,7 +1591,7 @@ function ribbonSlots(p, rng, want) {
   const slots = [];
   const fx = Math.sin(p.spin);
   const fz = Math.cos(p.spin);
-  const spacing = 10.5;
+  const spacing = 13;
   const steps = Math.max(3, Math.ceil(want / 4));
   for (let k = 1; k <= steps; k++) {
     for (const dir of rng.shuffle([-1, 1])) {
@@ -1603,14 +1623,19 @@ function quaySlots(p, rng, want) {
   const ax = -iz;
   const az = ix;
 
-  const stride = 11.5;
+  // Along-shore spacing has to clear the widest frontage — a warehouse is 13 m
+  // — or two of them in a row never fit and the fitting pass has to shunt one
+  // of them somewhere it does not belong.
+  const stride = 15;
   // Three lanes, and the town grows along the water rather than away from it.
   // A quay town that reaches inland for another row of houses every time the
-  // catalogue grows stops being a waterfront and becomes a spine.
-  const lanes = 3;
+  // catalogue grows stops being a waterfront and becomes a spine. The 26 m
+  // between lanes is the street plus the two rows of backs that meet across it;
+  // at 19 the warehouses on one lane stood in the cottages on the next.
+  const lanes = want > 30 ? 3 : 2;
   const span = Math.max(2, Math.ceil(Math.ceil(want / (1 + (lanes - 1) * 2)) / 2));
   for (let k = 0; k < lanes; k++) {
-    const inland = p.squareR + 3 + k * 19;
+    const inland = p.squareR + 3 + k * 28;
     // The quay itself has water on one side, so it is built up on one side
     // only; every lane behind it is a proper street with two frontages.
     const sides = k === 0 ? [1] : [-1, 1];
@@ -1633,8 +1658,8 @@ function terraceSlots(p, rng, want) {
   const slots = [];
   const rings = Math.max(3, Math.ceil(want / 9));
   for (let k = 0; k < rings; k++) {
-    const r = p.squareR + 8 + k * 11.5;
-    const count = Math.max(4, Math.round((Math.PI * 2 * r * 0.72) / 12));
+    const r = p.squareR + 8 + k * 13;
+    const count = Math.max(4, Math.round((Math.PI * 2 * r * 0.72) / 14));
     const idx = [];
     for (let i = 0; i < count; i++) idx.push(i);
     for (const i of rng.shuffle(idx)) {

@@ -68,8 +68,8 @@ import { WORLD_SIZE } from './TerrainGen.js';
  * eventually fixed. Re-pointing the sun was never going to produce it, and
  * MM6's own hillside (standard deviation 6.7 across the dome) says why.
  */
-const KEY_GAIN = 1.78;
-const FILL_GAIN = 0.62;
+const KEY_GAIN = 1.70;
+const FILL_GAIN = 0.58;
 
 /**
  * Flat ambient floor, as a fraction of the hemisphere fill.
@@ -98,8 +98,28 @@ const FLOOR_RATIO = 0.30;
  * safe to do on its own: lifting it moves the sky and nothing else. Applied
  * only to the day keys — dawn, dusk and night were graded by eye against a
  * different problem and are not part of this measurement.
+ *
+ * Per channel rather than scalar, because the target is the reference's
+ * *measured* open sky — [62.7, 101.3, 196.0] on a clean sky-only window — and
+ * that is very slightly less saturated than a pure `#29458C` × 1.42 would be.
+ * A scalar 1.55 landed our open sky at [65, 107, 213]: red and green on the
+ * nose, blue 9% over. These gains are just `target / #29458C`.
  */
-const SKY_DAY_GAIN = 1.45;
+const SKY_DAY_GAIN = [1.53, 1.47, 1.40];
+
+/**
+ * Gain on the day palette's `gNear` / `gFar` — the band the sky shader paints
+ * below the horizon, past the edge of the heightfield.
+ *
+ * These are raw palette colours while the terrain beside them is lit by the
+ * rig, so the two drifted apart and the seam showed: measured on the round-3
+ * capture, the band sat at RGB [70, 86, 69] against the terrain immediately
+ * below it at [101, 97, 62] — darker, greener and with its blue *above* the
+ * terrain's rather than below it, which is what made it read as a grey strip
+ * pasted along the skyline instead of as more land. The gain lands the band on
+ * the terrain's own colour after the fog mix is added back.
+ */
+const GROUND_BAND_GAIN = [1.40, 1.05, 0.72];
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
@@ -292,14 +312,25 @@ const SKY_LIFT_HORIZON = { 6.4: 0, 7.6: 1.0, 10.0: 1.0, 12.0: 1.0, 15.0: 1.0, 16
 for (const k of KEYS) {
   const t = SKY_LIFT[k.h];
   if (!t) continue;
-  const g = 1 + (SKY_DAY_GAIN - 1) * t;
-  const gh = 1 + (SKY_DAY_GAIN - 1) * (SKY_LIFT_HORIZON[k.h] ?? 0);
-  const scale = (c, m) => { c[0] = Math.min(1, c[0] * m); c[1] = Math.min(1, c[1] * m); c[2] = Math.min(1, c[2] * m); };
-  scale(k.zen, g);
-  scale(k.hor, gh);
+  const th = SKY_LIFT_HORIZON[k.h] ?? 0;
+  /** Blend each channel's gain toward 1 by how much of the lift this key gets. */
+  const scale = (c, amount) => {
+    for (let i = 0; i < 3; i++) {
+      c[i] = Math.min(1, c[i] * (1 + (SKY_DAY_GAIN[i] - 1) * amount));
+    }
+  };
+  scale(k.zen, t);
+  scale(k.hor, th);
   // Fog is the sky seen through distance; if it does not move with the sky it
   // paints a differently-coloured strip along the skyline.
-  scale(k.fog, g);
+  scale(k.fog, t);
+  // The ground band has to follow the *terrain*, not the sky — see
+  // GROUND_BAND_GAIN. Weighted by the same day ramp so it stays continuous.
+  for (const band of [k.gNear, k.gFar]) {
+    for (let i = 0; i < 3; i++) {
+      band[i] = Math.min(1, band[i] * (1 + (GROUND_BAND_GAIN[i] - 1) * t));
+    }
+  }
 }
 
 const KEY_FIELDS = Object.keys(KEYS[0]).filter((k) => k !== 'h');

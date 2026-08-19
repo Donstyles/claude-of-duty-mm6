@@ -22,14 +22,18 @@
 .mm-train-title {
   text-align: center;
   font-size: calc(var(--u) * 16);
-  line-height: calc(var(--u) * 18);
+  line-height: calc(var(--u) * 19);
+  letter-spacing: 0;
 }
+/* The yard's terms under its name. A subtitle names the room, so it takes the
+   label colour — gold is the live control (STYLE.md §2). */
 .mm-train-sub {
   text-align: center;
   font-style: italic;
   font-size: calc(var(--u) * 12);
-  line-height: calc(var(--u) * 14);
-  color: var(--gold);
+  line-height: calc(var(--u) * 15);
+  letter-spacing: 0;
+  color: var(--dim);
 }
 
 /* ── the muster roll ──────────────────────────────────────────────────────── */
@@ -67,8 +71,10 @@
 }
 .mm-train-row .is-num { text-align: right; }
 
+/* A column head names data, so it is dim — quieter than the data. It used to
+   be gold, which is the live-control colour (STYLE.md §2). */
 .mm-train-row.is-head {
-  color: var(--gold);
+  color: var(--dim);
   line-height: calc(var(--u) * 19);
   font-size: calc(var(--u) * 12);
   border-bottom: calc(var(--u) * 1) solid rgba(15, 18, 16, 0.7);
@@ -76,41 +82,62 @@
   cursor: default;
 }
 
-.mm-train-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-train-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--name); }
 .mm-train-row.is-selected .mm-train-name { color: var(--gold); }
 /* MM6 turns the whole row under the cursor red — name, rank and number
    together. It is the only hover state the interface has. */
 .mm-train-row:not(.is-head):hover,
 .mm-train-row:not(.is-head):hover span { color: var(--down); }
 
-/* ── the strip that explains every refusal ────────────────────────────────── */
+/* ── the caption that explains every refusal ──────────────────────────────── */
 
+/* The one caption treatment the interface has (STYLE.md §4): a soft gradient
+   across the foot of the painting, fading upward to nothing. It was a hard
+   black box with a pale rule — one of three treatments across five venue
+   screens. These numbers are the conversation screen's, to the digit. */
 .mm-train-notice {
   position: absolute;
-  left: calc(var(--u) * 8);
-  right: calc(var(--u) * 8);
-  bottom: calc(var(--u) * 4);
-  min-height: calc(var(--u) * 46);
-  padding: calc(var(--u) * 5) calc(var(--u) * 10);
-  background: rgba(10, 12, 10, 0.72);
-  box-shadow:
-    inset calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(15, 18, 16, 0.9),
-    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(196, 192, 196, 0.5);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: calc(var(--u) * 26) calc(var(--u) * 14) calc(var(--u) * 10);
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 5, 3, 0) 0%,
+    rgba(8, 5, 3, 0.42) 30%,
+    rgba(8, 5, 3, 0.78) 62%,
+    rgba(8, 5, 3, 0.90) 100%);
 }
 .mm-train-notice-text {
   font-style: italic;
   font-size: calc(var(--u) * 12);
-  line-height: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 15);
+  letter-spacing: 0;
+  color: var(--ink);
+  text-shadow: var(--shadow), 0 0 calc(var(--u) * 6) rgba(0, 0, 0, 0.9);
 }
 
 /* ── the drillmaster's panel ──────────────────────────────────────────────── */
 
-.mm-train-side { position: absolute; inset: 0; padding: calc(var(--u) * 7); }
+/* Measurements are the house venue sidebar (STYLE.md §3, §8) — identical to
+   the shop's, the tavern's and the guild's. `background: transparent` is §6
+   rule 2: this component stands on the ground the panel declares
+   (`sideSurface = 'wood'`) and says so. */
+.mm-train-side {
+  position: absolute;
+  inset: 0;
+  padding: calc(var(--u) * 6) calc(var(--u) * 8) calc(var(--u) * 38);
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
 
 .mm-train-portrait {
-  width: calc(var(--u) * 62);
-  height: calc(var(--u) * 76);
-  margin: calc(var(--u) * 10) auto 0;
+  flex: none;
+  width: calc(var(--u) * 60);
+  height: calc(var(--u) * 74);
+  margin: calc(var(--u) * 6) auto 0;
   background: center / cover no-repeat;
   box-shadow:
     0 0 0 calc(var(--u) * 1) #10120f,
@@ -118,45 +145,74 @@
     0 0 0 calc(var(--u) * 4) #23261f,
     0 calc(var(--u) * 2) calc(var(--u) * 5) rgba(0, 0, 0, 0.55);
 }
+
+/* The identity block (STYLE.md §3): name, then role. This screen used to give
+   the name and stop. */
 .mm-train-trainer {
-  margin-top: calc(var(--u) * 7);
+  flex: none;
+  margin-top: calc(var(--u) * 8);
   text-align: center;
   font-size: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 17);
+  letter-spacing: 0;
+  color: var(--name);
+}
+.mm-train-role {
+  flex: none;
+  text-align: center;
+  font-size: calc(var(--u) * 12);
+  font-style: italic;
   line-height: calc(var(--u) * 15);
-  color: var(--azure);
+  letter-spacing: 0;
+  color: var(--ink);
 }
 
 /* One adventurer's account: engraved into the timber, labels flush left and
-   values flush right, which is how MM6 states any set of numbers. */
+   values flush right. This is the block the review called the best in the set,
+   so it is now the house way of stating any set of numbers (STYLE.md §9) and
+   the guild hall states its terms the same way. */
 .mm-train-account {
-  margin-top: calc(var(--u) * 8);
-  padding: calc(var(--u) * 4) 0;
+  flex: none;
+  margin-top: calc(var(--u) * 12);
+  padding: calc(var(--u) * 3) 0;
 }
 .mm-train-account .mm-row {
   padding: 0 calc(var(--u) * 6);
   line-height: calc(var(--u) * 15);
   font-size: calc(var(--u) * 12);
 }
+/* A label names data, so it is dim — quieter than the figure beside it (§2). */
+.mm-train-account .mm-row-label { color: var(--dim); }
 .mm-train-who {
   text-align: center;
   font-style: italic;
-  font-size: calc(var(--u) * 13);
+  font-size: calc(var(--u) * 12);
   line-height: calc(var(--u) * 16);
+  color: var(--name);
 }
 
+/* STYLE.md §8: fixed gap inside the list, larger gap around it, slack centred
+   rather than dumped between the rows or at the foot. */
 .mm-train-options {
-  margin-top: calc(var(--u) * 10);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: visible;
+  margin-top: calc(var(--u) * 12);
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: calc(var(--u) * 9);
 }
 .mm-train-option {
-  font-size: calc(var(--u) * 15);
+  flex: none;
+  font-size: calc(var(--u) * 16);
   font-style: italic;
   text-align: center;
-  line-height: calc(var(--u) * 16);
+  line-height: calc(var(--u) * 19);
+  letter-spacing: 0;
   max-width: calc(var(--u) * 130);
+  color: var(--ink);
 }
 .mm-train-option:hover { color: var(--gold); }
 

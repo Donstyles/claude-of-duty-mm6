@@ -1,6 +1,7 @@
 import './train.css';
 import { Panel } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, fmt, ellipsis, engraved, labelRow, goldOval } from '../widgets.js';
+import { attribute } from './dialogue.js';
 import { GuildSystem, experienceOf } from '../../game/GuildSystem.js';
 import { experienceForLevel } from '../../game/rules.js';
 
@@ -81,6 +82,10 @@ export class TrainPanel extends Panel {
     // account, and the two things you can buy.
     this.portraitEl = el('div', { className: 'mm-train-portrait' });
     this.nameEl = el('div', { className: 'mm-train-trainer' });
+    // The role line. This screen was the one that gave the NPC a blue name and
+    // no role at all — the fifth of five different treatments the review found
+    // for one component (STYLE.md §3).
+    this.roleEl = el('div', { className: 'mm-train-role' });
     this.accountEl = engraved('mm-train-account');
     this.optionsEl = el('div', { className: 'mm-train-options' });
     const exit = goldOval({
@@ -89,7 +94,8 @@ export class TrainPanel extends Panel {
       tip: () => tipMarkup({ title: 'Leave the hall' }),
     });
     side.appendChild(el('div', { className: 'mm-train-side' },
-      this.portraitEl, this.nameEl, this.accountEl, this.optionsEl, exit));
+      this.portraitEl, this.nameEl, this.roleEl,
+      this.accountEl, this.optionsEl, exit));
   }
 
   onOpen(opts = {}) {
@@ -97,9 +103,11 @@ export class TrainPanel extends Panel {
     this.view = opts.view ?? 'yard';
     const hall = this.hall();
     if (!hall) return;
-    this._notice = `${hall.keeper}: "We train to level ${hall.maxLevel} in this yard. `
-      + 'Bring the experience and the fee and I will make it a level."';
-    this.ui.log(`${hall.name}, ${hall.townName}.`, 'info');
+    // Attributed, curly quotes (STYLE.md §7); the strip gets a sentence in the
+    // one grammar the strip has (§5). `Hall of Arms, Millhaven.` was a label.
+    this._notice = attribute(hall.keeper, `We train to level ${hall.maxLevel} in this yard. `
+      + 'Bring the experience and the fee and I will make it a level.');
+    this.ui.log(`You enter ${hall.name}.`, 'info');
   }
 
   // ── draw ───────────────────────────────────────────────────────────────────
@@ -117,6 +125,7 @@ export class TrainPanel extends Panel {
     this.subEl.textContent = `${hall.townName} · trains to level ${hall.maxLevel}`;
     this.portraitEl.style.backgroundImage = `url("${T.portrait(hall.portrait)}")`;
     this.nameEl.textContent = hall.keeper;
+    this.roleEl.textContent = 'the Drillmaster';
 
     // One adventurer's account, in the sidebar where MM6 keeps the counter.
     // Past the yard's ceiling nothing is owed and nothing is short, so those
@@ -124,13 +133,15 @@ export class TrainPanel extends Panel {
     const capped = state.level >= hall.maxLevel;
     const needTone = capped ? '' : state.short > 0 ? 'mm-t-down' : 'mm-t-up';
     const feeTone = !capped && !state.ok && state.short === 0 ? 'mm-t-down' : '';
+    // The subject's name in the name colour, not gold: gold is the live
+    // control and money is gold-deep (STYLE.md §2, §9).
     setChildren(this.accountEl,
-      el('div', { className: 'mm-train-who mm-t-gold', text: ellipsis(vm?.name ?? '—', 17) }),
+      el('div', { className: 'mm-train-who', text: ellipsis(vm?.name ?? '—', 17) }),
       labelRow('Level', String(state.level), { tone: capped ? 'mm-t-down' : '' }),
       labelRow('Experience', fmt(state.xp)),
       labelRow('Needs', capped ? '—' : state.short > 0 ? fmt(state.short) : 'ready', { tone: needTone }),
-      labelRow('Fee', capped ? '—' : fmt(state.cost), { tone: feeTone }),
-      labelRow('In the purse', fmt(guilds.gold())));
+      labelRow('Fee', capped ? '—' : fmt(state.cost), { tone: feeTone || 'mm-t-golddeep' }),
+      labelRow('In the purse', fmt(guilds.gold()), { tone: 'mm-t-golddeep' }));
 
     const options = [];
     const add = (label, onClick, current = false) => {
@@ -235,9 +246,16 @@ export class TrainPanel extends Panel {
     this._say(result.message, result.trained.length > 0);
   }
 
-  _say(text, good) {
+  /**
+   * The drillmaster answers, in the caption across the foot of the yard.
+   *
+   * It used to go to the caption *and* the message strip, which put one
+   * sentence in two channels at once and truncated it in the narrower of them.
+   * STYLE.md §5: the strip says where you are and what to do next; the caption
+   * is what the person in the room is saying.
+   */
+  _say(text) {
     this._notice = text;
-    this.ui.log(text, good ? 'good' : 'warn');
     // The party sync repaints the gold plate on its own cadence; touching it
     // here keeps the coin on screen honest the instant it is spent.
     this.ui.hud?.setGold(this.ui.gold, this.ui.food);

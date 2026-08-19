@@ -13,12 +13,14 @@
  * off the real menu, the plaque face runs about two and a half times the value
  * of the wall behind it — that ratio is what makes them read as plates.
  *
- * Every rule is prefixed with .mm-ui so it outranks the shared sheet: the
- * bundler emits a panel's own CSS before ui.panels.css, so equal specificity
- * would silently lose to it.
+ * Every selector is scoped to `.mm-panel[data-panel='menu']` (STYLE.md §11).
+ * That is what makes "nothing in this file can reach another screen" true by
+ * inspection, and it also settles the cascade: the bundler emits a panel's own
+ * CSS before ui.panels.css, so a rule of equal specificity would silently lose
+ * to the shared sheet, and the attribute hook puts this file above it.
  */
 
-.mm-ui .mm-menu {
+.mm-panel[data-panel='menu'] .mm-menu {
   padding: calc(var(--u) * 8) calc(var(--u) * 16) calc(var(--u) * 8);
   gap: calc(var(--u) * 6);
   justify-content: flex-start;
@@ -30,12 +32,12 @@
 
 /* ── the shared plate edge ────────────────────────────────────────────────── */
 
-.mm-ui .mm-menu-item,
-.mm-ui .mm-menu-plaque,
-.mm-ui .mm-menu-logo,
-.mm-ui .mm-sv,
-.mm-ui .mm-opt-toggle,
-.mm-ui .mm-opt-choice {
+.mm-panel[data-panel='menu'] .mm-menu-item,
+.mm-panel[data-panel='menu'] .mm-menu-plaque,
+.mm-panel[data-panel='menu'] .mm-menu-logo,
+.mm-panel[data-panel='menu'] .mm-sv,
+.mm-panel[data-panel='menu'] .mm-opt-toggle,
+.mm-panel[data-panel='menu'] .mm-opt-choice {
   background: var(--tex-menu-stone) center / calc(var(--u) * 260) calc(var(--u) * 70);
   background-color: #8e8477;
   box-shadow:
@@ -54,7 +56,7 @@
     inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(255, 246, 224, 0.28);
 }
 
-.mm-ui .mm-menu-logo {
+.mm-panel[data-panel='menu'] .mm-menu-logo {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
@@ -68,7 +70,7 @@
 /* The logo is gold plate: a vertical run from a white catch through amber to a
    burnished return along the bottom, cut out of the glyphs and outlined dark
    so it stands off the stone the way a cast letter would. */
-.mm-ui .mm-menu-logo-name {
+.mm-panel[data-panel='menu'] .mm-menu-logo-name {
   letter-spacing: 0.16em;
   line-height: 1.06;
   color: transparent;
@@ -83,12 +85,12 @@
     drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) 0 rgba(0, 0, 0, 0.6));
 }
 /* Off the title page the logo is a header, not the point of the screen. */
-.mm-ui .mm-panel[data-page]:not([data-page='root']) .mm-menu-logo {
+.mm-panel[data-panel='menu'][data-page]:not([data-page='root']) .mm-menu-logo {
   font-size: calc(var(--u) * 17);
   padding: calc(var(--u) * 3) calc(var(--u) * 20);
 }
-.mm-ui .mm-panel[data-page]:not([data-page='root']) .mm-menu-logo-sub { display: none; }
-.mm-ui .mm-menu-logo-sub {
+.mm-panel[data-panel='menu'][data-page]:not([data-page='root']) .mm-menu-logo-sub { display: none; }
+.mm-panel[data-panel='menu'] .mm-menu-logo-sub {
   font-size: calc(var(--u) * 11);
   letter-spacing: 0.30em;
   color: #f0cf72;
@@ -97,7 +99,7 @@
 
 /* The root page keeps MM6's centred column; every other page is a working
    sheet and fills the width it is given. */
-.mm-ui .mm-menu-page {
+.mm-panel[data-panel='menu'] .mm-menu-page {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -106,10 +108,10 @@
   align-items: center;
   gap: calc(var(--u) * 6);
 }
-.mm-ui .mm-panel[data-panel='menu'][data-page='root'] .mm-menu-page { justify-content: center; }
+.mm-panel[data-panel='menu'][data-page='root'] .mm-menu-page { justify-content: center; }
 
-.mm-ui .mm-menu-grid { grid-template-columns: repeat(2, calc(var(--u) * 176)); gap: calc(var(--u) * 14); }
-.mm-ui .mm-menu-item {
+.mm-panel[data-panel='menu'] .mm-menu-grid { grid-template-columns: repeat(2, calc(var(--u) * 176)); gap: calc(var(--u) * 14); }
+.mm-panel[data-panel='menu'] .mm-menu-item {
   height: calc(var(--u) * 38);
   display: flex;
   flex-direction: column;
@@ -126,32 +128,37 @@
     calc(var(--u) * 1) calc(var(--u) * 1) 0 #000, calc(var(--u) * -1) 0 0 rgba(0, 0, 0, 0.8),
     0 calc(var(--u) * -1) 0 rgba(0, 0, 0, 0.8);
 }
-.mm-ui .mm-menu-item:hover { color: #fff4c8; }
-.mm-ui .mm-menu-item.is-quit { color: #f0402c; }
-.mm-ui .mm-menu-item.is-quit:hover { color: #ff7a62; }
-.mm-ui .mm-menu-item small {
+/* Rest is `#ffdf94`, the value REFERENCE.md §4.6 measures for main-menu
+   options; hover is `--gold`, which STYLE.md §2 reserves for the live control.
+   The two documents look like they disagree here — §2 says a menu item is not
+   gold for being a menu item — and they do not: the screen's own measured
+   literal marks the plate, and the shared token marks where the cursor is. */
+.mm-panel[data-panel='menu'] .mm-menu-item:hover { color: var(--gold); }
+.mm-panel[data-panel='menu'] .mm-menu-item.is-quit { color: #f0402c; }
+.mm-panel[data-panel='menu'] .mm-menu-item.is-quit:hover { color: #ff7a62; }
+.mm-panel[data-panel='menu'] .mm-menu-item small {
   font-size: calc(var(--u) * 9);
   font-style: italic;
   color: #2a2418;
   text-shadow: none;
   line-height: 1;
 }
-.mm-ui .mm-menu-item.is-dead { color: #6a5f4a; cursor: default; }
-.mm-ui .mm-menu-item.is-dead:hover { color: #6a5f4a; }
+.mm-panel[data-panel='menu'] .mm-menu-item.is-dead { color: #6a5f4a; cursor: default; }
+.mm-panel[data-panel='menu'] .mm-menu-item.is-dead:hover { color: #6a5f4a; }
 
 /* Seven plaques cut from one slab would be seven identical crops of it, so each
    takes its stone from a different part of the block. */
-.mm-ui .mm-menu-item:nth-child(1) { background-position: 0% 12%; }
-.mm-ui .mm-menu-item:nth-child(2) { background-position: 46% 74%; }
-.mm-ui .mm-menu-item:nth-child(3) { background-position: 88% 30%; }
-.mm-ui .mm-menu-item:nth-child(4) { background-position: 22% 92%; }
-.mm-ui .mm-menu-item:nth-child(5) { background-position: 66% 6%; }
-.mm-ui .mm-menu-item:nth-child(6) { background-position: 12% 56%; }
-.mm-ui .mm-menu-item:nth-child(7) { background-position: 94% 82%; }
-.mm-ui .mm-sv-wrap:nth-child(odd) .mm-sv { background-position: 18% 30%; }
-.mm-ui .mm-sv-wrap:nth-child(even) .mm-sv { background-position: 72% 70%; }
+.mm-panel[data-panel='menu'] .mm-menu-item:nth-child(1) { background-position: 0% 12%; }
+.mm-panel[data-panel='menu'] .mm-menu-item:nth-child(2) { background-position: 46% 74%; }
+.mm-panel[data-panel='menu'] .mm-menu-item:nth-child(3) { background-position: 88% 30%; }
+.mm-panel[data-panel='menu'] .mm-menu-item:nth-child(4) { background-position: 22% 92%; }
+.mm-panel[data-panel='menu'] .mm-menu-item:nth-child(5) { background-position: 66% 6%; }
+.mm-panel[data-panel='menu'] .mm-menu-item:nth-child(6) { background-position: 12% 56%; }
+.mm-panel[data-panel='menu'] .mm-menu-item:nth-child(7) { background-position: 94% 82%; }
+.mm-panel[data-panel='menu'] .mm-sv-wrap:nth-child(odd) .mm-sv { background-position: 18% 30%; }
+.mm-panel[data-panel='menu'] .mm-sv-wrap:nth-child(even) .mm-sv { background-position: 72% 70%; }
 
-.mm-ui .mm-menu-hint {
+.mm-panel[data-panel='menu'] .mm-menu-hint {
   font-size: calc(var(--u) * 10);
   font-style: italic;
   color: #c4b28a;
@@ -159,15 +166,15 @@
 
 /* ── page furniture ───────────────────────────────────────────────────────── */
 
-.mm-ui .mm-menu-head { width: 100%; text-align: center; flex: 0 0 auto; }
-.mm-ui .mm-menu-head h2 {
+.mm-panel[data-panel='menu'] .mm-menu-head { width: 100%; text-align: center; flex: 0 0 auto; }
+.mm-panel[data-panel='menu'] .mm-menu-head h2 {
   margin: 0;
   font-size: calc(var(--u) * 18);
   font-weight: normal;
   letter-spacing: 0.12em;
   color: #ffdf94;
 }
-.mm-ui .mm-menu-head p {
+.mm-panel[data-panel='menu'] .mm-menu-head p {
   margin: calc(var(--u) * 2) auto 0;
   max-width: calc(var(--u) * 360);
   font-size: calc(var(--u) * 10);
@@ -176,18 +183,18 @@
   color: #b6a988;
 }
 
-.mm-ui .mm-menu-prose {
+.mm-panel[data-panel='menu'] .mm-menu-prose {
   max-width: calc(var(--u) * 340);
   font-size: calc(var(--u) * 11);
   line-height: 1.45;
   color: #d8ccb0;
 }
-.mm-ui .mm-menu-prose p { margin: 0 0 calc(var(--u) * 6); }
+.mm-panel[data-panel='menu'] .mm-menu-prose p { margin: 0 0 calc(var(--u) * 6); }
 
-.mm-ui .mm-menu-actions { display: flex; gap: calc(var(--u) * 8); flex: 0 0 auto; }
-.mm-ui .mm-menu-actions.is-foot { margin-top: auto; }
+.mm-panel[data-panel='menu'] .mm-menu-actions { display: flex; gap: calc(var(--u) * 8); flex: 0 0 auto; }
+.mm-panel[data-panel='menu'] .mm-menu-actions.is-foot { margin-top: auto; }
 
-.mm-ui .mm-menu-plaque {
+.mm-panel[data-panel='menu'] .mm-menu-plaque {
   height: calc(var(--u) * 26);
   padding: 0 calc(var(--u) * 16);
   display: grid;
@@ -196,12 +203,12 @@
   color: #ffdf94;
   text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #000;
 }
-.mm-ui .mm-menu-plaque:hover { color: #fff4c8; }
-.mm-ui .mm-menu-plaque.is-lead { color: #fff4c8; }
+.mm-panel[data-panel='menu'] .mm-menu-plaque:hover { color: var(--gold); }
+.mm-panel[data-panel='menu'] .mm-menu-plaque.is-lead { color: #fff4c8; }
 
 /* ── save slots ───────────────────────────────────────────────────────────── */
 
-.mm-ui .mm-sv-list {
+.mm-panel[data-panel='menu'] .mm-sv-list {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -211,11 +218,11 @@
   gap: calc(var(--u) * 3);
   padding-right: calc(var(--u) * 4);
 }
-.mm-ui .mm-sv-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
-.mm-ui .mm-sv-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+.mm-panel[data-panel='menu'] .mm-sv-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-panel[data-panel='menu'] .mm-sv-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
 
-.mm-ui .mm-sv-wrap { position: relative; display: flex; }
-.mm-ui .mm-sv {
+.mm-panel[data-panel='menu'] .mm-sv-wrap { position: relative; display: flex; }
+.mm-panel[data-panel='menu'] .mm-sv {
   flex: 1;
   min-width: 0;
   /* Seven slots have to stand on one page, so a row is two lines and no more. */
@@ -223,48 +230,48 @@
   text-align: left;
   background-size: calc(var(--u) * 300) calc(var(--u) * 40);
 }
-.mm-ui .mm-sv:hover { background-color: #a89c8b; }
-.mm-ui .mm-sv.is-empty { color: #4a4034; }
-.mm-ui .mm-sv:disabled { cursor: default; }
-.mm-ui .mm-sv:disabled:hover { background-color: #8e8477; }
+.mm-panel[data-panel='menu'] .mm-sv:hover { background-color: #a89c8b; }
+.mm-panel[data-panel='menu'] .mm-sv.is-empty { color: #4a4034; }
+.mm-panel[data-panel='menu'] .mm-sv:disabled { cursor: default; }
+.mm-panel[data-panel='menu'] .mm-sv:disabled:hover { background-color: #8e8477; }
 
-.mm-ui .mm-sv-head { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
-.mm-ui .mm-sv-name { font-size: calc(var(--u) * 12); line-height: 1.2; color: #ffdf94; }
-.mm-ui .mm-sv.is-empty .mm-sv-name { color: #d8c8a4; }
-.mm-ui .mm-sv-when { font-size: calc(var(--u) * 9); color: #f0e4c8; white-space: nowrap; }
-.mm-ui .mm-sv-body { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
-.mm-ui .mm-sv-party {
+.mm-panel[data-panel='menu'] .mm-sv-head { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
+.mm-panel[data-panel='menu'] .mm-sv-name { font-size: calc(var(--u) * 12); line-height: 1.2; color: #ffdf94; }
+.mm-panel[data-panel='menu'] .mm-sv.is-empty .mm-sv-name { color: #d8c8a4; }
+.mm-panel[data-panel='menu'] .mm-sv-when { font-size: calc(var(--u) * 9); color: #f0e4c8; white-space: nowrap; }
+.mm-panel[data-panel='menu'] .mm-sv-body { display: flex; justify-content: space-between; gap: calc(var(--u) * 8); align-items: baseline; }
+.mm-panel[data-panel='menu'] .mm-sv-party {
   font-size: calc(var(--u) * 10);
   color: #f4ead4;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mm-ui .mm-sv-place { font-size: calc(var(--u) * 10); font-style: italic; color: #e0d2ac; white-space: nowrap; }
+.mm-panel[data-panel='menu'] .mm-sv-place { font-size: calc(var(--u) * 10); font-style: italic; color: #e0d2ac; white-space: nowrap; }
 
-.mm-ui .mm-sv-del {
+.mm-panel[data-panel='menu'] .mm-sv-del {
   width: calc(var(--u) * 20);
   display: grid;
   place-items: center;
   color: #b06050;
 }
-.mm-ui .mm-sv-del:hover { color: #ff8a70; }
+.mm-panel[data-panel='menu'] .mm-sv-del:hover { color: #ff8a70; }
 
 /* ── options ──────────────────────────────────────────────────────────────── */
 
-.mm-ui .mm-opt-list {
+.mm-panel[data-panel='menu'] .mm-opt-list {
   flex: 1;
   min-height: 0;
   width: 100%;
   overflow-y: auto;
   padding-right: calc(var(--u) * 4);
 }
-.mm-ui .mm-opt-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
-.mm-ui .mm-opt-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+.mm-panel[data-panel='menu'] .mm-opt-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-panel[data-panel='menu'] .mm-opt-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
 
 /* Eight settings have to fit on one screen without a scrollbar, so a row is a
    name, a one-line gloss under it, the control and its reading — nothing else. */
-.mm-ui .mm-opt-row {
+.mm-panel[data-panel='menu'] .mm-opt-row {
   display: grid;
   grid-template-columns: 1fr calc(var(--u) * 140) calc(var(--u) * 40);
   align-items: center;
@@ -272,9 +279,9 @@
   padding: calc(var(--u) * 1) calc(var(--u) * 6);
   border-bottom: 1px solid rgba(120, 104, 62, 0.22);
 }
-.mm-ui .mm-opt-label { min-width: 0; }
-.mm-ui .mm-opt-label span { font-size: calc(var(--u) * 11); line-height: 1.2; color: #ffd773; }
-.mm-ui .mm-opt-label small {
+.mm-panel[data-panel='menu'] .mm-opt-label { min-width: 0; }
+.mm-panel[data-panel='menu'] .mm-opt-label span { font-size: calc(var(--u) * 11); line-height: 1.2; color: #ffd773; }
+.mm-panel[data-panel='menu'] .mm-opt-label small {
   display: block;
   font-size: calc(var(--u) * 8);
   font-style: italic;
@@ -284,12 +291,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mm-ui .mm-opt-value { font-size: calc(var(--u) * 11); text-align: right; color: #fff2c0; }
-.mm-ui .mm-opt-wide { grid-column: 2 / span 2; display: flex; gap: calc(var(--u) * 4); }
+.mm-panel[data-panel='menu'] .mm-opt-value { font-size: calc(var(--u) * 11); text-align: right; color: #fff2c0; }
+.mm-panel[data-panel='menu'] .mm-opt-wide { grid-column: 2 / span 2; display: flex; gap: calc(var(--u) * 4); }
 
 /* A slider MM6 never had, built out of the parts it did: a recessed channel
    and a brass fitting sliding in it. */
-.mm-ui .mm-opt-slider {
+.mm-panel[data-panel='menu'] .mm-opt-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -301,7 +308,7 @@
   outline: none;
   cursor: pointer;
 }
-.mm-ui .mm-opt-slider::-webkit-slider-thumb {
+.mm-panel[data-panel='menu'] .mm-opt-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: calc(var(--u) * 10);
@@ -309,7 +316,7 @@
   background: linear-gradient(180deg, #ebe2a7 0 18%, #c3b37a 45%, #a98e57 70%, #7a6031);
   box-shadow: 0 0 0 1px #302410;
 }
-.mm-ui .mm-opt-slider::-moz-range-thumb {
+.mm-panel[data-panel='menu'] .mm-opt-slider::-moz-range-thumb {
   width: calc(var(--u) * 10);
   height: calc(var(--u) * 16);
   border: 1px solid #302410;
@@ -317,8 +324,8 @@
   background: linear-gradient(180deg, #ebe2a7 0 18%, #c3b37a 45%, #a98e57 70%, #7a6031);
 }
 
-.mm-ui .mm-opt-toggle,
-.mm-ui .mm-opt-choice {
+.mm-panel[data-panel='menu'] .mm-opt-toggle,
+.mm-panel[data-panel='menu'] .mm-opt-choice {
   min-width: calc(var(--u) * 40);
   height: calc(var(--u) * 18);
   padding: 0 calc(var(--u) * 8);
@@ -329,12 +336,12 @@
   background-size: calc(var(--u) * 160) calc(var(--u) * 26);
   text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #000;
 }
-.mm-ui .mm-opt-toggle:hover,
-.mm-ui .mm-opt-choice:hover { color: #fff4c8; }
+.mm-panel[data-panel='menu'] .mm-opt-toggle:hover,
+.mm-panel[data-panel='menu'] .mm-opt-choice:hover { color: var(--gold); }
 /* A chosen setting is the one plate on the page whose face is gold rather than
    stone; its edge is the same five layers, so it is the same object. */
-.mm-ui .mm-opt-toggle.is-on,
-.mm-ui .mm-opt-choice.is-on {
+.mm-panel[data-panel='menu'] .mm-opt-toggle.is-on,
+.mm-panel[data-panel='menu'] .mm-opt-choice.is-on {
   color: #241a08;
   background-image: linear-gradient(180deg, #fff2c0 0 16%, #f0cf72 44%, #c19a34 74%, #8a6a2c);
   text-shadow: none;
@@ -342,7 +349,7 @@
 
 /* ── controls ─────────────────────────────────────────────────────────────── */
 
-.mm-ui .mm-ctrl-list {
+.mm-panel[data-panel='menu'] .mm-ctrl-list {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -351,9 +358,9 @@
   column-gap: calc(var(--u) * 20);
   padding-right: calc(var(--u) * 4);
 }
-.mm-ui .mm-ctrl-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
-.mm-ui .mm-ctrl-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
-.mm-ui .mm-ctrl-row {
+.mm-panel[data-panel='menu'] .mm-ctrl-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
+.mm-panel[data-panel='menu'] .mm-ctrl-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+.mm-panel[data-panel='menu'] .mm-ctrl-row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -364,8 +371,8 @@
   color: #d8ccb0;
   border-bottom: 1px solid rgba(120, 104, 62, 0.18);
 }
-.mm-ui .mm-ctrl-keys { display: flex; gap: calc(var(--u) * 3); }
-.mm-ui .mm-ctrl-row kbd {
+.mm-panel[data-panel='menu'] .mm-ctrl-keys { display: flex; gap: calc(var(--u) * 3); }
+.mm-panel[data-panel='menu'] .mm-ctrl-row kbd {
   font: inherit;
   font-size: calc(var(--u) * 10);
   padding: 0 calc(var(--u) * 5);

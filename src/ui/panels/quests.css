@@ -10,12 +10,14 @@
  * Body text is the one place in the whole interface with no shadow and no
  * outline: black upright sans on paper, as in the original.
  *
- * Every rule is prefixed with .mm-ui so it outranks the shared sheet: the
- * bundler emits a panel's own CSS before ui.panels.css, so equal specificity
- * would silently lose to it.
+ * Every selector is scoped to `.mm-panel[data-panel='quests']` (STYLE.md §11).
+ * That is what makes "nothing in this file can reach another screen" true by
+ * inspection, and it also settles the cascade: the bundler emits a panel's own
+ * CSS before ui.panels.css, so a rule of equal specificity would silently lose
+ * to the shared sheet, and the attribute hook puts this file above it.
  */
 
-.mm-ui .mm-questbook {
+.mm-panel[data-panel='quests'] .mm-questbook {
   position: absolute;
   inset: 0;
   display: flex;
@@ -28,7 +30,7 @@
    element itself contributes no fill and no border at all. The plate goes in a
    pseudo-element rather than the background so the deckle is not cut off by
    the box, and the content sits above it by DOM order. */
-.mm-ui .mm-quest-page {
+.mm-panel[data-panel='quests'] .mm-quest-page {
   position: relative;
   padding: calc(var(--u) * 8) calc(var(--u) * 12) calc(var(--u) * 14);
   display: flex;
@@ -39,22 +41,22 @@
   box-shadow: none;
   overflow: visible;
 }
-.mm-ui .mm-quest-page::before {
+.mm-panel[data-panel='quests'] .mm-quest-page::before {
   content: '';
   position: absolute;
   inset: 0;
   background: var(--tex-quest-page) center / 100% 100% no-repeat;
 }
-.mm-ui .mm-quest-page.is-right::before { background-image: var(--tex-quest-page-r); }
-.mm-ui .mm-quest-page > * { position: relative; }
-.mm-ui .mm-quest-page.is-left { flex: 196; }
+.mm-panel[data-panel='quests'] .mm-quest-page.is-right::before { background-image: var(--tex-quest-page-r); }
+.mm-panel[data-panel='quests'] .mm-quest-page > * { position: relative; }
+.mm-panel[data-panel='quests'] .mm-quest-page.is-left { flex: 196; }
 /* The right page starts below the tabs that overhang the top of the book. */
-.mm-ui .mm-quest-page.is-right { flex: 214; padding-top: calc(var(--u) * 14); }
+.mm-panel[data-panel='quests'] .mm-quest-page.is-right { flex: 214; padding-top: calc(var(--u) * 14); }
 
 /* The gutter: two pages of one sheet, folded. The paper runs through it, the
    two leaves throw their shadows into it from both sides, and a thin catch of
    light marks the crease itself. */
-.mm-ui .mm-qb-gutter {
+.mm-panel[data-panel='quests'] .mm-qb-gutter {
   width: calc(var(--u) * 10);
   /* Flat paper, not the leaf plate: the plate carries a deckle and a shadow of
      its own, and squeezing that into a ten-unit strip would print the edge of a
@@ -70,22 +72,22 @@
 /* The cartouche is smaller here than on a single-page book, because it shares
    the page with an index. The script never wraps: a two-line title breaks out
    of the carved ivory and stops reading as a plate. */
-.mm-ui .mm-quest-head {
+.mm-panel[data-panel='quests'] .mm-quest-head {
   width: 100%;
   height: calc(var(--u) * 24);
   margin: 0 auto calc(var(--u) * 2);
   flex: 0 0 auto;
   overflow: hidden;
 }
-.mm-ui .mm-quest-head span {
+.mm-panel[data-panel='quests'] .mm-quest-head span {
   font-size: calc(var(--u) * 14);
   white-space: nowrap;
   padding: 0 calc(var(--u) * 16);
 }
-.mm-ui .mm-quest-head::before,
-.mm-ui .mm-quest-head::after { width: calc(var(--u) * 9); height: calc(var(--u) * 9); }
+.mm-panel[data-panel='quests'] .mm-quest-head::before,
+.mm-panel[data-panel='quests'] .mm-quest-head::after { width: calc(var(--u) * 9); height: calc(var(--u) * 9); }
 
-.mm-ui .mm-qb-count {
+.mm-panel[data-panel='quests'] .mm-qb-count {
   flex: 0 0 auto;
   margin: 0 0 calc(var(--u) * 5);
   text-align: center;
@@ -97,7 +99,7 @@
 
 /* ── the index page ────────────────────────────────────────────────────────── */
 
-.mm-ui .mm-qb-index {
+.mm-panel[data-panel='quests'] .mm-qb-index {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -107,12 +109,12 @@
   -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 10), transparent 100%);
   mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 10), transparent 100%);
 }
-.mm-ui .mm-qb-index::-webkit-scrollbar,
-.mm-ui .mm-qb-entry::-webkit-scrollbar { width: calc(var(--u) * 4); }
-.mm-ui .mm-qb-index::-webkit-scrollbar-thumb,
-.mm-ui .mm-qb-entry::-webkit-scrollbar-thumb { background: rgba(70, 58, 38, 0.45); }
+.mm-panel[data-panel='quests'] .mm-qb-index::-webkit-scrollbar,
+.mm-panel[data-panel='quests'] .mm-qb-entry::-webkit-scrollbar { width: calc(var(--u) * 4); }
+.mm-panel[data-panel='quests'] .mm-qb-index::-webkit-scrollbar-thumb,
+.mm-panel[data-panel='quests'] .mm-qb-entry::-webkit-scrollbar-thumb { background: rgba(70, 58, 38, 0.45); }
 
-.mm-ui .mm-qb-group {
+.mm-panel[data-panel='quests'] .mm-qb-group {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -122,8 +124,8 @@
   border-bottom: 1px solid rgba(70, 58, 38, 0.4);
   text-shadow: none;
 }
-.mm-ui .mm-qb-group:first-child { margin-top: 0; }
-.mm-ui .mm-qb-group-name {
+.mm-panel[data-panel='quests'] .mm-qb-group:first-child { margin-top: 0; }
+.mm-panel[data-panel='quests'] .mm-qb-group-name {
   font-size: calc(var(--u) * 11);
   font-style: italic;
   color: #2a2418;
@@ -131,9 +133,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mm-ui .mm-qb-group-place { font-size: calc(var(--u) * 9); color: #6a5c44; white-space: nowrap; }
+.mm-panel[data-panel='quests'] .mm-qb-group-place { font-size: calc(var(--u) * 9); color: #6a5c44; white-space: nowrap; }
 
-.mm-ui .mm-qb-row {
+.mm-panel[data-panel='quests'] .mm-qb-row {
   width: 100%;
   display: flex;
   align-items: baseline;
@@ -146,30 +148,30 @@
   font-size: calc(var(--u) * 10);
   line-height: calc(var(--u) * 14);
 }
-.mm-ui .mm-qb-row:hover { color: #7a1010; }
-.mm-ui .mm-qb-row.is-selected {
+.mm-panel[data-panel='quests'] .mm-qb-row:hover { color: #7a1010; }
+.mm-panel[data-panel='quests'] .mm-qb-row.is-selected {
   color: #100c06;
   /* Selection is a wash of ink into the paper, not a filled bar. */
   background: linear-gradient(90deg, rgba(120, 96, 40, 0.28), rgba(120, 96, 40, 0.04));
   box-shadow: inset 0 0 0 1px rgba(90, 74, 40, 0.35);
 }
-.mm-ui .mm-qb-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mm-ui .mm-qb-row-step { font-size: calc(var(--u) * 9); color: #6a5c44; white-space: nowrap; }
+.mm-panel[data-panel='quests'] .mm-qb-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-panel[data-panel='quests'] .mm-qb-row-step { font-size: calc(var(--u) * 9); color: #6a5c44; white-space: nowrap; }
 
 /* The mark in the margin says what kind of work it is: a filled lozenge for the
    main road, an open one for an errand, a ring for guild business. */
-.mm-ui .mm-qb-mark {
+.mm-panel[data-panel='quests'] .mm-qb-mark {
   width: calc(var(--u) * 6);
   height: calc(var(--u) * 6);
   transform: rotate(45deg);
   flex: 0 0 auto;
   background: #6a5c44;
 }
-.mm-ui .mm-qb-mark.is-main { background: #7a1010; }
-.mm-ui .mm-qb-mark.is-side { background: none; box-shadow: inset 0 0 0 1px #6a5c44; }
-.mm-ui .mm-qb-mark.is-guild { background: none; border-radius: 50%; box-shadow: inset 0 0 0 1px #3a5a20; transform: none; }
+.mm-panel[data-panel='quests'] .mm-qb-mark.is-main { background: #7a1010; }
+.mm-panel[data-panel='quests'] .mm-qb-mark.is-side { background: none; box-shadow: inset 0 0 0 1px #6a5c44; }
+.mm-panel[data-panel='quests'] .mm-qb-mark.is-guild { background: none; border-radius: 50%; box-shadow: inset 0 0 0 1px #3a5a20; transform: none; }
 
-.mm-ui .mm-qb-empty {
+.mm-panel[data-panel='quests'] .mm-qb-empty {
   margin: calc(var(--u) * 14) 0 0;
   color: #2a2418;
   text-shadow: none;
@@ -181,7 +183,7 @@
 
 /* ── the entry page ───────────────────────────────────────────────────────── */
 
-.mm-ui .mm-qb-entry {
+.mm-panel[data-panel='quests'] .mm-qb-entry {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -194,17 +196,17 @@
   -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 12), transparent 100%);
   mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 12), transparent 100%);
 }
-.mm-ui .mm-qb-title {
+.mm-panel[data-panel='quests'] .mm-qb-title {
   margin: 0 0 calc(var(--u) * 3);
-  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  font-family: var(--face);
   font-size: calc(var(--u) * 15);
   font-weight: normal;
   color: #1a1408;
   line-height: 1.1;
 }
-.mm-ui .mm-qb-meta { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 3); margin-bottom: calc(var(--u) * 4); }
-.mm-ui .mm-qb-chip,
-.mm-ui .mm-qb-reward {
+.mm-panel[data-panel='quests'] .mm-qb-meta { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 3); margin-bottom: calc(var(--u) * 4); }
+.mm-panel[data-panel='quests'] .mm-qb-chip,
+.mm-panel[data-panel='quests'] .mm-qb-reward {
   display: inline-flex;
   align-items: baseline;
   gap: calc(var(--u) * 4);
@@ -214,10 +216,10 @@
   background: rgba(120, 100, 60, 0.16);
   box-shadow: inset 0 0 0 1px rgba(90, 74, 40, 0.35);
 }
-.mm-ui .mm-qb-chip b,
-.mm-ui .mm-qb-reward b { font-weight: normal; color: #6a5c44; text-transform: uppercase; letter-spacing: 0.06em; }
+.mm-panel[data-panel='quests'] .mm-qb-chip b,
+.mm-panel[data-panel='quests'] .mm-qb-reward b { font-weight: normal; color: #6a5c44; text-transform: uppercase; letter-spacing: 0.06em; }
 
-.mm-ui .mm-qb-summary {
+.mm-panel[data-panel='quests'] .mm-qb-summary {
   margin: 0 0 calc(var(--u) * 4);
   font-style: italic;
   font-size: calc(var(--u) * 11);
@@ -226,14 +228,14 @@
 
 /* A thin engraved braided rule of tiny diamonds, with its heading sitting in a
    break in the middle of it. */
-.mm-ui .mm-qb-rule {
+.mm-panel[data-panel='quests'] .mm-qb-rule {
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 5);
   margin: calc(var(--u) * 5) 0 calc(var(--u) * 3);
 }
-.mm-ui .mm-qb-rule span {
-  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+.mm-panel[data-panel='quests'] .mm-qb-rule span {
+  font-family: var(--face);
   font-size: calc(var(--u) * 9);
   font-style: italic;
   letter-spacing: 0.12em;
@@ -241,7 +243,7 @@
   color: #5a4c34;
   white-space: nowrap;
 }
-.mm-ui .mm-qb-rule::after {
+.mm-panel[data-panel='quests'] .mm-qb-rule::after {
   content: '';
   flex: 1;
   height: calc(var(--u) * 5);
@@ -250,7 +252,7 @@
   opacity: 0.75;
 }
 
-.mm-ui .mm-qb-stage {
+.mm-panel[data-panel='quests'] .mm-qb-stage {
   margin: 0 0 calc(var(--u) * 4);
   padding-left: calc(var(--u) * 7);
   font-size: calc(var(--u) * 10);
@@ -259,33 +261,33 @@
 }
 /* The newest line is the one the party is acting on; the older ones have had
    time to fade into the page. */
-.mm-ui .mm-qb-stage { color: #3a3226; }
-.mm-ui .mm-qb-stage.is-latest { color: #000; border-left-color: rgba(122, 16, 16, 0.6); }
+.mm-panel[data-panel='quests'] .mm-qb-stage { color: #3a3226; }
+.mm-panel[data-panel='quests'] .mm-qb-stage.is-latest { color: #000; border-left-color: rgba(122, 16, 16, 0.6); }
 
-.mm-ui .mm-qb-obj {
+.mm-panel[data-panel='quests'] .mm-qb-obj {
   display: flex;
   align-items: baseline;
   gap: calc(var(--u) * 5);
   font-size: calc(var(--u) * 10);
   line-height: calc(var(--u) * 14);
 }
-.mm-ui .mm-qb-obj i { color: #5a4c34; line-height: 0; }
-.mm-ui .mm-qb-obj.is-done { color: #4a5a3a; text-decoration: line-through; text-decoration-color: rgba(70, 90, 50, 0.6); }
-.mm-ui .mm-qb-obj.is-done i { color: #3a5a20; }
+.mm-panel[data-panel='quests'] .mm-qb-obj i { color: #5a4c34; line-height: 0; }
+.mm-panel[data-panel='quests'] .mm-qb-obj.is-done { color: #4a5a3a; text-decoration: line-through; text-decoration-color: rgba(70, 90, 50, 0.6); }
+.mm-panel[data-panel='quests'] .mm-qb-obj.is-done i { color: #3a5a20; }
 
-.mm-ui .mm-qb-rewards { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); }
+.mm-panel[data-panel='quests'] .mm-qb-rewards { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); }
 
 /* Pinned to the foot of the page, clear of the exit plaque in the corner. */
-.mm-ui .mm-qb-foot {
+.mm-panel[data-panel='quests'] .mm-qb-foot {
   flex: 0 0 auto;
   padding-right: calc(var(--u) * 44);
   color: #000;
   text-shadow: none;
   font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
 }
-.mm-ui .mm-qb-foot .mm-qb-rule { margin: calc(var(--u) * 5) 0 calc(var(--u) * 3); }
+.mm-panel[data-panel='quests'] .mm-qb-foot .mm-qb-rule { margin: calc(var(--u) * 5) 0 calc(var(--u) * 3); }
 
-.mm-ui .mm-qb-blank {
+.mm-panel[data-panel='quests'] .mm-qb-blank {
   height: 100%;
   display: grid;
   place-items: center;
@@ -297,9 +299,9 @@
 
 /* ── autonotes ────────────────────────────────────────────────────────────── */
 
-.mm-ui .mm-qb-note-head {
+.mm-panel[data-panel='quests'] .mm-qb-note-head {
   margin: calc(var(--u) * 6) 0 calc(var(--u) * 3);
-  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  font-family: var(--face);
   font-size: calc(var(--u) * 11);
   font-style: italic;
   letter-spacing: 0.1em;
@@ -308,8 +310,8 @@
   text-shadow: none;
   border-bottom: 1px solid rgba(70, 58, 38, 0.4);
 }
-.mm-ui .mm-qb-note-head:first-child { margin-top: 0; }
-.mm-ui .mm-qb-note {
+.mm-panel[data-panel='quests'] .mm-qb-note-head:first-child { margin-top: 0; }
+.mm-panel[data-panel='quests'] .mm-qb-note {
   margin: 0 0 calc(var(--u) * 5);
   color: #100c06;
   text-shadow: none;
@@ -324,8 +326,8 @@
    swallow-tail notched into the outer edge — not coloured pills. Selection is
    the original's: the chosen flap is gilt and carries a warm halo, and the
    others keep their jade ink on bone. */
-.mm-ui .mm-quest-tabs { right: calc(var(--u) * 30); top: calc(var(--u) * 2); gap: calc(var(--u) * 3); }
-.mm-ui .mm-quest-tab {
+.mm-panel[data-panel='quests'] .mm-quest-tabs { right: calc(var(--u) * 30); top: calc(var(--u) * 2); gap: calc(var(--u) * 3); }
+.mm-panel[data-panel='quests'] .mm-quest-tab {
   width: calc(var(--u) * 46);
   height: calc(var(--u) * 22);
   font-size: calc(var(--u) * 10);
@@ -341,7 +343,7 @@
     inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(88, 78, 58, 0.85);
   filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.6));
 }
-.mm-ui .mm-quest-tab.is-active {
+.mm-panel[data-panel='quests'] .mm-quest-tab.is-active {
   color: #241a08;
   background: linear-gradient(180deg, #fff6d0 0 20%, #f0cf72 52%, #c19a34 100%);
   box-shadow:
@@ -353,7 +355,7 @@
 }
 
 /* Gilt serpent clasps down the binding — a painted object, not a gold pip. */
-.mm-ui .mm-quest-clasp {
+.mm-panel[data-panel='quests'] .mm-quest-clasp {
   left: calc(var(--u) * 3);
   width: calc(var(--u) * 20);
   height: calc(var(--u) * 29);
@@ -363,4 +365,4 @@
   filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.7));
 }
 
-.mm-ui .mm-stone-plaque { right: calc(var(--u) * 34); bottom: calc(var(--u) * 8); }
+.mm-panel[data-panel='quests'] .mm-stone-plaque { right: calc(var(--u) * 34); bottom: calc(var(--u) * 8); }

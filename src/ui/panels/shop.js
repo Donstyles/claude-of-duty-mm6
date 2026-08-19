@@ -164,7 +164,7 @@ export class ShopPanel extends Panel {
     // The keeper's own line, in the one caption treatment the interface has:
     // a soft gradient across the foot of the painting (STYLE.md §4). The room
     // is still the best thing on the screen and is not boxed over.
-    this.sayEl = el('div', { className: 'mm-venue-say' });
+    this.sayEl = el('div', { className: 'mm-venue-say is-empty' });
     body.append(this.wallEl, this.packEl, this.sayEl);
 
     // ── the keeper's side ───────────────────────────────────────────────────
@@ -191,7 +191,7 @@ export class ShopPanel extends Panel {
     // stacks a listener each time it is called.
     tooltip.attach(this.portraitEl, () => this._keeperTip());
     this.portraitEl.addEventListener('click', () => {
-      if (this.stall) this._speak(this.system.greeting(this.stall));
+      if (this.stall) this._speak(attribute(this.stall.keeper, this.system.greeting(this.stall)));
     });
 
     // Right-click backs out of the goods and returns to the counter, as the
@@ -504,7 +504,11 @@ export class ShopPanel extends Panel {
     }
     if (price) lines.push({ k: priceLabel, v: `${fmt(price)} gold` });
     if (known && item.bonus) lines.push(`<span class="mm-tip-magic">${item.bonus}</span>`);
-    if (item.broken) lines.push('<span class="mm-tip-broken">Broken — useless until it is repaired.</span>');
+    // `mm-t-down` rather than a `mm-tip-broken` of our own: the tooltip is a
+    // fixed-position element outside every panel, so a panel stylesheet cannot
+    // reach it without an unscoped selector (STYLE.md §11). Broken is a
+    // blocking condition, which is what `--down` already means (§2).
+    if (item.broken) lines.push('<span class="mm-t-down">Broken — useless until it is repaired.</span>');
 
     return tipMarkup({
       title: displayName(item),

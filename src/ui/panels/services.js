@@ -2,6 +2,7 @@ import './services.css';
 import { Panel } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, fmt, goldOval, labelRow } from '../widgets.js';
 import { icon } from '../Icons.js';
+import { attribute } from './dialogue.js';
 import { TownServices } from '../../game/TownServices.js';
 
 /**
@@ -117,7 +118,7 @@ export class ServicesPanel extends Panel {
     // The keeper's line, in the house caption: a soft gradient across the foot
     // of the painting (STYLE.md §4). It shows only while the room is bare —
     // once a counter is up, the board is the screen.
-    this.sayEl = el('div', { className: 'mm-venue-say' });
+    this.sayEl = el('div', { className: 'mm-venue-say is-empty' });
     body.appendChild(el('div', { className: 'mm-svc' }, this.boardEl, this.sayEl));
 
     this.titleEl = el('div', { className: 'mm-svc-title' });
@@ -146,7 +147,12 @@ export class ServicesPanel extends Panel {
     // `ui:forcePanel`, say — still stands in a real room, since the model has
     // just told us which building it resolved to.
     if (!opts?.venue && venue?.id) this._applyInterior({ venue: venue.id });
-    this.ui.log(this._greeting(), 'info');
+    // The strip says where you are, in the one grammar the strip has: a
+    // complete sentence, sentence case, full stop (STYLE.md §5). What the
+    // keeper says goes to the caption over the room instead, so the two
+    // channels never carry the same line.
+    this.ui.log(`You enter ${venue?.name ?? 'the house'}.`, 'info');
+    this._speak(this._greeting());
   }
 
   /**
@@ -179,8 +185,13 @@ export class ServicesPanel extends Panel {
       gender: femaleName(keeper) ? 'f' : 'm',
     })}")`;
     this.portraitEl.classList.toggle('is-vacant', !keeper);
+    // Name then role, two elements, the name alone in the name colour
+    // (STYLE.md §3). An unattended house keeps the block's shape rather than
+    // dropping a line: the role slot states the vacancy.
     this.nameEl.textContent = keeper ?? 'Nobody attends';
-    this.roleEl.textContent = keeper ? (ROLE[this.service] ?? '') : 'the lamps are lit all the same';
+    this.roleEl.textContent = keeper
+      ? (ROLE[this.service] ?? 'the Keeper')
+      : 'the lamps are lit all the same';
 
     // The sidebar's two panes carry the retinue's faces once anybody is hired,
     // and the interface reads that list from its own field — so point it at the
@@ -196,6 +207,9 @@ export class ServicesPanel extends Panel {
       || (this.page === 'healing' && !!this.model.refusal(venue));
     this.boardEl.classList.toggle('is-tall', tall);
     setChildren(this.boardEl, ...this._page(venue));
+    // The caption only exists while the room is bare. Once a counter is up the
+    // board is the screen, and a gradient behind it would read as grime.
+    this.sayEl.classList.toggle('is-covered', this.page !== 'room');
   }
 
   _offices(venue) {
@@ -451,7 +465,9 @@ export class ServicesPanel extends Panel {
     if (!this.rumour && !this.model.told(venue).length) {
       this.rumour = this.model.rumour(venue);
       this.model.remember(venue, this.rumour);
-      this.ui.log(`${this.rumour.keeper}: "${this.rumour.text}"`, 'info');
+      // The board already shows this line in full, in curly quotes. Repeating
+      // it in the strip was the same sentence in two channels at once, which
+      // STYLE.md §5 forbids.
     }
     const told = this.model.told(venue);
     const current = this.rumour ?? told[0];
@@ -462,7 +478,8 @@ export class ServicesPanel extends Panel {
       const r = this.model.rumour(venue);
       this.model.remember(venue, r);
       this.rumour = r;
-      this.ui.log(`${r.keeper}: "${r.text}"`, 'info');
+      // Not to the strip: the board below already carries this line in full,
+      // in curly quotes, and one sentence never occupies two channels (§5).
       this.refresh();
     });
 

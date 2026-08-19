@@ -38,22 +38,22 @@ our captures. Divide any luminance read off one by 1.42 before comparing.
 
 ## 1. Type
 
-**One family, everywhere.** `'Palatino Linotype', 'Book Antiqua', Palatino,
-Georgia, 'Times New Roman', serif`, declared once on `.mm-ui`. No screen
-introduces a second family, a second weight axis, or a webfont.
+**One family, everywhere.** `var(--face)` — TeX Gyre Pagella, bundled and
+`@font-face`d in `ui.panels.css`, over the old Palatino stack as fallback. It is
+a token, not a literal, so the whole interface moves together. No screen
+introduces a second family, a second weight axis, or a webfont. Use `--face`;
+never re-declare a stack in a panel file.
 
-> ⚠ **The type stack is not settled and nothing here is to be tuned against it
-> yet.** None of Palatino Linotype, Book Antiqua, Palatino or Georgia exists in
-> the capture environment, so every screenshot both blind reviewers judged was
-> set in the generic serif fallback — a face nobody chose. Several typographic
-> findings ("≈0.15em tracking on the action list", "word space narrower than
-> letterspace", "Waitwithout", counters clotting at small sizes) are plausibly
-> artefacts of that fallback rather than of anything in our stylesheets.
-> A Palatino-class face is being bundled and `@font-face`d in `ui.panels.css`.
-> **Until it lands, do not tune tracking, size, leading or letterfit against a
-> capture** — you would be fitting a face we are about to replace. Sizes and
-> leadings in the ladder below are ratios and hold either way; letterfit does
-> not.
+> **Every measurement of letterfit taken before Pagella landed is void.**
+> None of Palatino Linotype, Book Antiqua, Palatino or Georgia existed in the
+> capture environment, so every screenshot both blind reviewers judged was set
+> in the generic serif fallback — DejaVu Serif, a much wider face nobody chose,
+> whose italic is synthesised in some fontconfig setups. Roughly half this
+> interface is italic, so that is not a detail. Both reviewers' findings on
+> tracking ("≈0.15em on the action list"), word space, run-together words
+> ("Waitwithout") and small-size counters are **provisional** and must be
+> re-taken against Pagella before anyone acts on them. Luminance and contrast
+> findings are unaffected — that is why §6 specifies the measurement it does.
 
 **Upright or italic, and it means something:**
 
@@ -103,7 +103,7 @@ things means nothing; the review found gold doing four.
 | `--gold-deep` | `#e7cf21` | **money** — any figure denominated in gold, and nothing else |
 | `--up` | `#00fe00` | a figure **better** than its baseline, or a condition met |
 | `--down` | `#ff0000` | a figure **worse** than its baseline, or a condition blocking |
-| dim | `#cfc6b2` | **labels and column heads** — the words that name data, never the data |
+| `--dim` | `#cfcac2` | **labels and column heads** — the words that name data, never the data |
 
 Consequences worth spelling out, because each one was a live conflict:
 
@@ -116,7 +116,10 @@ Consequences worth spelling out, because each one was a live conflict:
 - `--azure` `#109AEF` is MM6's own name blue and it does not survive our
   grounds: measured on our dark venue timber it reads **2.46:1**, the least
   legible text on the panel, on the one string that is the NPC's identity.
-  `--name` is that hue lifted until it clears §6. Do not put `#109AEF` back.
+  `--name` is that hue lifted until it clears §6. `#109AEF` is gone from the
+  tree; `--azure` survives only as `var(--name)`, a bridge for the six files
+  that still reference it. Do not reach for `--azure` in new work, and do not
+  put `#109AEF` back.
 
 ---
 
@@ -147,6 +150,33 @@ one per screen.
   costs nothing.
 - **Nothing is omitted.** A screen that knows no role prints the generic one
   (`the Merchant`), it does not drop the line and change the block's shape.
+
+### 3a. Where the venue's name goes
+
+Exactly once per screen, at the top, upright and white. Never twice, never
+absent.
+
+- A screen whose viewport is a **bare painted room** sets it at the head of the
+  sidebar — shop counter, town services, conversation. It wraps to two lines
+  with real leading rather than clipping.
+- A screen whose viewport carries a **working board** sets it over the room, on
+  the head scrim, with the house's terms in the line beneath — guild hall,
+  training hall. Putting it in the sidebar as well would state it twice.
+
+### 3b. Sidebar order
+
+Every venue sidebar stacks the same things in the same order, so moving between
+two of them moves nothing on screen that did not have to move:
+
+```
+sign (where the sidebar carries it)
+portrait
+name
+role
+the numbers, if the screen has any        ← §9
+the action list                            ← §8
+the brass oval
+```
 
 ---
 
@@ -265,11 +295,13 @@ settled: **dry, concrete, present tense, nobody impressed by anything.** People
 state a fact or a job and stop. No exclamation marks, no adventurer-flattery, no
 "brave heroes", no exposition the speaker would not actually say out loud.
 
-> "Sheep going missing off the high field, and not the way a fox takes them.
-> Somebody has to walk up to the old tower and look."
-> "Yard is open. You will not enjoy it and you will be better for it."
-> "Four hundred gold. You may then buy spells at the posted price, which is
-> also not negotiable."
+> “Sheep going missing off the high field, and not the way a fox takes them.
+> Somebody has to walk up to the old tower and look.”
+>
+> “Yard is open. You will not enjoy it and you will be better for it.”
+>
+> “Four hundred gold. You may then buy spells at the posted price, which is
+> also not negotiable.”
 
 A line that could be cut in half usually should be.
 
@@ -360,8 +392,38 @@ it in their own file.
   which is the one file allowed to be unscoped — and is deliberately not owned
   by any screen.
 
+**The tooltip is the special case, and it is the worst one.** `.mm-tooltip` is
+`position: fixed` at the document root — it is not inside any panel, so no
+panel-scoped selector can reach it. That makes it the one component a panel file
+*cannot* style correctly, and three panel files are styling it anyway, each in
+its own colour:
+
+| file | rule | reaches |
+| --- | --- | --- |
+| `inventory.css` | `.mm-tip.is-broken .mm-tip-head` → `--down` | every tooltip on every screen |
+| `inventory.css` | `.mm-tip.is-unknown .mm-tip-head` → `--azure` | every tooltip on every screen |
+| `create.css` | `.mm-tip.is-bad .mm-tip-head` → `#ff6a5a` | every tooltip on every screen |
+
+> **Tooltip classes are styled in `src/ui/ui.panels.css` and nowhere else.**
+> A panel that wants a coloured line in a tooltip uses an existing shared token
+> class (`mm-t-down`, `mm-t-up`, `mm-t-gold`, `mm-tip-magic`), it does not mint
+> a class and style it from its own file.
+
+`shop.css` had a `.mm-tip-broken` of its own; it now uses `mm-t-down`, which is
+the same meaning already defined once (§2).
+
 Grep that finds violations: an `.mm-` selector at the start of a line in
 `src/ui/panels/*.css` with no `[data-panel=` anywhere in the selector.
+
+**Still outstanding, stated so nobody thinks it is done.** The rule is enforced
+today only where a *shared* class name was involved — `.mm-npc-side` and
+`.mm-item` in `shop.css` and `dialogue.css`, which is where the live collisions
+were. The panel-private prefixes (`.mm-svc-*`, `.mm-guild-*`, `.mm-train-*`,
+`.mm-inv-*`, `.mm-create-*`, `.mm-menu-*`, `.mm-qb-*`) are still written
+unscoped in their own files. They are latent, not broken — but a unique-looking
+class name is not scoping, it is a bet that no other screen will ever adopt the
+name, and `.mm-npc-side` is the proof that the bet loses. Rescoping them is
+mechanical and should be done per file by its owner.
 
 ---
 
@@ -392,41 +454,38 @@ dark timber (venue sidebars), marble (the standing chrome).
 
 Written down here so the owner can pick them up.
 
-1. **`src/ui/ui.panels.css`** — the shared sheet still declares `--azure`
-   `#109AEF` and `--gold` doing four jobs. §2's tokens want to live here as
-   `--name` and friends, replacing the per-panel copies the venue screens now
-   carry.
-2. **`src/ui/ui.panels.css`** — the five venue sidebars are five near-identical
+1. **`src/ui/ui.panels.css`** — the five venue sidebars are five near-identical
    components under four class prefixes (`mm-npc-*`, `mm-svc-*`, `mm-guild-*`,
    `mm-train-*`). They should collapse to one `mm-venue-side` here. The
    measurements in §3 and §8 are already identical across all five, so the
    collapse is mechanical.
-3. **`src/ui/ui.panels.css`** — `.mm-block-head` is gold; per §2 a column head
-   is dim.
-4. **The type stack** — being handled centrally; see the warning in §1. Four
-   different stacks are declared today, and a bundled face has to satisfy all of
-   them:
+2. **The leftover type stacks.** `--face` now exists and Pagella is bundled, but
+   four hard-coded stacks still bypass it and should become `var(--face)`:
 
    | file | line | stack | used for |
    | --- | --- | --- | --- |
-   | `src/ui/ui.panels.css` | 41 | `'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, 'Times New Roman', serif` | **the whole interface** — declared on `.mm-ui`, inherited by every panel |
    | `src/ui/ui.css` | 27 | `'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif` | the document body |
-   | `src/ui/ui.panels.css` | 1036 | `Georgia, 'Times New Roman', serif` | `.mm-quest-entry p` — quest-book body text, black on parchment |
-   | `src/ui/panels/quests.css` | 199, 236, 302 | `'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif` | quest-book headings and rules |
+   | `src/ui/ui.panels.css` | ~1036 | `Georgia, 'Times New Roman', serif` | `.mm-quest-entry p` — quest-book body, black on parchment |
+   | `src/ui/panels/quests.css` | 199, 236, 302 | `'Palatino Linotype', …` | quest-book headings and rules |
    | `src/ui/panels/quests.css` | 145, 176, 191, 284, 316 | `'Segoe UI', 'Helvetica Neue', Arial, sans-serif` | quest-book small print — the one deliberate sans in the game |
 
-   The intent is a Palatino-class old-style serif with true italics — generous
-   x-height, moderate contrast, calligraphic italic — because MM6's own face is
-   Palatino and half the interface is set in italic. The quest book's black-on-
-   parchment body deliberately drops to Georgia for a heavier colour at small
-   size; a bundled face should let that collapse into the one family.
-5. **`src/ui/HUD.js`** — the message strip. §5's grammar has to hold for lines
+   The quest book's black-on-parchment body dropped to Georgia for a heavier
+   colour at small size; with a real Palatino-class face bundled, that reason is
+   gone and it should collapse into `--face`. The sans small print is a
+   deliberate contrast and stays.
+3. **`src/ui/HUD.js`** — the message strip. §5's grammar has to hold for lines
    the HUD writes itself; `tree` is not a sentence.
-6. **`src/world/*`** — `You enter The Ossran Vaults.` is already correct §5
+4. **`src/world/*`** — `You enter The Ossran Vaults.` is already correct §5
    grammar. Keep it; it is the model the rest were changed to match.
-7. **`src/ui/panels/spellbook.*`** — `Select a spell` → `Select a spell.` (§5).
-8. **`src/ui/panels/menu.*`** — every menu button label is gold, which under §2
+5. **`src/ui/panels/spellbook.*`** — `Select a spell` → `Select a spell.` (§5).
+6. **`src/ui/panels/menu.*`** — every menu button label is gold, which under §2
    is the hover colour. At rest they are `--ink`.
-9. **`src/ui/widgets.js`** — `attribute()` (curly-quote attribution, §7) is
-   parked in `src/ui/panels/dialogue.js` because that file is owned and this one
-   is not. It is a text helper and belongs beside `fmt` and `ellipsis`.
+7. **`src/ui/widgets.js`** — `attribute()` (curly-quote attribution, §7) and
+   `roleLine()` (§3) are parked in `src/ui/panels/dialogue.js` because that file
+   is owned and this one is not. They are text helpers and belong beside `fmt`
+   and `ellipsis`.
+8. **`src/game/ShopSystem.js`** — `GREETINGS`, `TERMS` and `VERB_LINES` store
+    their lines pre-wrapped in straight quotes. `attribute()` strips and re-makes
+    them at render, so nothing straight reaches the screen (§7), but the data
+    would read better unquoted, the way `TownServices` and `NPCs.js` store
+    theirs. Cosmetic, not urgent.

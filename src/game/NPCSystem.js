@@ -29,17 +29,25 @@ const TALK_RADIUS = 4.0;
  * How many metres of surface one tile of a character texture covers.
  *
  * This is the number that decides whether cloth reads as cloth. The maps are
- * authored with a thread count per tile, so the tile size sets the thread size:
- * wool at 30 threads over 32 cm is a 1 cm homespun thread, which survives
- * mipping at conversation range, whereas the same map stretched over a whole
- * robe would be one enormous checkerboard and over 3 cm would mip to a flat
- * wash by the time the player is three paces away.
+ * authored with a feature count per tile, so the tile size sets the feature
+ * size: wool at 44 threads over 32 cm is a 7 mm homespun thread, about two
+ * pixels at conversation range. Stretch the same map over a whole robe and it
+ * is one enormous checkerboard; shrink it much below this and every thread
+ * lands on a pixel boundary, beats against the grid, and the normal map turns
+ * a cloak into corduroy.
+ *
+ * Per-dress `weave` multipliers scale these without a second bake, which is
+ * how a monk's sackcloth and a factor's fine coat come off one texture.
  */
 const TILE = {
   'npc-wool': 0.32,
   'npc-cloth': 0.30,
-  'npc-skin': 0.17,
-  'npc-hair': 0.15,
+  // Skin and hair are tiled a little larger than the part they cover, so a
+  // frequency in those shaders reads directly as "times across a head". At the
+  // first pass's 0.15 m a head wrapped five tiles and every feature the maps
+  // owned landed below a texel: a smooth ball and a moulded brown helmet.
+  'npc-skin': 0.30,
+  'npc-hair': 0.42,
   leather: 0.30,
   metal: 0.34,
 };
@@ -310,24 +318,24 @@ export class NPCSystem extends System {
       'commoner':        { skirt: 0.55, shoulder: 0.0, trim: 0x6a5a44, fabric: 'wool' },
       'apron':           { skirt: 0.48, shoulder: 0.0, trim: 0xb8a888, fabric: 'wool', apron: true },
       'stained-apron':   { skirt: 0.48, shoulder: 0.0, trim: 0x8a7a5a, fabric: 'wool', apron: true },
-      'furs':            { skirt: 0.58, shoulder: 0.08, trim: 0x6a5236, fabric: 'wool', cape: true },
+      'furs':            { skirt: 0.58, shoulder: 0.08, trim: 0x6a5236, fabric: 'wool', cape: true, weave: 1.40 },
       'fisher-wrap':     { skirt: 0.56, shoulder: 0.0, trim: 0x5a6a6a, fabric: 'wool' },
-      'oilskin':         { skirt: 0.60, shoulder: 0.0, trim: 0x4a5a5a, fabric: 'leather' },
-      'choir-robe':      { skirt: 0.90, shoulder: 0.0, trim: 0xc8b070, fabric: 'cloth', cape: true },
-      'monk-robe':       { skirt: 0.92, shoulder: 0.0, hood: true, trim: 0x4a3a28, fabric: 'wool', cape: true },
+      'oilskin':         { skirt: 0.60, shoulder: 0.0, trim: 0x4a5a5a, fabric: 'leather', weave: 1.35 },
+      'choir-robe':      { skirt: 0.90, shoulder: 0.0, trim: 0xc8b070, fabric: 'cloth', cape: true, weave: 1.18 },
+      'monk-robe':       { skirt: 0.92, shoulder: 0.0, hood: true, trim: 0x4a3a28, fabric: 'wool', cape: true, weave: 1.22 },
       'druid-robe':      { skirt: 0.90, shoulder: 0.0, hood: true, trim: 0x3d6630, fabric: 'wool', cape: true },
-      'ash-robe':        { skirt: 0.90, shoulder: 0.0, hood: true, trim: 0x5a5248, fabric: 'wool', cape: true },
+      'ash-robe':        { skirt: 0.90, shoulder: 0.0, hood: true, trim: 0x5a5248, fabric: 'wool', cape: true, weave: 1.28 },
       'sun-robe':        { skirt: 0.92, shoulder: 0.0, trim: 0xd8b25c, fabric: 'cloth', cape: true },
       'lamp-robe':       { skirt: 0.92, shoulder: 0.0, trim: 0xd8b25c, fabric: 'cloth', cape: true },
       'sun-vestments':   { skirt: 0.94, shoulder: 0.06, trim: 0xf0d890, fabric: 'cloth', cape: true },
       'lamp-vestments':  { skirt: 0.94, shoulder: 0.06, trim: 0xf0d890, fabric: 'cloth', cape: true },
       'black-robe':      { skirt: 0.92, shoulder: 0.0, hood: true, trim: 0x2a1a3a, fabric: 'cloth', cape: true },
       'red-robe':        { skirt: 0.90, shoulder: 0.0, trim: 0x8a2a20, fabric: 'cloth', cape: true },
-      'guild-robe':      { skirt: 0.88, shoulder: 0.0, trim: 0x6a3f8f, fabric: 'cloth', cape: true },
-      'court-robe':      { skirt: 0.90, shoulder: 0.06, trim: 0xd8b25c, fabric: 'cloth', cape: true },
-      'arch-robe':       { skirt: 0.95, shoulder: 0.08, trim: 0xd8b25c, fabric: 'cloth', cape: true },
+      'guild-robe':      { skirt: 0.88, shoulder: 0.0, trim: 0x6a3f8f, fabric: 'cloth', cape: true, weave: 1.30 },
+      'court-robe':      { skirt: 0.90, shoulder: 0.06, trim: 0xd8b25c, fabric: 'cloth', cape: true, weave: 0.82 },
+      'arch-robe':       { skirt: 0.95, shoulder: 0.08, trim: 0xd8b25c, fabric: 'cloth', cape: true, weave: 0.86 },
       'scholar-coat':    { skirt: 0.72, shoulder: 0.0, trim: 0x6a5a3a, fabric: 'cloth' },
-      'factor-coat':     { skirt: 0.72, shoulder: 0.04, trim: 0xc8a860, fabric: 'cloth' },
+      'factor-coat':     { skirt: 0.72, shoulder: 0.04, trim: 0xc8a860, fabric: 'cloth', weave: 0.84 },
       'official-coat':   { skirt: 0.70, shoulder: 0.04, trim: 0xd8b25c, fabric: 'cloth' },
       'plate':           { skirt: 0.42, shoulder: 0.10, metal: true, trim: 0x9aa2ac, fabric: 'metal' },
       'noble-plate':     { skirt: 0.44, shoulder: 0.12, metal: true, trim: 0xd8b25c, fabric: 'metal' },
@@ -339,7 +347,7 @@ export class NPCSystem extends System {
       'dark-leather':    { skirt: 0.50, shoulder: 0.04, trim: 0x2a2420, fabric: 'leather' },
       'black-shawl':     { skirt: 0.86, shoulder: 0.0, hood: true, trim: 0x2a2a2e, fabric: 'wool', cape: true },
       'grey-veil':       { skirt: 0.88, shoulder: 0.0, hood: true, trim: 0x8a8a90, fabric: 'wool', cape: true },
-      'royal':           { skirt: 0.94, shoulder: 0.10, trim: 0xd8b25c, fabric: 'cloth', cape: true },
+      'royal':           { skirt: 0.94, shoulder: 0.10, trim: 0xd8b25c, fabric: 'cloth', cape: true, weave: 0.78 },
     }[look.dress] ?? { skirt: 0.55, shoulder: 0, trim: 0x6a5a44, fabric: 'wool' };
 
     const M = this.mats;
@@ -350,9 +358,12 @@ export class NPCSystem extends System {
       : DRESS.fabric === 'leather' ? M.leather
         : DRESS.fabric === 'cloth' ? M.cloth : M.wool;
     const { skin, hair, metal, leather } = M;
+    // `weave` stretches the tile without touching the material, so a guild's
+    // heavy serge and a factor's fine coat come off the same bake at different
+    // thread counts. Free: it is a multiply on the UVs, not a second texture.
     const gTile = TILE[DRESS.fabric === 'metal' ? 'metal'
       : DRESS.fabric === 'leather' ? 'leather'
-        : DRESS.fabric === 'cloth' ? 'npc-cloth' : 'npc-wool'];
+        : DRESS.fabric === 'cloth' ? 'npc-cloth' : 'npc-wool'] * (DRESS.weave ?? 1);
 
     // Undyed maps, so the colour arrives on the vertices. Borrowed world
     // materials (leather, iron) already carry their own colour, so they take a
@@ -445,8 +456,8 @@ export class NPCSystem extends System {
     // A shoulder cape or yoke. Robes get one because it is the cheapest way to
     // break the long vertical run of cloth into a body with shoulders on it.
     if (DRESS.cape) {
-      const cap = lathe(shoulderY - 0.20 * Hs, shoulderY + 0.03, 0.30 * W, 0.115 * W, 16, 4);
-      flute(cap, folds + 2, 0.045, phase + 1.1);
+      const cap = lathe(shoulderY - 0.24 * Hs, shoulderY + 0.025, 0.262 * W, 0.125 * W, 16, 5);
+      flute(cap, folds + 2, 0.040, phase + 1.1);
       cap.scale(1.06, 1, 0.90);
       cap.translate(0, 0, lean(0, shoulderY, 0));
       uvRepeat(cap, (2 * Math.PI * 0.21 * W) / gTile, (0.23 * Hs) / gTile);
@@ -557,7 +568,7 @@ export class NPCSystem extends System {
       // a face and a ball with two dots on it.
       const brow = new THREE.SphereGeometry(0.085, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.55);
       brow.scale(1.12, 0.42, 0.66);
-      brow.translate(0, headY + 0.040, hz - 0.048);
+      brow.translate(0, headY + 0.026, hz - 0.050);
       uvRepeat(brow, (2 * Math.PI * 0.09) / TILE['npc-skin'], (Math.PI * 0.04) / TILE['npc-skin']);
       push(paint(brow, skinCol, flat(1.03)), skin);
 
@@ -581,9 +592,14 @@ export class NPCSystem extends System {
       uvRepeat(nose, (2 * Math.PI * 0.024) / TILE['npc-skin'], 0.056 / TILE['npc-skin']);
       push(paint(nose, skinCol, flat(1.04)), skin);
 
+      // The eye line sits at the middle of the head, not the top third. That
+      // was not a stylistic choice before: the hair cap reached 104° down from
+      // the crown and swallowed both eyes, which is why every townsperson had a
+      // blank face with a nose on it.
       for (const sgn of [-1, 1]) {
-        const eye = new THREE.SphereGeometry(0.0165, 8, 6);
-        eye.translate(sgn * 0.042, headY + 0.021, hz - 0.098);
+        const eye = new THREE.SphereGeometry(0.017, 8, 6);
+        eye.scale(1.1, 0.85, 1);
+        eye.translate(sgn * 0.043, headY + 0.004, hz - 0.100);
         push(paint(eye, eyeCol), metal);
       }
     }
@@ -605,20 +621,23 @@ export class NPCSystem extends System {
       uvRepeat(cowl, (Math.PI * 0.155) / gTile, (Math.PI * 0.12) / gTile);
       push(paint(cowl, cloak, flat(0.86)), garment);
     } else {
-      const cap = new THREE.SphereGeometry(0.124, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.58);
-      cap.scale(1.0, 1.06, 1.0);
-      cap.translate(0, headY + 0.010, hz);
+      // 0.42π stops the cap at 76° from the crown — above the eye line, which
+      // is at 86°. Anything past 80° puts hair over the eyes.
+      const cap = new THREE.SphereGeometry(0.126, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.42);
+      cap.scale(1.02, 1.10, 1.02);
+      cap.translate(0, headY + 0.004, hz);
       // Hair wants its strands running down the head, so v is the short axis.
-      uvRepeat(cap, (2 * Math.PI * 0.124) / TILE['npc-hair'], (Math.PI * 0.075) / TILE['npc-hair']);
+      uvRepeat(cap, (2 * Math.PI * 0.126) / TILE['npc-hair'], (Math.PI * 0.055) / TILE['npc-hair']);
       push(paint(cap, hairCol), hair);
 
-      if (look.age !== 'ancient') {
-        const back = new THREE.SphereGeometry(0.120, 12, 10);
-        back.scale(1, 1.02, 0.72);
-        back.translate(0, headY - 0.012, hz + 0.034);
-        uvRepeat(back, (2 * Math.PI * 0.12) / TILE['npc-hair'], (Math.PI * 0.12) / TILE['npc-hair']);
-        push(paint(back, hairCol, flat(0.9)), hair);
-      }
+      // The back and sides of the mass hang lower than the crown does — that
+      // asymmetry is most of what reads as a hairstyle rather than a swim cap.
+      const back = new THREE.SphereGeometry(0.124, 12, 10, 0, Math.PI, 0, Math.PI * 0.72);
+      back.scale(1.02, look.age === 'ancient' ? 0.86 : 1.10, 0.80);
+      back.rotateY(-Math.PI / 2);
+      back.translate(0, headY - 0.004, hz + 0.028);
+      uvRepeat(back, (Math.PI * 0.124) / TILE['npc-hair'], (Math.PI * 0.09) / TILE['npc-hair']);
+      push(paint(back, hairCol, flat(0.88)), hair);
     }
 
     if (look.age === 'ancient' || look.age === 'older') {
@@ -892,17 +911,28 @@ export class NPCSystem extends System {
 
     // Conversation range. Cloth, skin and hair are all authored to be read from
     // about here, so this is the frame that says whether they work.
-    const near = this.npcs.reduce((best, n) => (
-      !best || n.pos.distanceToSquared(c) < best.pos.distanceToSquared(c) ? n : best
-    ), null);
-    if (near) {
-      const p = near.pos;
+    //
+    // Deliberately one of the unattached townsfolk rather than the nearest
+    // person: door keepers stand under eaves and market stalls, and the first
+    // version of this shot photographed a figure in a canopy's shadow at a
+    // twentieth of the square's brightness, where no material tells you
+    // anything. The idle ring stands in open sun.
+    const open = this.npcs.filter((n) => !n.building);
+    const subject = open.reduce((best, n) => (
+      !best || n.pos.distanceToSquared(c) > best.pos.distanceToSquared(c) ? n : best
+    ), null) ?? this.npcs[0];
+    if (subject) {
+      const p = subject.pos;
+      // Stand off to one side of the line to the square's centre: dead-on puts
+      // the stalls behind the subject and the camera in their shade.
       const dx = c.x - p.x, dz = c.z - p.z;
       const len = Math.hypot(dx, dz) || 1;
-      const cam = [p.x + (dx / len) * 2.3, p.y + 1.42, p.z + (dz / len) * 2.3];
+      const ux = dx / len, uz = dz / len;
+      const ox = -uz, oz = ux;
+      const cam = [p.x + ux * 1.75 + ox * 1.30, p.y + 1.46, p.z + uz * 1.75 + oz * 1.30];
       capture.registerShot('npc-close', {
         description: 'A townsperson at conversation range.',
-        camera: { position: cam, yaw: lookAt(cam[0], cam[2], p.x, p.z), pitch: -4, fov: 55 },
+        camera: { position: cam, yaw: lookAt(cam[0], cam[2], p.x, p.z), pitch: -6, fov: 50 },
         apply(g) { g.state.worldTime = 12.5 * 3600; },
       });
     }

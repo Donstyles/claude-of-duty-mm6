@@ -119,7 +119,12 @@ export class DialoguePanel extends Panel {
       this._applyInterior({ interior: model.interiorFor(this.conv.speaker) });
     } catch { /* a missing plate leaves the panel's own surface, which is fine */ }
     const s = this.conv.speaker;
-    this.ui.log(`${s.name} — ${s.place}.`, 'info');
+    // One grammar for the strip: a complete sentence, sentence case, full stop
+    // (STYLE.md §5). `Ferrin Coll — House on Fishgate.` was a caption, not a
+    // sentence, and it was one of seven grammars across sixteen screens. What
+    // the speaker says is already in the caption over the room, so the strip
+    // states where you are, exactly as the four venue screens now do.
+    this.ui.log(`You enter ${s.place}.`, 'info');
   }
 
   refresh() {
@@ -131,11 +136,13 @@ export class DialoguePanel extends Panel {
     this.venueEl.textContent = ellipsis(s.place, 34);
     this.portraitEl.style.backgroundImage = portraitUrl(T, s.portraitSpec);
     this.nameEl.textContent = s.name;
-    this.tradeEl.textContent = s.profession;
+    this.tradeEl.textContent = roleLine(s.profession);
 
-    // What they are saying now.
+    // What they are saying now. Curly, and stripped first: a few of the model's
+    // lines arrive already wrapped in straight quotes, and `“"…"”` is worse
+    // than either (STYLE.md §7).
     setChildren(this.linesEl, ...(conv.text?.lines ?? []).filter(Boolean)
-      .map((line) => el('p', { className: 'mm-talk-line', text: `“${line}”` })));
+      .map((line) => el('p', { className: 'mm-talk-line', text: attribute(null, line) })));
     this.noteEl.textContent = conv.text?.note ?? '';
     this.noteEl.classList.toggle('is-empty', !conv.text?.note);
     this.sayEl.dataset.tone = conv.text?.tone ?? 'plain';
@@ -248,13 +255,32 @@ export class DialoguePanel extends Panel {
 }
 
 /**
+ * The role line of the identity block (STYLE.md §3): a short noun phrase
+ * beginning "the ", so every venue screen reads `the Weaponsmith`,
+ * `the Innkeeper`, `the Drillmaster`, `the Cooper`.
+ *
+ * Every trade in `DialogueSystem.TRADES` is titled with a noun, so the article
+ * simply goes in front. This used to carry a heuristic for the one exception —
+ * `housekeeper`, titled "Keeps the House", a verb phrase that "the " in front
+ * of would have ruined — and the heuristic is gone because the data was fixed
+ * instead. That is the right order: a rule about language belongs in the
+ * language, not in a regular expression downstream of it.
+ */
+export function roleLine(profession) {
+  const p = String(profession ?? '').trim();
+  if (!p) return '';
+  return /^the\s/i.test(p) ? p : `the ${p}`;
+}
+
+/**
  * One line of attributed speech, in the house grammar (STYLE.md §5 and §7).
  *
  * Everything anyone says anywhere in the interface goes through here, so the
  * marks are curly on every screen and the speaker is always named. Several of
  * the model files hand their lines out already wrapped in straight quotes —
  * `ShopSystem.greeting` does, `TownServices` does not — so the wrapping is
- * stripped first and re-made rather than trusted.
+ * stripped first and re-made rather than trusted. Pass `null` as the speaker
+ * for a line whose speaker is already established by the screen around it.
  *
  * It lives in this file because dialogue is the speech screen and this is the
  * only module of the five that is not a venue. It belongs in `ui/widgets.js`

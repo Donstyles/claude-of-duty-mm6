@@ -71,7 +71,7 @@ const LAYER_SCALE = { grass: 4.0, dirt: 4.5, rock: 8.0, sand: 4.0 };
  */
 const LAYER_TINT = {
   grass: [0.92, 1.00, 1.05],
-  dirt: [1.20, 0.86, 1.18],
+  dirt: [1.26, 0.90, 1.24],
   rock: [1.02, 1.00, 1.02],
   sand: [1.08, 1.00, 0.96],
 };
@@ -113,10 +113,20 @@ const LAYER_TINT = {
  * negative, and it expands proportionally, so a texture's bright grain and its
  * dark grain open up together instead of one end clipping first.
  */
-const LAYER_CONTRAST = { grass: 2.00, dirt: 1.70, rock: 1.45, sand: 1.40 };
+const LAYER_CONTRAST = { grass: 2.60, dirt: 2.30, rock: 1.60, sand: 1.50 };
 
-/** Each layer's mean linear albedo *luminance* — what the curve rotates about. */
-const LAYER_PIVOT = { grass: 0.140, dirt: 0.110, rock: 0.130, sand: 0.175 };
+/**
+ * Each layer's mean linear albedo *luminance* — what the curve rotates about.
+ *
+ * These have to be the real means or the curve stops being a contrast control
+ * and becomes a brightness control: every texel sits on the same side of a
+ * wrong pivot, so `pow` scales them all the same way. That is measurable and
+ * it happened — with the grass pivot at 0.140, raising its exponent from 2.0
+ * to 2.6 brightened rendered grass from luminance 108.6 to 118.0 while its
+ * standard deviation stayed at 15. Back-solving that shift gives the true
+ * grass mean at ≈0.175 and the dirt at ≈0.124, which is what is set here.
+ */
+const LAYER_PIVOT = { grass: 0.175, dirt: 0.124, rock: 0.145, sand: 0.190 };
 
 export class TerrainSystem extends System {
   static id = 'terrain';
@@ -512,23 +522,36 @@ export class TerrainSystem extends System {
    *
    * Kept as a value/warmth drift rather than a hue drift: MM6's ground is olive
    * and red-brown everywhere, it just is not the *same* olive everywhere.
+   *
+   * **The wavelengths are the whole point and they were wrong.** The original
+   * terms ran at 0.0031 and 0.0009 radians per metre — periods of 2 km and
+   * 7 km — against a vista that sees roughly 800 m of ground. The entire
+   * visible field therefore sat at one phase, so widening the amplitude did
+   * nothing at all to the variation *within a frame*: measured, taking the
+   * swing from ±5% to ±26% left rendered grass at a standard deviation of 15.0,
+   * unchanged. A drift slower than the view is not a drift, it is a constant.
+   * The bands below are 150–900 m, which is the scale the reference actually
+   * shows — one hillside reading distinctly lighter than the next inside a
+   * single frame — with one long term kept for regional character.
    */
   _macroTint(wx, wz, h) {
-    const n =
-      Math.sin(wx * 0.0031 + wz * 0.0017) * 0.5 +
-      Math.sin(wx * 0.0009 - wz * 0.0026) * 0.5;
-    // A second, slower band so the drift is not one readable sine across the
-    // whole map — this is what makes separate hillsides differ from each other
-    // rather than the whole world breathing together.
-    const broad = Math.sin(wx * 0.00043 - wz * 0.00051 + 2.1);
-    const warm = 0.5 + 0.5 * Math.sin(wx * 0.0007 + 1.3) * Math.cos(wz * 0.0006 - 0.4);
+    // Three incommensurate bands: ~190 m, ~450 m, ~900 m. Summed at unequal
+    // amplitudes so no single sine is legible as a stripe across open ground.
+    const fine = Math.sin(wx * 0.0331 * 0.5 + wz * 0.0189 * 0.5 + 0.7);
+    const mid =
+      Math.sin(wx * 0.0140 + wz * 0.0078) * 0.5 +
+      Math.sin(wx * 0.0061 - wz * 0.0133 + 2.3) * 0.5;
+    const broad = Math.sin(wx * 0.0070 - wz * 0.0052 + 2.1);
+    // Regional character, slower than any one view.
+    const region = Math.sin(wx * 0.00085 + wz * 0.00061 - 1.1);
+    const warm = 0.5 + 0.5 * Math.sin(wx * 0.0032 + 1.3) * Math.cos(wz * 0.0027 - 0.4);
     // Sun-bleached on the tops, cooler and greener in the hollows.
     const alt = Math.min(1, Math.max(0, (h - 10) / 140));
-    const v = n * 0.15 + broad * 0.11;
+    const v = fine * 0.055 + mid * 0.115 + broad * 0.085 + region * 0.06;
     return [
-      0.86 + v + warm * 0.10 + alt * 0.06,
-      0.88 + v * 0.92 + warm * 0.05,
-      0.80 + v * 0.86 - warm * 0.04 + alt * 0.08,
+      0.84 + v + warm * 0.12 + alt * 0.07,
+      0.86 + v * 0.92 + warm * 0.06,
+      0.78 + v * 0.86 - warm * 0.05 + alt * 0.09,
     ];
   }
 
