@@ -151,6 +151,26 @@ of which it scored as *wins* for us. That is not a contradiction to resolve:
 our menu is well set and badly made, and both reviewers are right about their
 own half. Fix the material without disturbing the setting.
 
+### Provisional: every letterfit finding, from both reviewers
+
+**We were not rendering the typeface we asked for, and had not been for the
+whole review.** `ui.panels.css` asked for Palatino Linotype, Book Antiqua,
+Palatino, Georgia, Times New Roman. None of those five exists in the capture
+environment, so every screenshot both reviewers judged fell through to generic
+`serif` — DejaVu Serif, which is wider, larger on the body, and synthesises its
+italic instead of drawing one. Roughly half this interface is italic.
+
+So these findings describe a face we never chose and are **void until re-shot**:
+the "~0.15em tracking" on the action lists, `Sell` reading as `S e l l`, word
+space narrower than letterspace, "Waitwithout", counters clotting at small
+sizes, and the ragged value columns. Some will survive the real face. Some were
+never ours. Nobody should spend an hour compensating for DejaVu.
+
+Contrast findings are unaffected — luminance ratios survive a face change, which
+is exactly why `STYLE.md` §6 specifies the measurement the way it does.
+
+TeX Gyre Pagella is now bundled. Re-shoot before trusting any spacing number.
+
 ### The most damaging finding in either round
 
 Neither a screen nor a texture. **Our interface disagrees with itself.** The
