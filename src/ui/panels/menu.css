@@ -134,7 +134,19 @@
    gold for being a menu item — and they do not: the screen's own measured
    literal marks the plate, and the shared token marks where the cursor is. */
 .mm-panel[data-panel='menu'] .mm-menu-item:hover { color: var(--gold); }
-.mm-panel[data-panel='menu'] .mm-menu-item.is-quit { color: #f0402c; }
+/* Red is intrinsically the darkest hue at full chroma — green and blue carry
+   most of the luminance — so a red word on mid-value stone separates from its
+   ground far less than a gold one does. Measured against MM6's own Quit, ours
+   sat at 1.25:1 where the original reaches 1.61:1. The original buys that back
+   the same way it letters everything else: a pale catch along the lit edge of
+   the glyph, which lifts the letterform without desaturating the red. */
+.mm-panel[data-panel='menu'] .mm-menu-item.is-quit {
+  color: #ff4a30;
+  text-shadow:
+    calc(var(--u) * 1) calc(var(--u) * 1) 0 #000,
+    calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(255, 206, 160, 0.85),
+    0 calc(var(--u) * -1) 0 rgba(255, 190, 150, 0.6);
+}
 .mm-panel[data-panel='menu'] .mm-menu-item.is-quit:hover { color: #ff7a62; }
 .mm-panel[data-panel='menu'] .mm-menu-item small {
   font-size: calc(var(--u) * 9);
@@ -161,7 +173,7 @@
 .mm-panel[data-panel='menu'] .mm-menu-hint {
   font-size: calc(var(--u) * 10);
   font-style: italic;
-  color: #c4b28a;
+  color: #e8dcc0;
 }
 
 /* ── page furniture ───────────────────────────────────────────────────────── */
