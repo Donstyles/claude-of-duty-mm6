@@ -23,107 +23,74 @@ It is unlabelled on purpose.
 
 ---
 
-## Round 6 — where the project stands
+## Round 7 — the blind review
 
-Photographed at `shots/round5/` and `shots/world5/`, 900x675, HUD on, 4:3.
-Build the A/B sheets with `python3 tools/blindtest.py --ours shots/round5
---out shots/blind6`; it pairs each screen with its reference still, decides
-left/right from a hash of the screen name, and writes the answer key to a file
-the reviewer is not given.
+Sixteen screens photographed at `shots/round7/`, paired with the reference
+stills into unlabelled A/B sheets by `tools/blindtest.py`, and judged by
+reviewers who were not told which panel was ours and were told explicitly not
+to try to work it out.
 
-### Closed since round 5
+**Result on the twelve valid comparisons: we won eight, lost four.** Three
+more were void (see below) and one was compromised.
 
-1. **Portraits.** Painted plates replaced the procedural faces. Measured
-   contrast 58.3 against the reference's 61.2, edge energy 12.53 against
-   12.91. This was the single most damaging defect in the project and it is
-   gone.
-2. **Town planting.** Millhaven now carries gate trees, an avenue ring and
-   street trees — and, as of this round, *not* in the market square, where an
-   oak was standing on the exact spot the viewpoint occupies.
-3. **The standing figure.** The equipment niche was the last place the
-   procedural painter was still doing the work; at full length it read as a
-   flat cartoon. Eighteen painted figures, nine classes in both sexes.
-4. **Item sprites.** A blue teardrop is a potion the way a road sign is a car.
-   141 rendered objects now back the backpack, the shop wall and the loot pile.
-5. **Venue interiors.** Walking into a shop shows the room — forge, chapel,
-   counting house — the way the reference does, instead of a flat panel.
+### Two faults in the test itself
 
-### Open
+1. **Three "world" comparisons were photographing a leftover panel.** The
+   capture harness only closed an open screen for `ui-hud`, so a run that shot
+   a screen and then a landscape shot the screen again. `town-square`,
+   `terrain-vista` and `dungeon-corridor` were all a painted interior. The
+   reviewer judged them as rooms, correctly, and every verdict built on them is
+   void. Fixed: `CaptureSystem.goto` now closes whatever the last shot left
+   open.
+2. **`ui-menu` prints both games' titles on screen**, so that pair could never
+   have been blind. The reviewer disclosed it rather than exploiting it, which
+   is the right behaviour, but the comparison is worth less than the others.
 
-1. **The quality tiers do not degrade gracefully.** Everything was tuned at
-   `ultra`. At `medium` the sky bakes its cloud sheet at 512 instead of 1024
-   and drops a shader tier, and the clouds become hard-edged blobs in rows
-   rather than soft cumulus; at `low` grass density is zero and the meadows are
-   bare. A player on medium sees a visibly worse game, not a cheaper one.
-   Lower tiers must look like a softer ultra, never like a broken one.
-2. **Paving is too yellow** — reads as packed dirt; the reference's flagstones
-   are cooler grey with a blue-green cast.
-3. **Windows read as dark muddle** — they need glazing tone or an interior
-   suggestion rather than a brown texture.
-4. **The marble bottom bar carries dark crack lines** that read as damage
-   rather than veining.
-5. **Dungeon floors tile visibly**, and interiors want rubble, bones, cobwebs
-   and chests. Being addressed with the dungeon rebuild.
-6. **Overall colour is cooler and greyer** than the reference, which is warmer
-   and more saturated throughout.
+### What we lost, and why
 
-### Measured, and not a defect after all
+1. **The game menu.** Six flat dark rectangles with a hairline gold border —
+   no bevel, no highlight, no thickness, no material. The title plate is a
+   gradient with a rule: a graphic device, not an object. Damning because our
+   own character slab proves we know how to cut a two-sided bevel.
+2. **The quest journal.** Two cream rectangles on dark green. No paper fibre,
+   no deckle, no gutter, no curl, no page thickness, no shadow under the
+   cards. The reference is a *book*; ours is a web layout.
+3. **Rest.** A near-uniform dusty rose with a faint gradient — painted board,
+   not stone — and the buttons carry a 1px lighter border with no bevel, so
+   nothing on the screen reads as a key you could press.
+4. **The spellbook page.** A flat cream fill with no fibre, no gutter and no
+   curl, against a reference parchment that mottles and darkens toward the
+   spine. Several miniatures are still too low in contrast to read at display
+   size, and the greyed entries are effectively invisible.
 
-The clouds looked wrong to me at `medium` — beige blobs in bands rather than
-white cumulus — so I photographed them at `ultra` and measured instead of
-trusting the impression. Sky crop, cloud pixels taken as luminance > 150:
+### Systemic faults, worth more than any single screen
 
-| | cloud RGB | sky RGB | cover |
-|---|---|---|---|
-| ours | 178, 160, 130 | 66, 82, 134 | 7% |
-| reference 33 | 161, 152, 151 | 60, 81, 107 | 1% |
-| reference 35 | 188, 176, 141 | 72, 89, 137 | 24% |
-| reference 32 | 183, 172, 141 | 120, 118, 139 | 39% |
+- **One crack overlay is doing three jobs.** The same hairline network sits on
+  the charcoal character slab, the cream marble party bar and the dark green
+  rest inset, at the same weight and scale. Slate crazes, marble fractures
+  along its bedding, painted board checks with the grain — these look nothing
+  alike, and the shared texture betrays all three. Worse, it runs *underneath*
+  panel frames instead of being interrupted by them, which proves it an
+  overlay rather than damage to the plate.
+- **Bevel discipline is inconsistent screen to screen.** Character and skills
+  have genuine two-sided recesses; menu, quests and rest have none. Same
+  interface, two different physics.
+- **The stained-glass hireling panes read as encaustic tile,** not glass: every
+  pane sits at a similar mid-to-high value, so no pane is lit against a dark
+  one. They are on every single screen.
+- **Our interiors and our exterior are two different games.** The painted
+  rooms are richly and directionally lit, with dirt and wear. The hillside has
+  no sun vector — a hill's near and far faces share one value — no texel
+  compression with distance, a hard blobby seam where grass meets earth, and
+  hard-edged clouds on a flat blue. Nothing bridges them.
 
-Ours sits inside the reference's range on every axis, and MM6's own cloud
-cover swings from 1% to 39% between scenes, so 7% is unremarkable. The warm
-cast I objected to is what the reference does too. **Do not re-tint the clouds
-or reduce their count on the strength of someone's eye, including mine.**
+### What we won on, and should not lose
 
-What measurement does not settle is the *arrangement* — ours compress into
-bands toward the horizon. That is what a cloud plane does in projection and is
-probably right; if a reviewer raises it, get a number before acting.
-
-### The exposure control — read this before measuring anything
-
-The reference stills are **globally 1.42x darker than our captures**. Measured
-on the message strip, which is the same interface asset in both and should
-therefore match exactly: ours reads luminance 132, two different reference
-stills both read 93.
-
-Every colour comparison against `reference/mm6-web/` has to divide by that
-first. Skipping it is how a previous round concluded our grass should be
-*brightened* toward 111,122,58 — a figure that does not survive the control.
-
-### Ground colour — measured, partly confounded
-
-True-green pixels only (G > R+6 and G > B+12), grass crop of a vista:
-
-| | grass RGB | share of crop |
-|---|---|---|
-| ours | 99, 125, 69 | 61% |
-| reference 33 | 52, 79, 43 | 14% |
-| reference 35 | 56, 79, 41 | 22% |
-| reference 32 | 41, 64, 33 | 14% |
-| reference 34 | 51, 69, 35 | 4% |
-
-**Brightness: do not act on this yet.** Ours looks nearly twice as bright, but
-after dividing by the 1.42 exposure control it lands at roughly 70,88,49
-against a reference of ~50,73,38 — perhaps 25% high, which is inside the range
-a different capture gamma could explain. Get a same-scene comparison before
-retuning.
-
-**Composition: this one is real.** Our ground is 61% true green where the
-reference runs 4–22%. MM6's landscape is mostly brown earth and rock with
-grass in patches; ours is a green carpet with roads cut through it. Exposure
-cannot explain a difference in *coverage*. The caveat is that the crops are
-not guaranteed to be the same kind of terrain, so treat it as strong rather
-than settled — but four stills all falling below 22% is hard to dismiss.
+The venue interiors, the guild library, the training yard, the character
+sheet's three-metal specular separation, the inventory's dyed leather, and the
+skills page's two-sided recesses all beat the reference outright. The forge
+was called the best single image in the set — pegged tools each casting their
+own shadow, an anvil worn bright on the horn where it is struck.
 
 ### Not defects — do not "fix" these
 - The flat sky with no horizon gradient is **correct** and deliberate.
