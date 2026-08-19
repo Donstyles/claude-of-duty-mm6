@@ -271,9 +271,14 @@ function hash2(x, y) {
  */
 export function mineral(g, w, h, opts = {}) {
   const seed = opts.seed ?? 0;
+  // Three sizes of grain, because a rock has three: the sand-sized crystals,
+  // the clots they gather into, and the flakes the whole face cleaves along.
+  // Two octaves gave the right *amount* of structure and the wrong shape — an
+  // even speckle, where the reference's slate breaks into big angular faces.
   const oct = opts.octaves ?? [
-    { cell: 3.4, amp: 11, hue: 5.0, facet: 13 },
-    { cell: 9.0, amp: 13, hue: 3.5, facet: 10 },
+    { cell: 3.4, amp: 8, hue: 4.0, facet: 10 },
+    { cell: 9.0, amp: 11, hue: 3.0, facet: 9 },
+    { cell: 24.0, amp: 8, hue: 3.0, facet: 17 },
   ];
   const fine = opts.fine ?? 6;
   const warm = opts.warm ?? 1;

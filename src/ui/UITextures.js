@@ -334,7 +334,7 @@ export class UITextures {
       // That is the whole reason these read as hairs on a scanner bed.
       const len = rng.range(h * 0.45, h * 1.15);
       UITextures.crack(g, rng, x, y, a, len, rng.range(0.9, 2.0), colour,
-        { depth: 2, wander: 0.14, lip });
+        { depth: 2, wander: 0.14, lip, alpha: opts.alpha });
       // Rock does not part along one clean surface: a bedding failure comes
       // as a swarm of short sub-parallel splinters stepping past each other
       // beside the main break. One line on its own is a scratch on the scan.
@@ -716,22 +716,48 @@ export class UITextures {
       UITextures.breccia(g, w, h, rng);
       // Long healed shears cutting across the mosaic, a shade deeper than the
       // seams: the second event this rock has been through.
-      for (let i = 0; i < 3; i++) {
-        g.save();
-        g.globalAlpha = rng.range(0.08, 0.18);
-        g.strokeStyle = rng.chance(0.5) ? '#F0DCCE' : '#7A4632';
-        g.lineWidth = rng.range(4, 14);
-        g.filter = `blur(${rng.range(3, 8).toFixed(1)}px)`;
+      //
+      // Drawn as lenses, and only two of them. Three uniform blurred strokes
+      // run corner to corner is the brush that put scanner hairs across this
+      // panel — a shear swells where it opened and closes to nothing at both
+      // tips, and it is the taper that stops it reading as a scratch.
+      for (let i = 0; i < 2; i++) {
         const x0 = rng.range(-w * 0.2, w);
-        const y0 = rng.range(-h * 0.2, h);
-        g.beginPath();
-        g.moveTo(x0, y0);
-        g.quadraticCurveTo(x0 + rng.range(-w * 0.3, w * 0.6), y0 + h * 0.4,
-          x0 + rng.range(-w * 0.2, w * 0.9), y0 + h * 1.1);
-        g.stroke();
+        const y0 = rng.range(-h * 0.2, h * 0.4);
+        const cx = x0 + rng.range(-w * 0.2, w * 0.5);
+        const cy = y0 + h * 0.45;
+        const ex = x0 + rng.range(-w * 0.15, w * 0.8);
+        const ey = y0 + h * 1.05;
+        const wid = rng.range(5, 15);
+        const pale = rng.chance(0.5);
+        const segs = 16;
+        g.save();
+        g.lineCap = 'butt';
+        g.strokeStyle = pale ? '#F0DCCE' : '#7A4632';
+        g.filter = `blur(${rng.range(3, 7).toFixed(1)}px)`;
+        for (let k = 0; k < segs; k++) {
+          const t0 = k / segs;
+          const t1 = (k + 1) / segs;
+          const q = (t) => [
+            (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * ex,
+            (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * cy + t * t * ey,
+          ];
+          const taper = Math.sin(((t0 + t1) / 2) * Math.PI) ** 0.8;
+          g.globalAlpha = rng.range(0.05, 0.14) * taper;
+          g.lineWidth = Math.max(0.6, wid * taper);
+          const [ax, ay] = q(t0);
+          const [bx, by] = q(t1);
+          g.beginPath();
+          g.moveTo(ax, ay);
+          g.lineTo(bx, by);
+          g.stroke();
+        }
         g.restore();
       }
-      UITextures.fracture(g, w, h, rng, { crack: '#3E1C12', bedding: -0.5, count: 4, lip: 'rgba(255,232,214,0.5)' });
+      UITextures.fracture(g, w, h, rng, {
+        crack: '#3E1C12', bedding: -0.5, count: 2, alpha: 0.42,
+        lip: 'rgba(255,232,214,0.5)',
+      });
       UITextures.grain(g, w, h, rng, 12);
     });
   }
