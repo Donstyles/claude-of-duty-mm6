@@ -4,10 +4,16 @@
  * Every screen in this game is two things sitting three pixels apart: painted
  * scene art, which is lit, and interface chrome, which historically was not.
  * The chrome read as plastic for one reason — it had no light direction. A
- * brass oval carried a top-to-bottom symmetric ramp and a halo on all four
- * sides; a column carried a lambert ramp and a black keyline; a stud was a
- * white glyph floating on the moulding. None of those describe an object under
- * a lamp, so none of them read as an object.
+ * brass oval carried a symmetric ramp in both axes; a column carried a lambert
+ * ramp with no material in it; a stud was a white glyph floating on the
+ * moulding. None of those describe an object under a lamp, so none of them
+ * read as an object.
+ *
+ * Two halves of that diagnosis are not in this file and cannot be fixed from
+ * it: the all-round outer glow is `filter: drop-shadow(0 0 …)` in
+ * `panels/character.css` and `ui.panels.css`, and the black keyline down each
+ * column is an inset `box-shadow` on `.mm-col-shaft`. Both are named in the
+ * handover; everything the textures themselves control is done here.
  *
  * So there is now exactly one lamp, declared here, and every raised or cut form
  * in `UITextures` obeys it. It is up and to the left and slightly in front of
@@ -271,14 +277,16 @@ function hash2(x, y) {
  */
 export function mineral(g, w, h, opts = {}) {
   const seed = opts.seed ?? 0;
-  // Three sizes of grain, because a rock has three: the sand-sized crystals,
-  // the clots they gather into, and the flakes the whole face cleaves along.
-  // Two octaves gave the right *amount* of structure and the wrong shape — an
-  // even speckle, where the reference's slate breaks into big angular faces.
+  // Two sizes of grain: the crystals, and the clots they gather into. A third
+  // octave at cell 24 was tried for the big cleavage faces the reference's
+  // slate breaks along and is deliberately not here — at that size the cells
+  // stop being jittered enough to hide their own grid, and the panel picked up
+  // a faint checker. It also measured *worse*: 1.5-6px structure fell from
+  // 4.39 to 4.13. Large-scale shape has to come from the dab passes, which
+  // have no lattice to give away.
   const oct = opts.octaves ?? [
-    { cell: 3.4, amp: 8, hue: 4.0, facet: 10 },
-    { cell: 9.0, amp: 11, hue: 3.0, facet: 9 },
-    { cell: 24.0, amp: 8, hue: 3.0, facet: 17 },
+    { cell: 3.4, amp: 11, hue: 5.0, facet: 13 },
+    { cell: 9.0, amp: 13, hue: 3.5, facet: 10 },
   ];
   const fine = opts.fine ?? 6;
   const warm = opts.warm ?? 1;

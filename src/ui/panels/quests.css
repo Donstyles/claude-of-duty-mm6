@@ -22,7 +22,11 @@
   inset: 0;
   display: flex;
   align-items: stretch;
-  padding: calc(var(--u) * 6) 0 calc(var(--u) * 6) calc(var(--u) * 8);
+  /* The foot padding is deeper than the head's on purpose: it is the band of
+     closed board the exit oval stands on. Without it the oval has nowhere to
+     be but on the paper, which is how the old × came to sit "pasted flat over
+     the page edge with no seat". */
+  padding: calc(var(--u) * 6) 0 calc(var(--u) * 26) calc(var(--u) * 8);
 }
 
 /* A page is a sheet of paper, not a card: the leaf carries its own deckled
@@ -405,4 +409,12 @@
   filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.7));
 }
 
-.mm-panel[data-panel='quests'] .mm-stone-plaque { right: calc(var(--u) * 34); bottom: calc(var(--u) * 8); }
+/* Bottom-centre, like every other screen's exit (STYLE.md §12). It sits over
+   the closed board below the page block rather than on the paper. */
+.mm-panel[data-panel='quests'] .mm-quest-exit {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--u) * 4);
+  transform: translateX(-50%);
+  z-index: 4;
+}

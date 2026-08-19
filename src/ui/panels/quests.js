@@ -1,6 +1,6 @@
 import './quests.css';
 import { Panel } from './base.js';
-import { el, setChildren, nu, fmt, ellipsis, tooltip, tipMarkup } from '../widgets.js';
+import { el, setChildren, nu, fmt, ellipsis, tooltip, tipMarkup, goldOval } from '../widgets.js';
 import { icon } from '../Icons.js';
 import { QUESTS } from '../../game/data/Quests.js';
 
@@ -249,11 +249,19 @@ export class QuestPanel extends Panel {
       return b;
     });
 
-    const exit = el('button', {
-      className: 'mm-stone-plaque', type: 'button',
-      html: icon('close', { size: 12 }), 'aria-label': 'Close the journal',
+    // The house exit, not a window chrome close box.
+    //
+    // This was a plain grey plaque carrying a ×, and it made the journal the
+    // third exit design in one interface — the brass oval on seven screens, a
+    // labelled "Close" plate on the spellbook, and an OS-looking × here. Both
+    // round-10 reviewers named it independently; one called it "a Windows close
+    // button dropped on the paper". STYLE.md §12: every screen leaves by one
+    // oval, bottom-centre.
+    const exit = goldOval({
+      glyph: 'exitDoor', label: 'Close the journal', textures: this.ui.textures,
+      onClick: () => this.ui.closePanel(), className: 'mm-quest-exit',
+      tip: () => tipMarkup({ title: 'Close the journal' }),
     });
-    exit.addEventListener('click', () => this.ui.closePanel());
 
     const left = el('div', { className: 'mm-quest-page is-left' },
       el('div', { className: 'mm-quest-head' }, this.headEl),

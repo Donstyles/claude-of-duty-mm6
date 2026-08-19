@@ -42,7 +42,17 @@
    are on, so it reads as struck brass sunk a pixel into the stone. */
 [data-panel="character"] .mm-oval.is-current {
   transform: translateY(calc(var(--u) * 1));
-  filter: brightness(1.22) saturate(1.12) drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 236, 160, 0.85));
+  /* Struck and seated, not lit from within.
+   *
+   * This was `drop-shadow(0 0 3u rgba(255,236,160,0.85))` — a glow with no
+   * offset, so it haloed all four sides equally and the granite beside the
+   * button measured +13 to +22 above the panel median *right the way round*.
+   * A blind reviewer ranked that the third worst material defect in the game
+   * ("a symmetric halo makes the button read as a light emitter"), and this
+   * rule was its actual source. The oval already drops a pixel; a single
+   * cast shadow down-right is what says it went into the stone. */
+  filter: brightness(1.06)
+    drop-shadow(calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.55));
 }
 
 /* ── skills ────────────────────────────────────────────────────────────────

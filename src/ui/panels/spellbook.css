@@ -158,6 +158,21 @@
    is what made a reviewer call the slots unfinished. A ghost fills the page and
    still withholds everything the original withholds: the name stays off, so an
    unbought spell is a shape you cannot read rather than a spell you can. */
+/* The cost, written small in the setting's upper-right margin the way a scribe
+   numbers a plate — ink on paper, not a chip or a badge. `--down` when the
+   caster cannot cover it, which is the one thing on this page that blocks. */
+.mm-panel[data-panel='spellbook'] .mm-sb-cost {
+  position: absolute;
+  top: calc(var(--u) * 1);
+  right: calc(var(--u) * 6);
+  font-size: calc(var(--u) * 9);
+  line-height: 1;
+  font-style: italic;
+  color: #5c4a2e;
+  text-shadow: none;
+  pointer-events: none;
+}
+
 .mm-panel[data-panel='spellbook'] .mm-sb-cell.is-unknown .mm-sb-name { display: none; }
 .mm-panel[data-panel='spellbook'] .mm-sb-cell.is-unknown .mm-sb-ink {
   filter: grayscale(1) contrast(0.92) opacity(0.18);

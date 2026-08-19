@@ -398,6 +398,17 @@ export class SpellbookPanel extends Panel {
 
     const cell = el('div', { className: classes.join(' ') },
       el('div', { className: 'mm-sb-art' }, ink),
+      // What it costs, in the setting's own margin.
+      //
+      // The colophon states the pool — `24 / 24 SP` — and until now the grid
+      // gave you nothing to spend it against: a reviewer noted that the one
+      // blocking number on the screen was missing from every cell. It is
+      // withheld for an unlearned spell for the same reason the name is: the
+      // page does not describe what you have not bought.
+      learned ? el('span', {
+        className: `mm-sb-cost${check.ok ? '' : ' mm-t-down'}`,
+        text: String(spell.sp ?? spell.level ?? 0),
+      }) : null,
       el('div', { className: 'mm-sb-name', text: spell.name }));
 
     tooltip.attach(cell, () => this._spellTip(spell, vm, state, learned, check));

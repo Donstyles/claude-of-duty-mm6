@@ -649,10 +649,21 @@ function paintClasp(g, s, x, y, len) {
   gold.addColorStop(0.74, '#7a5c12');
   gold.addColorStop(1, '#2e2004');
   g.save();
-  g.strokeStyle = 'rgba(10,16,11,0.95)';
+  // An undercut, not an outline.
+  //
+  // This was `rgba(10,16,11,0.95)` at 8.4s under the 6s gold — a hard,
+  // near-black keyline drawn around a lit round. A blind reviewer named the
+  // pure-black stroke around every rounded form the fifth worst material
+  // defect in the game: cast metal terminates in its own falloff, and a black
+  // line around it is unphysical. Softened to the gradient's own darkest tone
+  // and blurred, it becomes the shadow the clasp sits in rather than a border
+  // drawn round it.
+  g.filter = `blur(${1.1 * s}px)`;
+  g.strokeStyle = 'rgba(38,26,6,0.78)';
   g.lineWidth = 8.4 * s;
   g.lineCap = 'round';
   g.stroke(path);
+  g.filter = 'none';
   g.strokeStyle = gold;
   g.lineWidth = 6 * s;
   g.stroke(path);
