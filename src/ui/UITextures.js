@@ -22,8 +22,11 @@
  */
 
 import { RNG, hashSeed } from '../core/RNG.js';
+// One lamp for the whole interface, and the shaders that obey it. See
+// `art/relief.js` — every raised or cut form below is lit from up and to the
+// left, casts down and right, and terminates in its own falloff.
 import {
-  LIGHT, cabochon, castShadow, cylinderValue, cylinderGradient, mineral, seatedStud,
+  cabochon, castShadow, cylinderValue, cylinderGradient, mineral, seatedStud,
 } from './art/relief.js';
 
 const TAU = Math.PI * 2;
@@ -323,9 +326,13 @@ export class UITextures {
     const count = opts.count ?? Math.max(2, Math.round(w / 300));
     for (let i = 0; i < count; i++) {
       const a = bed + rng.range(-0.16, 0.16) + (rng.chance(0.5) ? Math.PI : 0);
-      const x = rng.range(-w * 0.1, w * 1.1);
-      const y = rng.range(-h * 0.1, h * 1.1);
-      const len = rng.range(h * 1.1, h * 2.6);
+      const x = rng.range(w * 0.02, w * 0.98);
+      const y = rng.range(h * 0.02, h * 0.98);
+      // Short enough to begin and end inside the slab. At `h*1.1 .. h*2.6` a
+      // break ran clean off both edges, so all that was ever on screen was its
+      // middle — the one part of a tapered groove that has a constant width.
+      // That is the whole reason these read as hairs on a scanner bed.
+      const len = rng.range(h * 0.45, h * 1.15);
       UITextures.crack(g, rng, x, y, a, len, rng.range(0.9, 2.0), colour,
         { depth: 2, wander: 0.14, lip });
       // Rock does not part along one clean surface: a bedding failure comes
@@ -580,6 +587,16 @@ export class UITextures {
       UITextures.dab(g, rng.range(-w * 0.1, w * 1.1), rng.range(-h * 0.2, h * 1.2),
         rng.range(h * 0.6, h * 2.2), rng.range(h * 0.4, h * 1.2),
         rng.range(-0.6, 0.6), c, rng.range(0.22, 0.52), rng.range(40, 110));
+    }
+    // The palette's own spread is too narrow to carry the drift on its own —
+    // measured along the real bottom bar the slab swings 24 units of luminance
+    // over its length and ours managed 8 — so the widest pass is value, not
+    // hue: a few very large soft lifts and depressions in neutral.
+    for (let i = 0; i < Math.max(3, Math.round(w / 210)); i++) {
+      UITextures.dab(g, rng.range(-w * 0.05, w * 1.05), rng.range(-h * 0.3, h * 1.3),
+        rng.range(h * 0.7, h * 2.6), rng.range(h * 0.5, h * 1.4),
+        rng.range(-0.6, 0.6), rng.chance(0.5) ? '#FFFFFF' : '#0E0D0C',
+        rng.range(0.08, 0.19), rng.range(60, 140));
     }
 
     // Broad cloudy mottle.
@@ -882,11 +899,47 @@ export class UITextures {
         veins: ['#4E483C', '#635B4E', '#CCC2B2'],
         crack: '#241E18',
         ochre: false,
-        grain: 14,
+        grain: 12,
         veinAlpha: [0.20, 0.52],
         bedding: -0.34,
         crackCount: 2,
+        // The plaque is scaled down about a third on the way to the screen, so
+        // the grains have to be coarser here than on a 1:1 field or they land
+        // below a pixel and the plate goes back to being smooth.
+        mineralOpts: {
+          seed: 9,
+          octaves: [{ cell: 3.6, amp: 11, hue: 6, facet: 13 }, { cell: 11, amp: 9, hue: 4, facet: 8 }],
+          fine: 5,
+        },
       });
+      // A dressed face, not a sawn one: the mason's point left short parallel
+      // furrows across it, each a shadowed wall above a lit one.
+      for (let i = 0; i < 240; i++) {
+        const x0 = rng.range(-10, w);
+        const y0 = rng.range(-10, h);
+        const len = rng.range(8, 34);
+        const a = -0.36 + rng.range(-0.09, 0.09);
+        const dx = Math.cos(a) * len;
+        const dy = Math.sin(a) * len;
+        g.save();
+        g.lineCap = 'round';
+        g.globalAlpha = rng.range(0.04, 0.13);
+        g.strokeStyle = '#3A342C';
+        g.lineWidth = rng.range(0.8, 2.2);
+        g.beginPath();
+        g.moveTo(x0, y0);
+        g.lineTo(x0 + dx, y0 + dy);
+        g.stroke();
+        g.globalAlpha = rng.range(0.04, 0.12);
+        g.strokeStyle = '#E4DED2';
+        g.lineWidth = rng.range(0.5, 1.4);
+        g.beginPath();
+        g.moveTo(x0 + 1.0, y0 + 1.1);
+        g.lineTo(x0 + dx + 1.0, y0 + dy + 1.1);
+        g.stroke();
+        g.restore();
+      }
+      UITextures.grain(g, w, h, rng, 8);
     });
   }
 
@@ -1067,10 +1120,14 @@ export class UITextures {
     // this — shows them brightest at the frame and falling away inboard; the
     // middle column shows its whole face. Every *relief* on all three (joints,
     // chips, pitting) still obeys the one lamp: shadow below and to the right.
-    const arc = mode === 'left' ? [-0.34, 1.44]
-      : mode === 'right' ? [-1.44, 0.34]
-        : [-1.30, 1.32];
-    return this._make(`col-${mode}`, 56, 168, (g, w, h, rng) => {
+    const arc = mode === 'left' ? [-0.34, 1.46]
+      : mode === 'right' ? [-1.46, 0.34]
+        : [-1.48, 1.50];
+    // Sized near the width each column is actually drawn at (8u, 14u and 10u
+    // of a 640-wide field), because a 56-pixel tile squeezed into fifteen
+    // turns crystals into mush and mush is what "texture-free" looks like.
+    const tw = mode === 'left' ? 34 : mode === 'right' ? 42 : 56;
+    return this._make(`col-${mode}`, tw, 200, (g, w, h, rng) => {
       g.fillStyle = cylinderGradient(g, 0, w, 0, '#B9B0A8', arc,
         { amb: 0.34, kd: 0.80, kb: 0.26, ks: 0.26, shine: 16, stops: 28 });
       g.fillRect(0, 0, w, h);
@@ -1219,10 +1276,21 @@ export class UITextures {
       }
       g.fillStyle = term;
       g.fillRect(0, 0, w, h);
+      // Contact at both arrises. A cylinder's silhouette turns fully away from
+      // the viewer, so it always darkens there — and it is what lets the shaft
+      // end in its own falloff rather than in the line the stylesheet still
+      // draws down each side (see the note in the report: `.mm-col-shaft`).
+      for (const [x0, x1, a0, a1] of [[0, w * 0.10, 0.30, 0], [w * 0.90, w, 0, 0.46]]) {
+        const e = g.createLinearGradient(x0, 0, x1, 0);
+        e.addColorStop(0, `rgba(20,19,19,${a0})`);
+        e.addColorStop(1, `rgba(20,19,19,${a1})`);
+        g.fillStyle = e;
+        g.fillRect(x0, 0, x1 - x0, h);
+      }
       mineral(g, w, h, {
         seed: mode === 'left' ? 21 : mode === 'right' ? 22 : 23,
-        octaves: [{ cell: 2.6, amp: 9, hue: 4, facet: 12 }, { cell: 8, amp: 8, hue: 3, facet: 6 }],
-        fine: 5,
+        octaves: [{ cell: 2.4, amp: 7, hue: 4, facet: 8 }, { cell: 7, amp: 6, hue: 3, facet: 5 }],
+        fine: 4,
       });
       UITextures.grain(g, w, h, rng, 7);
     });
@@ -1239,9 +1307,9 @@ export class UITextures {
    * drum below it.
    */
   columnCollar(mode = 'left') {
-    const arc = mode === 'left' ? [-0.34, 1.44]
-      : mode === 'right' ? [-1.44, 0.34]
-        : [-1.30, 1.32];
+    const arc = mode === 'left' ? [-0.34, 1.46]
+      : mode === 'right' ? [-1.46, 0.34]
+        : [-1.48, 1.50];
     return this._make(`collar-${mode}`, 64, 28, (g, w, h, rng) => {
       const bandTop = h * 0.10;
       const bandBot = h * 0.80;
@@ -1640,13 +1708,37 @@ export class UITextures {
         g.lineWidth = lw;
         g.stroke(path);
         g.restore();
+        // Each roll is a torus, so it takes the same lamp as everything else:
+        // a catch along its upper-left shoulder and its own shadow beneath.
+        // Flat concentric bands are what made the frame read as printed.
+        g.save();
+        g.lineJoin = 'round';
+        g.globalAlpha = 0.55;
+        g.strokeStyle = 'rgba(255,253,248,0.9)';
+        g.lineWidth = Math.max(0.8, lw * 0.30);
+        g.translate(-lw * 0.24, -lw * 0.26);
+        g.stroke(path);
+        g.restore();
+        g.save();
+        g.lineJoin = 'round';
+        g.globalAlpha = 0.48;
+        g.strokeStyle = 'rgba(22,20,20,0.9)';
+        g.lineWidth = Math.max(0.8, lw * 0.26);
+        g.translate(lw * 0.28, lw * 0.30);
+        g.stroke(path);
+        g.restore();
       }
-      // A catch-light along the upper-left of the outermost roll.
+      // One direction over the whole moulding: the frame's upper-left limb is
+      // lit and its lower-right limb is in shade, so the arch turns in space.
       g.save();
-      g.globalAlpha = 0.5;
-      g.strokeStyle = '#EFEAE4';
-      g.lineWidth = W * 0.012;
-      g.setLineDash([W * 0.34, W * 0.9]);
+      g.lineJoin = 'round';
+      const sweep = g.createLinearGradient(0, 0, W, H);
+      sweep.addColorStop(0, 'rgba(255,253,248,0.30)');
+      sweep.addColorStop(0.42, 'rgba(255,253,248,0.05)');
+      sweep.addColorStop(0.66, 'rgba(20,18,18,0.10)');
+      sweep.addColorStop(1, 'rgba(20,18,18,0.42)');
+      g.strokeStyle = sweep;
+      g.lineWidth = W * 0.125;
       g.stroke(path);
       g.restore();
 
@@ -3623,8 +3715,8 @@ export class UITextures {
       // sheen and no hard catch at all. The active one is gilt bronze, warmer
       // and duller than raw gold — a mirror-bright torus reads as moulded
       // plastic, which is the exact failure this pass exists to remove.
-      const amb = gold ? [26, 21, 9] : [30, 30, 30];
-      const body = gold ? [162, 140, 80] : [124, 124, 124];
+      const amb = gold ? [26, 21, 9] : [22, 22, 23];
+      const body = gold ? [162, 140, 80] : [126, 125, 122];
       const spec = gold ? [255, 246, 206] : [206, 206, 202];
       const bcol = gold ? [204, 164, 84] : [150, 144, 134];
       const KEY = [-0.52, -0.46, 0.72];
@@ -3719,9 +3811,9 @@ export class UITextures {
       // transparent and `mineral` leaves transparent pixels alone.
       mineral(g, w, h, {
         seed: gold ? 71 : 72,
-        octaves: [{ cell: 2.6, amp: gold ? 6 : 9, hue: gold ? 4 : 2, facet: gold ? 7 : 10 },
-          { cell: 8, amp: gold ? 5 : 7, hue: 2, facet: 5 }],
-        fine: gold ? 4 : 6,
+        octaves: [{ cell: 2.6, amp: gold ? 5 : 7, hue: gold ? 4 : 2, facet: gold ? 6 : 8 },
+          { cell: 8, amp: gold ? 4 : 5, hue: 2, facet: 4 }],
+        fine: gold ? 3 : 4,
       });
 
       // The portrait sits below the bezel, so the reveal casts inward from the

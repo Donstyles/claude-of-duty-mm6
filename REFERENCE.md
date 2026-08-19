@@ -229,7 +229,16 @@ and G together while B never moves:
 `#29458C → #314D8C → #394D8C → #4A558C → #5A658C → #6B6D8C → #73758C → #84758C → #8C8A8C → #948E8C → #9C918C → #A59A8C → #AD9E8C → #B5A68C → #BDB28C → #C6BA8C → #DED38C → #E7D38C`
 
 **The ground simply stops at the sky.** A hard, stair-stepped 1–2 px edge, with
-no fog band, no atmospheric lightening and no distant mountain silhouette.
+no fog *band* and no distant mountain silhouette — the transition is an edge,
+not a gradient, and nothing is drawn along it.
+
+**But the ground arriving at that edge is heavily lightened, and §2.7 measures
+it.** "No atmospheric lightening" was the original reading here and it is wrong:
+on a vista the reference's most distant ground band is `110.5 · 123.5 · 105.5`,
+3.6× less saturated than its near ground and with its blue channel more than
+doubled. What §2.4 correctly observes is that there is no *painted haze band* —
+no separate strip of atmosphere drawn between land and sky. The land itself
+recedes. Do not read this paragraph as forbidding that; see §2.7.
 
 ### 2.5 Water
 
@@ -1019,7 +1028,7 @@ Score each axis **0–10**. A screenshot passes at **8 or better on every axis**
 | 3 | **Composition and silhouette** | The frame is proscenium-framed the way MM6 frames: a clear subject on the view axis, vertical masses bracketing it, a horizontal band anchoring the bottom, foreground / midground / skyline layering. Sky is a **minority** of the viewport (14–35%), skyline between 34% and 61% down. Landmarks read as silhouettes. Not an aimless expanse. |
 | 4 | **Colour and grade** | Sky is flat `#29458C` with **cream** clouds (`#BDB28C`–`#E7D38C`), grass is olive-khaki (`#395129`), dirt is dark red-brown (`#523021`), stone is achromatic and never brighter than `#7F817F`, canopies are near-black green. The bulk of pixels sits between value 30 and 100. Not muddy, not grey, not neon, and above all **not the pale-blue-sky, white-cloud, lawn-green default of every fantasy engine**. |
 | 5 | **Geometric density** | Nothing reads as a Three.js primitive. Buildings carry real openings, real roof geometry, real plank and pier volumes; trees have modelled trunks that fork; walls have depth at their coping. Proportions match the measured ones — a 5.2:1 gate pier, a 1.87 m boundary wall whose top tracks the horizon. Nothing floats, nothing z-fights, nothing intersects the terrain without a ground contact. |
-| 6 | **Atmosphere** | The world has air without fog. At most 12% desaturation toward sky colour at maximum draw distance; the sky's upper 60% remains a flat field; terrain resolves into a distant silhouette rather than clipping into nothing. Clouds are **perspective-compressed toward the horizon** (thick above, thin at the skyline), not evenly sized dome puffs. A visible fog wall, a haze band along the horizon, or a zenith-to-horizon gradient each cost the axis outright. |
+| 6 | **Atmosphere** | Depth is carried by the ground, not by a drawn band. At **street range** the world has air without fog: dirt sampled across ~40 m is flat within ±5%, so a town square must not haze. At **vista range** distant ground desaturates hard — the reference's furthest band is 3.6× less saturated than its nearest, with the blue channel more than doubled — and terrain resolves into distance rather than clipping into nothing. The sky's upper 60% remains a flat field. Clouds are **perspective-compressed toward the horizon** (thick above, thin at the skyline), not evenly sized dome puffs. A visible fog *wall*, a painted haze strip drawn between land and sky, or a zenith-to-horizon gradient each cost the axis outright — but ground that recedes with depth is required, not forbidden. See §2.7. |
 | 7 | **MM6 identity** | A fan names the game in one second. The frame is right — 71.9% × 71.7% viewport pinned top-left, three columns, full-height right panel, 26.7% marble bottom bar with egg portraits and vertical green/blue tubes. The world is right — flat blue sky, cream clouds, olive grass, dark earth, grey rubble, sparse punctuation trees, no ground clutter. The scale is right. The mood is right: dry, bright, quiet, uncrowded. |
 | 8 | **Absence of artefacts** | No z-fighting, no cracked seams between terrain cells, no popping LOD, no shimmering aliasing on foliage or trim, no clipping through walls, no stretched UVs, no black holes in geometry, no missing or magenta textures, no text overflowing a UI frame, no misaligned panel by even one pixel, no console error during capture. |
 

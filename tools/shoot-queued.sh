@@ -16,6 +16,13 @@
 #
 # Every argument is passed straight through to tools/shoot.mjs.
 #
+# THE SAME APPLIES TO A PLAIN VERIFICATION BUILD. `npx vite build` run outside
+# this lock rewrites dist/ with new content-hashed chunk names, and any capture
+# in flight is serving dist/ — so a bare "did my change compile?" can kill
+# somebody else's twenty-minute slot with an HTTP 404 that reads like a broken
+# import. If a capture might be running, check your work through this script
+# rather than building beside it.
+#
 # The wait is unbounded on purpose. A capture that queues for ten minutes and
 # then succeeds is worth far more than one that starts immediately, fights six
 # others for a core, and dies at the timeout with nothing to show.

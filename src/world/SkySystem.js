@@ -1445,9 +1445,25 @@ export class SkySystem extends System {
    * and its centre has to be snapped to the shadow-map texel grid *in light
    * space* or the whole scene crawls with shimmer whenever the party walks.
    */
+  /**
+   * Place the key light, and — when it is casting — fit its shadow box.
+   *
+   * The two jobs used to be one, behind `if (!light.castShadow) return`, and
+   * this is the only code that ever writes `keyLight.position`. So with
+   * `config.shadows === false` the light stayed at the origin, on top of its
+   * own target: three normalises the zero vector between them, the sun's
+   * direction becomes nothing, and the whole world is lit by fill alone.
+   *
+   * Nothing threw and nothing logged. The no-shadow path — `?shadows=0`, and
+   * whatever a low-end tier chooses — had simply never had a sun in it. Found
+   * by an agent working on something else entirely, which is the only way a
+   * fault like this ever gets found: it does not look like a bug, it looks
+   * like a flat art style.
+   */
   _fitShadowCamera(ctx) {
     const light = this.keyLight;
-    if (!light?.castShadow) return;
+    if (!light) return;
+    const casting = !!light.castShadow;
 
     const extent = this._q.shadowExtent;
     const cam = ctx.camera;
@@ -1466,28 +1482,37 @@ export class SkySystem extends System {
     centre.x = clamp(centre.x, -half, half);
     centre.z = clamp(centre.z, -half, half);
 
-    // Light-space basis.
-    const w = this._lightBasis.w.copy(this.keyDirection).normalize();
-    const upRef = Math.abs(w.y) > 0.98 ? UP_X : UP_Y;
-    const u = this._lightBasis.u.copy(upRef).cross(w).normalize();
-    const v = this._lightBasis.v.copy(w).cross(u).normalize();
-
-    // Snap the centre to whole texels along the light's own axes.
+    // Texel snapping only matters to a shadow map — it is what stops the
+    // shadow edges crawling as the camera moves — so it is skipped when there
+    // is no map to keep still.
     const texel = (extent * 2) / this._q.shadowMap;
-    const du = centre.dot(u);
-    const dv = centre.dot(v);
-    const dw = centre.dot(w);
-    const su = Math.round(du / texel) * texel;
-    const sv = Math.round(dv / texel) * texel;
-    centre.set(0, 0, 0)
-      .addScaledVector(u, su)
-      .addScaledVector(v, sv)
-      .addScaledVector(w, dw);
+    if (casting) {
+      // Light-space basis.
+      const w = this._lightBasis.w.copy(this.keyDirection).normalize();
+      const upRef = Math.abs(w.y) > 0.98 ? UP_X : UP_Y;
+      const u = this._lightBasis.u.copy(upRef).cross(w).normalize();
+      const v = this._lightBasis.v.copy(w).cross(u).normalize();
 
+      // Snap the centre to whole texels along the light's own axes.
+      const du = centre.dot(u);
+      const dv = centre.dot(v);
+      const dw = centre.dot(w);
+      const su = Math.round(du / texel) * texel;
+      const sv = Math.round(dv / texel) * texel;
+      centre.set(0, 0, 0)
+        .addScaledVector(u, su)
+        .addScaledVector(v, sv)
+        .addScaledVector(w, dw);
+    }
+
+    // Always. A directional light with no separation from its target has no
+    // direction, and every surface in the world reads it as unlit.
     const dist = extent * 2.6 + 60;
     light.position.copy(centre).addScaledVector(this.keyDirection, dist);
     this._keyTarget.position.copy(centre);
     this._keyTarget.updateMatrixWorld();
+
+    if (!casting) return;
 
     const sc = light.shadow.camera;
     if (sc.left !== -extent) {
