@@ -91,7 +91,11 @@
   height: calc(var(--u) * 12);
   color: var(--ink);
   font-style: italic;
-  font-size: calc(var(--u) * 9);
+  /* Sized by measurement, not by eye: at 9 native the label came in at 4.37:1
+     against this granite, under §6's 4.5:1 floor for a control, because a
+     smaller glyph is a larger share of antialiased edge. The ink is already
+     `--ink`, so glyph size is the only lever the ground leaves. */
+  font-size: calc(var(--u) * 10);
   line-height: calc(var(--u) * 12);
   text-align: center;
   text-shadow: var(--shadow);
