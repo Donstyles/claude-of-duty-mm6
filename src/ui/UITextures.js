@@ -1079,21 +1079,21 @@ export class UITextures {
       // Crystalline aggregate: small angular grains, each a shade off its
       // neighbours and each catching the lamp on its upper-left facet. This is
       // the pass the shaft had none of, and the reason it read as a dowel.
-      for (let i = 0; i < 520; i++) {
+      for (let i = 0; i < 180; i++) {
         const gx = rng.range(-2, w + 2);
         const gy = rng.range(-2, h + 2);
-        const gr = rng.range(0.9, 3.4);
+        const gr = rng.range(1.0, 3.6);
         const shade = rng.range(-1, 1);
         g.save();
-        g.globalAlpha = rng.range(0.10, 0.34);
+        g.globalAlpha = rng.range(0.06, 0.20);
         g.fillStyle = shade > 0 ? '#D6D0C8' : '#4E4846';
         g.beginPath();
         const sides = rng.int(3, 5);
         for (let k = 0; k <= sides; k++) {
           const a = (k / sides) * TAU + rng.range(-0.3, 0.3);
-          const rr = gr * rng.range(0.55, 1.4);
+          const rr = gr * rng.range(0.6, 1.3);
           const px = gx + Math.cos(a) * rr;
-          const py = gy + Math.sin(a) * rr * 1.35;
+          const py = gy + Math.sin(a) * rr * 1.05;
           if (k === 0) g.moveTo(px, py); else g.lineTo(px, py);
         }
         g.closePath();
@@ -1114,10 +1114,11 @@ export class UITextures {
         g.stroke();
         g.restore();
       }
-      // Fine vertical striation, the polish direction.
-      for (let i = 0; i < 40; i++) {
+      // Fine vertical striation, the polish direction. Kept faint and few:
+      // this is a hint of the dressing direction, not a scratch pass.
+      for (let i = 0; i < 18; i++) {
         const x = rng.range(0, w);
-        g.globalAlpha = rng.range(0.03, 0.11);
+        g.globalAlpha = rng.range(0.02, 0.07);
         g.strokeStyle = rng.chance(0.5) ? '#FFFFFF' : '#2B2628';
         g.lineWidth = rng.range(0.5, 1.6);
         g.beginPath();
@@ -1218,7 +1219,12 @@ export class UITextures {
       }
       g.fillStyle = term;
       g.fillRect(0, 0, w, h);
-      UITextures.grain(g, w, h, rng, 9);
+      mineral(g, w, h, {
+        seed: mode === 'left' ? 21 : mode === 'right' ? 22 : 23,
+        octaves: [{ cell: 2.6, amp: 9, hue: 4, facet: 12 }, { cell: 8, amp: 8, hue: 3, facet: 6 }],
+        fine: 5,
+      });
+      UITextures.grain(g, w, h, rng, 7);
     });
   }
 
@@ -2075,7 +2081,7 @@ export class UITextures {
             rng.range(1.5, 9), rng.range(1.5, 8), rng.range(0, TAU),
             rng.chance(0.5) ? '#6A4522' : '#150C03', rng.range(0.05, 0.2), 2);
         }
-        spines.push([x, y, sw, sh, grd]);
+        spines.push([x, y, sw, sh]);
         // Raised bands. A sewn-on band stands proud of the spine, so the
         // group is: shadow above it, the lit crown, shadow below, then the
         // tooled gold rules that were run either side of it. Straight flat
@@ -2139,14 +2145,20 @@ export class UITextures {
         octaves: [{ cell: 3.0, amp: 7, hue: 4, facet: 8 }, { cell: 9.0, amp: 5, hue: 3, facet: 4 }],
         fine: 4,
       });
-      // The pore pass flattens the roundness of the backs, so the cylinder
-      // goes back over the top at low weight — the spines must stay rounded.
-      for (const [x, y, sww, shh, grd] of spines) {
-        g.save();
-        g.globalAlpha = 0.30;
-        g.fillStyle = grd;
+      // Everything on a spine wraps the spine, so the roundness goes back on
+      // last, over the bands and the tooling too: a gold rule on a round back
+      // dims toward both edges, and one that does not is printed on a plank.
+      for (const [x, y, sww, shh] of spines) {
+        const round = g.createLinearGradient(x, 0, x + sww, 0);
+        round.addColorStop(0.00, 'rgba(6,4,2,0.72)');
+        round.addColorStop(0.10, 'rgba(10,6,2,0.34)');
+        round.addColorStop(0.34, 'rgba(255,236,206,0.08)');
+        round.addColorStop(0.46, 'rgba(255,240,214,0.14)');
+        round.addColorStop(0.66, 'rgba(0,0,0,0)');
+        round.addColorStop(0.88, 'rgba(10,6,2,0.34)');
+        round.addColorStop(1.00, 'rgba(6,4,2,0.76)');
+        g.fillStyle = round;
         g.fillRect(x, y, sww, shh);
-        g.restore();
       }
 
       // The board's own front edge: a thickness, lit on top and dark beneath.
