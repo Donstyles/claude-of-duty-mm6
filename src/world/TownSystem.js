@@ -182,7 +182,14 @@ export class TownSystem extends System {
     const site = this._levelSiteNear(terrain, at[0], at[1], SIZE_SPEC[town.size]?.radius ?? TOWN.radius);
     this.centreX = site[0];
     this.centreZ = site[1];
-    this.baseY = terrain?.heightAt?.(this.centreX, this.centreZ) ?? 14;
+    // The town's datum is the HIGHEST ground under the middle of its square,
+    // not the ground at its centre point. `_padY` fills up to this and never
+    // cuts, so taking the centre sample let any rise inside the square come up
+    // through the paving — Emberhold had a grass ridge straight across its
+    // forge platz. Taking the maximum costs a little fill on the low side and
+    // guarantees the floor is a floor.
+    const squareR = SIZE_SPEC[town.size]?.squareR ?? SIZE_SPEC.small.squareR;
+    this.baseY = this._datumFor(terrain, squareR * 0.6);
 
     this.profile = profileFor(town, terrain, this, rng);
 
@@ -506,11 +513,29 @@ export class TownSystem extends System {
     const g = this._terrain?.heightAt?.(x, z) ?? this.baseY;
     const p = this.profile;
     if (!p) return g;
-    const rim = p.squareR + 5;
+    // Level across the core the centrepiece and the stalls stand on, then a
+    // long ramp back down to the ground. The ramp is deliberately more than
+    // twice the core: cut it short and the platform reads as a mesa with a
+    // cliff of paving round it instead of as graded ground.
+    const core = p.squareR * 0.6;
+    const rim = p.squareR * 1.7;
     const d = Math.hypot(x - this.centreX, z - this.centreZ);
     if (d >= rim) return g;
-    const k = smoothstep(rim * 0.7, rim, d);
+    const k = smoothstep(core, rim, d);
     return Math.max(g, this.baseY) * (1 - k) + g * k;
+  }
+
+  /** The highest ground within `r` of the town centre — the square's floor. */
+  _datumFor(terrain, r) {
+    if (!terrain?.heightAt) return 14;
+    let hi = terrain.heightAt(this.centreX, this.centreZ);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      for (const rr of [r * 0.55, r]) {
+        hi = Math.max(hi, terrain.heightAt(this.centreX + Math.sin(a) * rr, this.centreZ + Math.cos(a) * rr));
+      }
+    }
+    return hi;
   }
 
   /**
@@ -1318,7 +1343,7 @@ function profileFor(town, terrain, sys, rng) {
   // the only thing anyone looks at in the shot.
   if (p.ruined) {
     p.paving = 'marble';
-    p.pavingRepeat = 0.85;
+    p.pavingRepeat = 2.0;      // flagstone-sized; at 0.85 the veining was metres across
     p.pavingTint = 0xbcb4a4;
   }
 
