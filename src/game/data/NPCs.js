@@ -917,6 +917,298 @@ npc({
   desc: 'Extremely reasonable, which is the worst thing about him.',
 });
 
+// ── The campaign's own people ───────────────────────────────────────────────
+//
+// Everyone above is a townsperson who happens to hand out work. Everyone below
+// exists because `Campaign.js` names them — as the giver of a stage, or as the
+// person a `talk` objective sends you to — and until now none of them was in
+// this file. `tools/lint-content.mjs` found eighteen of them across thirty-one
+// dangling references, including the nine guild wardens and the antagonist of
+// act five.
+//
+// The failure was silent in the way that matters: nothing throws when a stage
+// names a giver who does not exist. The stage simply never gets handed to
+// anybody, and a chain that depends on it never opens. Four of act three's nine
+// parallel chains began with a person who was not there.
+//
+// Their voices are taken from what the campaign already says about them in its
+// `journal` and `completion` lines, so the two files agree rather than merely
+// coexisting.
+
+// ── The Ninefold Concord: wardens and adepts ────────────────────────────────
+// Nine guilds, and act three sends the party to each of them for a ward key.
+// To a one they are custodians who have lost, pawned, mislaid or never once
+// looked at the thing they are the custodian of. That is the joke and it is
+// also the plot.
+
+npc({
+  id: 'npc_warden_ashcroft', name: 'Warden Ashcroft', profession: 'Warden of the Guild of the Ember',
+  town: 'town_thornwick', location: 'thornwick_vale', portrait: 'scholar',
+  look: { build: 'average', age: 'older', dress: 'guild-robe', palette: 0x8c3a24 },
+  greeting: '"You have come about the key. Sit down. No — stand, this will be quicker standing."',
+  topics: [
+    { id: 'key', label: 'The Ember\'s Key', text: '"I staked it at the Cindermoor fair. Three years ago, over a wager about a firing, against a factor I should have known better than to drink with. I have spent every day since not mentioning it."', gives: 'a3_ember_1_what_ashcroft_lost' },
+    { id: 'stone', label: 'The Ninth Stone', text: '"They keep what they win under the ninth stone. I know that because I asked, afterwards, like a fool, and they told me, like men who did not care."', gives: 'a3_ember_2_the_standing_nine' },
+    { id: 'guild', label: 'The Ember', text: '"Fire magic, and a guild that has forgotten it was ever dangerous. We teach glazing now. Glazing."', service: 'town_thornwick_guild_ember' },
+  ],
+  questsGiven: ['a3_ember_1_what_ashcroft_lost', 'a3_ember_2_the_standing_nine'],
+  desc: 'Lost his guild\'s ward key at a fair and would like this conversation to have not happened.',
+});
+
+npc({
+  id: 'npc_warden_sile', name: 'Warden Sile', profession: 'Warden of the Guild of the Gale',
+  town: 'town_thornwick', location: 'thornwick_vale', portrait: 'scholar',
+  look: { build: 'slight', age: 'adult', dress: 'guild-robe', palette: 0x6f8ea8 },
+  greeting: '"Air magic. Ask your question before it blows away."',
+  topics: [
+    { id: 'route', label: 'The Whitemantle', text: '"Our key hangs in a wind-shrine on the glacier. Nobody from this guild has been up since the warden died on the stair. We call that *the vacancy*."', gives: 'a3_gale_1_the_route' },
+    { id: 'stair', label: 'The Wind Stair', text: '"Six hundred feet of cut ice with the shrine at the top of it. The route only gets you to the bottom step."', gives: 'a3_gale_2_the_wind_stair' },
+    { id: 'vacancy', label: 'The Vacancy', text: '"Four years. You will notice I have not said his name. That is not grief, it is procedure — the shrine takes the name of whoever holds the post, and I would rather it did not have mine yet."' },
+    { id: 'guild', label: 'The Gale', text: '"We are eleven, and four of us are afraid of heights. Do not write that down."', service: 'town_thornwick_guild_gale' },
+  ],
+  questsGiven: ['a3_gale_1_the_route', 'a3_gale_2_the_wind_stair'],
+  desc: 'Has never been to the Whitemantle, and neither has anyone else still drawing a wage here.',
+});
+
+npc({
+  id: 'npc_warden_aurelin', name: 'Warden Aurelin', profession: 'Warden of the Guild of the Dawnbell',
+  town: 'town_thornwick', location: 'thornwick_vale', portrait: 'cleric',
+  look: { build: 'average', age: 'adult', dress: 'guild-robe', palette: 0xd8c169 },
+  greeting: '"The Dawnbell keeps two of everything, which is how we know we are missing one."',
+  topics: [
+    { id: 'road', label: 'The Road to Duskorn', text: '"Our key went east with a warden who would not abandon a dead city. He is still there. So is it. You will have to go and ask him."', gives: 'a3_dawn_1_the_road_to_duskorn' },
+    { id: 'coll', label: 'Warden-in-Exile Coll', text: '"He is not in exile. He simply stayed. The word is ours, it was unkind, and it stuck."' },
+    { id: 'guild', label: 'The Dawnbell', text: '"Light magic, ledgers, and a schism nobody under sixty remembers the cause of."', service: 'town_thornwick_guild_dawnbell' },
+  ],
+  questsGiven: ['a3_dawn_1_the_road_to_duskorn'],
+  desc: 'Keeps two of everything, and has spent forty years not saying the word schism.',
+});
+
+npc({
+  id: 'npc_warden_coll', name: 'Warden-in-Exile Coll', profession: 'Warden of the Dawnbell at Duskorn',
+  town: 'town_duskorn', location: 'duskorn_waste', portrait: 'scholar',
+  look: { build: 'slight', age: 'older', dress: 'guild-robe', palette: 0xb9a163 },
+  greeting: '"In exile, they say, in a hall I have not left in forty years. You see the difficulty."',
+  topics: [
+    { id: 'want', label: 'What Coll Wants', text: '"I have the key. I have always had it. You may have it the evening the lamp of Duskorn is lit again — publicly, at dusk, where the whole waste can see it. That is the entire price."', gives: 'a3_dawn_2_what_coll_wants' },
+    { id: 'schism', label: 'The Schism', text: '"A disagreement about the order of two verses. That is the whole of it. Both halves have since forgotten which order they were arguing for."' },
+    { id: 'guild', label: 'The Dawnbell', text: '"Four members, one bell, and a waste outside the door that eats anything left standing."', service: 'town_duskorn_guild_dawnbell' },
+  ],
+  questsGiven: ['a3_dawn_2_what_coll_wants'],
+  desc: 'Will trade forty years of custody for one lamp, lit publicly, at dusk.',
+});
+
+npc({
+  id: 'npc_warden_tallow', name: 'Warden Tallow', profession: 'Warden of the Guild of the Steady Hand',
+  town: 'town_thornwick', location: 'thornwick_vale', portrait: 'townsfolk',
+  look: { build: 'broad', age: 'older', dress: 'apron', palette: 0x6b5a3c },
+  greeting: '"Steady Hand. Body magic, bone-setting, and the only guild in the Concord that has never lost anything."',
+  topics: [
+    { id: 'wasting', label: 'The Wasting', text: '"We can cure almost anything. There is one thing we cannot, it is in this valley now, and you may take that as a professional insult because that is how I take it."', gives: 'a3_hand_1_the_wasting' },
+    { id: 'night', label: 'The Long Night', text: '"When you find where it comes from, come back at dusk and bring nothing you are fond of."', gives: 'a3_hand_2_the_long_night' },
+    { id: 'concord', label: 'The Concord', text: '"Nine guilds. Eight excuses. Ours is in the strongbox where it has been since I was apprenticed, and I have been to thirty Concord sittings listening to the word *mislaid*."' },
+    { id: 'guild', label: 'The Steady Hand', text: '"Come in with a broken arm and leave with a set one. That is the entire prospectus."', service: 'town_thornwick_guild_steadyhand' },
+  ],
+  questsGiven: ['a3_hand_1_the_wasting', 'a3_hand_2_the_long_night'],
+  desc: 'Can cure almost anything, and takes the one exception as a professional insult.',
+});
+
+npc({
+  id: 'npc_adept_grell', name: 'Adept Grell', profession: 'Adept of the Guild of the Deep Stone',
+  town: 'town_ashford', location: 'ashford_hollow', portrait: 'scholar',
+  look: { build: 'broad', age: 'adult', dress: 'guild-robe', palette: 0x5d5a52 },
+  greeting: '"Earth magic. Everything here is heavier than it looks, including the paperwork."',
+  topics: [
+    { id: 'survey', label: 'The Survey', text: '"We will not open the Undercut for a warrant. We will open it when somebody has walked the galleries and told me they will hold. That somebody is not going to be one of mine."', gives: 'a3_stone_1_the_survey' },
+    { id: 'gallery', label: 'The Key in the Gallery', text: '"Our key went down with the master of works. He is still in the second gallery. So is it."', gives: 'a3_stone_2_the_key_in_the_gallery' },
+    { id: 'hollow', label: 'Ashford Hollow', text: '"Charcoal, iron, and men in Chapter coats collecting at the road head every week. Ask the burners, not me — I hear it secondhand and I would rather keep it that way."' },
+    { id: 'guild', label: 'The Deep Stone', text: '"We are under the hill, which is the point, and the roof has held two hundred years, which is also the point."', service: 'town_ashford_guild_deepstone' },
+  ],
+  questsGiven: ['a3_stone_1_the_survey', 'a3_stone_2_the_key_in_the_gallery'],
+  desc: 'Will not open the Undercut for a warrant, only for somebody who has walked the galleries.',
+});
+
+npc({
+  id: 'npc_adept_vell', name: 'Adept Vell', profession: 'Adept of the Guild of the Open Eye',
+  town: 'town_greywater', location: 'greywater_fen', portrait: 'scholar',
+  look: { build: 'slight', age: 'adult', dress: 'guild-robe', palette: 0x4f7a6a },
+  greeting: '"The Open Eye. We see a great deal and act on almost none of it."',
+  topics: [
+    { id: 'proofs', label: 'Three Proofs', text: '"We do not hand things to people who arrive with warrants. We hand things to people who win the argument. Bring me three proofs and we will see which you are."', gives: 'a3_eye_1_three_proofs' },
+    { id: 'disputation', label: 'The Disputation', text: '"Win it in the hall, in front of all of us, or do not win it. That is not a formality — the key answers to whoever the hall agrees it answers to."', gives: 'a3_eye_2_the_disputation' },
+    { id: 'register', label: 'The Burial Register', text: '"Forty-one interments. Nineteen dead villagers. I have written to the Concord twice about the difference and had a receipt back both times."' },
+    { id: 'guild', label: 'The Open Eye', text: '"Divination, mostly. It is a worse gift than the songs suggest."', service: 'town_greywater_guild_openeye' },
+  ],
+  questsGiven: ['a3_eye_1_three_proofs', 'a3_eye_2_the_disputation'],
+  desc: 'Hands nothing to anyone with a warrant, and everything to anyone who wins the argument.',
+});
+
+npc({
+  id: 'npc_adept_yorwin', name: 'Adept Yorwin', profession: 'Adept of the Guild of the Quiet Hall',
+  town: 'town_netherby', location: 'netherby_moors', portrait: 'scholar',
+  look: { build: 'average', age: 'older', dress: 'guild-robe', palette: 0x5a5468 },
+  greeting: '"Quietly, if you would. The hall is called that for a reason and the reason is not manners."',
+  topics: [
+    { id: 'novices', label: 'Three Novices', text: '"Three of mine went up the barrow ridge four days ago to lay a ghost. Four days is two days too many and I have nobody left to send but you."', gives: 'a3_quiet_1_three_novices' },
+    { id: 'sleeper', label: 'The Ninth Sleeper', text: '"Eight barrows on that ridge and the survey says eight. I have counted nine every time I have gone up, and I have stopped going up."', gives: 'a3_quiet_2_the_ninth_sleeper' },
+    { id: 'moors', label: 'The Moors', text: '"Netherby ends where the moor starts and the moor does not end. Take the drovers\' line or take a shovel for yourself."' },
+    { id: 'guild', label: 'The Quiet Hall', text: '"Mind magic. We do not advertise and we do not recruit. People arrive."', service: 'town_netherby_guild_quiethall' },
+  ],
+  questsGiven: ['a3_quiet_1_three_novices', 'a3_quiet_2_the_ninth_sleeper',
+    'a4_netherby_2_the_digging', 'a4_netherby_3_chorister_nolt', 'a4_netherby_4_the_reseal'],
+  desc: 'Counts nine barrows on a ridge the survey says has eight, and has stopped going up.',
+});
+
+npc({
+  id: 'npc_corr_merrow', name: 'Adept Corr Merrow', profession: 'Adept of the Guild of the Tide',
+  town: 'town_saltmarch', location: 'saltmarch', portrait: 'townsfolk',
+  look: { build: 'average', age: 'adult', dress: 'oilskin', palette: 0x3f6a76 },
+  greeting: '"Water magic in a town that gets quite enough of it for free. Say your piece."',
+  topics: [
+    { id: 'bell', label: 'The Bell Metal', text: '"Our key is cast into the core of a bell that has stood on the bar since before either of us was born. You do not get it out by asking the bell."', gives: 'a3_tide_1_the_bell_metal' },
+    { id: 'slack', label: 'Slack Water', text: '"There is one hour in the month when that bar is walkable. Miss it and you wait a month, and I would not swim it for the key or for you."', gives: 'a3_tide_2_slack_water' },
+    { id: 'boats', label: 'Night Boats', text: '"Wrapped freight, landed at night, paid for in the wrapping, going up the fen. I have watched it happen twice and reported it twice."' },
+    { id: 'guild', label: 'The Tide', text: '"Nine of us, and six are out on the water at any hour. Come back at slack."', service: 'town_saltmarch_guild_tide' },
+  ],
+  questsGiven: ['a3_tide_1_the_bell_metal', 'a3_tide_2_slack_water'],
+  desc: 'The Tide\'s key is cast into a bell core on a bar that is walkable one hour a month.',
+});
+
+// ── Named people the campaign sends you to ──────────────────────────────────
+
+npc({
+  id: 'npc_prior_absalon', name: 'Prior Absalon', profession: 'Prior of the Lamp of the Long Watch',
+  town: 'town_netherby', location: 'netherby_moors', portrait: 'cleric',
+  look: { build: 'average', age: 'older', dress: 'lamp-robe', palette: 0xd8b25c },
+  greeting: '"Aurenne keep you. Out here we keep the lamp lit mostly so the drovers can find the door."',
+  topics: [
+    { id: 'gate', label: 'The Gate Held', text: '"This town is walled against its own dead. It always has been. What is new is that our own dead have started getting organised."', gives: 'a4_netherby_1_the_gate_held' },
+    { id: 'watch', label: 'The Long Watch', text: '"Six hundred years of keeping a light on this moor against nothing in particular. Lately it has felt considerably less like nothing."' },
+    { id: 'burials', label: 'The Fen Burials', text: '"I have read Prior Ashe\'s account of Greywater. Twenty-two graves dug for strangers, in consecrated ground, for a fee. She asks what I would have done. I have not answered her."' },
+    { id: 'heal', label: 'Healing', text: '"Sit. The moor takes something out of everyone who crosses it."', service: 'town_netherby_temple' },
+  ],
+  questsGiven: ['a4_netherby_1_the_gate_held'],
+  desc: 'Keeps a town walled against its own dead, who have lately started getting organised.',
+});
+
+npc({
+  id: 'npc_deri_hobb', name: 'Deri Hobb', profession: 'Weaponsmith of Hobb\'s Forge',
+  town: 'town_millhaven', location: 'millhaven_downs', portrait: 'smith',
+  look: { build: 'broad', age: 'adult', dress: 'apron', palette: 0x5a4030 },
+  greeting: '"Steel is steel. What you do with it is your business and your confession."',
+  topics: [
+    { id: 'glass', label: 'Four Crates', text: '"My bar iron was on that cart. What came off it is not bar iron. It does not cut like glass and it does not break like glass and it will not take heat at all."', gives: 'a1_four_crates_of_glass' },
+    { id: 'trade', label: 'Their Trade', text: '"Third generation on this anvil. My grandmother put the horn on it and I have worn it bright again in the same place."' },
+    { id: 'buy', label: 'Buy', text: '"Everything on the board is mine and everything on the board is honest."', service: 'town_millhaven_weaponsmith' },
+  ],
+  questsGiven: ['a1_four_crates_of_glass'],
+  desc: 'Third generation on the same anvil, worn bright on the horn in the same place as her grandmother\'s.',
+});
+
+npc({
+  id: 'npc_wenna_salter', name: 'Wenna Salter', profession: 'Keeper of the Downs Provisioners',
+  town: 'town_millhaven', location: 'millhaven_downs', portrait: 'townsfolk',
+  look: { build: 'average', age: 'older', dress: 'commoner', palette: 0x7a6a4a },
+  greeting: '"Rope, lamp oil, salt fish and opinions. The first three are priced."',
+  topics: [
+    { id: 'dogs', label: 'What the Dogs Left', text: '"Nine ewes and not a bite out of one of them. That is not hunger, that is practice. Lambing is in three weeks — do it before then or do not bother."', gives: 'a1_what_the_dogs_left' },
+    { id: 'wool', label: 'The Wool', text: '"I buy the clip for the whole parish, so when the parish loses nine ewes it is my drawer it comes out of. I will be mentioning that again."' },
+    { id: 'ledger', label: 'The Ledger', text: '"Factor Salter is my cousin and I will thank you not to make that mean anything."' },
+    { id: 'buy', label: 'Buy', text: '"Take a torch. Take two. Nobody has ever come back and told me they took too many."', service: 'town_millhaven_generalstore' },
+  ],
+  questsGiven: ['a1_what_the_dogs_left'],
+  desc: 'Sells rope, lamp oil, salt fish and opinions, and prices the first three.',
+});
+
+npc({
+  id: 'npc_harbourmaster_nix', name: 'Harbourmaster Nix', profession: 'Harbourmaster of Millhaven',
+  town: 'town_millhaven', location: 'millhaven_downs', portrait: 'townsfolk',
+  look: { build: 'average', age: 'adult', dress: 'oilskin', palette: 0x3d5866 },
+  greeting: '"Every hull that touches this quay is in my book. That is not a boast, it is the job."',
+  topics: [
+    { id: 'lights', label: 'Lights Off the Point', text: '"Four hulls unaccounted for on the ebb and my own boy\'s name on one of them. Sit on the point and count. Do not hail them. Count them."', gives: 'a1_lights_off_the_point' },
+    { id: 'stair', label: 'The Weeping Stair', text: '"They load at the foot of the cliff, and there is a stair cut into that cliff that nobody in Millhaven cut. The fishermen named it and then stopped using it."', gives: 'a1_the_weeping_stair' },
+    { id: 'packets', label: 'Packets', text: '"When the Ledger opens the packet routes you will want me. Until then the only water you are crossing is the harbour."', service: 'town_millhaven_dock' },
+    { id: 'silt', label: 'The Harbour', text: '"Silts up every autumn. We dredge it every spring. That is Millhaven in one sentence."' },
+  ],
+  questsGiven: ['a1_lights_off_the_point', 'a1_the_weeping_stair'],
+  desc: 'Keeps every hull in his book, and has his own son\'s name against one of the four that go out dark.',
+});
+
+npc({
+  id: 'npc_driver_ockham', name: 'Driver Ockham', profession: 'Coachman of the Moor Post',
+  town: 'town_netherby', location: 'netherby_moors', portrait: 'townsfolk',
+  look: { build: 'broad', age: 'older', dress: 'commoner', palette: 0x6a5744 },
+  greeting: '"Up on the box or not at all. I do not wait and the moor does not either."',
+  topics: [
+    { id: 'post', label: 'The Broken Post', text: '"The road east ends at the Duskorn post house. The post house has been loopholed. Somebody cut firing slits in a building I have watered horses at for nineteen years."', gives: 'a4_the_broken_post' },
+    { id: 'ride', label: 'Book a Seat', text: '"Fare is the fare. Rations are your own lookout."', service: 'town_netherby_coachstop' },
+    { id: 'drovers', label: 'The Drovers', text: '"If you want the glacier, do not ask me, ask Hask Marrow. He walks cattle over the top of it every summer and comes back with all of them."' },
+  ],
+  questsGiven: ['a4_the_broken_post'],
+  desc: 'Does not wait, on the grounds that the moor does not either.',
+});
+
+// ── People who exist only to be asked something ─────────────────────────────
+// These three are `talk` targets rather than quest givers: the campaign sends
+// the party to get an answer out of them and nothing else. They have no
+// shopfront, so `town` places them and `venue` is left off entirely.
+
+npc({
+  id: 'npc_lay_reader_pask', name: 'Pask', profession: 'Lay Reader of the Greywater Fen',
+  town: 'town_greywater', location: 'greywater_fen', portrait: 'cleric',
+  look: { build: 'slight', age: 'older', dress: 'lamp-robe', palette: 0x6b6a52 },
+  greeting: '"You are not from the village. Say what you are here for, quietly, and stand where they cannot see you from the road."',
+  topics: [
+    { id: 'register', label: 'The Register', text: '"Forty-one graves. Nineteen of them are ours. I dug the other twenty-two for strangers who came up the fen by boat at night, wrapped, already cold, with the fee in the wrapping."' },
+    { id: 'sin', label: 'Was It a Sin', text: '"I have read the office over every one of them, which is more than whoever sent them did. I asked the Prior whether that was a sin. I am asking you now because she has not written back."' },
+    { id: 'account', label: 'Write It Down', text: '"I will sign it. I have wanted to sign something for two years. Take it to Thornwick and do not come back through the village."' },
+  ],
+  desc: 'Has read the office over forty-one graves and dug twenty-two of them for strangers.',
+});
+
+npc({
+  id: 'npc_drover_hask_marrow', name: 'Hask Marrow', profession: 'Drover of the Whitemantle Line',
+  town: 'town_netherby', location: 'netherby_moors', portrait: 'townsfolk',
+  look: { build: 'broad', age: 'adult', dress: 'commoner', palette: 0x715f48 },
+  greeting: '"Cattle in summer, nothing in winter, and no I will not take you up for free."',
+  topics: [
+    { id: 'route', label: 'The Summer Line', text: '"Eleven gold and I will draw you the line the cattle take. It is the only line up there that is not a crevasse field, and it is not marked because we do not mark it."' },
+    { id: 'ice', label: 'The Ice', text: '"Be off it by three o\'clock. Every day. Three o\'clock."' },
+    { id: 'why', label: 'Why Three', text: '"Be off it by three o\'clock."' },
+  ],
+  desc: 'Sells the summer cattle line for eleven gold and will not explain the three o\'clock rule.',
+});
+
+npc({
+  id: 'npc_ashford_charcoal_burners', name: 'The Charcoal Camps', profession: 'Burners of Ashford Hollow',
+  town: 'town_ashford', location: 'ashford_hollow', portrait: 'townsfolk',
+  look: { build: 'broad', age: 'adult', dress: 'commoner', palette: 0x4a3c30 },
+  greeting: '"Four camps in this hollow and you will get the same answer at all four, so you may as well hear it once."',
+  topics: [
+    { id: 'muster', label: 'The Muster', text: '"We stopped sending men because we are already paying. Weekly, at the road head, in coin, to men in Chapter coats."' },
+    { id: 'tax', label: 'A Tax', text: '"Nobody mentioned it to the Marshal because everybody assumed he knew. It is a tax, is it not? It has a receipt."' },
+    { id: 'receipt', label: 'The Receipt', text: '"Here. It is a real hand and a real seal and it is not the Chapter\'s seal, and none of us can read well enough to have noticed that until you asked."' },
+  ],
+  desc: 'Four camps, four versions, and the same detail in all four.',
+});
+
+// ── Act five ────────────────────────────────────────────────────────────────
+
+npc({
+  id: 'npc_the_pale_cantor', name: 'The Pale Cantor', profession: 'Of the Hollow Choir',
+  town: null, location: 'ossra_deep', portrait: 'cultist',
+  look: { build: 'slight', age: 'adult', dress: 'choir-robe', palette: 0xcfc9bd },
+  // He is the last person who could explain any of it, and the campaign kills
+  // him before he does. CANON.md §5 is explicit that he is never named further,
+  // and act five reveals the premise through the shape of the corridors rather
+  // than through anything anybody says — so he gets no topic that answers a
+  // question. He is not a conversation. He is a door with a man in front of it.
+  greeting: '"You are late. Not by much. Stand there and you will hear it start."',
+  topics: [],
+  desc: 'Never gave a name and was never asked for one. Fought hard, badly, and for a long time, like a man who had never expected to have to.',
+});
+
 export const NPCS = deepFreeze(npcs);
 export const NPC_IDS = Object.freeze(Object.keys(NPCS));
 
