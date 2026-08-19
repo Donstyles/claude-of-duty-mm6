@@ -151,6 +151,92 @@ export const ROADS = [
   [[-260, 240], [-380, 60], [-520, -300]],
 ];
 
+/**
+ * Compass directions the terrain's own horizon is sampled in.
+ *
+ * **This number is shared with `TerrainSystem`'s shader** — it decides how the
+ * eight sines are packed into two RGBA textures and how the shader interpolates
+ * between them toward the sun's azimuth. Changing it means changing both.
+ */
+export const HORIZON_DIRS = 8;
+
+/**
+ * Ray lengths, in grid cells, along each direction.
+ *
+ * Geometric rather than uniform because what matters is angular resolution,
+ * not distance: doubling the step halves the angle a given rise subtends, so a
+ * geometric ladder samples elevation evenly in the quantity actually being
+ * maximised. Twelve taps reach 130 cells — 520 m — which is what it takes for
+ * a real ridge to shadow its own valley when the key is at its 8° floor. Every
+ * tap beyond that costs 263k samples × 8 directions and buys an angle under a
+ * degree.
+ */
+const HORIZON_STEPS = [1, 2, 3, 5, 8, 12, 18, 27, 40, 60, 90, 130];
+
+/**
+ * The terrain's own horizon, per sample, per compass direction.
+ *
+ * Stored as `sin(elevation)` so it compares directly against `sunDir.y`, which
+ * is already the sine of the sun's elevation: the ground at a sample is in its
+ * own shadow exactly when `sunDir.y < horizon`. That one comparison is what
+ * REFERENCE §2.7's reviewer asked for and what the shadow map cannot give —
+ * the map's box is 190 m across at its widest quality tier, so a hill 600 m
+ * away, which is most of what a vista shows, was never in it. Here the cost is
+ * paid once at world build and the result is a texture.
+ *
+ * The same data doubles as ambient occlusion: the mean of the eight sines is
+ * how much of the sky dome the sample cannot see, so a valley floor and the
+ * base of a slope darken under the fill without any extra bake.
+ */
+function computeHorizon(data) {
+  const H = data.heights;
+  const out = data.horizon;
+  const n = HORIZON_STEPS.length;
+  const offX = new Int32Array(HORIZON_DIRS * n);
+  const offZ = new Int32Array(HORIZON_DIRS * n);
+  const dist = new Float32Array(HORIZON_DIRS * n);
+  for (let k = 0; k < HORIZON_DIRS; k++) {
+    const a = (k / HORIZON_DIRS) * Math.PI * 2;
+    const dx = Math.sin(a);
+    const dz = Math.cos(a);
+    for (let s = 0; s < n; s++) {
+      const ox = Math.round(dx * HORIZON_STEPS[s]);
+      const oz = Math.round(dz * HORIZON_STEPS[s]);
+      offX[k * n + s] = ox;
+      offZ[k * n + s] = oz;
+      // The real distance walked, not the nominal one: rounding a diagonal to
+      // whole cells moves the sample, and using the nominal length would
+      // report every diagonal ridge as steeper than it is.
+      dist[k * n + s] = Math.hypot(ox, oz) * CELL;
+    }
+  }
+
+  const last = GRID - 1;
+  for (let iz = 0; iz < GRID; iz++) {
+    for (let ix = 0; ix < GRID; ix++) {
+      const i = iz * GRID + ix;
+      const h0 = H[i];
+      for (let k = 0; k < HORIZON_DIRS; k++) {
+        let best = 0;
+        const base = k * n;
+        for (let s = 0; s < n; s++) {
+          let sx = ix + offX[base + s];
+          let sz = iz + offZ[base + s];
+          if (sx < 0) sx = 0; else if (sx > last) sx = last;
+          if (sz < 0) sz = 0; else if (sz > last) sz = last;
+          const dh = H[sz * GRID + sx] - h0;
+          if (dh <= 0) continue;
+          const d = dist[base + s];
+          const sn = dh / Math.sqrt(dh * dh + d * d);
+          if (sn > best) best = sn;
+        }
+        const v = (best * 255) | 0;
+        out[i * HORIZON_DIRS + k] = v > 255 ? 255 : v;
+      }
+    }
+  }
+}
+
 export class TerrainData {
   constructor() {
     this.size = WORLD_SIZE;
@@ -162,6 +248,12 @@ export class TerrainData {
     this.splat = new Float32Array(GRID * GRID * 4);
     /** @type {Float32Array} 0 off-road, 1 on the road centre line */
     this.road = new Float32Array(GRID * GRID);
+    /**
+     * @type {Uint8Array} sine of the terrain's own horizon elevation, in
+     * `HORIZON_DIRS` compass directions per sample, 0 = open sky to the ground
+     * plane, 255 = a wall straight overhead. See `computeHorizon`.
+     */
+    this.horizon = new Uint8Array(GRID * GRID * HORIZON_DIRS);
     this.minHeight = 0;
     this.maxHeight = 0;
   }
@@ -325,6 +417,7 @@ export function generateTerrain(rng) {
   // ── 5. smooth, then classify ─────────────────────────────────────────────
   smooth(data, 1);
   computeSplat(data, permDetail);
+  computeHorizon(data);
 
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < H.length; i++) { if (H[i] < lo) lo = H[i]; if (H[i] > hi) hi = H[i]; }

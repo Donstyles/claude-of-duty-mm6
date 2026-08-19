@@ -144,7 +144,7 @@
   text-align: left;
   text-shadow: none;
   color: #100c06;
-  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--face);
   font-size: calc(var(--u) * 10);
   line-height: calc(var(--u) * 14);
 }
@@ -175,7 +175,7 @@
   margin: calc(var(--u) * 14) 0 0;
   color: #2a2418;
   text-shadow: none;
-  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--face);
   font-size: calc(var(--u) * 11);
   line-height: 1.45;
   font-style: italic;
@@ -185,17 +185,42 @@
 
 .mm-panel[data-panel='quests'] .mm-qb-entry {
   flex: 1;
-  min-height: 0;
+  /* The summary, a rule, and at least a couple of lines of journal under it.
+     At `min-height: 0` the pinned foot took the whole leaf and left "THE
+     JOURNAL" heading a void, which is what happened the moment the objectives
+     moved down there and a four-objective quest arrived. 52u was not enough
+     either — the summary alone ate it, and the heading was still empty. A
+     heading over nothing is worse than no heading. */
+  min-height: calc(var(--u) * 104);
   overflow-y: auto;
   padding-right: calc(var(--u) * 4);
   color: #000;
   text-shadow: none;
-  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  /* A long entry runs off the foot of the page rather than stopping dead on a
-     half-cut line — the fade is what says "there is more, turn the page". */
+  font-family: var(--face);
+}
+/* A long entry runs off the foot of the page rather than stopping dead on a
+ * half-cut line — the fade is what says "there is more, turn the page".
+ *
+ * But it was applied unconditionally, so it also faded the *last* line of a
+ * short entry, and the last line of a short entry is the current objective.
+ * A reviewer measured the thing the player has to do next rendering at 2.37:1
+ * where the line above it read 9.60:1: the required action fading out
+ * mid-sentence, with nothing left to scroll to. A hint that there is more is
+ * a lie when there is no more.
+ *
+ * `is-overflowing` is set from `refresh()` only when the content genuinely
+ * exceeds the page, so the fade now means what it says. */
+.mm-panel[data-panel='quests'] .mm-qb-entry.is-overflowing {
   -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 12), transparent 100%);
   mask-image: linear-gradient(180deg, #000 calc(100% - var(--u) * 12), transparent 100%);
 }
+/* The tab strip is absolutely positioned across the top of the right leaf, so
+ * the leaf has to reserve its height or the title runs underneath it. It did:
+ * the gold "Current" tab sat across the cap-height of the quest's name, a
+ * measured 128 x 13 px collision, and a reviewer found it before we did.
+ * Tabs are 22u tall at top 2u, so 26u clears them with a little air. */
+.mm-panel[data-panel='quests'] .mm-quest-page.is-right { padding-top: calc(var(--u) * 26); }
+
 .mm-panel[data-panel='quests'] .mm-qb-title {
   margin: 0 0 calc(var(--u) * 3);
   font-family: var(--face);
@@ -204,7 +229,16 @@
   color: #1a1408;
   line-height: 1.1;
 }
-.mm-panel[data-panel='quests'] .mm-qb-meta { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 3); margin-bottom: calc(var(--u) * 4); }
+/* On the left leaf now, under the list it describes — see the note in
+   quests.js. `margin-top: auto` sits it at the foot of that leaf so it reads as
+   a caption to the list rather than a fourth list row. */
+.mm-panel[data-panel='quests'] .mm-qb-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 3);
+  margin: auto 0 calc(var(--u) * 2);
+  flex: 0 0 auto;
+}
 .mm-panel[data-panel='quests'] .mm-qb-chip,
 .mm-panel[data-panel='quests'] .mm-qb-reward {
   display: inline-flex;
@@ -277,13 +311,17 @@
 
 .mm-panel[data-panel='quests'] .mm-qb-rewards { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4); }
 
+/* The foot carries the objectives now, so it can grow past its share on a
+   long quest. It yields rather than pushing the journal off the leaf. */
+.mm-panel[data-panel='quests'] .mm-qb-foot { min-height: 0; overflow-y: auto; }
+
 /* Pinned to the foot of the page, clear of the exit plaque in the corner. */
 .mm-panel[data-panel='quests'] .mm-qb-foot {
   flex: 0 0 auto;
   padding-right: calc(var(--u) * 44);
   color: #000;
   text-shadow: none;
-  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--face);
 }
 .mm-panel[data-panel='quests'] .mm-qb-foot .mm-qb-rule { margin: calc(var(--u) * 5) 0 calc(var(--u) * 3); }
 
@@ -315,7 +353,7 @@
   margin: 0 0 calc(var(--u) * 5);
   color: #100c06;
   text-shadow: none;
-  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--face);
   font-size: calc(var(--u) * 10);
   line-height: 1.4;
 }

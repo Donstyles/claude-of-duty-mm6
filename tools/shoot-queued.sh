@@ -24,28 +24,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCK="${TMPDIR:-/tmp}/mm6-capture.lock"
 
-# Pre-flight, deliberately OUTSIDE the lock.
-#
-# Seven agents are saving into one tree, so at any moment it may not compile --
-# somebody is mid-write on a file you do not own. `shoot.mjs` builds before it
-# captures, so a red tree turns a queue slot into nothing. That was cheap when
-# captures ran concurrently and is not cheap now: waiting half an hour for the
-# lock and then losing it to somebody else's half-written file is the worst
-# outcome this script can produce.
-#
-# So establish the tree is green before queueing. It costs a build, which is
-# tens of seconds against a slot worth tens of minutes, and it fails with a
-# message that says whose problem it is.
-echo "[queue] pre-flight build…" >&2
-if ! BUILD_LOG="$(cd "$ROOT" && npx vite build --logLevel error 2>&1)"; then
-  echo "[queue] TREE IS RED — not queueing, the slot would be wasted." >&2
-  echo "$BUILD_LOG" | tail -20 >&2
-  echo "[queue] This is very likely another agent mid-save rather than your" >&2
-  echo "[queue] change. Wait a minute and run this again; if it persists, the" >&2
-  echo "[queue] file named above tells you who to tell." >&2
-  exit 2
-fi
-
 exec 9>"$LOCK"
 
 if ! flock -n 9; then
@@ -53,5 +31,29 @@ if ! flock -n 9; then
   flock 9
 fi
 
-echo "[queue] lock acquired, starting capture" >&2
+echo "[queue] lock acquired" >&2
+
+# The build goes INSIDE the lock, and that placement is the whole point.
+#
+# It was outside, so a red tree could be caught without spending a slot. That
+# was worth having and it cost something worse: `vite build` rewrites `dist/`
+# with content-hashed chunk names, and `shoot.mjs` serves `dist/` for the whole
+# of a capture. So one agent's pre-flight, running outside the lock, could
+# rename the chunks under another agent's running capture — which failed as
+# `HTTP 404 …/assets/WeatherSystem-<hash>.js`, a error that looks like a broken
+# import and is nothing of the kind.
+#
+# Serialising captures is pointless if the artefact they serve is shared and
+# mutable. One writer at a time, and the writer is whoever holds the lock.
+echo "[queue] building…" >&2
+if ! BUILD_LOG="$(cd "$ROOT" && npx vite build --logLevel error 2>&1)"; then
+  echo "[queue] TREE IS RED — nothing to capture." >&2
+  echo "$BUILD_LOG" | tail -20 >&2
+  echo "[queue] This is very likely another agent mid-save rather than your" >&2
+  echo "[queue] change. Wait a minute and run this again; if it persists, the" >&2
+  echo "[queue] file named above tells you who to tell." >&2
+  exit 2
+fi
+
+echo "[queue] starting capture" >&2
 node "$ROOT/tools/shoot.mjs" "$@"

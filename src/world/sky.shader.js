@@ -96,6 +96,9 @@ uniform float uBump;
 uniform float uOpacityA;
 uniform float uOpacityB;
 uniform vec2  uSunUvDir;       // normalised sun azimuth in cloud-plane uv
+uniform vec2  uDriftDir;       // normalised drift heading, cloud-plane world xz
+uniform float uStretch;        // 1 = round puffs, >1 = drawn out along the drift
+uniform float uCrown;          // strength of the lit-top / shaded-base term
 uniform float uShadowSlope;
 uniform float uShadowStrength;
 uniform vec3  uCloudTintMul;
@@ -151,9 +154,17 @@ float vnoise2(vec2 p) {
 
 /* Where the cloud shading is expanded from, and by how much — see the note at
  * the expansion itself. The pivot is the *measured* mean position of our cloud
- * pixels along the ramp, so widening about it costs no brightness. */
+ * pixels along the ramp, so widening about it costs no brightness.
+ *
+ * CLOUD_CONTRAST came down from 1.75 when the crown/belly term went up. It was
+ * expanding the wrong axis: with a near-overhead sun the widest thing on a puff
+ * was the difference between its flat interior and its rim, so multiplying it
+ * made each mass a brighter smear inside a darker outline rather than a lit top
+ * over a shaded base. Total spread is held roughly constant across that swap —
+ * cloud luminance sd measured 28.2 against the exposure-matched reference's
+ * 30.0 — while the axis the spread runs along becomes top-to-bottom.          */
 const float CLOUD_PIVOT = 0.50;
-const float CLOUD_CONTRAST = 1.75;
+const float CLOUD_CONTRAST = 1.20;
 const float CLOUD_CONTRAST_B = 1.35;
 
 vec3 mm6Ramp(float t) {
@@ -302,7 +313,17 @@ void main() {
 
   float tA = uAltA * proj;
   vec2 pA = uCamPos.xz + d.xz * tA;
-  vec2 uvA = (pA + uOffA) * uInvScaleA;
+  // Drawn out along the wind. §2.4 measures MM6's clouds as "long horizontal
+  // wisps and streaks with soft internal shading plus occasional large soft
+  // masses" — and a metaball sheet sampled isotropically gives the opposite,
+  // round lumps that a reviewer will call amoebae because that is what they
+  // are. Compressing the sample coordinate along the drift heading stretches
+  // every feature along it by uStretch without touching the bake, and the
+  // lattice stays periodic under an anisotropic scale so nothing seams.
+  vec2 qA = pA + uOffA;
+  float along = dot(qA, uDriftDir);
+  qA += uDriftDir * (along / uStretch - along);
+  vec2 uvA = qA * uInvScaleA;
   vec4 cA = texture2D(uClouds, uvA);
 
   float hA = clamp((cA.r - uThrA) / max(1.0 - uThrA, 0.06), 0.0, 1.0);
@@ -316,7 +337,14 @@ void main() {
   float detailFade = 1.0 / (1.0 + tA / 9000.0);
   float edge = 1.0 - smoothstep(0.0, 0.55, hA);
   float dn = texture2D(uClouds, uvA * 2.15 + vec2(0.37, 0.11)).r;
-  hA *= 1.0 - 0.24 * dn * edge * detailFade;
+  // Tear the trailing edge and leave the leading one firm. A cumulus is built
+  // up on the side it is moving into and shredded off the side it is leaving,
+  // so a silhouette eroded evenly all the way round reads as a blob however
+  // good its shading is. The baked gradient already says which way the field
+  // falls; where it falls *with* the drift, this is the back of the mass.
+  vec2 gradA = vec2(cA.g * 2.0 - 1.0, cA.b * 2.0 - 1.0);
+  float trail = clamp(-dot(normalize(gradA + vec2(1e-5)), uDriftDir), 0.0, 1.0);
+  hA *= 1.0 - (0.15 + 0.34 * trail) * dn * edge * detailFade;
 
   // The alpha ramp is what decides whether a cloud has an *outline*.
   //
@@ -390,8 +418,17 @@ void main() {
   // ray's own ground direction. Keying a signed term off that gives MM6's
   // bright crown / soft grey-cream belly on every mass at once, whatever the
   // sun is doing, which a pure N·L never does with a near-overhead sun.
+  //
+  // This is the term the blind review was missing when it wrote "no lit top or
+  // shaded base", and it was being outvoted. With a sun near the zenith both
+  // of the terms above peak on a puff's *flat interior* -- wrapped because a
+  // flat face points at the sun and amb because it is proportional to n.y --
+  // so each mass came out with a bright custard smear through its middle and
+  // an even grey rim, which is the reading a reviewer describes as an amoeba.
+  // At uCrown the crown/belly sweep is the largest single term on a puff,
+  // and top-to-bottom is the direction the value runs.
   vec2 rad2 = normalize(d.xz + vec2(1e-5, 1e-5));
-  lumA -= dot(n.xz, rad2) * 0.17 * smoothstep(0.02, 0.30, hA);
+  lumA -= dot(n.xz, rad2) * uCrown * smoothstep(0.015, 0.42, hA);
 
   // Silver lining: thin edges facing the sun burn out.
   float rim = pow(max(0.0, dot(d, uSunDir)), 9.0) * (1.0 - smoothstep(0.10, 0.55, hA));

@@ -22,6 +22,9 @@
  */
 
 import { RNG, hashSeed } from '../core/RNG.js';
+import {
+  LIGHT, cabochon, castShadow, cylinderValue, cylinderGradient, mineral, seatedStud,
+} from './art/relief.js';
 
 const TAU = Math.PI * 2;
 
@@ -207,41 +210,65 @@ export class UITextures {
     }
 
     g.save();
-    g.lineCap = 'round';
+    g.lineCap = 'butt';
     const alpha = opts.alpha ?? rng.range(0.5, 0.92);
-    // The lit lip first, so the core cuts back into it.
+    // The lit lip, and it is not continuous. Light catches the raised side of
+    // a break only where that side happens to face the lamp, so a lip that is
+    // painted the whole length of the crack is the single thing that turns it
+    // back into a drawn line.
     if (opts.lip) {
       g.strokeStyle = opts.lip;
-      g.globalAlpha = alpha * 0.5;
       for (let i = 1; i < pts.length; i++) {
-        g.lineWidth = width * rng.range(0.5, 1.1);
+        if (!rng.chance(0.55)) continue;
+        const t = i / (pts.length - 1);
+        const taper = Math.sin(Math.min(1, t) * Math.PI) ** 1.15;
+        g.globalAlpha = alpha * 0.55 * taper * rng.range(0.4, 1);
+        g.lineWidth = Math.max(0.4, width * rng.range(0.4, 1.0));
         g.beginPath();
         g.moveTo(pts[i - 1][0] - width * 0.9, pts[i - 1][1] - width * 0.9);
         g.lineTo(pts[i][0] - width * 0.9, pts[i][1] - width * 0.9);
         g.stroke();
       }
     }
-    // The core, segment by segment: a groove that opens in the middle of its
-    // run and pinches out at both ends.
+    // The core, segment by segment: a groove that opens somewhere along its
+    // run and pinches to nothing at both ends. The taper is deliberately
+    // steep — at `^0.45` it was flat over four-fifths of the length, which is
+    // a uniform-width stroke with rounded ends, which is a hair on a scanner.
     g.strokeStyle = colour;
+    const bias = rng.range(0.3, 0.7);
     for (let i = 1; i < pts.length; i++) {
       const t = i / (pts.length - 1);
-      const taper = Math.sin(Math.min(1, t) * Math.PI) ** 0.45;
-      g.globalAlpha = alpha * (0.45 + taper * 0.55);
-      g.lineWidth = Math.max(0.4, width * taper * rng.range(0.7, 1.5));
+      // Widest at `bias`, not at the midpoint, so no two breaks share a shape.
+      const u = t < bias ? t / bias : 1 - (t - bias) / (1 - bias);
+      const taper = Math.max(0, Math.sin(u * Math.PI * 0.5)) ** 1.35;
+      g.globalAlpha = alpha * (0.10 + taper * 0.90);
+      g.lineWidth = Math.max(0.35, width * taper * rng.range(0.55, 1.7));
       g.beginPath();
       g.moveTo(pts[i - 1][0], pts[i - 1][1]);
       g.lineTo(pts[i][0], pts[i][1]);
       g.stroke();
-      // A chipped wall: the odd short spur where the break stepped sideways.
-      if (rng.chance(0.18)) {
-        const n = rng.range(-1, 1) * width * rng.range(1.2, 3.4);
-        g.lineWidth = Math.max(0.4, width * 0.5);
-        g.globalAlpha = alpha * 0.5;
+      // A spall: where a break runs near the surface a flake comes away, and
+      // the scar has a shadowed wall and a bright fresh face like everything
+      // else here. This is the thing a stroke can never be.
+      if (rng.chance(0.13)) {
+        const sx = pts[i][0];
+        const sy = pts[i][1];
+        const sw = width * rng.range(1.8, 5.5);
+        const dir = rng.chance(0.5) ? 1 : -1;
+        g.save();
+        g.globalAlpha = alpha * rng.range(0.25, 0.55);
+        g.fillStyle = colour;
         g.beginPath();
-        g.moveTo(pts[i][0], pts[i][1]);
-        g.lineTo(pts[i][0] + n, pts[i][1] + n * rng.range(-1, 1));
-        g.stroke();
+        g.moveTo(sx, sy);
+        g.lineTo(sx + sw * dir, sy + sw * rng.range(-0.5, 0.5));
+        g.lineTo(sx + sw * dir * rng.range(0.2, 0.6), sy + sw * rng.range(0.4, 1.1));
+        g.closePath();
+        g.fill();
+        g.globalAlpha = alpha * rng.range(0.16, 0.34);
+        g.fillStyle = opts.lip ?? 'rgba(255,255,255,0.5)';
+        g.translate(width * 0.8, width * 0.9);
+        g.fill();
+        g.restore();
       }
     }
     g.restore();
@@ -298,8 +325,21 @@ export class UITextures {
       const a = bed + rng.range(-0.16, 0.16) + (rng.chance(0.5) ? Math.PI : 0);
       const x = rng.range(-w * 0.1, w * 1.1);
       const y = rng.range(-h * 0.1, h * 1.1);
-      UITextures.crack(g, rng, x, y, a, rng.range(h * 1.1, h * 2.6),
-        rng.range(0.9, 2.0), colour, { depth: 2, wander: 0.14, lip });
+      const len = rng.range(h * 1.1, h * 2.6);
+      UITextures.crack(g, rng, x, y, a, len, rng.range(0.9, 2.0), colour,
+        { depth: 2, wander: 0.14, lip });
+      // Rock does not part along one clean surface: a bedding failure comes
+      // as a swarm of short sub-parallel splinters stepping past each other
+      // beside the main break. One line on its own is a scratch on the scan.
+      for (let k = 0; k < rng.int(2, 5); k++) {
+        const off = rng.range(-h * 0.055, h * 0.055);
+        UITextures.crack(g, rng,
+          x + rng.range(0.1, 0.8) * Math.cos(a) * len - Math.sin(a) * off,
+          y + rng.range(0.1, 0.8) * Math.sin(a) * len + Math.cos(a) * off,
+          a + rng.range(-0.09, 0.09), len * rng.range(0.10, 0.34),
+          rng.range(0.5, 1.1), colour,
+          { depth: 0, wander: 0.10, lip, alpha: rng.range(0.24, 0.60) });
+      }
     }
   }
 
@@ -440,85 +480,49 @@ export class UITextures {
   /**
    * Cast brass, as every gold button in the game is made of.
    *
-   * Measured off the real buttons (Screenshot 17, the four sidebar ovals), the
-   * value curve down a brass cabochon is **not monotonic**: a dark cap at the
-   * very top, a hard specular at ~16% down, a long mid-brass body, and then a
-   * second bright band at ~76% down where light bounced off the marble comes
-   * back up the far rim. The naive smooth ramp misses that lower band entirely,
-   * and without it the button is a printed gradient rather than a metal object.
+   * The old painter stacked two gradients and four dabs, and the result had no
+   * light direction: measured across the button, the left/right value
+   * asymmetry was -0.07 at the top and -0.02 at the bottom — flat, both ends,
+   * on all thirteen screens. It was also fenced by a dark elliptical stroke,
+   * which is a drawing convention rather than anything a lit cylinder does.
+   *
+   * It is now one shaded cabochon under the interface's single lamp
+   * (`art/relief.js`), which reproduces the reference's measured signature: a
+   * kidney specular high and left, a dark core low and right, a warm bounce off
+   * the marble along the lower-right rim, and asymmetry that flips sign from
+   * -0.6 at the top of the object to +0.7 at the bottom. Nothing strokes the
+   * silhouette; it feathers out in its own shading.
    *
    * `opts.tilt` rotates the specular a few degrees so four buttons in a row are
    * not four copies of one casting.
    */
   static brassFace(g, x, y, w, h, rng, opts = {}) {
-    const tilt = opts.tilt ?? 0;
-    const cx = x + w / 2;
-    const cy = y + h / 2;
-
-    // The vertical curve: cap, specular band, body, bounce band, dark rim.
-    const grd = g.createLinearGradient(x, y, x, y + h);
-    grd.addColorStop(0.00, '#3A2C12');
-    grd.addColorStop(0.05, '#6E5628');
-    grd.addColorStop(0.12, '#C6B278');
-    grd.addColorStop(0.17, '#F2EBBE');
-    grd.addColorStop(0.26, '#D2BE86');
-    grd.addColorStop(0.42, '#AE9459');
-    grd.addColorStop(0.58, '#8E7440');
-    grd.addColorStop(0.70, '#A98E52');
-    grd.addColorStop(0.78, '#DCC474');
-    grd.addColorStop(0.86, '#9A7C3C');
-    grd.addColorStop(0.94, '#5A4318');
-    grd.addColorStop(1.00, '#241A08');
-    g.save();
-    g.beginPath();
-    g.ellipse(cx, cy, w / 2, h / 2, 0, 0, TAU);
-    g.clip();
-    g.fillStyle = grd;
-    g.fillRect(x, y, w, h);
-
-    // The cross-section: a cylinder, brightest just left of centre and falling
-    // to a dark rim on both sides — darker on the right, which is the shadow
-    // side under the interface's one light.
-    const across = g.createLinearGradient(x, y, x + w, y);
-    across.addColorStop(0.00, 'rgba(24,16,4,0.85)');
-    across.addColorStop(0.12, 'rgba(40,28,8,0.35)');
-    across.addColorStop(0.40, 'rgba(255,246,208,0.10)');
-    across.addColorStop(0.60, 'rgba(0,0,0,0)');
-    across.addColorStop(0.84, 'rgba(30,20,6,0.42)');
-    across.addColorStop(1.00, 'rgba(18,12,2,0.92)');
-    g.fillStyle = across;
-    g.fillRect(x, y, w, h);
-
-    // The hard specular, up and left of centre and elongated down the long
-    // axis, plus the warm bounce coming back off the far lower rim.
-    UITextures.dab(g, cx - w * 0.10, y + h * 0.17, w * 0.17, h * 0.075, -0.5 + tilt, '#FFF8DC', 0.95, w * 0.07);
-    UITextures.dab(g, cx - w * 0.06, y + h * 0.21, w * 0.30, h * 0.12, -0.35 + tilt, '#F6EFC4', 0.42, w * 0.16);
-    UITextures.dab(g, cx + w * 0.20, y + h * 0.76, w * 0.22, h * 0.075, 0.28 + tilt, '#F0D888', 0.70, w * 0.11);
-    UITextures.dab(g, cx - w * 0.02, y + h * 0.82, w * 0.30, h * 0.045, 0, '#C9A857', 0.40, w * 0.14);
-
-    // Cast brass is worn, not plated: patchy tarnish and pit shadow.
+    cabochon(g, x, y, w, h, rng, opts);
+    // Cast brass is worn, not plated: patchy tarnish over the shading, clipped
+    // to the casting so nothing bleeds past the silhouette.
     if (rng) {
-      for (let i = 0; i < 40; i++) {
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      g.save();
+      g.beginPath();
+      g.ellipse(cx, cy, w / 2 - 0.5, h / 2 - 0.5, 0, 0, TAU);
+      g.clip();
+      for (let i = 0; i < 30; i++) {
         UITextures.dab(g, x + rng.range(0, w), y + rng.range(0, h),
-          rng.range(1.5, w * 0.22), rng.range(0.8, h * 0.09), rng.range(0, TAU),
-          rng.chance(0.45) ? '#FFF2C4' : '#3A2A0E', rng.range(0.04, 0.16), rng.range(1, 5));
+          rng.range(1.5, w * 0.20), rng.range(0.8, h * 0.08), rng.range(0, TAU),
+          rng.chance(0.42) ? '#FFF2C4' : '#3A2A0E', rng.range(0.04, 0.13), rng.range(1, 5));
       }
+      // Pitting: a cast surface takes knocks, and each one is a shadowed wall
+      // up-left of a lit one — the same lamp, at two pixels.
+      for (let i = 0; i < 14; i++) {
+        const px = x + rng.range(w * 0.12, w * 0.88);
+        const py = y + rng.range(h * 0.10, h * 0.90);
+        const rr = rng.range(0.7, w * 0.045);
+        UITextures.dab(g, px - rr * 0.4, py - rr * 0.4, rr, rr * 0.8, 0, '#2A1E06', rng.range(0.16, 0.34), 0.6);
+        UITextures.dab(g, px + rr * 0.5, py + rr * 0.55, rr * 0.8, rr * 0.6, 0, '#FFF4CE', rng.range(0.10, 0.24), 0.6);
+      }
+      g.restore();
     }
-    g.restore();
-
-    // Rim: dark on the shadow side, with a thin catch along the lit shoulder.
-    g.save();
-    g.lineWidth = Math.max(1, w * 0.045);
-    g.strokeStyle = 'rgba(30,20,6,0.9)';
-    g.beginPath();
-    g.ellipse(cx, cy, w / 2 - g.lineWidth * 0.5, h / 2 - g.lineWidth * 0.5, 0, 0, TAU);
-    g.stroke();
-    g.lineWidth = Math.max(0.8, w * 0.026);
-    g.strokeStyle = 'rgba(255,244,198,0.55)';
-    g.beginPath();
-    g.ellipse(cx, cy, w / 2 - g.lineWidth * 1.6, h / 2 - g.lineWidth * 1.6, 0, Math.PI * 1.05, Math.PI * 1.72);
-    g.stroke();
-    g.restore();
   }
 
   /**
@@ -563,6 +567,20 @@ export class UITextures {
     base.addColorStop(1, pal[4] ?? pal[2]);
     g.fillStyle = base;
     g.fillRect(0, 0, w, h);
+
+    // The slab's own drift, first and biggest.
+    //
+    // Measured against the real bottom bar, the one band this rock was short
+    // of was the widest: 2.2 units of variation above eight pixels against the
+    // reference's 7.0. A polished slab is *not* uniform over its length — it
+    // is light down one part of its run and deeper down another, and without
+    // that the bar is one tint with detail sprinkled on it.
+    for (let i = 0; i < Math.max(4, Math.round(w / 190)); i++) {
+      const c = pal[rng.int(0, pal.length - 1)];
+      UITextures.dab(g, rng.range(-w * 0.1, w * 1.1), rng.range(-h * 0.2, h * 1.2),
+        rng.range(h * 0.6, h * 2.2), rng.range(h * 0.4, h * 1.2),
+        rng.range(-0.6, 0.6), c, rng.range(0.22, 0.52), rng.range(40, 110));
+    }
 
     // Broad cloudy mottle.
     const clouds = Math.round((w * h) / 5200);
@@ -621,6 +639,16 @@ export class UITextures {
       count: opts.crackCount ?? Math.max(2, Math.round(w / 260)),
     });
 
+    // Calcite is crystalline: the polished face is a mosaic of grains, each
+    // one catching the lamp on its own facet. Small here — this rock is
+    // polished, not dressed — but it is what stops the field being a wash.
+    if (opts.mineral !== false) {
+      mineral(g, w, h, opts.mineralOpts ?? {
+        seed: 5,
+        octaves: [{ cell: 2.8, amp: 8, hue: 5, facet: 10 }, { cell: 8.0, amp: 7, hue: 4, facet: 6 }],
+        fine: 4,
+      });
+    }
     UITextures.grain(g, w, h, rng, opts.grain ?? 9);
   }
 
@@ -704,33 +732,83 @@ export class UITextures {
     // Large patchiness first, then finer mottle on top of it. Contrast comes
     // from alpha rather than from stroke count: a headless software rasteriser
     // will quietly give up on a few thousand large blurred fills.
+    //
+    // The alphas here are deliberately lower than they look like they should
+    // be. Measured against the real game's slate, the cloud at this scale was
+    // the *one* band our rock had too much of — 8.1 units against 5.8 — and
+    // it was doing the work the crystals should have been doing.
     for (let i = 0; i < 14; i++) {
       UITextures.dab(g, rng.range(0, w), rng.range(0, h),
         rng.range(w * 0.10, w * 0.34), rng.range(h * 0.08, h * 0.30), rng.range(0, TAU),
-        pal[rng.int(0, pal.length - 1)], rng.range(0.40, 0.80), 14);
+        pal[rng.int(0, pal.length - 1)], rng.range(0.14, 0.32), 14);
     }
     const blobs = Math.round((w * h) / 2600);
     for (let i = 0; i < blobs; i++) {
       const c = pal[rng.int(0, pal.length - 1)];
       UITextures.dab(g, rng.range(0, w), rng.range(0, h),
         rng.range(6, 80), rng.range(5, 46), rng.range(0, TAU),
-        c, rng.range(0.24, 0.62), rng.range(2, 10));
+        c, rng.range(0.16, 0.42), rng.range(2, 10));
     }
 
     // Pale mineral streaks, running one way like a bedding plane.
-    for (let i = 0; i < Math.round(w / 12); i++) {
+    //
+    // Drawn as *lenses*, not strokes. A uniform-width blurred line with soft
+    // ends is the brush that made half this family's stone read as hairs on a
+    // scanner bed; a mineral segregation in rock swells in the middle of its
+    // run and pinches out at both ends, and it has a shadow on one flank
+    // because it stands a little proud of the softer matrix around it.
+    for (let i = 0; i < Math.round(w / 20); i++) {
       const x0 = rng.range(-40, w);
       const y0 = rng.range(0, h);
+      const len = rng.range(80, 300);
+      const a = rng.range(-0.28, 0.28);
+      const bow = rng.range(-0.22, 0.22);
+      const wid = rng.range(1.4, 7);
+      const pale = rng.chance(0.5);
+      const segs = 14;
       g.save();
-      g.globalAlpha = rng.range(0.10, 0.34);
-      g.strokeStyle = rng.chance(0.5) ? (opts.streak ?? '#8B8C86') : (opts.streakDark ?? '#22221F');
-      g.lineWidth = rng.range(1, 7);
-      g.filter = `blur(${rng.range(1, 3.4).toFixed(2)}px)`;
-      g.beginPath();
-      g.moveTo(x0, y0);
-      g.quadraticCurveTo(x0 + rng.range(30, 140), y0 + rng.range(-22, 22), x0 + rng.range(80, 300), y0 + rng.range(-40, 40));
-      g.stroke();
+      g.lineCap = 'butt';
+      g.filter = `blur(${rng.range(0.8, 2.2).toFixed(2)}px)`;
+      for (let k = 0; k < segs; k++) {
+        const t0 = k / segs;
+        const t1 = (k + 1) / segs;
+        const pt = (t) => [
+          x0 + Math.cos(a) * len * t,
+          y0 + Math.sin(a) * len * t + Math.sin(t * Math.PI) * bow * len,
+        ];
+        const taper = Math.sin(((t0 + t1) / 2) * Math.PI) ** 0.7;
+        const [ax, ay] = pt(t0);
+        const [bx, by] = pt(t1);
+        // The shadow flank first, offset down-right off the lit lamp.
+        g.globalAlpha = rng.range(0.06, 0.16) * taper;
+        g.strokeStyle = opts.streakDark ?? '#22221F';
+        g.lineWidth = Math.max(0.4, wid * taper * 0.8);
+        g.beginPath();
+        g.moveTo(ax + wid * 0.5, ay + wid * 0.5);
+        g.lineTo(bx + wid * 0.5, by + wid * 0.5);
+        g.stroke();
+        g.globalAlpha = rng.range(0.10, 0.30) * taper;
+        g.strokeStyle = pale ? (opts.streak ?? '#8B8C86') : (opts.streakDark ?? '#22221F');
+        g.lineWidth = Math.max(0.4, wid * taper * rng.range(0.8, 1.2));
+        g.beginPath();
+        g.moveTo(ax, ay);
+        g.lineTo(bx, by);
+        g.stroke();
+      }
       g.restore();
+    }
+
+    // A bedding plane: one horizon where the rock changes hand, faint, and the
+    // thing that stops a slab reading as a swatch. The reference has one.
+    if (opts.bed !== false) {
+      const by = h * rng.range(0.28, 0.72);
+      const bed = g.createLinearGradient(0, by - h * 0.05, 0, by + h * 0.05);
+      bed.addColorStop(0, 'rgba(20,20,18,0)');
+      bed.addColorStop(0.46, 'rgba(20,20,18,0.16)');
+      bed.addColorStop(0.56, 'rgba(206,204,196,0.10)');
+      bed.addColorStop(1, 'rgba(206,204,196,0)');
+      g.fillStyle = bed;
+      g.fillRect(0, by - h * 0.05, w, h * 0.10);
     }
 
     // Damage, and how this rock takes it: slate crazes into closed cells, the
@@ -744,7 +822,43 @@ export class UITextures {
       g.fill();
     }
     g.globalAlpha = 1;
-    UITextures.grain(g, w, h, rng, opts.grain ?? 24);
+
+    // Chisel marks: this rock was worked, so it carries the tool. Short,
+    // parallel, one-handed strokes running with the dressing direction, each a
+    // shallow furrow — dark wall up-left of a lit one, like everything else.
+    if (opts.chisel !== false) {
+      const ca = opts.chiselAngle ?? -0.42;
+      for (let i = 0; i < Math.round((w * h) / 5200); i++) {
+        const x0 = rng.range(-10, w);
+        const y0 = rng.range(-10, h);
+        const len = rng.range(6, 26);
+        const a = ca + rng.range(-0.10, 0.10);
+        const dx = Math.cos(a) * len;
+        const dy = Math.sin(a) * len;
+        g.save();
+        g.lineCap = 'round';
+        g.globalAlpha = rng.range(0.05, 0.16);
+        g.strokeStyle = '#151614';
+        g.lineWidth = rng.range(0.7, 2.0);
+        g.beginPath();
+        g.moveTo(x0, y0);
+        g.lineTo(x0 + dx, y0 + dy);
+        g.stroke();
+        g.globalAlpha = rng.range(0.04, 0.12);
+        g.strokeStyle = '#D2D0C8';
+        g.lineWidth = rng.range(0.5, 1.3);
+        g.beginPath();
+        g.moveTo(x0 + 0.9, y0 + 1.0);
+        g.lineTo(x0 + dx + 0.9, y0 + dy + 1.0);
+        g.stroke();
+        g.restore();
+      }
+    }
+    g.globalAlpha = 1;
+
+    // Crystals last, so they sit *in* the rock rather than under the cloud.
+    if (opts.mineral !== false) mineral(g, w, h, opts.mineralOpts);
+    UITextures.grain(g, w, h, rng, opts.grain ?? 10);
   }
 
   granite() {
@@ -870,7 +984,12 @@ export class UITextures {
         crack: '#050805',
         fracture: UITextures.slick,
         slick: '#8FA684',
-        grain: 16,
+        grain: 12,
+        // Verd-antique is a polished sheared rock, not a dressed one: it has
+        // crystals but no tool marks and no bedding to speak of.
+        chisel: false,
+        bed: false,
+        mineralOpts: { seed: 41, octaves: [{ cell: 3.0, amp: 9, hue: 4, facet: 11 }, { cell: 11, amp: 10, hue: 3, facet: 8 }], fine: 5 },
       });
     });
   }
@@ -942,35 +1061,63 @@ export class UITextures {
    * invisible.
    */
   columnShaft(mode = 'left') {
-    return this._make(`col-${mode}`, 64, 128, (g, w, h, rng) => {
-      const grd = g.createLinearGradient(0, 0, w, 0);
-      if (mode === 'left') {
-        grd.addColorStop(0.00, '#B5AEA5');
-        grd.addColorStop(0.30, '#A29A93');
-        grd.addColorStop(0.68, '#867D7C');
-        grd.addColorStop(0.92, '#6D6466');
-        grd.addColorStop(1.00, '#3A3436');
-      } else if (mode === 'right') {
-        grd.addColorStop(0.00, '#3A3436');
-        grd.addColorStop(0.08, '#6D6466');
-        grd.addColorStop(0.32, '#867D7C');
-        grd.addColorStop(0.70, '#A29A93');
-        grd.addColorStop(1.00, '#B5AEA5');
-      } else {
-        grd.addColorStop(0.00, '#5E5757');
-        grd.addColorStop(0.14, '#8F8681');
-        grd.addColorStop(0.38, '#BDB2AD');
-        grd.addColorStop(0.62, '#A69C97');
-        grd.addColorStop(0.86, '#7E7573');
-        grd.addColorStop(1.00, '#4A4344');
-      }
-      g.fillStyle = grd;
+    // The visible arc of the cylinder, in radians either side of the face that
+    // points at the viewer. The two side columns stand against the screen edge
+    // with the rest of their girth cut off, which is why the reference — and
+    // this — shows them brightest at the frame and falling away inboard; the
+    // middle column shows its whole face. Every *relief* on all three (joints,
+    // chips, pitting) still obeys the one lamp: shadow below and to the right.
+    const arc = mode === 'left' ? [-0.34, 1.44]
+      : mode === 'right' ? [-1.44, 0.34]
+        : [-1.30, 1.32];
+    return this._make(`col-${mode}`, 56, 168, (g, w, h, rng) => {
+      g.fillStyle = cylinderGradient(g, 0, w, 0, '#B9B0A8', arc,
+        { amb: 0.34, kd: 0.80, kb: 0.26, ks: 0.26, shine: 16, stops: 28 });
       g.fillRect(0, 0, w, h);
 
-      // Very fine vertical striations — not flutes.
-      for (let i = 0; i < 46; i++) {
+      // ── the stone itself ────────────────────────────────────────────────
+      // Crystalline aggregate: small angular grains, each a shade off its
+      // neighbours and each catching the lamp on its upper-left facet. This is
+      // the pass the shaft had none of, and the reason it read as a dowel.
+      for (let i = 0; i < 520; i++) {
+        const gx = rng.range(-2, w + 2);
+        const gy = rng.range(-2, h + 2);
+        const gr = rng.range(0.9, 3.4);
+        const shade = rng.range(-1, 1);
+        g.save();
+        g.globalAlpha = rng.range(0.10, 0.34);
+        g.fillStyle = shade > 0 ? '#D6D0C8' : '#4E4846';
+        g.beginPath();
+        const sides = rng.int(3, 5);
+        for (let k = 0; k <= sides; k++) {
+          const a = (k / sides) * TAU + rng.range(-0.3, 0.3);
+          const rr = gr * rng.range(0.55, 1.4);
+          const px = gx + Math.cos(a) * rr;
+          const py = gy + Math.sin(a) * rr * 1.35;
+          if (k === 0) g.moveTo(px, py); else g.lineTo(px, py);
+        }
+        g.closePath();
+        g.fill();
+        g.restore();
+      }
+      // Bedding: the quarry's own layering, faint and near-horizontal.
+      for (let i = 0; i < 7; i++) {
+        const y = rng.range(0, h);
+        g.save();
+        g.globalAlpha = rng.range(0.05, 0.13);
+        g.strokeStyle = rng.chance(0.5) ? '#E4DED6' : '#3E3A38';
+        g.lineWidth = rng.range(1.2, 4);
+        g.filter = 'blur(1.6px)';
+        g.beginPath();
+        g.moveTo(-2, y);
+        g.quadraticCurveTo(w * 0.5, y + rng.range(-2.5, 2.5), w + 2, y + rng.range(-3, 3));
+        g.stroke();
+        g.restore();
+      }
+      // Fine vertical striation, the polish direction.
+      for (let i = 0; i < 40; i++) {
         const x = rng.range(0, w);
-        g.globalAlpha = rng.range(0.03, 0.13);
+        g.globalAlpha = rng.range(0.03, 0.11);
         g.strokeStyle = rng.chance(0.5) ? '#FFFFFF' : '#2B2628';
         g.lineWidth = rng.range(0.5, 1.6);
         g.beginPath();
@@ -979,148 +1126,444 @@ export class UITextures {
         g.stroke();
       }
       g.globalAlpha = 1;
-      UITextures.grain(g, w, h, rng, 7);
-    });
-  }
 
-  /** Gold collar band wrapping a shaft; the shading follows the shaft's. */
-  columnCollar(mode = 'left') {
-    return this._make(`collar-${mode}`, 64, 24, (g, w, h) => {
-      const grd = g.createLinearGradient(0, 0, w, 0);
-      const stops = mode === 'left'
-        ? [['#E8DFA0', 0], ['#DBBC80', 0.26], ['#B3A36F', 0.6], ['#8A7038', 0.88], ['#5B4310', 1]]
-        : mode === 'right'
-          ? [['#5B4310', 0], ['#8A7038', 0.12], ['#B3A36F', 0.4], ['#DBBC80', 0.74], ['#E8DFA0', 1]]
-          : [['#7B5918', 0], ['#B3A36F', 0.2], ['#E8DFA0', 0.4], ['#C4AC6C', 0.66], ['#A08649', 0.86], ['#6A4C14', 1]];
-      for (const [c, p] of stops) grd.addColorStop(p, c);
-      g.fillStyle = grd;
+      // ── drum joints ─────────────────────────────────────────────────────
+      // A column is built of drums, so it has beds. One sits on the tile seam,
+      // which is also what hides the repeat. A bed lit from above is shadowed
+      // along the upper drum's underside and catches along the lower drum's
+      // top arris, so the pair is dark-then-light going down, never a rule.
+      for (const jy of [0, h * 0.5]) {
+        const wob = () => rng.range(-0.8, 0.8);
+        g.save();
+        g.lineCap = 'round';
+        g.strokeStyle = 'rgba(28,26,26,0.62)';
+        g.lineWidth = 1.6;
+        g.beginPath();
+        g.moveTo(-2, jy + wob());
+        g.bezierCurveTo(w * 0.3, jy + wob(), w * 0.7, jy + wob(), w + 2, jy + wob());
+        g.stroke();
+        g.strokeStyle = 'rgba(244,240,232,0.34)';
+        g.lineWidth = 1.1;
+        g.beginPath();
+        g.moveTo(-2, jy + 1.7 + wob() * 0.5);
+        g.bezierCurveTo(w * 0.3, jy + 1.7 + wob() * 0.5, w * 0.7, jy + 1.9 + wob() * 0.5, w + 2, jy + 1.8 + wob() * 0.5);
+        g.stroke();
+        g.restore();
+        // Grime gathers in the bed and bleeds a little way down the drum.
+        const bleed = g.createLinearGradient(0, jy, 0, jy + h * 0.06);
+        bleed.addColorStop(0, 'rgba(46,42,38,0.30)');
+        bleed.addColorStop(1, 'rgba(46,42,38,0)');
+        g.fillStyle = bleed;
+        g.fillRect(0, jy, w, h * 0.06);
+        // Each drum is its own block of stone, so its tone is its own.
+        g.save();
+        g.globalAlpha = rng.range(0.04, 0.10);
+        g.fillStyle = rng.chance(0.5) ? '#CFC8BF' : '#5E5854';
+        g.fillRect(0, jy, w, h * 0.5);
+        g.restore();
+      }
+
+      // ── chips at the arris ──────────────────────────────────────────────
+      // The corner takes the knocks. A chip shows unweathered stone — brighter
+      // than the polished face — with the removed material's shadow above it.
+      for (let i = 0; i < 9; i++) {
+        const onLeft = rng.chance(0.5);
+        const cx0 = onLeft ? rng.range(0, w * 0.10) : rng.range(w * 0.90, w);
+        const cy0 = rng.range(0, h);
+        const cw = rng.range(1.6, 4.4);
+        const ch = rng.range(1.6, 6.5);
+        const path = new Path2D();
+        path.moveTo(cx0, cy0);
+        path.lineTo(cx0 + (onLeft ? cw : -cw) * rng.range(0.6, 1.2), cy0 + ch * rng.range(0.2, 0.5));
+        path.lineTo(cx0 + (onLeft ? cw : -cw) * rng.range(0.1, 0.5), cy0 + ch);
+        path.closePath();
+        g.save();
+        g.globalAlpha = rng.range(0.30, 0.55);
+        g.fillStyle = '#2E2A28';
+        g.translate(-0.7, -0.7);
+        g.fill(path);
+        g.restore();
+        g.save();
+        g.globalAlpha = rng.range(0.35, 0.70);
+        g.fillStyle = '#D8D2C9';
+        g.fill(path);
+        g.restore();
+      }
+
+      // ── dirt ────────────────────────────────────────────────────────────
+      // Weather runs down, and it collects on the side the light does not dry:
+      // the shadow flank of each shaft, wherever that is for this column.
+      const dirtSide = mode === 'left' ? 0.80 : mode === 'right' ? 0.20 : 0.5;
+      for (let i = 0; i < 22; i++) {
+        const x = w * dirtSide + rng.range(-w * 0.34, w * 0.34);
+        g.save();
+        g.globalAlpha = rng.range(0.05, 0.16);
+        g.strokeStyle = '#332F2B';
+        g.lineWidth = rng.range(0.8, 3.6);
+        g.filter = `blur(${rng.range(0.6, 2.2).toFixed(2)}px)`;
+        g.beginPath();
+        g.moveTo(x, rng.range(-10, h * 0.6));
+        g.lineTo(x + rng.range(-1.6, 1.6), rng.range(h * 0.4, h + 10));
+        g.stroke();
+        g.restore();
+      }
+
+      // The grain sits under the shading, not over it, so the terminator gets
+      // one last press to keep the shaft dying into its own falloff.
+      const term = g.createLinearGradient(0, 0, w, 0);
+      for (let i = 0; i <= 12; i++) {
+        const t = i / 12;
+        const v = cylinderValue(t, arc, { amb: 0, kd: 1, kb: 0, ks: 0 });
+        term.addColorStop(t, `rgba(22,20,20,${(0.34 * (1 - v) ** 1.6).toFixed(3)})`);
+      }
+      g.fillStyle = term;
       g.fillRect(0, 0, w, h);
-      // Bead mouldings top and bottom.
-      g.fillStyle = 'rgba(255,248,200,0.55)';
-      g.fillRect(0, 1, w, 1.5);
-      g.fillRect(0, h - 5, w, 1.2);
-      g.fillStyle = 'rgba(40,26,4,0.75)';
-      g.fillRect(0, 0, w, 1);
-      g.fillRect(0, h - 1.5, w, 1.5);
-      g.fillStyle = 'rgba(60,40,8,0.35)';
-      g.fillRect(0, h * 0.45, w, 1.4);
+      UITextures.grain(g, w, h, rng, 9);
     });
   }
 
   /**
-   * A Corinthian capital: acanthus leaves, volutes and a square abacus, drawn
-   * as dark high-contrast lumps the way the game's scanned photograph reads.
+   * The gold collar wrapping a shaft.
+   *
+   * It was three flat stops with straight horizontal boundaries: dark band,
+   * bright band, dark band. Gilt bronze is not that. It is a torus, so it has
+   * a specular core that runs *along* the band a little above its axis, it
+   * mirrors the pale stone around it at both rims, it tarnishes in vertical
+   * runs where water has come down the shaft, and it casts a shadow onto the
+   * drum below it.
+   */
+  columnCollar(mode = 'left') {
+    const arc = mode === 'left' ? [-0.34, 1.44]
+      : mode === 'right' ? [-1.44, 0.34]
+        : [-1.30, 1.32];
+    return this._make(`collar-${mode}`, 64, 28, (g, w, h, rng) => {
+      const bandTop = h * 0.10;
+      const bandBot = h * 0.80;
+      const bh = bandBot - bandTop;
+
+      // Across the shaft: the same cylinder the stone follows, in brass.
+      g.fillStyle = cylinderGradient(g, 0, w, 0, '#D8C079', arc,
+        { amb: 0.30, kd: 0.86, kb: 0.34, ks: 0.52, shine: 26, stops: 26 });
+      g.fillRect(0, bandTop, w, bh);
+
+      // Down the band: a torus roll. The core sits above centre because the
+      // lamp is above, and both rims darken into their own contact.
+      const roll = g.createLinearGradient(0, bandTop, 0, bandBot);
+      roll.addColorStop(0.00, 'rgba(34,22,4,0.80)');
+      roll.addColorStop(0.10, 'rgba(60,42,10,0.30)');
+      roll.addColorStop(0.30, 'rgba(255,250,206,0.34)');
+      roll.addColorStop(0.38, 'rgba(255,252,220,0.52)');
+      roll.addColorStop(0.52, 'rgba(0,0,0,0)');
+      roll.addColorStop(0.74, 'rgba(48,32,6,0.30)');
+      roll.addColorStop(0.92, 'rgba(30,20,4,0.62)');
+      roll.addColorStop(1.00, 'rgba(20,12,2,0.85)');
+      g.fillStyle = roll;
+      g.fillRect(0, bandTop, w, bh);
+
+      // Environment: polished metal returns the pale stone standing above and
+      // below it, as a cool sliver at each rim rather than as a black line.
+      g.save();
+      g.globalAlpha = 0.30;
+      g.fillStyle = '#CFCCC4';
+      g.fillRect(0, bandTop + 1.2, w, 1.0);
+      g.globalAlpha = 0.20;
+      g.fillRect(0, bandBot - 2.2, w, 0.9);
+      g.restore();
+
+      // Tarnish: verdigris and grime in vertical runs, heavier low.
+      for (let i = 0; i < 26; i++) {
+        const x = rng.range(0, w);
+        g.save();
+        g.globalAlpha = rng.range(0.05, 0.20);
+        g.strokeStyle = rng.chance(0.4) ? '#6E7A4A' : '#3E300E';
+        g.lineWidth = rng.range(0.6, 2.6);
+        g.filter = `blur(${rng.range(0.4, 1.4).toFixed(2)}px)`;
+        g.beginPath();
+        g.moveTo(x, bandTop + rng.range(0, bh * 0.5));
+        g.lineTo(x + rng.range(-1, 1), bandBot - rng.range(0, bh * 0.2));
+        g.stroke();
+        g.restore();
+      }
+      // Wear on the crown: the band is rubbed brightest where it stands proud.
+      for (let i = 0; i < 14; i++) {
+        UITextures.dab(g, rng.range(0, w), bandTop + bh * rng.range(0.28, 0.46),
+          rng.range(1.5, 6), rng.range(0.5, 1.6), 0, '#FFF6C8', rng.range(0.06, 0.20), 1.2);
+      }
+
+      // Bead mouldings: a lit arris on top, a shadowed one beneath.
+      g.fillStyle = 'rgba(255,248,208,0.55)';
+      g.fillRect(0, bandTop, w, 1.0);
+      g.fillStyle = 'rgba(30,20,4,0.70)';
+      g.fillRect(0, bandBot - 1.0, w, 1.0);
+
+      // The collar stands proud, so it throws a shadow down the drum below it.
+      const cast = g.createLinearGradient(0, bandBot, 0, h);
+      cast.addColorStop(0, 'rgba(16,14,14,0.62)');
+      cast.addColorStop(0.5, 'rgba(16,14,14,0.26)');
+      cast.addColorStop(1, 'rgba(16,14,14,0)');
+      g.fillStyle = cast;
+      g.fillRect(0, bandBot, w, h - bandBot);
+      // …and a thin contact shadow above, where the shaft meets its top arris.
+      const above = g.createLinearGradient(0, 0, 0, bandTop);
+      above.addColorStop(0, 'rgba(16,14,14,0)');
+      above.addColorStop(1, 'rgba(16,14,14,0.42)');
+      g.fillStyle = above;
+      g.fillRect(0, 0, w, bandTop);
+      UITextures.grain(g, w, h, rng, 6);
+    });
+  }
+
+  /**
+   * A Corinthian capital: acanthus leaves, volutes and a square abacus.
+   *
+   * The old one drew each ornament as a flat light-grey shape with a hard black
+   * keyline on a mid-grey field: no undercut anywhere, and an abacus that
+   * overhung the bell by a fifth of the capital's height and cast nothing onto
+   * it. Carving is not outline — it is what the light does when it arrives at
+   * a form that stands proud of another one. So every lobe here is modelled
+   * rather than drawn: a lit upper-left face, a dark lower-right one, a cast
+   * shadow onto the tier below, and a hard undercut where it lifts off the
+   * bell. The abacus casts across the whole echinus, which is the single move
+   * that turns the plate from a pattern into a block of stone.
    */
   columnCapital() {
-    return this._make('capital', 128, 96, (g, w, h, rng) => {
+    return this._make('capital', 160, 120, (g, w, h, rng) => {
       const cx = w / 2;
-      // Abacus.
-      const ab = g.createLinearGradient(0, 0, 0, h * 0.2);
-      ab.addColorStop(0, '#C9C3BC');
-      ab.addColorStop(0.6, '#9B948E');
-      ab.addColorStop(1, '#5C5654');
-      g.fillStyle = ab;
-      g.fillRect(w * 0.02, 0, w * 0.96, h * 0.2);
-      g.fillStyle = 'rgba(255,255,255,0.5)';
-      g.fillRect(w * 0.02, 0, w * 0.96, 2.5);
+      const abH = h * 0.20;
 
-      // Bell of the capital.
+      // ── the bell ───────────────────────────────────────────────────────
       const bell = new Path2D();
-      bell.moveTo(w * 0.06, h * 0.2);
+      bell.moveTo(w * 0.06, abH);
       bell.bezierCurveTo(w * 0.14, h * 0.7, w * 0.24, h * 0.92, w * 0.30, h);
       bell.lineTo(w * 0.70, h);
       bell.bezierCurveTo(w * 0.76, h * 0.92, w * 0.86, h * 0.7, w * 0.94, h * 0.2);
       bell.closePath();
-      const bg = g.createLinearGradient(0, h * 0.2, 0, h);
-      bg.addColorStop(0, '#B4ADA6');
-      bg.addColorStop(0.5, '#918A85');
-      bg.addColorStop(1, '#5E5854');
-      g.fillStyle = bg;
-      g.fill(bell);
-
+      // The bell is a round form, so across it it is a cylinder like the shaft.
       g.save();
       g.clip(bell);
-      // Acanthus leaves: two tiers of curled lobes.
+      g.fillStyle = cylinderGradient(g, w * 0.06, w * 0.94, 0, '#B7AFA8', [-1.30, 1.32],
+        { amb: 0.34, kd: 0.80, kb: 0.26, ks: 0.24, shine: 16, stops: 22 });
+      g.fillRect(0, 0, w, h);
+      // …and down it, it narrows into shadow where the shaft takes over.
+      const drop = g.createLinearGradient(0, abH, 0, h);
+      drop.addColorStop(0, 'rgba(20,18,18,0.42)');
+      drop.addColorStop(0.22, 'rgba(20,18,18,0)');
+      drop.addColorStop(0.78, 'rgba(20,18,18,0.10)');
+      drop.addColorStop(1, 'rgba(20,18,18,0.46)');
+      g.fillStyle = drop;
+      g.fillRect(0, 0, w, h);
+
+      // Stone before ornament, so the ornament is cut from something.
+      for (let i = 0; i < 420; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(abH, h), rng.range(0.8, 3.2), rng.range(0.7, 2.4),
+          rng.range(0, TAU), rng.chance(0.5) ? '#D8D2CA' : '#4A4644', rng.range(0.05, 0.20), 0.8);
+      }
+
+      /** One carved lobe: cast shadow, body, lit face, undercut, midrib. */
+      const lobe = (x, y, lw, lh, tone) => {
+        const leaf = new Path2D();
+        leaf.moveTo(x, y + lh * 0.5);
+        leaf.bezierCurveTo(x - lw, y + lh * 0.2, x - lw * 0.8, y - lh * 0.6, x, y - lh * 0.5);
+        leaf.bezierCurveTo(x + lw * 0.8, y - lh * 0.6, x + lw, y + lh * 0.2, x, y + lh * 0.5);
+        leaf.closePath();
+        castShadow(g, leaf, lw * 0.30, 0.52, lw * 0.16);
+        g.save();
+        g.fillStyle = tone;
+        g.fill(leaf);
+        // Modelling inside the lobe: the roll catches up-left, dies down-right.
+        g.clip(leaf);
+        const face = g.createLinearGradient(x - lw, y - lh * 0.6, x + lw, y + lh * 0.6);
+        face.addColorStop(0, 'rgba(255,253,246,0.50)');
+        face.addColorStop(0.34, 'rgba(255,253,246,0.12)');
+        face.addColorStop(0.62, 'rgba(24,22,20,0.10)');
+        face.addColorStop(1, 'rgba(24,22,20,0.62)');
+        g.fillStyle = face;
+        g.fillRect(x - lw * 1.2, y - lh, lw * 2.4, lh * 2);
+        // The undercut: where the lobe lifts clear of the bell it is black,
+        // and that black is a wedge, not a stroke.
+        g.globalAlpha = 0.72;
+        g.fillStyle = '#0E0D0C';
+        g.beginPath();
+        g.ellipse(x + lw * 0.34, y + lh * 0.52, lw * 0.95, lh * 0.13, 0.10, 0, TAU);
+        g.fill();
+        g.restore();
+        // Midrib: a cut, so shadow above-left of a catch below-right.
+        g.save();
+        g.lineCap = 'round';
+        g.strokeStyle = 'rgba(18,16,14,0.62)';
+        g.lineWidth = Math.max(1, lw * 0.10);
+        g.beginPath();
+        g.moveTo(x - 0.4, y - lh * 0.42);
+        g.lineTo(x - 0.4, y + lh * 0.40);
+        g.stroke();
+        g.strokeStyle = 'rgba(255,252,244,0.42)';
+        g.lineWidth = Math.max(0.8, lw * 0.07);
+        g.beginPath();
+        g.moveTo(x + 0.7, y - lh * 0.38);
+        g.lineTo(x + 0.7, y + lh * 0.36);
+        g.stroke();
+        g.restore();
+      };
+
+      // Two tiers of acanthus, the lower one standing in front of the upper.
       for (const tier of [0, 1]) {
-        const y = h * (0.42 + tier * 0.3);
+        const y = h * (0.44 + tier * 0.28);
         const n = 5 - tier;
         for (let i = 0; i < n; i++) {
           const x = w * (0.5 + ((i - (n - 1) / 2) / n) * 0.78);
-          const lw = w * (0.13 - tier * 0.02);
-          const lh = h * (0.3 - tier * 0.05);
-          const leaf = new Path2D();
-          leaf.moveTo(x, y + lh * 0.5);
-          leaf.bezierCurveTo(x - lw, y + lh * 0.2, x - lw * 0.8, y - lh * 0.6, x, y - lh * 0.5);
-          leaf.bezierCurveTo(x + lw * 0.8, y - lh * 0.6, x + lw, y + lh * 0.2, x, y + lh * 0.5);
-          leaf.closePath();
-          g.fillStyle = mixHex('#D0CCC6', '#7A746F', rng.range(0.05, 0.55));
-          g.fill(leaf);
-          g.strokeStyle = '#101010';
-          g.lineWidth = 1.6;
-          g.stroke(leaf);
-          g.strokeStyle = 'rgba(20,18,16,0.75)';
-          g.lineWidth = 1.2;
-          g.beginPath();
-          g.moveTo(x, y - lh * 0.45);
-          g.lineTo(x, y + lh * 0.45);
-          g.stroke();
+          lobe(x, y, w * (0.115 - tier * 0.016), h * (0.28 - tier * 0.05),
+            mixHex('#C8C3BC', '#7E7873', rng.range(0.10, 0.60)));
         }
       }
-      // Volutes under the abacus corners.
+
+      // Volutes: a rolled scroll, so it is a lit ridge with its own shadow
+      // beneath, not a spiral of two strokes one on top of the other.
       for (const side of [-1, 1]) {
         const vx = cx + side * w * 0.38;
-        const vy = h * 0.30;
-        g.strokeStyle = '#C0BAB3';
-        g.lineWidth = 3.4;
-        g.beginPath();
-        for (let t = 0; t < TAU * 1.6; t += 0.16) {
-          const r = 2 + t * 2.4;
-          const px = vx + Math.cos(t * side) * r;
-          const py = vy + Math.sin(t * side) * r;
-          if (t === 0) g.moveTo(px, py); else g.lineTo(px, py);
-        }
-        g.stroke();
-        g.strokeStyle = 'rgba(16,16,16,0.85)';
-        g.lineWidth = 1.4;
-        g.stroke();
+        const vy = h * 0.32;
+        const scroll = (dx, dy, colour, lw) => {
+          g.strokeStyle = colour;
+          g.lineWidth = lw;
+          g.lineCap = 'round';
+          g.beginPath();
+          for (let t = 0; t < TAU * 1.6; t += 0.14) {
+            const r = 2 + t * 2.6;
+            const px = vx + dx + Math.cos(t * side) * r;
+            const py = vy + dy + Math.sin(t * side) * r;
+            if (t === 0) g.moveTo(px, py); else g.lineTo(px, py);
+          }
+          g.stroke();
+        };
+        g.save();
+        scroll(1.4, 1.6, 'rgba(14,13,12,0.55)', 4.6);
+        scroll(0, 0, '#A79F98', 3.6);
+        scroll(-0.9, -1.0, 'rgba(255,252,246,0.60)', 1.5);
+        g.restore();
       }
-      // Crevice darkening.
-      for (let i = 0; i < 40; i++) {
-        UITextures.dab(g, rng.range(0, w), rng.range(h * 0.2, h), rng.range(2, 10), rng.range(2, 7),
-          rng.range(0, TAU), rng.chance(0.55) ? '#101010' : '#B0ACA6', rng.range(0.08, 0.3), 2);
+
+      // Crevice grime, gathered where two carved forms meet.
+      for (let i = 0; i < 46; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(abH, h), rng.range(2, 9), rng.range(1.6, 6),
+          rng.range(0, TAU), rng.chance(0.62) ? '#141312' : '#BCB7B0', rng.range(0.06, 0.26), 2);
       }
+
+      // ── the abacus casts onto everything below it ───────────────────────
+      // This is the move the plate was missing. The slab overhangs by a fifth
+      // of the capital's height; under one lamp from up and left it throws a
+      // hard-edged wedge down the echinus, offset right.
+      const cast = g.createLinearGradient(0, abH, 0, abH + h * 0.26);
+      cast.addColorStop(0, 'rgba(10,9,9,0.80)');
+      cast.addColorStop(0.35, 'rgba(10,9,9,0.44)');
+      cast.addColorStop(1, 'rgba(10,9,9,0)');
+      g.fillStyle = cast;
+      g.fillRect(w * 0.03, abH, w * 0.94, h * 0.26);
       g.restore();
 
-      g.strokeStyle = 'rgba(10,10,10,0.7)';
-      g.lineWidth = 1.6;
-      g.stroke(bell);
-      UITextures.grain(g, w, h, rng, 10);
+      // ── the abacus itself ──────────────────────────────────────────────
+      const ab = g.createLinearGradient(0, 0, 0, abH);
+      ab.addColorStop(0, '#D5CFC8');
+      ab.addColorStop(0.42, '#ABA49E');
+      ab.addColorStop(0.86, '#7B7570');
+      ab.addColorStop(1, '#4E4846');
+      g.fillStyle = ab;
+      g.fillRect(w * 0.02, 0, w * 0.96, abH);
+      // Across it, the same lamp: the left return is lit, the right is not.
+      const abx = g.createLinearGradient(w * 0.02, 0, w * 0.98, 0);
+      abx.addColorStop(0, 'rgba(255,253,248,0.34)');
+      abx.addColorStop(0.30, 'rgba(255,253,248,0.06)');
+      abx.addColorStop(0.72, 'rgba(22,20,20,0.10)');
+      abx.addColorStop(1, 'rgba(22,20,20,0.46)');
+      g.fillStyle = abx;
+      g.fillRect(w * 0.02, 0, w * 0.96, abH);
+      g.fillStyle = 'rgba(255,255,252,0.62)';
+      g.fillRect(w * 0.02, 0, w * 0.96, 2.0);
+      g.fillStyle = 'rgba(24,22,22,0.55)';
+      g.fillRect(w * 0.02, abH - 1.6, w * 0.96, 1.6);
+      for (let i = 0; i < 140; i++) {
+        UITextures.dab(g, rng.range(w * 0.02, w * 0.98), rng.range(0, abH),
+          rng.range(0.8, 3), rng.range(0.7, 2.2), rng.range(0, TAU),
+          rng.chance(0.5) ? '#E4DFD8' : '#56514E', rng.range(0.05, 0.18), 0.8);
+      }
+      UITextures.grain(g, w, h, rng, 11);
     });
   }
 
-  /** Moulded torus/scotia plinth, drawn in front of the bottom bar. */
+  /**
+   * Moulded torus/scotia plinth, drawn in front of the bottom bar.
+   *
+   * Each moulding is a turned ring, so across it it is a small cylinder with
+   * its own highlight left of centre, and down it a torus catches above its
+   * equator and goes into contact below. The scotias between them are hollow,
+   * so they invert: dark at the top where the roll above overhangs, lit at the
+   * bottom where the floor of the groove faces up.
+   */
   columnBase() {
-    return this._make('col-base', 128, 56, (g, w, h, rng) => {
+    return this._make('col-base', 160, 72, (g, w, h, rng) => {
+      // top, bottom, base colour, convex?
       const bands = [
-        [0.00, 0.16, '#B9B2AB', '#7E7773'],
-        [0.16, 0.30, '#948D89', '#57514F'],
-        [0.30, 0.58, '#C6BFB8', '#6E6764'],
-        [0.58, 0.70, '#8B8480', '#4E4846'],
-        [0.70, 1.00, '#CCC5BD', '#655F5C'],
+        [0.00, 0.15, '#A9A29C', false],
+        [0.15, 0.31, '#C6BFB8', true],
+        [0.31, 0.44, '#8F8884', false],
+        [0.44, 0.70, '#D0C9C1', true],
+        [0.70, 0.80, '#847D79', false],
+        [0.80, 1.00, '#D6CFC7', true],
       ];
-      for (const [a, b, hi, lo] of bands) {
-        const grd = g.createLinearGradient(0, 0, w, 0);
-        grd.addColorStop(0, lo);
-        grd.addColorStop(0.34, hi);
-        grd.addColorStop(0.7, mixHex(hi, lo, 0.5));
-        grd.addColorStop(1, lo);
-        g.fillStyle = grd;
-        const inset = a === 0.30 || a === 0.70 ? 0 : w * 0.05;
-        g.fillRect(inset, h * a, w - inset * 2, h * (b - a));
-        g.fillStyle = 'rgba(0,0,0,0.4)';
-        g.fillRect(inset, h * b - 1.2, w - inset * 2, 1.2);
+      for (const [a, b, base, convex] of bands) {
+        const y0 = h * a;
+        const y1 = h * b;
+        const inset = convex ? 0 : w * 0.045;
+        g.save();
+        g.beginPath();
+        g.rect(inset, y0, w - inset * 2, y1 - y0);
+        g.clip();
+        g.fillStyle = cylinderGradient(g, inset, w - inset, 0, base, [-1.28, 1.30],
+          { amb: 0.36, kd: 0.78, kb: 0.28, ks: convex ? 0.34 : 0.10, shine: 18, stops: 20 });
+        g.fillRect(0, y0, w, y1 - y0);
+        // Down the moulding.
+        const v = g.createLinearGradient(0, y0, 0, y1);
+        if (convex) {
+          v.addColorStop(0.00, 'rgba(20,18,18,0.52)');
+          v.addColorStop(0.16, 'rgba(255,253,248,0.14)');
+          v.addColorStop(0.30, 'rgba(255,253,248,0.30)');
+          v.addColorStop(0.52, 'rgba(0,0,0,0)');
+          v.addColorStop(0.84, 'rgba(20,18,18,0.28)');
+          v.addColorStop(1.00, 'rgba(20,18,18,0.62)');
+        } else {
+          v.addColorStop(0.00, 'rgba(12,11,11,0.72)');
+          v.addColorStop(0.34, 'rgba(12,11,11,0.36)');
+          v.addColorStop(0.72, 'rgba(255,252,246,0.10)');
+          v.addColorStop(1.00, 'rgba(255,252,246,0.26)');
+        }
+        g.fillStyle = v;
+        g.fillRect(0, y0, w, y1 - y0);
+        for (let i = 0; i < 90; i++) {
+          UITextures.dab(g, rng.range(0, w), rng.range(y0, y1), rng.range(0.8, 3),
+            rng.range(0.6, 1.8), rng.range(0, TAU),
+            rng.chance(0.5) ? '#E2DDD6' : '#4E4A48', rng.range(0.05, 0.18), 0.8);
+        }
+        g.restore();
       }
-      UITextures.grain(g, w, h, rng, 8);
+      // Chips along the exposed top arris, and grime pooled at the floor.
+      for (let i = 0; i < 7; i++) {
+        const x = rng.range(w * 0.06, w * 0.94);
+        const cw = rng.range(2, 6);
+        g.save();
+        g.globalAlpha = rng.range(0.25, 0.5);
+        g.fillStyle = '#2C2926';
+        g.beginPath();
+        g.moveTo(x, 0);
+        g.lineTo(x + cw, 0);
+        g.lineTo(x + cw * rng.range(0.2, 0.7), rng.range(1.5, 4));
+        g.closePath();
+        g.fill();
+        g.restore();
+      }
+      const pool = g.createLinearGradient(0, h * 0.88, 0, h);
+      pool.addColorStop(0, 'rgba(30,28,26,0)');
+      pool.addColorStop(1, 'rgba(30,28,26,0.42)');
+      g.fillStyle = pool;
+      g.fillRect(0, h * 0.88, w, h * 0.12);
+      UITextures.grain(g, w, h, rng, 10);
     });
   }
 
@@ -1222,23 +1665,98 @@ export class UITextures {
     });
   }
 
-  /** The compass tape window: brass/parchment with a left-to-right ramp. */
+  /**
+   * The compass tape window.
+   *
+   * It was a flat cream rectangle with a hairline round it. It is a brass
+   * window sunk into the arch: the frame is a rolled bezel that catches on its
+   * upper-left and goes into shadow at its lower-right, the tape behind it is
+   * sunk, so the top and left walls of the recess throw across it, and the
+   * whole plate is old brass with a wiped centre and tarnish at the corners.
+   */
   compassPlate() {
-    return this._make('compass-plate', 200, 46, (g, w, h, rng) => {
-      const grd = g.createLinearGradient(0, 0, w, 0);
-      grd.addColorStop(0, '#E0DCAE');
-      grd.addColorStop(0.5, '#D6CE97');
-      grd.addColorStop(1, '#C9C087');
-      g.fillStyle = grd;
+    return this._make('compass-plate', 240, 56, (g, w, h, rng) => {
+      const bez = Math.max(3, h * 0.16);
+
+      // The bezel: a small torus running round the opening.
+      g.fillStyle = cylinderGradient(g, 0, w, 0, '#CFC08A', [-1.20, 1.24],
+        { amb: 0.42, kd: 0.66, kb: 0.28, ks: 0.30, shine: 20, stops: 16 });
       g.fillRect(0, 0, w, h);
-      g.fillStyle = 'rgba(255,255,232,0.75)';
-      g.fillRect(0, 0, w, 2);
-      g.fillStyle = 'rgba(60,50,20,0.7)';
-      g.fillRect(0, h - 2.4, w, 2.4);
-      g.strokeStyle = 'rgba(70,58,24,0.55)';
-      g.lineWidth = 1.4;
-      g.strokeRect(0.8, 0.8, w - 1.6, h - 1.6);
-      UITextures.grain(g, w, h, rng, 9);
+      const roll = g.createLinearGradient(0, 0, 0, h);
+      roll.addColorStop(0.00, 'rgba(255,252,214,0.62)');
+      roll.addColorStop(0.10, 'rgba(216,198,132,0.20)');
+      roll.addColorStop(0.50, 'rgba(0,0,0,0)');
+      roll.addColorStop(0.88, 'rgba(52,38,10,0.32)');
+      roll.addColorStop(1.00, 'rgba(30,20,4,0.72)');
+      g.fillStyle = roll;
+      g.fillRect(0, 0, w, h);
+
+      // The sunk field the letters scroll across: parchment behind glass, and
+      // the recess's own top-left walls dropped over it.
+      const field = g.createLinearGradient(0, bez, 0, h - bez);
+      field.addColorStop(0, '#B9B184');
+      field.addColorStop(0.30, '#E4DEB0');
+      field.addColorStop(0.75, '#D2CA92');
+      field.addColorStop(1, '#A9A073');
+      g.fillStyle = field;
+      g.fillRect(bez, bez, w - bez * 2, h - bez * 2);
+      const wall = g.createLinearGradient(bez, bez, bez, bez + h * 0.32);
+      wall.addColorStop(0, 'rgba(46,38,14,0.60)');
+      wall.addColorStop(1, 'rgba(46,38,14,0)');
+      g.fillStyle = wall;
+      g.fillRect(bez, bez, w - bez * 2, h * 0.32);
+      const wall2 = g.createLinearGradient(bez, 0, bez + w * 0.05, 0);
+      wall2.addColorStop(0, 'rgba(46,38,14,0.46)');
+      wall2.addColorStop(1, 'rgba(46,38,14,0)');
+      g.fillStyle = wall2;
+      g.fillRect(bez, bez, w * 0.05, h - bez * 2);
+      // …and the floor of the recess catches, bottom-right.
+      const floor = g.createLinearGradient(0, h - bez - h * 0.16, 0, h - bez);
+      floor.addColorStop(0, 'rgba(255,252,220,0)');
+      floor.addColorStop(1, 'rgba(255,252,220,0.34)');
+      g.fillStyle = floor;
+      g.fillRect(bez, h - bez - h * 0.16, w - bez * 2, h * 0.16);
+
+      // Foxing and tarnish: the corners go first.
+      for (let i = 0; i < 40; i++) {
+        const t = rng.next();
+        const x = t < 0.5 ? rng.range(bez, w * 0.22) : rng.range(w * 0.78, w - bez);
+        UITextures.dab(g, x, rng.range(bez, h - bez), rng.range(2, 12), rng.range(1.5, 6),
+          rng.range(0, TAU), rng.chance(0.55) ? '#8C7A40' : '#F2ECC2', rng.range(0.05, 0.20), 2.4);
+      }
+      for (let i = 0; i < 22; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(1.5, 8), rng.range(0.8, 3),
+          rng.range(0, TAU), rng.chance(0.5) ? '#FFF6C8' : '#3A2E0A', rng.range(0.04, 0.16), 1.6);
+      }
+      UITextures.grain(g, w, h, rng, 8);
+    });
+  }
+
+  /**
+   * A brass stud seated into a moulding — the automap's zoom controls.
+   *
+   * The + and − on the arch shoulders are a white bar and a white cross with
+   * no plate, no seat and no shadow: two glyphs floating on the stone. This is
+   * the object they should be sitting on. It is not yet wired up: `ui.panels.css`
+   * owns `.mm-zoom`, and the change there is to drop the two `::before`/`::after`
+   * bars for `background: var(--tex-zoom-plus)` / `var(--tex-zoom-minus)`.
+   */
+  zoomStud(sign = 'plus') {
+    return this._make(`zoom-${sign}`, 48, 48, (g, w, h, rng) => {
+      seatedStud(g, w / 2, h / 2, w * 0.40, h * 0.40, rng, {
+        depth: w * 0.075,
+        seat: 0.55,
+        face: { dome: 1.25, shoulder: 0.5, ks: 0.9, kb: 1.5 },
+      });
+      // The glyph is cut into the stud, so it is a groove: shadowed wall up
+      // and left, lit wall down and right, near-black floor.
+      const bar = (c) => {
+        c.beginPath();
+        c.rect(w * 0.28, h * 0.455, w * 0.44, h * 0.09);
+        if (sign === 'plus') c.rect(w * 0.455, h * 0.28, w * 0.09, h * 0.44);
+        c.fill();
+      };
+      UITextures.emboss(g, bar);
     });
   }
 
@@ -1493,59 +2011,149 @@ export class UITextures {
   /** The whole shelf recess: black interior, four leather spines, gold art. */
   bookShelf(w = 276, h = 186) {
     return this._make(`shelf-${w}x${h}`, w, h, (g, W, H, rng) => {
-      g.fillStyle = '#000000';
+      // The board first: a shelf is a plank with a thickness, and the books
+      // stand on it and drop shadows into it. The old plate was a flat black
+      // rectangle with a rule across it.
+      const board = g.createLinearGradient(0, 0, 0, H);
+      board.addColorStop(0, '#100C08');
+      board.addColorStop(0.5, '#1A130C');
+      board.addColorStop(1, '#0A0705');
+      g.fillStyle = board;
       g.fillRect(0, 0, W, H);
+      const s = H / 186;
+
       const kinds = ['sword', 'quill', 'globe', 'key'];
       const pad = W * 0.022;
       const sw = (W - pad * 5) / 4;
+      const spines = [];
       for (let i = 0; i < 4; i++) {
         const x = pad + i * (sw + pad);
         const y = H * 0.015;
-        const sh = H * 0.97;
-        // Pillow-shaded chocolate leather.
+        const sh = H * 0.95;
+
+        // Each volume leans a hair differently and is bound in its own hide.
+        const hue = rng.range(-1, 1);
+        const dark = mixHex('#1C1004', '#2A1808', rng.range(0, 1));
+        const mid = mixHex('#4E3018', '#5E3C22', (hue + 1) / 2);
+        const lit = mixHex('#6A4526', '#7A5230', rng.range(0, 1));
+
+        // The spine is a rounded back, so across it it is a cylinder — but a
+        // cylinder of leather, which is matte, so its highlight is broad.
         const grd = g.createLinearGradient(x, 0, x + sw, 0);
-        grd.addColorStop(0, '#241505');
-        grd.addColorStop(0.16, '#422818');
-        grd.addColorStop(0.44, '#5A3A22');
-        grd.addColorStop(0.72, '#392410');
-        grd.addColorStop(1, '#180E04');
+        grd.addColorStop(0.00, '#120A02');
+        grd.addColorStop(0.09, dark);
+        grd.addColorStop(0.30, mid);
+        grd.addColorStop(0.44, lit);
+        grd.addColorStop(0.66, mid);
+        grd.addColorStop(0.88, dark);
+        grd.addColorStop(1.00, '#0C0702');
         g.fillStyle = grd;
         g.fillRect(x, y, sw, sh);
+
+        // Head and tail take the wear: a book is pulled off the shelf by its
+        // head cap, so that is where the dye is rubbed back to the hide.
         const vg = g.createLinearGradient(0, y, 0, y + sh);
-        vg.addColorStop(0, 'rgba(0,0,0,0.55)');
-        vg.addColorStop(0.2, 'rgba(0,0,0,0)');
-        vg.addColorStop(0.85, 'rgba(0,0,0,0)');
-        vg.addColorStop(1, 'rgba(0,0,0,0.6)');
+        vg.addColorStop(0, 'rgba(0,0,0,0.62)');
+        vg.addColorStop(0.06, 'rgba(0,0,0,0.10)');
+        vg.addColorStop(0.5, 'rgba(0,0,0,0)');
+        vg.addColorStop(0.94, 'rgba(0,0,0,0.16)');
+        vg.addColorStop(1, 'rgba(0,0,0,0.66)');
         g.fillStyle = vg;
         g.fillRect(x, y, sw, sh);
-        // Mottling.
+        for (let k = 0; k < 26; k++) {
+          const scuffY = rng.chance(0.5) ? y + rng.range(0, sh * 0.10) : y + sh - rng.range(0, sh * 0.10);
+          UITextures.dab(g, x + rng.range(0, sw), scuffY,
+            rng.range(1.5, sw * 0.30), rng.range(0.6, 2.6), rng.range(-0.3, 0.3),
+            rng.chance(0.6) ? '#8A6440' : '#0A0602', rng.range(0.10, 0.30), 1.2);
+        }
+
+        // Hide, not paint: coarse mottle now, the pores once for the whole
+        // plate at the end — `putImageData` ignores a clip, so a per-book
+        // grain pass would lay four coats of it on every book.
         for (let k = 0; k < 70; k++) {
           UITextures.dab(g, x + rng.range(0, sw), y + rng.range(0, sh),
             rng.range(1.5, 9), rng.range(1.5, 8), rng.range(0, TAU),
             rng.chance(0.5) ? '#6A4522' : '#150C03', rng.range(0.05, 0.2), 2);
         }
-        // Band groups at ~18% and ~85%.
-        for (const frac of [0.18, 0.85]) {
+        spines.push([x, y, sw, sh, grd]);
+        // Raised bands. A sewn-on band stands proud of the spine, so the
+        // group is: shadow above it, the lit crown, shadow below, then the
+        // tooled gold rules that were run either side of it. Straight flat
+        // lines of constant width are exactly what this was.
+        for (const frac of [0.18, 0.86]) {
           const by = y + sh * frac;
-          const bands = [
-            [-9, '#D8B64A', 2.2], [-6, '#CFC7BD', 1.6], [0, '#520000', 7],
-            [6, '#CFC7BD', 1.6], [9, '#D8B64A', 2.2],
-          ];
-          for (const [off, col, th] of bands) {
-            g.fillStyle = col;
-            g.fillRect(x, by + off * (H / 186), sw, th * (H / 186));
+          const bandH = 9 * s;
+          // The band itself, as a small torus across the spine.
+          const bg = g.createLinearGradient(0, by - bandH / 2, 0, by + bandH / 2);
+          bg.addColorStop(0.00, 'rgba(0,0,0,0.72)');
+          bg.addColorStop(0.22, 'rgba(255,232,200,0.16)');
+          bg.addColorStop(0.42, 'rgba(255,236,206,0.26)');
+          bg.addColorStop(0.70, 'rgba(0,0,0,0.12)');
+          bg.addColorStop(1.00, 'rgba(0,0,0,0.62)');
+          g.fillStyle = '#5A0E0E';
+          g.fillRect(x, by - bandH / 2, sw, bandH);
+          g.fillStyle = bg;
+          g.fillRect(x, by - bandH / 2, sw, bandH);
+          // Gold rules, tooled in: a debossed shadow on one side of the line
+          // and the catch on the other, never a flat stroke.
+          for (const off of [-8, -5.6, 5.6, 8]) {
+            const ry = by + off * s;
+            const thick = Math.abs(off) > 7 ? 2.0 * s : 1.4 * s;
+            g.fillStyle = 'rgba(0,0,0,0.55)';
+            g.fillRect(x, ry - thick * 0.55, sw, thick * 0.8);
+            g.fillStyle = Math.abs(off) > 7 ? '#D8B64A' : '#CFC7BD';
+            g.fillRect(x, ry, sw, thick);
+            g.fillStyle = 'rgba(255,246,206,0.55)';
+            g.fillRect(x, ry + thick * 0.75, sw, thick * 0.35);
           }
-          g.fillStyle = 'rgba(0,0,0,0.35)';
-          g.fillRect(x, by + 13 * (H / 186), sw, 1.4);
+          // Wear on the crown of the band, following the spine's own light.
+          for (let k = 0; k < 8; k++) {
+            UITextures.dab(g, x + rng.range(0, sw), by + rng.range(-bandH * 0.3, bandH * 0.1),
+              rng.range(1.2, sw * 0.22), rng.range(0.4, 1.2), 0, '#D8B678', rng.range(0.06, 0.20), 0.8);
+          }
         }
-        // Gold outline emblem in the middle.
+
+        // Gold tooling: struck into the leather, so it sits in a debossed well
+        // — a dark wall up-left, the metal, and a bright catch down-right.
         g.save();
-        g.globalAlpha = 0.9;
-        g.strokeStyle = '#B8963C';
-        UITextures.spineEmblem(g, kinds[i], x + sw * 0.08 + 1.5, y + sh * 0.34 + 1.5, sw * 0.84, sh * 0.34);
+        g.globalAlpha = 0.85;
+        g.strokeStyle = '#120A02';
+        UITextures.spineEmblem(g, kinds[i], x + sw * 0.08 - 1.2 * s, y + sh * 0.34 - 1.3 * s, sw * 0.84, sh * 0.34);
+        g.globalAlpha = 0.95;
+        g.strokeStyle = '#8A6A22';
+        UITextures.spineEmblem(g, kinds[i], x + sw * 0.08 + 1.4 * s, y + sh * 0.34 + 1.5 * s, sw * 0.84, sh * 0.34);
         g.restore();
         UITextures.spineEmblem(g, kinds[i], x + sw * 0.08, y + sh * 0.34, sw * 0.84, sh * 0.34);
+
+        // The book drops a shadow onto its neighbour and onto the board.
+        const gut = g.createLinearGradient(x + sw, 0, x + sw + pad * 1.6, 0);
+        gut.addColorStop(0, 'rgba(0,0,0,0.85)');
+        gut.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gut;
+        g.fillRect(x + sw, y, pad * 1.6, sh);
       }
+
+      // Leather pores: fine, warm, and one coat only.
+      mineral(g, W, H, {
+        seed: 203,
+        octaves: [{ cell: 3.0, amp: 7, hue: 4, facet: 8 }, { cell: 9.0, amp: 5, hue: 3, facet: 4 }],
+        fine: 4,
+      });
+      // The pore pass flattens the roundness of the backs, so the cylinder
+      // goes back over the top at low weight — the spines must stay rounded.
+      for (const [x, y, sww, shh, grd] of spines) {
+        g.save();
+        g.globalAlpha = 0.30;
+        g.fillStyle = grd;
+        g.fillRect(x, y, sww, shh);
+        g.restore();
+      }
+
+      // The board's own front edge: a thickness, lit on top and dark beneath.
+      g.fillStyle = 'rgba(224,218,208,0.22)';
+      g.fillRect(0, H - 3.4 * s, W, 1.2 * s);
+      g.fillStyle = 'rgba(0,0,0,0.62)';
+      g.fillRect(0, H - 2.2 * s, W, 2.2 * s);
       UITextures.grain(g, W, H, rng, 8);
     });
   }
@@ -1810,18 +2418,38 @@ export class UITextures {
       const cx = w / 2;
       // The bronze mount the serpent is pinned to: a lozenge with a lit
       // top-left face and a dark bottom-right one.
+      const lozenge = new Path2D();
+      lozenge.moveTo(cx, h * 0.26);
+      lozenge.lineTo(w * 0.94, h * 0.43);
+      lozenge.lineTo(cx, h * 0.60);
+      lozenge.lineTo(w * 0.06, h * 0.43);
+      lozenge.closePath();
+      // The mount stands off the board, so it drops one shadow, down-right.
+      castShadow(g, lozenge, 2.0, 0.55, 2.2);
       const mount = g.createLinearGradient(0, h * 0.24, w, h * 0.62);
-      mount.addColorStop(0, '#A8792E');
-      mount.addColorStop(0.45, '#6E4C18');
-      mount.addColorStop(1, '#38260A');
+      mount.addColorStop(0, '#B9873A');
+      mount.addColorStop(0.30, '#8A6220');
+      mount.addColorStop(0.62, '#5A3E10');
+      mount.addColorStop(1, '#2E1E06');
       g.fillStyle = mount;
-      g.beginPath();
-      g.moveTo(cx, h * 0.26);
-      g.lineTo(w * 0.94, h * 0.43);
-      g.lineTo(cx, h * 0.60);
-      g.lineTo(w * 0.06, h * 0.43);
-      g.closePath();
-      g.fill();
+      g.fill(lozenge);
+      // Its two upper facets take the light and its two lower ones do not, so
+      // the lozenge reads as a hammered boss rather than as a printed rhombus.
+      g.save();
+      g.clip(lozenge);
+      const facet = g.createLinearGradient(w * 0.2, h * 0.24, w * 0.8, h * 0.62);
+      facet.addColorStop(0, 'rgba(255,244,196,0.42)');
+      facet.addColorStop(0.32, 'rgba(255,244,196,0.08)');
+      facet.addColorStop(0.62, 'rgba(20,12,2,0.16)');
+      facet.addColorStop(1, 'rgba(20,12,2,0.62)');
+      g.fillStyle = facet;
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 20; i++) {
+        UITextures.dab(g, rng.range(w * 0.06, w * 0.94), rng.range(h * 0.26, h * 0.60),
+          rng.range(1.2, 5), rng.range(0.8, 2.4), rng.range(0, TAU),
+          rng.chance(0.45) ? '#FFEFB8' : '#2A1A04', rng.range(0.05, 0.20), 1.1);
+      }
+      g.restore();
 
       /** The serpent's spine, drawn twice: gold body, then a silvered head. */
       const spine = (c) => {
@@ -2951,50 +3579,152 @@ export class UITextures {
    */
   portraitRing(active = false) {
     return this._make(`ring-${active ? 'gold' : 'stone'}`, 138, 192, (g, w, h, rng) => {
-      const pal = active
-        ? ['#E4DCA8', '#D6CE94', '#A69764', '#8B7F42', '#54491E']
-        : ['#8B8A8B', '#6E6C6D', '#585758', '#454344', '#262425'];
-      const thick = w * 0.115;
-      const outer = new Path2D();
-      outer.ellipse(w / 2, h / 2, w / 2 - 1, h / 2 - 1, 0, 0, TAU);
-      const inner = new Path2D();
-      inner.ellipse(w / 2, h / 2, w / 2 - thick, h / 2 - thick * 0.86, 0, 0, TAU);
+      // A bezel is a torus, and a torus under one lamp is unambiguous: the
+      // roll catches along its upper-left quadrant, goes into its own shadow
+      // at the lower-right, and picks a warm bounce back off the marble under
+      // it. The old ring took a corner-to-corner gradient plus two blurred
+      // dabs, then fenced the whole thing in a 2px near-black stroke — which
+      // is the keyline defect, on four rings, on every frame of the game.
+      const gold = active;
+      const cxp = w / 2;
+      const cyp = h / 2;
+      const rox = w / 2 - 2.5;
+      const roy = h / 2 - 2.5;
+      const thick = w * 0.125;
+      const rix = rox - thick;
+      const riy = roy - thick * 0.86;
 
-      const grd = g.createLinearGradient(0, 0, w, h);
-      grd.addColorStop(0, pal[0]);
-      grd.addColorStop(0.3, pal[1]);
-      grd.addColorStop(0.55, pal[2]);
-      grd.addColorStop(0.8, pal[3]);
-      grd.addColorStop(1, pal[4]);
-      g.fillStyle = grd;
-      g.fill(outer);
-
-      // Torus shading: light on the upper-left of the roll, dark below.
+      // The ring stands proud, so it drops a shadow down and right first.
+      const sil = new Path2D();
+      sil.ellipse(cxp, cyp, rox, roy, 0, 0, TAU);
+      castShadow(g, sil, 2.2, 0.45, 2.2);
+      // …but never across the portrait it frames.
       g.save();
-      g.clip(outer);
-      UITextures.dab(g, w * 0.28, h * 0.14, w * 0.34, h * 0.10, -0.5, '#FFFFFF', active ? 0.5 : 0.35, 6);
-      UITextures.dab(g, w * 0.74, h * 0.9, w * 0.30, h * 0.09, -0.5, '#000000', 0.45, 7);
-      for (let i = 0; i < 60; i++) {
-        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(1.5, 8), rng.range(1.5, 6),
-          rng.range(0, TAU), rng.chance(0.5) ? '#FFFFFF' : '#000000', rng.range(0.02, 0.09), 2);
-      }
-      g.restore();
-
-      // Inner reveal: a dark lip, then punch the hole.
-      g.save();
-      g.strokeStyle = 'rgba(20,18,16,0.85)';
-      g.lineWidth = 3;
-      g.stroke(inner);
       g.globalCompositeOperation = 'destination-out';
       g.fillStyle = '#000';
-      g.fill(inner);
+      g.beginPath();
+      g.ellipse(cxp, cyp, rox - thick, roy - thick * 0.86, 0, 0, TAU);
+      g.fill();
       g.restore();
 
-      // Outer shadow line so the ring sits proud of the marble.
+      // The inactive ring is dressed stone, not chrome: it takes a broad, low
+      // sheen and no hard catch at all. The active one is gilt bronze, warmer
+      // and duller than raw gold — a mirror-bright torus reads as moulded
+      // plastic, which is the exact failure this pass exists to remove.
+      const amb = gold ? [26, 21, 9] : [30, 30, 30];
+      const body = gold ? [162, 140, 80] : [124, 124, 124];
+      const spec = gold ? [255, 246, 206] : [206, 206, 202];
+      const bcol = gold ? [204, 164, 84] : [150, 144, 134];
+      const KEY = [-0.52, -0.46, 0.72];
+      const BNC = [0.72, 0.52, 0.36];
+      const kn = Math.hypot(...KEY);
+      const bn = Math.hypot(...BNC);
+      const L = KEY.map((v) => v / kn);
+      const B = BNC.map((v) => v / bn);
+      const Hv = [L[0], L[1], L[2] + 1];
+      const hn = Math.hypot(...Hv);
+      const Hh = Hv.map((v) => v / hn);
+
+      const out = [0, 0, 0, 0];
+      const shadeTorus = (px, py) => {
+        const u = (px + 0.5 - cxp) / rox;
+        const v = (py + 0.5 - cyp) / roy;
+        const rho = Math.hypot(u, v);
+        if (rho > 1.02) return false;
+        const si = Math.hypot((px + 0.5 - cxp) / rix, (py + 0.5 - cyp) / riy);
+        if (si < 0.985) return false;
+        // Where across the roll are we, 0 at the inner lip, 1 at the outer?
+        const s = Math.max(0, Math.min(1, (rho - rix / rox) / (1 - rix / rox)));
+        const a = (s * 2 - 1) * 1.22;
+        // Outward normal of the ellipse at this point, in screen space.
+        const ex = u / (rox || 1);
+        const ey = v / (roy || 1);
+        const em = Math.hypot(ex, ey) || 1;
+        const nx = (ex / em) * Math.sin(a);
+        const ny = (ey / em) * Math.sin(a);
+        const nz = Math.cos(a);
+        const ndl = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]);
+        const ndh = Math.max(0, nx * Hh[0] + ny * Hh[1] + nz * Hh[2]);
+        const ndb = Math.max(0, nx * B[0] + ny * B[1] + nz * B[2]);
+        const sp = Math.pow(ndh, gold ? 26 : 9) * (gold ? 0.72 : 0.22);
+        const sh = Math.pow(ndh, 4) * (gold ? 0.16 : 0.12);
+        const bo = Math.pow(ndb, 3.0) * (gold ? 0.52 : 0.30);
+        const n = 1 + (rng.next() - 0.5) * (gold ? 0.12 : 0.20);
+        for (let i = 0; i < 3; i++) {
+          out[i] = Math.min(255, (amb[i] + body[i] * Math.pow(ndl, 1.25)
+            + spec[i] * (sp + sh) + bcol[i] * bo) * n);
+        }
+        // Soft at both terminations: the outer silhouette feathers, the inner
+        // reveal is a cut so it darkens rather than stops.
+        const aOut = rho > 1 ? Math.max(0, 1 - (rho - 1) / 0.02) : 1;
+        const aIn = si < 1 ? Math.max(0, (si - 0.985) / 0.015) : 1;
+        out[3] = aOut * aIn;
+        return true;
+      };
+
+      const img = g.getImageData(0, 0, w, h);
+      const d = img.data;
+      for (let py = 0; py < h; py++) {
+        for (let px = 0; px < w; px++) {
+          if (!shadeTorus(px, py)) continue;
+          const sa = out[3];
+          if (sa <= 0) continue;
+          const i = (py * w + px) * 4;
+          const da = d[i + 3] / 255;
+          const oa = sa + da * (1 - sa);
+          const k = da * (1 - sa);
+          d[i] = (out[0] * sa + d[i] * k) / oa;
+          d[i + 1] = (out[1] * sa + d[i + 1] * k) / oa;
+          d[i + 2] = (out[2] * sa + d[i + 2] * k) / oa;
+          d[i + 3] = oa * 255;
+        }
+      }
+      g.putImageData(img, 0, 0);
+
+      // Wear on the crown of the roll, and grime in the reveal.
       g.save();
-      g.strokeStyle = 'rgba(24,22,22,0.75)';
-      g.lineWidth = 2;
-      g.stroke(outer);
+      g.beginPath();
+      g.ellipse(cxp, cyp, rox, roy, 0, 0, TAU);
+      g.ellipse(cxp, cyp, rix, riy, 0, 0, TAU);
+      g.clip('evenodd');
+      for (let i = 0; i < 110; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(1.5, 7), rng.range(1.2, 5),
+          rng.range(0, TAU), rng.chance(0.5) ? '#FFFFFF' : '#000000',
+          rng.range(0.03, gold ? 0.10 : 0.16), 1.6);
+      }
+      // Rubbed brightest along the crown of the roll where hands reach it —
+      // and grubbiest in the hollow beside the reveal.
+      for (let i = 0; i < 26; i++) {
+        const a = rng.range(-2.9, -0.6);
+        const rr = rng.range(0.55, 0.78);
+        UITextures.dab(g, cxp + Math.cos(a) * rox * rr, cyp + Math.sin(a) * roy * rr,
+          rng.range(2, 9), rng.range(1, 3), a + Math.PI / 2,
+          gold ? '#FFF2C0' : '#E8E6E0', rng.range(0.04, 0.14), 2);
+      }
+      g.restore();
+      // `putImageData` ignores the clip, so the grain goes on last and over
+      // the whole plate — which is what is wanted anyway: the hole is
+      // transparent and `mineral` leaves transparent pixels alone.
+      mineral(g, w, h, {
+        seed: gold ? 71 : 72,
+        octaves: [{ cell: 2.6, amp: gold ? 6 : 9, hue: gold ? 4 : 2, facet: gold ? 7 : 10 },
+          { cell: 8, amp: gold ? 5 : 7, hue: 2, facet: 5 }],
+        fine: gold ? 4 : 6,
+      });
+
+      // The portrait sits below the bezel, so the reveal casts inward from the
+      // top-left — a recess, not a ruled circle.
+      g.save();
+      g.beginPath();
+      g.ellipse(cxp, cyp, rix, riy, 0, 0, TAU);
+      g.clip();
+      g.globalAlpha = 0.55;
+      g.strokeStyle = 'rgba(14,13,12,0.95)';
+      g.lineWidth = 5;
+      g.filter = 'blur(2px)';
+      g.beginPath();
+      g.ellipse(cxp + 1.6, cyp + 1.8, rix, riy, 0, Math.PI * 0.86, Math.PI * 1.94);
+      g.stroke();
       g.restore();
     });
   }
@@ -3002,42 +3732,105 @@ export class UITextures {
   /** The recessed stone channel the HP/SP tubes run in. */
   tubeSlot() {
     return this._make('tube-slot', 60, 240, (g, w, h, rng) => {
-      const grd = g.createLinearGradient(0, 0, w, 0);
-      grd.addColorStop(0, '#3E3835');
-      grd.addColorStop(0.25, '#534A47');
-      grd.addColorStop(0.7, '#5E5651');
-      grd.addColorStop(1, '#3A3431');
-      g.fillStyle = grd;
+      // A channel cut into the marble: the near walls are the top and left, so
+      // they are the ones in shadow, and the floor catches at the bottom right.
+      g.fillStyle = cylinderGradient(g, 0, w, 0, '#6A615B', [-1.10, 1.34],
+        { amb: 0.44, kd: 0.60, kb: 0.22, ks: 0.12, shine: 12, stops: 14 });
       g.fillRect(0, 0, w, h);
-      g.fillStyle = 'rgba(0,0,0,0.55)';
-      g.fillRect(0, 0, w, 2);
-      g.fillRect(0, 0, 2, h);
-      g.fillStyle = 'rgba(226,220,212,0.4)';
-      g.fillRect(0, h - 2, w, 2);
-      g.fillRect(w - 2, 0, 2, h);
-      UITextures.grain(g, w, h, rng, 10);
+      const wall = g.createLinearGradient(0, 0, 0, h * 0.10);
+      wall.addColorStop(0, 'rgba(0,0,0,0.62)');
+      wall.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = wall;
+      g.fillRect(0, 0, w, h * 0.10);
+      const floorLit = g.createLinearGradient(0, h * 0.92, 0, h);
+      floorLit.addColorStop(0, 'rgba(232,226,218,0)');
+      floorLit.addColorStop(1, 'rgba(232,226,218,0.34)');
+      g.fillStyle = floorLit;
+      g.fillRect(0, h * 0.92, w, h * 0.08);
+      mineral(g, w, h, { seed: 11, octaves: [{ cell: 2.8, amp: 9, hue: 4, facet: 11 }, { cell: 8, amp: 8, hue: 3, facet: 7 }], fine: 5 });
+      UITextures.grain(g, w, h, rng, 8);
     });
   }
 
-  /** A tiny gold classical capital, used at both ends of every tube. */
+  /** A tiny gold ferrule, used at both ends of every tube. */
   tubeCap(flip = false) {
-    return this._make(`tube-cap-${flip ? 'b' : 't'}`, 32, 20, (g, w, h) => {
+    return this._make(`tube-cap-${flip ? 'b' : 't'}`, 40, 26, (g, w, h, rng) => {
       g.save();
       if (flip) { g.translate(0, h); g.scale(1, -1); }
-      const grd = g.createLinearGradient(0, 0, 0, h);
-      grd.addColorStop(0, '#DBBC80');
-      grd.addColorStop(0.35, '#C9AC67');
-      grd.addColorStop(0.72, '#A98E4E');
-      grd.addColorStop(1, '#95844C');
-      g.fillStyle = grd;
+      // Across: the same small cylinder as everything else brass here.
+      g.fillStyle = cylinderGradient(g, 0, w, 0, '#D3B87A', [-1.18, 1.26],
+        { amb: 0.32, kd: 0.84, kb: 0.32, ks: 0.48, shine: 24, stops: 16 });
       g.fillRect(0, 0, w, h);
-      g.fillStyle = 'rgba(255,246,206,0.7)';
-      g.fillRect(0, 0, w, 2);
-      g.fillStyle = 'rgba(50,36,10,0.7)';
-      g.fillRect(0, h - 2, w, 2);
-      g.fillStyle = 'rgba(255,246,206,0.35)';
-      g.fillRect(w * 0.12, h * 0.35, w * 0.2, h * 0.4);
+      // Down: a turned collar — a fillet, a hollow, then the crown.
+      const v = g.createLinearGradient(0, 0, 0, h);
+      v.addColorStop(0.00, 'rgba(255,250,206,0.62)');
+      v.addColorStop(0.14, 'rgba(40,28,6,0.34)');
+      v.addColorStop(0.30, 'rgba(255,248,204,0.30)');
+      v.addColorStop(0.52, 'rgba(0,0,0,0)');
+      v.addColorStop(0.80, 'rgba(46,32,8,0.36)');
+      v.addColorStop(1.00, 'rgba(24,16,2,0.70)');
+      g.fillStyle = v;
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 16; i++) {
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(1, 5), rng.range(0.5, 1.8),
+          rng.range(0, TAU), rng.chance(0.45) ? '#FFF6C8' : '#3A2A08', rng.range(0.05, 0.18), 0.9);
+      }
       g.restore();
+    });
+  }
+
+  /**
+   * Glass, for the two tubes.
+   *
+   * The bars are flat saturated fills in a box: no tube, no meniscus, no inner
+   * shadow where the glass turns over at the top. This is that missing layer —
+   * a transparent overlay that goes *on top of* the coloured fluid, carrying
+   * the cylinder's own shading, the vertical catch left of centre, the dark
+   * reflected band on the right, and the shadow the tube's mouth throws down
+   * inside it.
+   *
+   * Not yet wired up: `ui.panels.css` owns `.mm-tube-well`, and the change
+   * there is one rule — a `::after` at `inset: 0` with this as its background.
+   */
+  tubeGlass() {
+    return this._make('tube-glass', 32, 200, (g, w, h) => {
+      // The body of the cylinder, as a multiply-ish darkening at both rims.
+      const across = g.createLinearGradient(0, 0, w, 0);
+      across.addColorStop(0.00, 'rgba(8,10,14,0.62)');
+      across.addColorStop(0.10, 'rgba(8,10,14,0.26)');
+      across.addColorStop(0.22, 'rgba(255,255,255,0.34)');
+      across.addColorStop(0.30, 'rgba(255,255,255,0.52)');
+      across.addColorStop(0.40, 'rgba(255,255,255,0.10)');
+      across.addColorStop(0.62, 'rgba(0,0,0,0)');
+      across.addColorStop(0.80, 'rgba(10,12,16,0.30)');
+      across.addColorStop(0.90, 'rgba(226,232,240,0.20)');
+      across.addColorStop(1.00, 'rgba(6,8,12,0.70)');
+      g.fillStyle = across;
+      g.fillRect(0, 0, w, h);
+      // The mouth of the tube throws down inside it, and the base pools.
+      const top = g.createLinearGradient(0, 0, 0, h * 0.09);
+      top.addColorStop(0, 'rgba(0,0,0,0.62)');
+      top.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = top;
+      g.fillRect(0, 0, w, h * 0.09);
+      const bot = g.createLinearGradient(0, h * 0.94, 0, h);
+      bot.addColorStop(0, 'rgba(0,0,0,0)');
+      bot.addColorStop(1, 'rgba(0,0,0,0.46)');
+      g.fillStyle = bot;
+      g.fillRect(0, h * 0.94, w, h * 0.06);
+      // A few flaws in the glass, drawn down its length.
+      for (let i = 0; i < 5; i++) {
+        const x = w * (0.18 + i * 0.16);
+        g.save();
+        g.globalAlpha = 0.10;
+        g.strokeStyle = '#FFFFFF';
+        g.lineWidth = 0.8;
+        g.beginPath();
+        g.moveTo(x, h * 0.04);
+        g.lineTo(x + 0.6, h * 0.96);
+        g.stroke();
+        g.restore();
+      }
     });
   }
 
@@ -3110,7 +3903,7 @@ export class UITextures {
    */
   tallOval(glyph) {
     return this._make(`oval-tall-${glyph}`, 56, 120, (g, w, h, rng) => {
-      UITextures.brassFace(g, 1, 1, w - 2, h - 2, rng, { tilt: rng.range(-0.16, 0.16) });
+      UITextures.brassFace(g, 0, 0, w, h, rng, { tilt: rng.range(-0.14, 0.14) });
       UITextures.emboss(g, (c) => GLYPHS[glyph]?.(c, w, h));
     });
   }
@@ -3118,7 +3911,7 @@ export class UITextures {
   /** The five wide panel ovals: 58 x 30 native, aspect 1.95 : 1. */
   wideOval(glyph) {
     return this._make(`oval-wide-${glyph}`, 116, 60, (g, w, h, rng) => {
-      UITextures.brassFace(g, 1, 1, w - 2, h - 2, rng, { tilt: rng.range(-0.16, 0.16) });
+      UITextures.brassFace(g, 0, 0, w, h, rng, { tilt: rng.range(-0.14, 0.14) });
       UITextures.emboss(g, (c) => GLYPHS[glyph]?.(c, w, h));
     });
   }
@@ -3242,6 +4035,12 @@ export class UITextures {
       '--tex-tube-slot': this.tubeSlot(),
       '--tex-tube-cap': this.tubeCap(false),
       '--tex-tube-base': this.tubeCap(true),
+      // Painted and published ahead of the stylesheet that will use them:
+      // `.mm-tube-well` wants the glass as a `::after`, and `.mm-zoom` wants
+      // the studs instead of its two white bars. Both live in `ui.panels.css`.
+      '--tex-tube-glass': this.tubeGlass(),
+      '--tex-zoom-plus': this.zoomStud('plus'),
+      '--tex-zoom-minus': this.zoomStud('minus'),
       '--tex-tomb': this.tombstone(),
     };
     for (const [k, v] of Object.entries(vars)) target.style.setProperty(k, U(v));

@@ -229,6 +229,14 @@ export class QuestPanel extends Panel {
     this.indexEl = el('div', { className: 'mm-qb-index' });
     this.entryEl = el('div', { className: 'mm-qb-entry' });
     this.footEl = el('div', { className: 'mm-qb-foot' });
+    // Who gave it, where, and what kind — on the left leaf, under the list.
+    //
+    // Measured, because the leaves were badly out of balance: the right leaf
+    // was holding 666px of content in 589px of space while the left sat 85%
+    // empty, and what fell off the bottom was the journal. These three chips
+    // are 82px of that, they are facts about the selected row rather than the
+    // body of the entry, and the list they belong to is right above them.
+    this.metaEl = el('div', { className: 'mm-qb-meta' });
     this.countEl = el('div', { className: 'mm-qb-count' });
 
     this.tabEls = TABS.map((t) => {
@@ -250,7 +258,8 @@ export class QuestPanel extends Panel {
     const left = el('div', { className: 'mm-quest-page is-left' },
       el('div', { className: 'mm-quest-head' }, this.headEl),
       this.countEl,
-      this.indexEl);
+      this.indexEl,
+      this.metaEl);
     const right = el('div', { className: 'mm-quest-page is-right' }, this.entryEl, this.footEl);
 
     const binding = el('div', { className: 'mm-quest-binding' },
@@ -347,7 +356,7 @@ export class QuestPanel extends Panel {
   }
 
   _renderEntry(q) {
-    const meta = el('div', { className: 'mm-qb-meta' },
+    setChildren(this.metaEl,
       metaChip('Given by', q.giver || 'Unknown'),
       metaChip('Where', q.place || 'Unrecorded'),
       metaChip('Kind', KIND_LABEL[q.kind] ?? 'Errand'));
@@ -375,16 +384,32 @@ export class QuestPanel extends Panel {
 
     setChildren(this.entryEl,
       el('h3', { className: 'mm-qb-title', text: q.name }),
-      meta,
       q.summary ? el('p', { className: 'mm-qb-summary', text: q.summary }) : null,
       rule('The journal'),
-      ...journal,
-      objectives.length ? rule('What is left') : null,
-      ...objectives);
+      ...journal);
 
-    // What the job pays is pinned to the foot of the page rather than left at
-    // the end of the prose: it is the one line a player scrolls back for.
+    // The foot-of-page fade only means "there is more" when there is more —
+    // see the note on `.mm-qb-entry.is-overflowing`. Measured after layout, so
+    // it has to wait a frame.
+    requestAnimationFrame(() => {
+      const e = this.entryEl;
+      if (!e) return;
+      e.classList.toggle('is-overflowing', e.scrollHeight > e.clientHeight + 1);
+    });
+
+    // What is left, and what the job pays, are both pinned to the foot rather
+    // than left at the end of the prose. The rewards are the line a player
+    // scrolls back for; the objective is the line they opened the book for.
+    //
+    // The objective used to sit at the end of the scrolling journal, which is
+    // how it came to be half-visible: the entry clipped it mid-sentence, so
+    // "Speak with Wat Fletcher at the Bell and" had no "Anchor.", and the fade
+    // over it made the most important line on the screen the least legible one.
+    // A reviewer measured it at 2.37:1 against 9.60:1 for the line above.
+    // Prose can scroll. The next action cannot.
     setChildren(this.footEl,
+      objectives.length ? rule('What is left') : null,
+      ...objectives,
       rule('On completion'),
       el('div', { className: 'mm-qb-rewards' }, ...rewards));
   }

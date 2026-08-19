@@ -121,6 +121,72 @@ const SKY_DAY_GAIN = [1.53, 1.47, 1.40];
  */
 const GROUND_BAND_GAIN = [1.45, 0.98, 0.71];
 
+/* ══════════════════════════ aerial perspective ═══════════════════════════
+ * REFERENCE §2.7, re-measured on a *vista* rather than on forty metres of
+ * street: MM6's distant ground is 3.6× less saturated than its near ground and
+ * its blue channel more than doubles, 45.8 → 105.5. Six ground bands from the
+ * horizon down measure 0.145 · 0.311 · 0.446 · 0.353 · 0.523 · 0.478. Ours
+ * measured 0.475 · 0.423 · 0.495 · 0.461 · 0.493 · 0.504 — no gradient at all,
+ * which is what makes the vista read as painted scenery.
+ *
+ * Three things had to move together, and the reason the obvious fix failed
+ * when it was tried on its own is that only one of them did.
+ *
+ * 1. **`HAZE_DAY` — the colour distance converges on.** It cannot be the sky
+ *    blue. The reference's most distant band is `110.5 · 123.5 · 105.5`, i.e.
+ *    green-dominant and *brighter* than its own sky, where the sky scaled into
+ *    our exposure is `76 · 109 · 196`. Fogging toward the sky colour makes
+ *    distant land go blue and dark; the measurement says it goes pale and
+ *    sage. This value is solved for: mixed `HAZE_BAND_FAR` of the way from the
+ *    palette's own far land colour it lands on `107.0 · 118.6 · 101.5`,
+ *    saturation 0.144, against the reference's 0.145. That first solve was done
+ *    in display space and came out a shade too neutral once it had been through
+ *    the light rig and ACES — the band measured 0.095 where it wanted 0.145 —
+ *    so the green lead is a little wider here than the arithmetic asked for.
+ *    The lesson is the general one: a colour solved on paper in display space
+ *    arrives compressed, and the only honest way to set it is to shoot it.
+ *
+ * 2. **The density.** `FogExp2` is `1 - exp(-(density·depth)²)`, and the
+ *    square is what makes a single number serve both cases §2.7 says must
+ *    differ: at 0.00062 a street at 40 m picks up 0.06% and is still flat, a
+ *    town square at 150 m picks up 0.9%, and a ridge at 900 m picks up 24%.
+ *    The old 0.00015 gave that same ridge 1.8% — nothing. This is the number
+ *    the previous attempt raised to 0.00045, which was still only 12% at
+ *    900 m, and it moved the far band the *wrong* way for reason 3.
+ *
+ *    0.00090 was tried first and measured too strong, which is worth keeping
+ *    because the cost did not show up in the acceptance test at all — the six
+ *    bands came out 0.119 · 0.250 · 0.320 · 0.370 · 0.418 · 0.451, a clean
+ *    monotone ramp — while the regression table showed the ground's mean
+ *    luminance up 6.9% and its standard deviation down 18%, i.e. the whole
+ *    mid-ground washed out. Haze always trades contrast for depth; the number
+ *    is where it buys the depth without spending the frame.
+ *
+ * 3. **The sky's ground band had to recede with the fog rather than against
+ *    it.** Past the edge of the heightfield the sky paints its own land, and
+ *    that band was authored to match *near* terrain: measured `101.7 · 84.8 ·
+ *    54.6` against near terrain's `103.6 · 81.3 · 53.9`. So the most distant
+ *    thing on screen wore the colour of the closest thing on screen and no
+ *    amount of fog behind it could show through — sampling rows down from the
+ *    skyline showed terrain at its *most* saturated at the skyline and
+ *    desaturating toward the viewer, aerial perspective exactly inverted. The
+ *    band is now mixed toward the same haze the fog uses, hard at the skyline
+ *    (`HAZE_BAND_FAR`) and lightly at the bottom of the band, so it continues
+ *    the ramp the fog is drawing instead of capping it.
+ */
+const HAZE_DAY = [0.392, 0.500, 0.452];
+/** How far the band at the skyline — the most distant thing drawn — is hazed. */
+const HAZE_BAND_FAR = 0.56;
+/** …and the bottom of the band, which is nearer land than the skyline is. */
+const HAZE_BAND_NEAR = 0.20;
+/**
+ * Weather's fog multiplier is re-based, because the clear-day density it
+ * multiplies is now six times what it was. `fog` weather asks for ×11, which
+ * against 0.00090 would put a wall at 150 m; halving its leverage keeps a
+ * pea-souper thick without deleting the world one street away.
+ */
+const WEATHER_FOG_LEVERAGE = 0.5;
+
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
 
@@ -157,7 +223,7 @@ const KEYS = [
     sunTint: C(0xa8c0e8), sunDisc: 0.0, sunHalo: 0.0,
     lightCol: C(0xaec0e0), lightI: 0.44,
     ambSky: C(0x445886), ambGnd: C(0x30374a), ambI: 0.95,
-    fog: C(0x0c1430), fogD: 0.00030,
+    fog: C(0x0c1430), fogD: 0.00034, haze: 0.0,
     stars: 1.0, night: 1.0, moonDisc: 1.0, moonTint: C(0xd2dcf0),
   },
   {
@@ -168,7 +234,7 @@ const KEYS = [
     sunTint: C(0xb08498), sunDisc: 0.0, sunHalo: 0.05,
     lightCol: C(0x9aacd6), lightI: 0.42,
     ambSky: C(0x475b8a), ambGnd: C(0x31384b), ambI: 0.96,
-    fog: C(0x10193a), fogD: 0.00034,
+    fog: C(0x10193a), fogD: 0.00038, haze: 0.0,
     stars: 0.90, night: 0.92, moonDisc: 0.95, moonTint: C(0xd0dbef),
   },
   {
@@ -179,7 +245,7 @@ const KEYS = [
     sunTint: C(0xdc9a76), sunDisc: 0.30, sunHalo: 0.35,
     lightCol: C(0x9a7a90), lightI: 0.26,
     ambSky: C(0x505a7e), ambGnd: C(0x423e4a), ambI: 0.80,
-    fog: C(0x453e5e), fogD: 0.00042,
+    fog: C(0x453e5e), fogD: 0.00046, haze: 0.12,
     stars: 0.45, night: 0.55, moonDisc: 0.60, moonTint: C(0xd6dcea),
   },
   {
@@ -190,7 +256,7 @@ const KEYS = [
     sunTint: C(0xffb572), sunDisc: 1.0, sunHalo: 0.90,
     lightCol: C(0xffa95e), lightI: 0.74,
     ambSky: C(0x8091b8), ambGnd: C(0x6c5f4a), ambI: 1.26,
-    fog: C(0x6d5f76), fogD: 0.00040,
+    fog: C(0x6d5f76), fogD: 0.00048, haze: 0.30,
     stars: 0.10, night: 0.14, moonDisc: 0.20, moonTint: C(0xdde3ef),
   },
   {
@@ -201,7 +267,7 @@ const KEYS = [
     sunTint: C(0xffe0b0), sunDisc: 0.50, sunHalo: 0.40,
     lightCol: C(0xffe8c2), lightI: 1.20,
     ambSky: C(0x9db0d6), ambGnd: C(0x797052), ambI: 1.54,
-    fog: C(0x45589a), fogD: 0.00026,
+    fog: C(0x45589a), fogD: 0.00058, haze: 0.88,
     stars: 0.0, night: 0.02, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
   {
@@ -212,7 +278,7 @@ const KEYS = [
     sunTint: C(0xfff0d2), sunDisc: 0.26, sunHalo: 0.14,
     lightCol: C(0xfff2d6), lightI: 1.50,
     ambSky: C(0x93aedd), ambGnd: C(0x847a58), ambI: 1.72,
-    fog: C(0x2b4890), fogD: 0.00016,
+    fog: C(0x2b4890), fogD: 0.00062, haze: 1.0,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
   {
@@ -223,7 +289,7 @@ const KEYS = [
     sunTint: C(0xfff4dc), sunDisc: 0.20, sunHalo: 0.10,
     lightCol: C(0xfff4dc), lightI: 1.44,
     ambSky: C(0x93aedd), ambGnd: C(0x847a58), ambI: 1.68,
-    fog: C(0x29458c), fogD: 0.00015,
+    fog: C(0x29458c), fogD: 0.00062, haze: 1.0,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
   {
@@ -234,7 +300,7 @@ const KEYS = [
     sunTint: C(0xffefcc), sunDisc: 0.30, sunHalo: 0.18,
     lightCol: C(0xfff0d0), lightI: 1.48,
     ambSky: C(0x94add8), ambGnd: C(0x837855), ambI: 1.72,
-    fog: C(0x2d4a90), fogD: 0.00017,
+    fog: C(0x2d4a90), fogD: 0.00062, haze: 1.0,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
   {
@@ -245,7 +311,7 @@ const KEYS = [
     sunTint: C(0xffe2b4), sunDisc: 0.45, sunHalo: 0.35,
     lightCol: C(0xffe8be), lightI: 1.32,
     ambSky: C(0x9aabd2), ambGnd: C(0x817252), ambI: 1.62,
-    fog: C(0x3d5090), fogD: 0.00021,
+    fog: C(0x3d5090), fogD: 0.00058, haze: 0.85,
     stars: 0.0, night: 0.0, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
   {
@@ -256,7 +322,7 @@ const KEYS = [
     sunTint: C(0xffc684), sunDisc: 0.90, sunHalo: 0.80,
     lightCol: C(0xffc684), lightI: 1.02,
     ambSky: C(0x93a0c4), ambGnd: C(0x7d6a4e), ambI: 1.42,
-    fog: C(0x6e6c8c), fogD: 0.00030,
+    fog: C(0x6e6c8c), fogD: 0.00052, haze: 0.35,
     stars: 0.0, night: 0.0, moonDisc: 0.05, moonTint: C(0xdde3ef),
   },
   {
@@ -271,7 +337,7 @@ const KEYS = [
     sunTint: C(0xff9a52), sunDisc: 1.0, sunHalo: 1.0,
     lightCol: C(0xff9450), lightI: 0.62,
     ambSky: C(0x8390ab), ambGnd: C(0x6f5d4a), ambI: 1.16,
-    fog: C(0x6b5747), fogD: 0.00042,
+    fog: C(0x6b5747), fogD: 0.00048, haze: 0.12,
     stars: 0.08, night: 0.12, moonDisc: 0.25, moonTint: C(0xdde3ef),
   },
   {
@@ -282,7 +348,7 @@ const KEYS = [
     sunTint: C(0xa06a72), sunDisc: 0.30, sunHalo: 0.32,
     lightCol: C(0x7a6a8e), lightI: 0.24,
     ambSky: C(0x56628c), ambGnd: C(0x464253), ambI: 0.82,
-    fog: C(0x3e3a5e), fogD: 0.00048,
+    fog: C(0x3e3a5e), fogD: 0.00046, haze: 0.0,
     stars: 0.50, night: 0.60, moonDisc: 0.70, moonTint: C(0xd6dcea),
   },
   {
@@ -293,7 +359,7 @@ const KEYS = [
     sunTint: C(0x8090b8), sunDisc: 0.0, sunHalo: 0.0,
     lightCol: C(0x9db0d8), lightI: 0.42,
     ambSky: C(0x455987), ambGnd: C(0x303749), ambI: 0.95,
-    fog: C(0x131b3c), fogD: 0.00034,
+    fog: C(0x131b3c), fogD: 0.00038, haze: 0.0,
     stars: 0.95, night: 0.95, moonDisc: 1.0, moonTint: C(0xd2dcf0),
   },
 ];
@@ -787,6 +853,39 @@ const PLANE_POW = 0.45;
 const COVER_A = [0.33, 0.90];
 const COVER_B = [0.13, 0.70];
 
+/* ═════════════════════ the cloud's form, not its colour ═══════════════════
+ * The blind review's exact words were "custard-yellow amoeba clouds at
+ * constant size with no lit top or shaded base". Three of those four are
+ * form, and the palette is not at fault for any of them:
+ *
+ *  - **Amoeba.** A metaball sheet sampled isotropically makes round lumps.
+ *    §2.4 measures MM6's as long horizontal wisps and streaks, and a 4× zoom
+ *    into screenshot 33's sky settles it: there is not one round form in the
+ *    frame, only parallel diagonal bands of mauve with cream crests, each
+ *    several times longer than it is wide, *before* the plane's own horizon
+ *    compression is counted. `CLOUD_STRETCH` draws every feature out along the
+ *    drift heading, which costs one dot product and no rebake. 1.5 was tried
+ *    first against the written description alone and was far too timid for
+ *    what the frame actually shows.
+ *  - **No lit top or shaded base.** With the sun near the zenith the wrapped
+ *    diffuse and the ambient term both peak on a puff's flat interior, so the
+ *    brightest part of every mass was its middle. `CLOUD_CROWN` makes the
+ *    near-face/far-face sweep the dominant term instead, which is what puts
+ *    the value on a top-to-bottom axis.
+ *  - **Constant size** was already wrong when it was written — the softened
+ *    plane compresses the deck hard in the last few degrees — but the round
+ *    silhouettes made the compression read as "smaller blobs" rather than as
+ *    perspective. Stretching them helps that too.
+ */
+const CLOUD_STRETCH = 2.9;
+const CLOUD_CROWN = 0.50;
+/** Layer A's drift heading, normalised — must match the uOffA rates below. */
+const DRIFT_A_DIR = (() => {
+  const [x, z] = [0.105, 0.034];
+  const l = Math.hypot(x, z);
+  return [x / l, z / l];
+})();
+
 export class SkySystem extends System {
   static id = 'sky';
   static order = 20;
@@ -964,6 +1063,9 @@ export class SkySystem extends System {
       uOpacityA: { value: 1.0 },
       uOpacityB: { value: 0.28 },
       uSunUvDir: { value: new THREE.Vector2(1, 0) },
+      uDriftDir: { value: new THREE.Vector2(...DRIFT_A_DIR) },
+      uStretch: { value: CLOUD_STRETCH },
+      uCrown: { value: CLOUD_CROWN },
       uShadowSlope: { value: 0.06 },
       uShadowStrength: { value: 0.8 },
       uCloudTintMul: { value: new THREE.Vector3(1, 1, 1) },
@@ -1177,16 +1279,25 @@ export class SkySystem extends System {
     // or it shows up as a bright strip riding along the skyline.
     const gk = clamp(0.30 + 0.70 * w.lightMul, 0.25, 1.0);
     const fogDisplay = mixOvercast(p.fog, desat, 0.95 * heavy);
-    const gNear = mixOvercast(scaleRGB(p.gNear, gk), desat * 0.8, 0.55 * heavy);
-    // The far band was mixed 28% toward the fog blue, which painted a distinct
-    // grey-green strip along the skyline: measured at [63,80,75] against the
-    // terrain's own [95,120,68] just below it — desaturated, and with its blue
-    // nearly up to its red. REFERENCE §2.7 caps aerial perspective at 12%
-    // toward the sky colour, and the band has to read as the same land the
-    // heightfield is drawing, so the mix comes down to match that cap. It also
-    // has to: the fog blue is now considerably brighter (SKY_DAY_GAIN), so the
-    // old 28% would have turned a dull strip into a bright one.
-    const gFar = mixRGB(mixOvercast(scaleRGB(p.gFar, gk), desat * 0.8, 0.70 * heavy), fogDisplay, 0.12);
+    // What distance converges on — see the aerial-perspective note above. The
+    // haze is folded into the *fog* colour too, so the band and the fogged
+    // heightfield below it are the same ramp rather than two different ones
+    // meeting at the skyline.
+    const hazeDisplay = mixRGB(fogDisplay, HAZE_DAY, clamp(p.haze, 0, 1) * (1 - desat * 0.65));
+    // The band is the most distant thing in the frame, so it is the most
+    // hazed: gFar sits at the skyline (`depth` 0 in the shader) and gNear at
+    // the bottom of the band, which is nearer land. Mixing them by different
+    // amounts is what makes the band itself carry a gradient instead of being
+    // a slab — previously both were near-unhazed and the band read as the
+    // colour of the ground under the party's feet, painted along the horizon.
+    const gNear = mixRGB(
+      mixOvercast(scaleRGB(p.gNear, gk), desat * 0.8, 0.55 * heavy),
+      hazeDisplay, HAZE_BAND_NEAR * clamp(p.haze, 0, 1),
+    );
+    const gFar = mixRGB(
+      mixOvercast(scaleRGB(p.gFar, gk), desat * 0.8, 0.70 * heavy),
+      hazeDisplay, lerp(0.12, HAZE_BAND_FAR, clamp(p.haze, 0, 1)),
+    );
 
     const u = this._u;
     if (u) {
@@ -1309,11 +1420,11 @@ export class SkySystem extends System {
       if (this._boltLight) this._boltLight.intensity = this._flash * 3.8;
     }
 
-    // ── fog: subtle, and the same blue the sky is actually painting ──
-    this.fogDensity = p.fogD * w.fogMul;
+    // ── fog: the aerial perspective, and the colour the band recedes into ──
+    this.fogDensity = p.fogD * (1 + (w.fogMul - 1) * WEATHER_FOG_LEVERAGE);
     const linear = this._preTonemap
-      ? [srgbToLinear(fogDisplay[0]), srgbToLinear(fogDisplay[1]), srgbToLinear(fogDisplay[2])]
-      : inverseTonemap(fogDisplay, ctx.renderer?.toneMappingExposure ?? 1);
+      ? [srgbToLinear(hazeDisplay[0]), srgbToLinear(hazeDisplay[1]), srgbToLinear(hazeDisplay[2])]
+      : inverseTonemap(hazeDisplay, ctx.renderer?.toneMappingExposure ?? 1);
     this.fogColor.setRGB(linear[0], linear[1], linear[2], THREE.LinearSRGBColorSpace);
     const fog = ctx.scene.fog;
     if (fog) {

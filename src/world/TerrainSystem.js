@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { System } from '../core/Engine.js';
 import { getMaterialLibrary } from '../render/MaterialLibrary.js';
 import {
-  generateTerrain, WORLD_SIZE, GRID, CELL, SEA_LEVEL, LANDMARKS,
+  generateTerrain, WORLD_SIZE, GRID, CELL, SEA_LEVEL, LANDMARKS, HORIZON_DIRS,
 } from './TerrainGen.js';
 
 /**
@@ -80,10 +80,33 @@ const LAYER_SCALE = { grass: 4.0, dirt: 4.5, rock: 8.0, sand: 4.0 };
  *    exactly would take us off canon; matching the swatch leaves that frame's
  *    aggregate blue about 20% away. These land between the two, nearer the
  *    swatch, and the residual is a known and deliberate miss.
+ *
+ * **Dirt, re-measured the way that note says to measure it.** `veg-meadow`
+ * frames a whole hillside of bare earth head-on in full sun — the exact case
+ * the warning above asks for, a material where the sun actually hits it, and
+ * not a hue-split population. Over 550×150 px of it: `154.9 · 79.6 · 57.9`,
+ * luminance 94.1, against §4.1's `#523021` scaled into our exposure at
+ * `116.4 · 68.3 · 47.2`, luminance 79.4. So the earth was 18% too bright and,
+ * worse, its red-to-green ratio was 1.94 against canon's 1.70 — which is what
+ * put a bright terracotta across every slope in the frame, the very thing the
+ * note above says produces "a bright terracotta nothing in MM6 has".
+ *
+ * It took two goes, and the second is the instructive one. The first correction
+ * was solved against the canonical swatch and shot; it
+ * landed at `139.0 · 73.9 · 51.7`, luminance 86.1 — 8% over — with the red-to-
+ * green ratio barely moved at 1.88, because the grade runs before ACES and a
+ * linear scale arrives compressed. The second was solved against the reference
+ * *frame* instead: its own hillside earth, lit and head-on like ours, measures
+ * `128.6 · 79.3 · 55.0` at R/G 1.62 and its foreground earth `113.7 · 70.0 ·
+ * 48.3` at the same ratio, so the swatch's 1.70 brackets them and the frame is
+ * the better target — same material, same lighting case, exposure-matched.
+ * Grass is left alone — measured the same way it is within a few percent of
+ * `#395129`, and the previous pass's finding that it was already olive-khaki
+ * rather than golf-course green still holds.
  */
 const LAYER_TINT = {
   grass: [0.92, 1.00, 1.20],
-  dirt: [1.52, 0.98, 1.50],
+  dirt: [1.11, 0.93, 1.34],
   rock: [1.02, 1.00, 1.06],
   sand: [1.08, 1.00, 1.00],
 };
@@ -147,6 +170,51 @@ const LAYER_CONTRAST = { grass: 1.85, dirt: 2.05, rock: 1.45, sand: 1.35 };
  * brightness-neutral and LAYER_CONTRAST controls spread alone.
  */
 const LAYER_PIVOT = { grass: 0.155, dirt: 0.102, rock: 0.140, sand: 0.185 };
+
+/* ═══════════════ where the light comes from, on the ground ════════════════
+ * The blind reviewer's verdict on our exterior was that nothing in it says
+ * where the sun is: "the hillside is the same value on its sunward and
+ * shadowed faces … not one object casts a shadow onto another." A previous
+ * pass checked the obvious cause and cleared it — re-pointing the key moved
+ * the ground's relief range from 13.26 to 13.30, i.e. not at all — so the
+ * missing term is not key-versus-fill balance. Two things were actually
+ * missing, and both are geometry the light rig cannot see:
+ *
+ *  - **Cast shadow at vista range.** Terrain has `castShadow = false`, and the
+ *    key's shadow box is 190 m across at its widest quality tier. A hill 600 m
+ *    out — most of what a vista frames — was never in the map and could not
+ *    shadow anything even if it were. `TerrainGen.computeHorizon` bakes the
+ *    heightfield's own horizon in eight compass directions instead, and the
+ *    test is one comparison: the ground is in its own shadow when the sine of
+ *    the sun's elevation falls below the horizon's.
+ *
+ *  - **Occlusion where a slope meets the flat.** The mean of those same eight
+ *    sines is how much sky a sample cannot see, which darkens hollows, gully
+ *    floors and the foot of every slope — the contact the reviewer asked for,
+ *    and the reason our darks sat well above the reference's (ground p5
+ *    luminance measured +36% against it).
+ *
+ * The floors are set by REFERENCE §2.7's ceiling on modern shaping: a shadowed
+ * face must stay within 40% of the same material's lit face. At noon a lit
+ * flat sums to key 2.34 + fill 0.97 + floor 0.29 = 3.61; dropping the key to
+ * `SUN_FLOOR` leaves 0.42·2.34 + 1.26 = 2.24, which is 62% of lit — inside the
+ * cap with a little room, and a 38% step is unmistakable on screen.
+ */
+const SUN_FLOOR = 0.42;
+/**
+ * Horizon sine below which a sample counts as open ground.
+ *
+ * The world's median mean-horizon is 0.183 and its tenth percentile is 0.075,
+ * so subtracting a flat 0.12 and rescaling leaves genuinely open ground at
+ * exactly its present value and darkens only what is actually enclosed. Not
+ * doing this would have applied a ~6% global dim to a ground mean that a
+ * previous pass had already brought inside a few percent of the reference.
+ */
+const AO_OPEN = 0.12;
+const AO_SPAN = 0.50;
+/** How much of the fill the deepest hollow loses, and of the key. */
+const AO_INDIRECT = 0.72;
+const AO_DIRECT = 0.26;
 
 export class TerrainSystem extends System {
   static id = 'terrain';
@@ -223,8 +291,17 @@ export class TerrainSystem extends System {
     });
 
     const splatTex = this._buildSplatTexture();
+    const horizon = this._buildHorizonTextures();
     const uniforms = {
       uSplat: { value: splatTex },
+      uHorizonA: { value: horizon[0] },
+      uHorizonB: { value: horizon[1] },
+      // Direction *to* the sun, and how much say the shadow test gets. The
+      // strength fades to zero as the sun reaches the horizon, because below
+      // that the key light is the moon and a terrain shadow cast by a sun that
+      // has set is nonsense.
+      uSunDir: { value: new THREE.Vector3(0.35, 0.88, 0.32) },
+      uSunShadow: { value: 0 },
       uWorldSize: { value: WORLD_SIZE },
       uLayerScale: {
         value: new THREE.Vector4(
@@ -251,6 +328,8 @@ export class TerrainSystem extends System {
     // plain material rather than sampling null samplers.
     this._splatReady = sets.every((s) => s && s.map);
 
+    this._uniforms = uniforms;
+
     material.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, uniforms);
       this._shader = shader;
@@ -268,11 +347,34 @@ export class TerrainSystem extends System {
         .replace('#include <common>', `#include <common>
           varying vec3 vTerrainWorld;
           uniform sampler2D uSplat;
+          uniform sampler2D uHorizonA;
+          uniform sampler2D uHorizonB;
+          uniform vec3 uSunDir;
+          uniform float uSunShadow;
           uniform float uWorldSize;
           uniform vec4 uLayerScale;
           uniform vec3 uLayerTint[4];
           uniform vec4 uLayerContrast;
           uniform vec4 uLayerPivot;
+
+          /**
+           * Value noise, world-space, used only to tear the boundary between
+           * two materials — never to add value variation. Our grass already
+           * carries roughly twice MM6's within-patch spread; what it lacked
+           * was a broken *edge*, which is a different quantity and the one the
+           * reviewer named ("a hard aliased line where grass meets earth").
+           */
+          float tHash(vec2 p) {
+            p = fract(p * vec2(127.113, 311.717));
+            p += dot(p, p + 41.317);
+            return fract(p.x * p.y);
+          }
+          float tNoise(vec2 p) {
+            vec2 i = floor(p), f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            return mix(mix(tHash(i), tHash(i + vec2(1.0, 0.0)), f.x),
+                       mix(tHash(i + vec2(0.0, 1.0)), tHash(i + vec2(1.0, 1.0)), f.x), f.y);
+          }
 
           uniform sampler2D uAlbedo0, uAlbedo1, uAlbedo2, uAlbedo3;
           uniform sampler2D uNormal0, uNormal1, uNormal2, uNormal3;
@@ -316,6 +418,51 @@ export class TerrainSystem extends System {
           vec4 sw = texture2D(uSplat, splatUv);
           sw /= max(dot(sw, vec4(1.0)), 1e-4);
 
+          // ── strays along the grass/earth boundary ──────────────────────
+          // The splat map is one texel per 4 m heightfield sample, filtered
+          // linearly, so every material boundary was a smooth 4 m ramp that
+          // the height blend then snapped into a hard curve — a clean line
+          // through open ground, which nothing on real ground does. Two
+          // octaves of world-space noise displace the grass/earth balance by
+          // up to most of its range, but *only* where the two are already
+          // close to even -- seam peaks at a 50/50 mix and vanishes inside
+          // either material -- so pure grass stays pure and the boundary
+          // breaks into islands and fingers instead of a curve.
+          float tear = (tNoise(vTerrainWorld.xz * 0.42) - 0.5) * 1.55
+                     + (tNoise(vTerrainWorld.xz * 0.13 + 17.0) - 0.5) * 1.05;
+          float seam = 4.0 * sw.x * sw.y;
+          float shift = tear * seam * 0.45;
+          sw.x = clamp(sw.x - shift, 0.0, 1.0);
+          sw.y = clamp(sw.y + shift, 0.0, 1.0);
+          sw /= max(dot(sw, vec4(1.0)), 1e-4);
+
+          // ── the terrain's own horizon, baked in eight directions ───────
+          vec4 hzA = texture2D(uHorizonA, splatUv);
+          vec4 hzB = texture2D(uHorizonB, splatUv);
+          float hv[8];
+          hv[0] = hzA.x; hv[1] = hzA.y; hv[2] = hzA.z; hv[3] = hzA.w;
+          hv[4] = hzB.x; hv[5] = hzB.y; hv[6] = hzB.z; hv[7] = hzB.w;
+          // Mean sine of the horizon = the share of the sky dome this sample
+          // cannot see. Open ground reads 0 and is left alone; see AO_OPEN.
+          float hzMean = (hzA.x + hzA.y + hzA.z + hzA.w
+                        + hzB.x + hzB.y + hzB.z + hzB.w) * 0.125;
+          float terrainOcc = clamp((hzMean - ${AO_OPEN.toFixed(3)}) / ${AO_SPAN.toFixed(3)}, 0.0, 1.0);
+          // Horizon toward the sun's azimuth: exactly two of the eight
+          // directions carry weight, so this is a linear interpolation
+          // between neighbours on the compass rose.
+          float sunK = atan(uSunDir.x, uSunDir.z) * (4.0 / PI);
+          float hzSun = 0.0;
+          for (int i = 0; i < 8; i++) {
+            float dd = float(i) - sunK;
+            dd = dd - 8.0 * floor(dd / 8.0 + 0.5);
+            hzSun += hv[i] * max(0.0, 1.0 - abs(dd));
+          }
+          // uSunDir.y *is* the sine of the sun's elevation, so the shadow test
+          // is a straight comparison against the baked sine. The ramp is a few
+          // hundredths wide: a hard step aliases along every ridge line.
+          float terrainSun = mix(1.0,
+            smoothstep(-0.030, 0.075, uSunDir.y - hzSun), uSunShadow);
+
           vec2 uv0 = vTerrainWorld.xz / uLayerScale.x;
           vec2 uv1 = vTerrainWorld.xz / uLayerScale.y;
           vec2 uv2 = vTerrainWorld.xz / uLayerScale.z;
@@ -351,6 +498,15 @@ export class TerrainSystem extends System {
             + gradeLayer(mix(rockPlanar, rockTri, smoothstep(0.35, 0.8, vertical)), uLayerContrast.z, uLayerPivot.z, uLayerTint[2]) * bw.z
             + gradeLayer(texture2D(uAlbedo3, uv3).rgb, uLayerContrast.w, uLayerPivot.w, uLayerTint[3]) * bw.w;
 
+          // A mud lip where grass gives way to earth. Real ground does not
+          // change material along a clean join: the grass thins, the soil
+          // under it shows damp and dark, and only then does bare earth take
+          // over. This is the same 50/50 weighting the strays use, applied
+          // after the height blend so it follows the *torn* boundary rather
+          // than the splat map's smooth one.
+          float lip = 4.0 * bw.x * bw.y;
+          albedo *= mix(vec3(1.0), vec3(0.84, 0.78, 0.70), lip * 0.42);
+
           // diffuseColor is declared further up main(); assign, never redeclare.
           // <color_fragment> runs after this and applies vColor itself, so the
           // macro tint must not be multiplied in here as well.
@@ -380,6 +536,14 @@ export class TerrainSystem extends System {
         .replace('#include <aomap_fragment>', `
           float terrainAO = clamp(orm.r, 0.0, 1.0);
           reflectedLight.indirectDiffuse *= mix(1.0, terrainAO, 0.75);
+          // Landform lighting. This chunk runs after <lights_fragment_end> and
+          // before the diffuse sum, which is the only place the direct and
+          // indirect terms are still separable — and they have to be, because
+          // a hillside in its own shadow keeps the sky's fill and loses the
+          // sun, which is precisely the value step that says where the sun is.
+          reflectedLight.indirectDiffuse *= 1.0 - ${AO_INDIRECT.toFixed(3)} * terrainOcc;
+          reflectedLight.directDiffuse *= mix(${SUN_FLOOR.toFixed(3)}, 1.0, terrainSun)
+                                        * (1.0 - ${AO_DIRECT.toFixed(3)} * terrainOcc);
         `);
     };
 
@@ -405,6 +569,40 @@ export class TerrainSystem extends System {
     tex.colorSpace = THREE.NoColorSpace;
     tex.generateMipmaps = false;
     return tex;
+  }
+
+  /**
+   * The baked horizon, as two RGBA textures.
+   *
+   * Eight directions do not fit in one RGBA texel, and packing them into
+   * vertex attributes instead would tie the term to the 4 m vertex spacing and
+   * to the LOD level a chunk happens to be showing. As textures it is sampled
+   * per fragment at whatever resolution the frame needs, and the skirt
+   * vertices — which have no meaningful horizon of their own — inherit their
+   * neighbours' by construction.
+   */
+  _buildHorizonTextures() {
+    const src = this.data.horizon;
+    const make = (offset) => {
+      const px = new Uint8Array(GRID * GRID * 4);
+      for (let i = 0; i < GRID * GRID; i++) {
+        const s = i * HORIZON_DIRS + offset;
+        px[i * 4 + 0] = src[s];
+        px[i * 4 + 1] = src[s + 1];
+        px[i * 4 + 2] = src[s + 2];
+        px[i * 4 + 3] = src[s + 3];
+      }
+      const tex = new THREE.DataTexture(px, GRID, GRID, THREE.RGBAFormat);
+      tex.needsUpdate = true;
+      tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.colorSpace = THREE.NoColorSpace;
+      tex.generateMipmaps = false;
+      return tex;
+    };
+    this._horizonTex = [make(0), make(4)];
+    return this._horizonTex;
   }
 
   _buildChunks() {
@@ -642,6 +840,21 @@ export class TerrainSystem extends System {
     if (!this._ready) return;
     const cam = ctx.camera.position;
 
+    // Where the sun is, for the baked horizon test. `sunDirection` is the
+    // sky's documented public surface and is the *true* sun, not the key —
+    // the key is floored at 8° so shadows never rake, and testing a horizon
+    // against a floored sun would shadow the world at dusk and keep shadowing
+    // it all night. The strength term handles that end instead: it reaches
+    // zero as the sun touches the horizon, at which point the key has become
+    // the moon and terrain shadows cast by the sun are simply wrong.
+    const sun = ctx.get('sky')?.sunDirection;
+    const u = this._uniforms;
+    if (sun && u) {
+      u.uSunDir.value.copy(sun);
+      const y = sun.y;
+      u.uSunShadow.value = y <= 0.02 ? 0 : y >= 0.16 ? 1 : (y - 0.02) / 0.14;
+    }
+
     for (const chunk of this.chunks) {
       const d = chunk.centre.distanceTo(cam);
       let level = 0;
@@ -656,6 +869,8 @@ export class TerrainSystem extends System {
 
   dispose() {
     for (const chunk of this.chunks) chunk.geom.dispose();
+    for (const tex of this._horizonTex ?? []) tex.dispose();
+    this._uniforms?.uSplat?.value?.dispose?.();
     this.material?.dispose();
     this.group?.parent?.remove(this.group);
     this.chunks.length = 0;
