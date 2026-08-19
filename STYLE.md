@@ -659,3 +659,68 @@ Written down here so the owner can pick them up.
    them at render, so nothing straight reaches the screen (§7), but the data
    would read better unquoted, the way `TownServices` and `NPCs.js` store
    theirs. Cosmetic, not urgent.
+
+---
+
+## 13. Touch, and what still caps it
+
+The phone build is landscape-only, installed from the home screen, and its
+targets are grown by an empty `::after` so nothing painted moves. `--u` is
+`min(height/480, width·0.30/172)` with **no floor** on a coarse pointer — the
+old flat `0.9` hung the brass ovals 23px off the bottom of an iPhone 14 and
+38px off an SE.
+
+**Where 44px could not be reached, the arithmetic rather than an excuse:**
+
+- **Four-across rows** (tall ovals, book spines). 4 × 44 = 176px of row against
+  a 172u sidebar, which needs `--u` ≥ 1.023 against a cap of 0.9006. The row is
+  partitioned edge to edge instead and **31px is the pitch, so 31px is the
+  ceiling**.
+- **Venue action lists.** Five rows at 44px need 220px; there are 131px between
+  the keeper's name and the brass oval. 25px is the pitch. The win taken there
+  was width — 24 × 17 → 134 × 25, so the whole row is the target, not the word.
+
+**Never write a blanket `button::after`.** Measurement caught three cases where
+a uniform 44px box stole taps from a neighbour's painted label — `Arrange`, and
+the training hall's third action. A box that swallows the control above it is
+worse than a small box.
+
+### The one number that caps the whole interface
+
+`.mm-inv-arrange` is what stops `--u` rising, and it is worth someone's hour
+because every touch target and every glyph in the game scales with it.
+
+Measured at 932 × 430, sweeping `--u`:
+
+| `--u` | gap under Arrange |
+| --- | --- |
+| 0.8958 (shipped) | **3.19px** |
+| 0.90 | 1.19px |
+| 0.92 | **−8.33px — collides** |
+
+`.mm-inv-strip` sits at `top: 304u`, height `13u`; the panel's wide-oval row
+starts at `320u`. Give the strip roughly 8–10u of air upward — after checking
+what the item grid's bottom edge actually is, which is the part I did not get
+to — and `--u` goes to about 0.92, worth ~2% on every control and every letter.
+
+### Still small, and each in a file of its own
+
+`quests.css` `.mm-quest-tab` 42 × 20 — its `clip-path` clips the pseudo-element
+used for hit-testing too, so the notched outline has to move to an inner
+element before the tab can take 44. `character.css` `.mm-skill` rows 11.9px
+tall and clickable (that is how a skill point is spent). `inventory.css`
+`Arrange` 53 × 11 and `.mm-inv-glass` 28 × 40. `spellbook.css` `.mm-sb-tab`
+29 × 25, `.mm-sb-btn` 66 × 19. `quests.css` `.mm-qb-row` 326 × 18.
+
+**A real bug, not a touch issue:** `train.js` / `train.css` — the third action
+(`The Muster Roll`) overlaps the exit oval by 1.8px **at every scale, desktop
+included**.
+
+### Ultra-wide (2.17 : 1)
+
+Nothing breaks. `spellbook.css` is the model — it caps the page at 460u and
+centres, so the extra width becomes binding cloth. `character.css` does not:
+its two stat columns stretch to an 831u panel against the 460u they were drawn
+for, so label→value gaps run about double the design. Legible, even, and not
+MM6's proportion; `max-width: calc(var(--u) * 448); margin: 0 auto` on
+`.mm-sheet` would fix it, at the cost of changing 16:9 desktop.
