@@ -60,7 +60,13 @@ page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 let out;
 try {
   await page.goto(`http://127.0.0.1:${port}/?quality=low&capture=1`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__CAPTURE, { timeout: 180000 });
+  // `waitForFunction(fn, arg, options)` — the middle parameter is the argument
+  // passed *into* the page, not the options. Written as two arguments this
+  // handed `{ timeout: 180000 }` to the browser as data and silently kept
+  // Playwright's 30s default, so the gate failed as "Timeout 30000ms exceeded"
+  // while asking for three minutes. It only ever fired under load, which is
+  // exactly when the boot is slowest.
+  await page.waitForFunction(() => !!window.__CAPTURE, null, { timeout: 180000 });
   await new Promise((r) => setTimeout(r, 8000));
 
   out = await page.evaluate(async () => {

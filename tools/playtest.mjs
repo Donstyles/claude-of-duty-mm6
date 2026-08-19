@@ -75,7 +75,10 @@ page.on('response', (r) => { if (r.status() >= 400) errors.push(`HTTP ${r.status
 let report;
 try {
   await page.goto(`http://127.0.0.1:${port}/?quality=low&capture=1`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__CAPTURE, { timeout: 180000 });
+  // Three arguments, not two: the middle one is passed into the page, so the
+  // two-argument form sends the options object to the browser as data and
+  // leaves Playwright on its 30s default. See the note in spelltest.mjs.
+  await page.waitForFunction(() => !!window.__CAPTURE, null, { timeout: 180000 });
   // The town builds asynchronously; there are no doors to walk to until it has.
   await new Promise((r) => setTimeout(r, 8000));
 
