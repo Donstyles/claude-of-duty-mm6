@@ -89,7 +89,7 @@ quest({
     'Eleven sheep in a month, and the shepherd will not go up to the tower any more. Wat is paying out of the inn takings, which tells you what the watch is worth.',
     'The warren goes three levels into the hill, and something down there is giving the goblins orders and a great deal of stolen tack.',
     'The crowned one is dead. Wat should hear it from us before the shepherd does.',
-    'Wat paid, thanked us, and then asked — carefully, and twice — whether we had heard anything odd from the direction of the gull cave.',
+    'Wat paid, thanked us, and then asked — carefully, and twice — whether we had heard anything odd from the direction of the point.',
   ],
   rewards: { xp: 800, gold: 500, reputation: 5, unlocks: ['main_02_the_singing_cave'] },
 });
@@ -98,15 +98,15 @@ quest({
   id: 'main_02_the_singing_cave', name: 'The Singing Cave', kind: 'main', chapter: 1,
   giver: 'npc_sergeant_bray', location: 'millhaven_downs',
   requires: { quests: ['main_01_a_small_errand'], level: 4 },
-  summary: 'Something sings in the gull cave at low tide. Nine people have heard it. Nobody has gone in.',
+  summary: 'Something sings in the sea cave under the point at low tide. Nine people have heard it. Nobody has gone in.',
   objectives: [
     { type: 'talk', target: 'npc_sergeant_bray', text: 'Ask Sergeant Bray about the cave.' },
-    { type: 'clear', target: 'dun_gullmouth', stage: 1, text: 'Go into Gullmouth Cave at low water.' },
+    { type: 'clear', target: 'dun_the_weeping_stair', stage: 1, text: 'Go down the Weeping Stair at low water.' },
     { type: 'collect', target: 'qi_choir_psalter', stage: 2, text: 'Take the psalter off the cantor.' },
     { type: 'deliver', target: 'npc_sergeant_bray', stage: 3, text: 'Bring the psalter to the watch.' },
   ],
   stages: [
-    'Low tide gives four hours. The singing is audible from the cliff path and everyone in Millhaven has decided not to discuss it.',
+    'Low tide gives four hours. The steps down are cut, which no fisherman did, and the singing carries as far as the cliff path.',
     'Nine of them, in ash robes, none from anywhere near here, and a great deal of rope for a prayer meeting.',
     'The psalter is unbound vellum in a notation nobody at the Millhaven chapel recognises. It names a place forty miles east of the last map anyone has drawn.',
     'Bray sent it to Thornwick by fast rider and told us, in as many words, to be somewhere else when the reply came.',
@@ -136,14 +136,14 @@ quest({
   id: 'main_04_the_sword_warrant', name: 'The Sword Warrant', kind: 'main', chapter: 2,
   giver: 'npc_bren_oakhallow', location: 'ashford_hollow',
   requires: { quests: ['main_03_the_summons'], level: 8 },
-  summary: 'The Lord Marshal will sign for anyone who can explain the shrine under his own muster hall.',
+  summary: 'The Lord Marshal will sign for anyone who can explain why one of his own outposts has started charging tolls.',
   objectives: [
-    { type: 'clear', target: 'dun_chapter_undercroft', text: 'Clear the undercroft beneath the Chapter hall.' },
-    { type: 'kill', target: 'choir_precentor', count: 1, stage: 1, text: 'Confront the precentor keeping it.' },
+    { type: 'clear', target: 'dun_hollow_stockade', text: 'Take the Hollow Stockade off the Ashford road.' },
+    { type: 'kill', target: 'choir_precentor', count: 1, stage: 1, text: 'Confront the precentor paying the garrison.' },
     { type: 'collect', target: 'qi_sword_warrant', stage: 2, text: 'Take the warrant from Oakhallow.' },
   ],
   stages: [
-    'The undercroft is older than the hall above it and there is a stair into it that appears on no plan of Ashford.',
+    'The stockade stopped sending returns in the spring and started charging by the cart. Chapter arms, Chapter drill, Chapter men.',
     'The precentor was wearing a Chapter serjeant\'s badge on a chain. He did not steal it.',
     'Oakhallow signed without a word, then went and sat in the yard for an hour.',
   ],
@@ -174,15 +174,15 @@ quest({
   id: 'main_06_the_orders_warrant', name: "The Order's Warrant", kind: 'main', chapter: 2,
   giver: 'npc_tamsin_ashe', location: 'netherby_moors',
   requires: { quests: ['main_03_the_summons'], level: 11 },
-  summary: 'Eighteen barrows on the Netherby moor were opened from the inside. The Order wants them shut.',
+  summary: 'The ninth barrow on the Netherby ridge was opened last spring, from the inside. The Order wants it shut.',
   objectives: [
-    { type: 'clear', target: 'dun_the_nineteen', text: 'Walk the barrow line at Netherby.' },
-    { type: 'kill', target: 'wraith', count: 6, stage: 1, text: 'Put down what has come out of them.' },
+    { type: 'clear', target: 'dun_the_ninth_barrow', text: 'Go into the ninth barrow on the Netherby ridge.' },
+    { type: 'kill', target: 'wraith', count: 6, stage: 1, text: 'Put down what has come out of it.' },
     { type: 'deliver', target: 'npc_tamsin_ashe', stage: 2, text: 'Report to Prior Ashe.' },
   ],
   stages: [
-    'Nineteen barrows. Eighteen of them are open and the nineteenth is the one the town will not talk about.',
-    'They were opened from the inside, in order, west to east, which means somebody walked the line before us.',
+    'Eight barrows on the ridge were opened and robbed centuries ago. The ninth is the one the town will not talk about.',
+    'It was opened from the inside, and the spoil is piled on the outside, which settles the question of who did the digging.',
     'Ashe granted the warrant and asked us not to say the word "order" in front of the Prior of Coldwater.',
   ],
   rewards: { xp: 16000, gold: 6000, items: ['qi_order_warrant'], reputation: 12, unlocks: ['main_07_the_ninefold_seal'] },
@@ -195,12 +195,12 @@ quest({
   summary: 'Nine wards hold the way into the Sunder shut, one per school, and every guild wants paying.',
   objectives: [
     { type: 'talk', target: 'npc_nim_vellory', text: 'Take the commission from Archivist Vellory.' },
-    { type: 'clear', target: 'dun_verhal_deep', stage: 1, text: 'Fetch the Deep Stone key out of the Verhal Deep.' },
+    { type: 'clear', target: 'dun_the_undercut', stage: 1, text: 'Fetch the Deep Stone key out of the Undercut at Ashford.' },
     { type: 'collect', target: 'qi_ninefold_seal', stage: 2, text: 'Gather the nine keys onto one ring.' },
   ],
   stages: [
     'Nine guilds, nine prices. Seven of them want a dungeon emptied and the other two want a secret kept.',
-    'The Deep Stone key was in a cistern under forty feet of sand, along with a mile of imperial road that has not settled an inch.',
+    'The Deep Stone key was three galleries down in the quarry that built Thornwick, left with the shift the collapse caught.',
     'Nine keys on one ring, and together they weigh almost nothing. Vellory weighed them twice and would not explain why.',
   ],
   rewards: { xp: 24000, gold: 9000, items: ['qi_ninefold_seal'], reputation: 15, unlocks: ['main_08_the_dawnbell_key', 'main_09_the_long_shadow_key'] },
@@ -208,19 +208,19 @@ quest({
 
 quest({
   id: 'main_08_the_dawnbell_key', name: 'The Dawnbell Key', kind: 'main', chapter: 3,
-  giver: 'npc_tamsin_ashe', location: 'the_cindermoor',
+  giver: 'npc_tamsin_ashe', location: 'greywater_fen',
   requires: { quests: ['main_07_the_ninefold_seal'], level: 18 },
-  summary: 'The Dawnbell will not part with its key while its founding shrine stands cold.',
+  summary: 'The Dawnbell will not part with its key while its founding shrine stands cold and to its sills in fen water.',
   objectives: [
-    { type: 'reach', target: 'dun_kindled_shrine', text: 'Enter the sealed sanctum on the Cindermoor.' },
+    { type: 'reach', target: 'dun_the_drowned_chapel', text: 'Wade into the drowned chapel on the fen causeway.' },
     { type: 'collect', target: 'qi_font_ember', stage: 1, text: 'Recover the ember of the old fire.' },
-    { type: 'kill', target: 'archangel', count: 1, stage: 1, text: "Answer the sanctum's guardian." },
+    { type: 'kill', target: 'archangel', count: 1, stage: 1, text: "Answer the shrine's guardian." },
     { type: 'deliver', target: 'npc_tamsin_ashe', stage: 2, text: 'Relight the font.' },
   ],
   stages: [
-    'The sanctum has been sealed since the font went out, and the seal was set from the inside.',
+    'The chapel has been going down into the fen since the lamp went out, and the doors were barred from the inside.',
     'The guardian stopped recognising the Order\'s authority some time ago. It had reasons and it listed them.',
-    'The font is lit. Everyone still living within a day of the heath walked out to look at it.',
+    'The font is lit. Everyone still living within a day of the causeway walked out to look at it.',
   ],
   rewards: { xp: 32000, gold: 12000, items: ['qi_dawnbell_key'], reputation: 20, unlocks: [] },
 });
@@ -229,14 +229,14 @@ quest({
   id: 'main_09_the_long_shadow_key', name: 'The Long Shadow Key', kind: 'main', chapter: 3,
   giver: 'npc_the_unlisted', location: 'coldwater_sound',
   requires: { quests: ['main_07_the_ninefold_seal'], level: 20 },
-  summary: 'The unlicensed guild has a key too, and its price is a Choir undercroft at Coldwater.',
+  summary: 'The unlicensed guild has a key too, and its price is the Choir cell working the Coldwater flensing tunnels.',
   objectives: [
-    { type: 'clear', target: 'dun_cantors_undercroft', text: "Take the Cantor's Undercroft at Coldwater." },
+    { type: 'clear', target: 'dun_the_whale_road', text: 'Take the Whale Road tunnels above Coldwater.' },
     { type: 'collect', target: 'qi_choir_roll', stage: 1, text: 'Copy the Choir roll.' },
     { type: 'deliver', target: 'npc_the_unlisted', stage: 2, text: 'Take the roll to the Unlisted.' },
   ],
   stages: [
-    'Under a merchant house, behind an oil store, three floors down, exactly where everyone said and nobody had looked.',
+    'Behind the try-works, past the oil store, and a good deal further back into the cliff than anybody has flensed since the ice year.',
     'The roll names four Ledger factors, a huscarl and a prior of the Kindled Lamp.',
     'The Unlisted read it, laughed once — a horrible sound — and handed over a key of black glass that is warm on the far side.',
   ],
@@ -283,15 +283,15 @@ quest({
   id: 'main_12_the_deep_choir', name: 'The Deep Choir', kind: 'main', chapter: 4,
   giver: 'npc_bren_oakhallow', location: 'duskorn_waste',
   requires: { quests: ['main_11_the_queens_magister'], level: 30 },
-  summary: 'Nine floors under Duskorn there is a basilica with the pews taken out. Take it apart.',
+  summary: 'There is a whole city under Duskorn, unlooted and lit, and the Choir is singing in it. Take it apart.',
   objectives: [
-    { type: 'clear', target: 'dun_the_deep_choir', text: 'Fight down to the Deep Choir.' },
+    { type: 'clear', target: 'dun_the_duskorn_undercity', text: 'Fight down through the Duskorn undercity.' },
     { type: 'kill', target: 'arch_devil', count: 1, stage: 1, text: 'Kill what is standing where the altar was.' },
     { type: 'collect', target: 'qi_reliquary', stage: 2, text: 'Take the sealed reliquary.' },
     { type: 'deliver', target: 'npc_bren_oakhallow', stage: 3, text: 'Carry the reliquary to the Lord Marshal.' },
   ],
   stages: [
-    'The acoustics are why they chose it. You can hear the ninth floor from the second.',
+    'The city below the city, four floors of it, lit as of this spring by somebody who came down with a great many lamps and a schedule.',
     'It was not a precentor and had not been for some time.',
     'The reliquary hums when carried and is warm on the coldest day of the year.',
     'Oakhallow will not have it opened at Ashford. He wants it under the glass, where it came from.',
@@ -303,14 +303,14 @@ quest({
   id: 'main_13_under_the_glass', name: 'Under the Glass', kind: 'main', chapter: 5,
   giver: 'npc_nim_vellory', location: 'the_sunder',
   requires: { quests: ['main_12_the_deep_choir'], level: 34 },
-  summary: 'The Ninefold Seal opens a shaft through the crater floor. Vellory is certain it is a stairwell.',
+  summary: 'The Ninefold Seal opens the tear in the crater floor. Vellory is certain it is a stairwell.',
   objectives: [
-    { type: 'reach', target: 'dun_the_glass_stair', text: 'Open the seal and descend the Glass Stair.' },
-    { type: 'kill', target: 'seraph', count: 1, stage: 1, text: 'Get past what is standing on the landing.' },
+    { type: 'reach', target: 'dun_the_wound', text: 'Open the seal and go down into the Wound.' },
+    { type: 'kill', target: 'guardian', count: 1, stage: 1, text: 'Get past what is standing on the landing.' },
     { type: 'collect', target: 'qi_glass_lens', stage: 2, text: 'Take the lens off the landing.' },
   ],
   stages: [
-    'Nine keys, one door, and a stair that goes down a great deal further than the crater is deep.',
+    'Nine keys, one door, and a tear in the glass that goes down a great deal further than the crater is deep. It reads as a cave for the first hundred feet and then it stops.',
     'It did not speak and it did not need to. Vellory was right: nobody carves a landing.',
     'The lens is ground from one crystal, by nothing that used a wheel. Looking through it hurts, and afterwards the glass floor looks like a lid.',
   ],
@@ -323,7 +323,7 @@ quest({
   requires: { quests: ['main_13_under_the_glass'], level: 40 },
   summary: 'Descend. The corridors stop being caverns. Whatever is down there has been alone for two hundred years.',
   objectives: [
-    { type: 'clear', target: 'dun_ossra_deep', text: 'Go down through Ossra Deep.' },
+    { type: 'clear', target: 'dun_the_pilots_chamber', text: 'Go down through Ossra Deep to the room at the bottom of it.' },
     { type: 'flag', target: 'reliquary_returned', stage: 1, text: 'Put the reliquary back where it was taken from.' },
     { type: 'kill', target: 'seraph', count: 1, stage: 2, text: 'Face what the Choir has been singing to.' },
     { type: 'deliver', target: 'npc_ysolde_caerwen', stage: 3, text: 'Bring the Queen the truth about the Sunder.' },
@@ -378,9 +378,9 @@ promo({
 promo({
   id: 'promo_black_knight', name: 'The Black Harness', giver: 'npc_warden_malveth',
   location: 'netherby_moors', level: 25, classes: ['champion'], promotes: 'black_knight', xp: 40000,
-  summary: 'Take the black harness out of the hole under the Netherhall — and put it on.',
+  summary: 'Take the black harness out of the barrow works under the Netherhall — and put it on.',
   objectives: [
-    { type: 'clear', target: 'dun_netherhall', text: 'Reach the fourth floor of the Netherhall.' },
+    { type: 'clear', target: 'dun_the_opened_barrows', text: 'Go down into the opened barrows below the Netherhall.' },
     { type: 'collect', target: 'qi_black_harness', stage: 1, text: 'Take the Black Harness.' },
   ],
   stages: ['The Malveths have guarded a hole their family did not dig for nine generations.', 'It fits. It always fits. That is the part to worry about.'],
@@ -487,13 +487,13 @@ promo({
 });
 promo({
   id: 'promo_priest_of_light', name: 'The Ember', giver: 'npc_tamsin_ashe',
-  location: 'the_cindermoor', level: 20, classes: ['priest'], promotes: 'priest_of_light', xp: 25000,
-  summary: 'Relight the Cindermoor font with the last ember of the old fire.',
+  location: 'greywater_fen', level: 20, classes: ['priest'], promotes: 'priest_of_light', xp: 25000,
+  summary: 'Relight the causeway font in the fen with the last ember of the old fire.',
   objectives: [
     { type: 'collect', target: 'qi_font_ember', text: 'Recover the ember of the old fire.' },
     { type: 'deliver', target: 'npc_tamsin_ashe', stage: 1, text: 'Light the font.' },
   ],
-  stages: ['The ember has sat in a sealed sanctum for twenty years, still warm to the hand.', 'Priest of Light, and the whole heath came out to watch.'],
+  stages: ['The ember has sat in a barred chapel for twenty years, under water for eleven of them, and is still warm to the hand.', 'Priest of Light, and the whole fen came out to watch.'],
 });
 promo({
   id: 'promo_priest_of_dark', name: 'The Dark Rite', giver: 'npc_precentor_vane',
@@ -531,14 +531,14 @@ promo({
 });
 promo({
   id: 'promo_lich', name: 'The Phylactery', giver: 'npc_the_unlisted',
-  location: 'malveth_spires', level: 22, classes: ['wizard'], promotes: 'lich', xp: 30000,
-  summary: 'Prepare your own phylactery in the Tharn Vault, and put your heart in it.',
+  location: 'netherby_moors', level: 22, classes: ['wizard'], promotes: 'lich', xp: 30000,
+  summary: 'Prepare your own phylactery behind the unlisted door, and put your heart in it.',
   objectives: [
     { type: 'collect', target: 'qi_phylactery_shell', text: 'Obtain an empty phylactery.' },
-    { type: 'reach', target: 'dun_tharn_vault', stage: 1, text: 'Perform the working in the Tharn Vault.' },
+    { type: 'reach', target: 'dun_the_unlisted_door', stage: 1, text: 'Perform the working in the hall behind the unlisted door.' },
     { type: 'flag', target: 'heart_sealed', stage: 2, text: 'Seal your heart in the jar.' },
   ],
-  stages: ['A jar of black glass with room inside for exactly one heart.', 'The vault is the only place in Caerwen where the working holds.', 'Lich. Food no longer tastes of anything, which is a surprisingly hard adjustment.'],
+  stages: ['A jar of black glass with room inside for exactly one heart.', 'The Concord has never licensed the hall, which is the whole reason the working holds in it.', 'Lich. Food no longer tastes of anything, which is a surprisingly hard adjustment.'],
 });
 
 promo({
@@ -575,9 +575,9 @@ promo({
 promo({
   id: 'promo_master', name: "Hessa's Answer", giver: 'npc_old_hessa',
   location: 'the_whitemantle', level: 20, classes: ['initiate'], promotes: 'master', xp: 25000,
-  summary: 'Climb to the wind shrine under the Whitemantle and bring back one word.',
+  summary: 'Climb the Wind Stair on the Whitemantle and bring back one word.',
   objectives: [
-    { type: 'reach', target: 'dun_hoarfast_keep', text: 'Climb to the wind shrine above the keep.' },
+    { type: 'reach', target: 'dun_the_wind_stair', text: 'Climb the Wind Stair to the shrine on the glacier face.' },
     { type: 'collect', target: 'qi_hessas_answer', stage: 1, text: "Retrieve Hessa's Answer." },
     { type: 'deliver', target: 'npc_old_hessa', stage: 2, text: 'Carry it back to Brackwater.' },
   ],
@@ -669,13 +669,13 @@ side({
   rewards: { xp: 1200, gold: 500, reputation: 3 },
 });
 side({
-  id: 'side_brinelode', name: 'The Brine Lode', giver: 'npc_pell_marrow', location: 'saltmarch', level: 10,
-  summary: 'The lode was worked out fifty years ago. The carts still come up full at night.',
+  id: 'side_brinelode', name: 'The Drowned Counting House', giver: 'npc_pell_marrow', location: 'saltmarch', level: 10,
+  summary: 'The Ledger wrote the old counting house off fifty years ago. The carts still come away from it full at night.',
   objectives: [
-    { type: 'clear', target: 'dun_brinelode', text: 'Clear the Brine Lode.' },
+    { type: 'clear', target: 'dun_the_drowned_counting_house', text: 'Clear the drowned counting house.' },
     { type: 'kill', target: 'ogre_lord', count: 1, stage: 1, text: 'Kill whatever is running the shift.' },
   ],
-  stages: ['Worked out fifty years ago. Somebody forgot to tell the carts.', 'An ogre lord with a rota. An actual written rota.'],
+  stages: ['Written off fifty years ago. Somebody forgot to tell the carts.', 'An ogre lord with a rota. An actual written rota, kept dry above the tide line.'],
   rewards: { xp: 3200, gold: 1800, items: ['axe_war'] },
 });
 side({
@@ -686,13 +686,13 @@ side({
   rewards: { xp: 2400, gold: 1000, items: ['staff_long'] },
 });
 side({
-  id: 'side_smugglers_ledger', name: 'The Tidelock', giver: 'npc_pell_marrow', location: 'greywater_fen', level: 12,
-  summary: 'A tide-locked cove, a ledger, and a schedule that is not yours.',
+  id: 'side_smugglers_ledger', name: 'The Bell Wreck', giver: 'npc_pell_marrow', location: 'saltmarch', level: 12,
+  summary: 'A hulk on the Saltmarch bar, a book in her cabin, and a schedule that is not yours.',
   objectives: [
-    { type: 'clear', target: 'dun_tidelock', text: 'Get into the tidelock cove.' },
+    { type: 'clear', target: 'dun_the_bell_wreck', text: 'Get aboard the bell wreck at slack water.' },
     { type: 'collect', target: 'qi_smugglers_ledger', stage: 1, text: 'Take the ledger.' },
   ],
-  stages: ['Tide-locked. You get four hours.', 'Marrow read two pages and burned the rest, which tells us something.'],
+  stages: ['She is only walkable at slack water, and slack water is four hours.', 'Marrow read two pages and burned the rest, which tells us something.'],
   rewards: { xp: 3000, gold: 1500, items: ['dagger_kris'] },
 });
 side({
@@ -723,9 +723,9 @@ side({
   rewards: { xp: 6000, gold: 3500, items: ['art_sealed_skin'], reputation: 5 },
 });
 side({
-  id: 'side_gullhold', name: 'Gullhold', giver: 'npc_huscarl_dain', location: 'coldwater_sound', level: 18,
-  summary: 'A militia keep above the Coldwater anchorage has quietly changed hands.',
-  objectives: [{ type: 'clear', target: 'dun_gullhold', text: 'Retake Gullhold.' }],
+  id: 'side_gullhold', name: 'Hollowfrost Keep', giver: 'npc_huscarl_dain', location: 'coldwater_sound', level: 18,
+  summary: "Coldwater's old garrison keep above the anchorage has quietly changed hands.",
+  objectives: [{ type: 'clear', target: 'dun_hollowfrost_keep', text: 'Retake Hollowfrost Keep.' }],
   stages: ['The militia roll and the garrison roll no longer match.', 'They had not changed the locks, which was careless of them.'],
   rewards: { xp: 8000, gold: 4000, items: ['shield_tower'], reputation: 5 },
 });
@@ -743,10 +743,10 @@ side({
   id: 'side_barrow_survey', name: 'The Barrow Survey', giver: 'npc_nell_ockham', location: 'netherby_moors', level: 22,
   summary: 'Walk the Netherby barrow line and count the open ones. Just count them.',
   objectives: [
-    { type: 'reach', target: 'dun_the_nineteen', text: 'Walk the barrow line.' },
+    { type: 'reach', target: 'dun_the_ninth_barrow', text: 'Walk the ridge as far as the ninth barrow.' },
     { type: 'flag', target: 'barrows_counted', stage: 1, text: 'Count the opened barrows.' },
   ],
-  stages: ['Nineteen barrows. She wants a number, not an opinion.', 'Eighteen open. All eighteen from the inside.'],
+  stages: ['Nine barrows on the ridge. She wants a number, not an opinion.', 'Eight robbed centuries ago, spoil outside. The ninth opened last spring, spoil outside as well.'],
   rewards: { xp: 8000, gold: 3000, items: ['cloak_fur'] },
 });
 side({
@@ -760,10 +760,10 @@ side({
   rewards: { xp: 14000, gold: 6000, items: ['amulet_talisman'], reputation: 4 },
 });
 side({
-  id: 'side_netherhall', name: 'The Netherhall', giver: 'npc_warden_malveth', location: 'netherby_moors', level: 27,
-  summary: 'Four floors of it, and the fourth is under the water table.',
-  objectives: [{ type: 'clear', target: 'dun_netherhall', text: 'Clear the Netherhall.' }],
-  stages: ['Nobody has been below the second floor in a generation.', 'The fourth floor is under water and something down there has been keeping it that way.'],
+  id: 'side_netherhall', name: 'The Barrow Works', giver: 'npc_warden_malveth', location: 'netherby_moors', level: 27,
+  summary: 'The hole the Netherhall was built to watch has been joined up into one work, and nobody in Netherby reported the digging.',
+  objectives: [{ type: 'clear', target: 'dun_the_opened_barrows', text: 'Clear the barrow works under the Netherhall.' }],
+  stages: ['Nobody has been past the second cut in a generation. The digging took a year and the town heard nothing.', 'All nineteen barrows are one work now, and the last of it is under the water table.'],
   rewards: { xp: 20000, gold: 9000, items: ['art_barrowclean'] },
 });
 side({
@@ -793,38 +793,38 @@ side({
   repeatable: true,
 });
 side({
-  id: 'side_cindral_foundry', name: 'The Cindral Foundry', giver: 'npc_magister_pell', location: 'malveth_spires', level: 27,
-  summary: 'An imperial foundry in the Spires never shut down. The Concord wants a sample of the output.',
+  id: 'side_cindral_foundry', name: 'The Working Floors', giver: 'npc_magister_pell', location: 'emberhold', level: 27,
+  summary: "The forge-cult's floors under the caldera are turning out parts to somebody else's pattern. The Concord wants a sample.",
   objectives: [
-    { type: 'clear', target: 'dun_cindral_foundry', text: 'Reach the heart of the foundry.' },
+    { type: 'clear', target: 'dun_the_caldera_stair', text: 'Go down the caldera stair to the working floors.' },
     { type: 'collect', target: 'sunder_alloy', count: 3, stage: 1, text: 'Take a sample of the output.' },
   ],
-  stages: ['The hammers are still running and nobody is feeding them.', 'It is still making parts. For what, nobody will say out loud.'],
+  stages: ['Somebody has been paying above the market rate for grey glass and the hammers have not stopped since.', 'It is still making parts. For what, nobody will say out loud.'],
   rewards: { xp: 18000, gold: 8000, items: ['plate_gothic'] },
 });
 side({
-  id: 'side_wyrmthroat', name: 'Wyrmthroat', giver: 'npc_aldwin_tharnec', location: 'malveth_spires', level: 31,
-  summary: 'An elder wyrm has taken the high pass, and with it the ore road.',
+  id: 'side_wyrmthroat', name: 'The Needle Road', giver: 'npc_aldwin_tharnec', location: 'malveth_spires', level: 31,
+  summary: 'A wyrm has taken the third needle, and with it the plank road and the ore route under it.',
   objectives: [
-    { type: 'clear', target: 'dun_wyrmthroat', text: 'Enter Wyrmthroat.' },
-    { type: 'kill', target: 'elder_dragon', count: 1, stage: 1, text: 'Kill the elder wyrm.' },
+    { type: 'clear', target: 'dun_the_needle_road', text: 'Walk the Needle Road out to the third needle.' },
+    { type: 'kill', target: 'elder_dragon', count: 1, stage: 1, text: 'Kill the wyrm in the eyrie.' },
     { type: 'collect', target: 'qi_dragon_tooth', stage: 2, text: 'Take a tooth as proof.' },
   ],
-  stages: ['Hot enough to blister at the second turning.', 'It was awake. They are always awake.', 'The tooth is as long as a forearm.'],
+  stages: ['Rope and plank, sixty years of weather on both, strung needle to needle by men who are not on them any more.', 'It was awake. They are always awake.', 'The tooth is as long as a forearm.'],
   rewards: { xp: 30000, gold: 15000, items: ['art_second_arrow'] },
 });
 side({
-  id: 'side_hoarfast_keep', name: 'Hoarfast Keep', giver: 'npc_nell_ockham', location: 'the_whitemantle', level: 24,
-  summary: 'Abandoned in a single season and sealed by the ice that followed.',
-  objectives: [{ type: 'clear', target: 'dun_hoarfast_keep', text: 'Clear Hoarfast Keep.' }],
-  stages: ['A whole garrison in one season, and the records stop mid-sentence.', 'The records stop because the thing in the well reached the record room.'],
+  id: 'side_hoarfast_keep', name: 'The Blue Throat', giver: 'npc_nell_ockham', location: 'the_whitemantle', level: 24,
+  summary: 'A meltwater shaft down through two hundred feet of ice, past everything the glacier has taken, in the order it took it.',
+  objectives: [{ type: 'clear', target: 'dun_the_blue_throat', text: 'Go down the Blue Throat.' }],
+  stages: ['Ockham wants the shaft walked and written down in order. The glacier has been collecting for six hundred years.', 'A cart, a village and a whole garrison, each at its own depth and each legible. So was what came up the shaft after us.'],
   rewards: { xp: 12000, gold: 5500, items: ['chain_scale'] },
 });
 side({
-  id: 'side_seven_altars', name: 'Seven Altars', giver: 'npc_tamsin_ashe', location: 'verdant_weald', level: 23,
-  summary: 'Seven altars in the Weald, one per attribute, and something guarding each.',
-  objectives: [{ type: 'clear', target: 'dun_seven_altars', text: 'Visit all seven altars.' }],
-  stages: ['One altar per attribute, and each wants proof before it gives anything.', 'Seven blessings. They do not stack, which the guardians find funny.'],
+  id: 'side_seven_altars', name: 'The Seven Judgements', giver: 'npc_tamsin_ashe', location: 'verdant_weald', level: 23,
+  summary: 'The Weald holds its own assizes under Thornhallow, and every bench wants proof of something different.',
+  objectives: [{ type: 'clear', target: 'dun_thornhallow_deep', text: 'Stand before all seven benches under Thornhallow.' }],
+  stages: ['One bench per attribute, and each of them wants proof before it gives anything.', 'Seven judgements, seven blessings. They do not stack, which the Antlered Judge finds funny.'],
   rewards: { xp: 14000, gold: 4000, items: ['potion_pure_might', 'potion_pure_luck'] },
 });
 side({
@@ -838,10 +838,10 @@ side({
   rewards: { xp: 9000, gold: 3500, items: ['potion_pure_endurance'] },
 });
 side({
-  id: 'side_hessas_cave', name: "Hessa's Cave", giver: 'npc_old_hessa', location: 'brackwater_isle', level: 17,
-  summary: 'The cave behind the hermitage goes back a great deal further than it looks.',
-  objectives: [{ type: 'clear', target: 'dun_hessas_cave', text: "Explore Hessa's Cave." }],
-  stages: ['One chamber, one fire, and then eight hundred feet of tunnel.', 'The trolls at the bottom had been walled in. From this side.'],
+  id: 'side_hessas_cave', name: "Hessa's Cut", giver: 'npc_old_hessa', location: 'brackwater_isle', level: 17,
+  summary: 'The sea cut under the hermitage goes back a great deal further than it looks.',
+  objectives: [{ type: 'clear', target: 'dun_hessas_cut', text: "Explore Hessa's Cut." }],
+  stages: ['One chamber, one fire, and then eight hundred feet of tunnel that stays dry at every tide.', 'The eels at the back had been walled in — from this side — and the charts pinned above them are in a hand nobody on the island can read.'],
   rewards: { xp: 6500, gold: 2800, items: ['boots_boots'] },
 });
 side({
@@ -869,20 +869,20 @@ side({
   rewards: { xp: 20000, gold: 5000, items: ['potion_black', 'potion_golden'] },
 });
 side({
-  id: 'side_the_vent', name: 'The Vent', giver: 'npc_isabeau_ossran', location: 'verhal_sands', level: 35,
-  summary: 'A hall cut into a live fissure. Four surveyors went in and none came out.',
+  id: 'side_the_vent', name: 'Slagfall', giver: 'npc_isabeau_ossran', location: 'emberhold', level: 35,
+  summary: 'Emberhold tips its slag down one gully. Four surveyors went down after what the smiths have been losing into it, and none came off the tip.',
   objectives: [
-    { type: 'clear', target: 'dun_the_vent', text: 'Survey the Vent.' },
-    { type: 'kill', target: 'inferno_lord', count: 1, stage: 1, text: 'Kill the thing in the fissure.' },
+    { type: 'clear', target: 'dun_slagfall', text: 'Survey the slag tip at Emberhold.' },
+    { type: 'kill', target: 'inferno_lord', count: 1, stage: 1, text: 'Kill what lives in the slag.' },
   ],
-  stages: ['Four surveyors, no returns. Isabeau was frank about the odds and about her margin.', 'The hall is cut into a live fissure, and the fissure was the thing.'],
+  stages: ['Four surveyors, no returns. Isabeau was frank about the odds and about her margin.', 'Whatever lives in the tip comes back up it when the smiths pour, which is how it took the surveyors and half a shift with them.'],
   rewards: { xp: 34000, gold: 16000, items: ['art_tharn_staff'] },
 });
 side({
-  id: 'side_garden_of_statues', name: 'The Garden of Statues', giver: 'npc_nell_ockham', location: 'verhal_sands', level: 33,
-  summary: 'A temple buried to the roofline, and a forecourt of figures that were not carved.',
-  objectives: [{ type: 'clear', target: 'dun_garden_of_statues', text: 'Enter the Garden of Statues.' }],
-  stages: ['Every figure in the forecourt is facing the door.', 'Now we know why.'],
+  id: 'side_garden_of_statues', name: 'The Buried Province', giver: 'npc_nell_ockham', location: 'verhal_sands', level: 33,
+  summary: 'A market town under ninety feet of dune, shutters still latched from the inside, and figures in the street that were not carved.',
+  objectives: [{ type: 'clear', target: 'dun_the_buried_province', text: 'Get down into the buried province.' }],
+  stages: ['Every figure in the street is facing the same doorway.', 'Now we know why.'],
   rewards: { xp: 26000, gold: 12000, items: ['art_the_blank'] },
 });
 side({
@@ -896,25 +896,25 @@ side({
   rewards: { xp: 9500, gold: 4200, items: ['belt_plate'] },
 });
 side({
-  id: 'side_the_swelling', name: 'The Swelling', giver: 'npc_alys_bracken', location: 'gallowfen', level: 32,
-  summary: 'The thing growing under the Gallowfen has been growing at the rate of a house a year.',
+  id: 'side_the_swelling', name: "The Confessor's Pit", giver: 'npc_alys_bracken', location: 'gallowfen', level: 32,
+  summary: 'Whatever has been growing under the Gallowfen for twenty years has come up into the cells the Imperium cut for asking questions in.',
   objectives: [
     { type: 'collect', target: 'qi_swelling_key', text: 'Take a key off an overseer.' },
-    { type: 'clear', target: 'dun_the_swelling', stage: 1, text: 'Fight down to the core.' },
-    { type: 'kill', target: 'arch_devil', count: 1, stage: 2, text: 'Kill what is holding the core.' },
+    { type: 'clear', target: 'dun_the_confessors_pit', stage: 1, text: 'Fight down through the cells.' },
+    { type: 'kill', target: 'arch_devil', count: 1, stage: 2, text: 'Kill what the Confessor has been asking questions of.' },
   ],
-  stages: ['Getting a key requires being extremely close to an overseer.', 'It is grown, not built, and four floors down the floor stops being floor.',
+  stages: ['Getting a key requires being extremely close to an overseer.', 'Every cell was cut so that it could hear the answer given in the next one, and something at the bottom has been answering.',
     'The Gallowfen is quiet for the first time in twenty years. It will not last.'],
   rewards: { xp: 45000, gold: 15000, items: ['art_gullwing_mail'], reputation: 25 },
 });
 side({
-  id: 'side_second_swelling', name: 'The Second Swelling', giver: 'npc_alys_bracken', location: 'the_sunder', level: 32,
-  summary: 'A second growth under the crater rim, smaller, newer, and being dug at speed.',
+  id: 'side_second_swelling', name: 'The Camp on the Glass', giver: 'npc_alys_bracken', location: 'the_sunder', level: 32,
+  summary: 'The thing in the Gallowfen started as a camp with a dig plan. There is a camp with a dig plan on the crater rim.',
   objectives: [
-    { type: 'clear', target: 'dun_the_second_swelling', text: 'Clear the second swelling.' },
-    { type: 'kill', target: 'horned_devil', count: 1, stage: 1, text: 'Kill the overseer.' },
+    { type: 'clear', target: 'dun_the_rim_camp', text: 'Break up the camp pinned to the glass at the rim.' },
+    { type: 'kill', target: 'master_mage', count: 1, stage: 1, text: 'Kill the quartermaster.' },
   ],
-  stages: ['Newer, smaller, and being dug at a frankly alarming rate.', 'It is closed. There will be a third.'],
+  stages: ['Tents, sledges and a year of stores pinned to the glass with iron, and a schedule that runs to the spring.', 'It is broken up. Bracken says the next one will be further in.'],
   rewards: { xp: 28000, gold: 12000, reputation: 6 },
 });
 side({
@@ -930,9 +930,9 @@ side({
 });
 side({
   id: 'side_long_stair', name: 'The Long Stair', giver: 'npc_isabeau_ossran', location: 'the_riven_steppe', level: 34,
-  summary: 'Two thousand steps cut into a canyon wall, each of them waist-high.',
-  objectives: [{ type: 'clear', target: 'dun_the_long_stair', text: 'Climb the Long Stair.' }],
-  stages: ['Two thousand steps, each of them waist-high, and no landing anywhere.', 'At the top, a greater titan and a view of the entire kingdom.'],
+  summary: 'Two thousand steps cut into a canyon wall, each of them waist-high, and a door at the bottom of them.',
+  objectives: [{ type: 'clear', target: 'dun_hall_beneath', text: 'Take the stair down to the doors of the Hall Beneath.' }],
+  stages: ['Two thousand steps, each of them waist-high, and no landing anywhere.', 'At the bottom, forty feet of door, a greater titan keeping it, and mason marks that are not giant work.'],
   rewards: { xp: 40000, gold: 18000, items: ['art_thornwick_harness'] },
 });
 

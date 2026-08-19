@@ -1,6 +1,6 @@
 import { System } from '../core/Engine.js';
 import { TRAVEL_MODES, ROUTES, getRoute, routesFrom, otherEnd } from './data/Travel.js';
-import { TOWNS } from './data/Regions.js';
+import { TOWNS, townPosition } from './data/Regions.js';
 
 /**
  * Riding the coach and taking the packet ship.
@@ -198,10 +198,16 @@ export class TravelSystem extends System {
   /** Put the party down at the destination and tell everyone who cares. */
   _arrive(townId, route) {
     const town = TOWNS[townId];
+    const terrain = this.ctx.get('terrain');
+    // Never the authored pair directly. Towns are authored in a 4096 m design
+    // frame and the terrain is built at 2048, so handing the raw figure to a
+    // teleport put the party 1900 m outside the world — a coach ride ended off
+    // the edge of the map, silently.
+    const at = townPosition(town, terrain?.worldSize ?? undefined, terrain);
     this.ctx.get('venue')?.leave({ silent: true });
-    if (town?.position) {
+    if (at) {
       this.ctx.events.emit('player:teleport', {
-        x: town.position[0], z: town.position[1], town: townId, reason: 'travel',
+        x: at[0], z: at[1], town: townId, reason: 'travel',
       });
     }
     this.ctx.events.emit('player:enteredTown', { town: townId, via: route.mode });

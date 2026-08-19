@@ -1,6 +1,6 @@
 /**
- * Regions — the world map of Caerwen: outdoor regions, their towns, their
- * dungeons, and what lives in them.
+ * Regions — the world map of Caerwen: outdoor regions, their towns, and what
+ * lives in them.
  *
  * The world is a square `WORLD_SIZE` metres on a side, centred on the origin,
  * matching `terrain.worldSize`. Region bounds are given in metres for the
@@ -9,6 +9,19 @@
  *
  * Spawn tables reference monster ids from Monsters.js; `validateData` in
  * rules.js asserts every one of them resolves.
+ *
+ * Dungeons are **not** here. `data/Dungeons.js` owns the catalogue and every
+ * dungeon record names the region its door is in, so the region → dungeon list
+ * is derived rather than authored: ask `dungeonsInRegion(regionId)` for it.
+ * This file used to carry a second table of its own and a `dungeons: [...]`
+ * array per region, and the two drifted until twenty-eight of the ids in those
+ * arrays named nothing the world built. One table cannot disagree with itself.
+ *
+ * The dependency runs one way for a reason and cannot be turned around:
+ * `Dungeons.js` derives every entrance from its region's `bounds`, so it
+ * imports this file at module-evaluation time. Importing it back — even only
+ * to derive the lists — would close the cycle and leave whichever module
+ * happened to load second reading a half-built one.
  */
 
 import { MONSTERS } from './Monsters.js';
@@ -60,7 +73,8 @@ function region(def) {
     musicVariant: def.musicVariant ?? def.id,
     towns: Object.freeze(def.towns ?? []),
     castles: Object.freeze(def.castles ?? []),
-    dungeons: Object.freeze(def.dungeons ?? []),
+    // No `dungeons` here: see the head of the file. The catalogue knows which
+    // region each of its doors is in, and `dungeonsInRegion()` reads it off.
     neighbours: Object.freeze(def.neighbours ?? []),
     palette: Object.freeze(def.palette),
     fog: Object.freeze(def.fog ?? { color: 0xb9c4cc, near: 60, far: 900 }),
@@ -89,7 +103,6 @@ region({
   weather: { clear: 0.25, overcast: 0.28, rain: 0.12, storm: 0.15, snow: 0.15, fog: 0.05 },
   ambience: 'amb-mountain', musicVariant: 'malveth',
   towns: [], castles: [],
-  dungeons: ['dun_tharn_vault', 'dun_wyrmthroat', 'dun_cindral_foundry'],
   neighbours: ['the_whitemantle', 'coldwater_sound'],
   palette: { grass: 0x5a6a4a, dirt: 0x6a5c48, rock: 0x8c8578, foliage: 0x3a4a34, water: 0x3a5a6a, snow: 0xe8eef4 },
   fog: { color: 0x9aa8b4, near: 40, far: 700 },
@@ -114,7 +127,6 @@ region({
   weather: { clear: 0.2, overcast: 0.24, rain: 0.02, storm: 0.08, snow: 0.4, fog: 0.06 },
   ambience: 'amb-snow', musicVariant: 'whitemantle',
   towns: [], castles: [],
-  dungeons: ['dun_hoarfast_keep', 'dun_blue_hall'],
   neighbours: ['malveth_spires', 'verdant_weald', 'ashford_hollow'],
   palette: { grass: 0x6a7a6a, dirt: 0x7a7060, rock: 0x9aa0a8, foliage: 0x2e4038, water: 0x5a8ab0, snow: 0xf4f8ff },
   fog: { color: 0xd8e4f0, near: 30, far: 600 },
@@ -138,7 +150,6 @@ region({
   weather: { clear: 0.55, overcast: 0.2, rain: 0.14, storm: 0.03, snow: 0, fog: 0.08 },
   ambience: 'amb-forest', musicVariant: 'weald',
   towns: [], castles: [],
-  dungeons: ['dun_greenheart', 'dun_seven_altars'],
   neighbours: ['the_whitemantle', 'the_riven_steppe', 'the_cindermoor'],
   palette: { grass: 0x6f8a3a, dirt: 0x7a6244, rock: 0x8c8578, foliage: 0x3f6a2c, water: 0x3f7fa8, snow: 0xffffff },
   fog: { color: 0xc8d8c0, near: 80, far: 1200 },
@@ -165,7 +176,6 @@ region({
   weather: { clear: 0.3, overcast: 0.3, rain: 0.14, storm: 0.16, snow: 0.06, fog: 0.04 },
   ambience: 'amb-mountain', musicVariant: 'steppe',
   towns: [], castles: [],
-  dungeons: ['dun_hall_beneath', 'dun_the_long_stair'],
   neighbours: ['verdant_weald', 'the_sunder'],
   palette: { grass: 0x67743a, dirt: 0x8a7050, rock: 0x9a938a, foliage: 0x3a5030, water: 0x40708a, snow: 0xeef2f6 },
   fog: { color: 0xa8b0b8, near: 60, far: 1400 },
@@ -193,7 +203,6 @@ region({
   weather: { clear: 0.2, overcast: 0.3, rain: 0.2, storm: 0.1, snow: 0.12, fog: 0.08 },
   ambience: 'amb-coast', musicVariant: 'coldwater',
   towns: ['town_coldwater'], castles: [],
-  dungeons: ['dun_gullhold', 'dun_cantors_undercroft'],
   neighbours: ['malveth_spires', 'greywater_fen', 'ashford_hollow', 'emberhold'],
   palette: { grass: 0x5f7040, dirt: 0x6a5c48, rock: 0x82868c, foliage: 0x2e4a30, water: 0x1f5a80, snow: 0xeef4fa },
   fog: { color: 0xb4c4d0, near: 50, far: 900 },
@@ -217,7 +226,6 @@ region({
   weather: { clear: 0.44, overcast: 0.26, rain: 0.18, storm: 0.04, snow: 0.02, fog: 0.06 },
   ambience: 'amb-forest', musicVariant: 'ashford',
   towns: ['town_ashford'], castles: ['keep_oakhallow'],
-  dungeons: ['dun_wenlow_manor', 'dun_chapter_undercroft'],
   neighbours: ['thornwick_vale', 'coldwater_sound', 'the_cindermoor', 'the_whitemantle'],
   palette: { grass: 0x62743a, dirt: 0x6a5438, rock: 0x8c8578, foliage: 0x33552a, water: 0x3f7fa8, snow: 0xffffff },
   fog: { color: 0xbfc8c4, near: 60, far: 1100 },
@@ -242,7 +250,6 @@ region({
   weather: { clear: 0.46, overcast: 0.24, rain: 0.18, storm: 0.04, snow: 0.01, fog: 0.07 },
   ambience: 'amb-plains', musicVariant: 'cindermoor',
   towns: [], castles: [],
-  dungeons: ['dun_imperial_conduit', 'dun_kindled_shrine'],
   neighbours: ['ashford_hollow', 'verdant_weald', 'netherby_moors', 'saltmarch'],
   palette: { grass: 0x5e6438, dirt: 0x4e4432, rock: 0x7e7a72, foliage: 0x36502c, water: 0x3a6a86, snow: 0xffffff },
   fog: { color: 0xbcbcb0, near: 70, far: 1300 },
@@ -267,7 +274,6 @@ region({
   weather: { clear: 0.42, overcast: 0.28, rain: 0.1, storm: 0.08, snow: 0, fog: 0.12 },
   ambience: 'amb-desert', musicVariant: 'sunder',
   towns: [], castles: [],
-  dungeons: ['dun_the_glass_stair', 'dun_the_second_swelling'],
   neighbours: ['the_riven_steppe', 'gallowfen', 'the_cindermoor', 'ossra_deep'],
   palette: { grass: 0x5a6050, dirt: 0x6e6858, rock: 0x8e9490, foliage: 0x3a4438, water: 0x2f6a72, snow: 0xffffff },
   fog: { color: 0xc4cec8, near: 90, far: 1700 },
@@ -293,7 +299,6 @@ region({
   weather: { clear: 0.24, overcast: 0.26, rain: 0.24, storm: 0.06, snow: 0, fog: 0.2 },
   ambience: 'amb-swamp', musicVariant: 'greywater',
   towns: ['town_greywater'], castles: [],
-  dungeons: ['dun_the_wreck', 'dun_tidelock'],
   neighbours: ['coldwater_sound', 'millhaven_downs', 'thornwick_vale', 'brackwater_isle', 'fallowmere'],
   palette: { grass: 0x5a6a44, dirt: 0x6a5c40, rock: 0x7a7870, foliage: 0x2f4a2c, water: 0x2a5a68, snow: 0xffffff },
   fog: { color: 0xa8b8b0, near: 25, far: 600 },
@@ -318,7 +323,6 @@ region({
   weather: { clear: 0.46, overcast: 0.24, rain: 0.2, storm: 0.03, snow: 0.01, fog: 0.06 },
   ambience: 'amb-forest', musicVariant: 'thornwick',
   towns: ['town_thornwick'], castles: ['castle_caerwen'],
-  dungeons: ['dun_vale_barrow', 'dun_wolf_den'],
   neighbours: ['ashford_hollow', 'millhaven_downs', 'saltmarch', 'the_cindermoor'],
   palette: { grass: 0x6f7a3a, dirt: 0x7a6244, rock: 0x8c8578, foliage: 0x3d6630, water: 0x3f7fa8, snow: 0xffffff },
   fog: { color: 0xc8d2cc, near: 80, far: 1300 },
@@ -343,7 +347,6 @@ region({
   weather: { clear: 0.14, overcast: 0.34, rain: 0.22, storm: 0.08, snow: 0.02, fog: 0.2 },
   ambience: 'amb-swamp', musicVariant: 'netherby',
   towns: ['town_netherby'], castles: ['keep_netherhall'],
-  dungeons: ['dun_netherhall', 'dun_the_nineteen'],
   neighbours: ['the_cindermoor', 'gallowfen', 'duskorn_waste'],
   palette: { grass: 0x4a5a38, dirt: 0x54452f, rock: 0x6a6660, foliage: 0x2a3a26, water: 0x2a3a34, snow: 0xdde4e0 },
   fog: { color: 0x8a9490, near: 20, far: 500 },
@@ -369,7 +372,6 @@ region({
   weather: { clear: 0.1, overcast: 0.3, rain: 0.26, storm: 0.08, snow: 0, fog: 0.26 },
   ambience: 'amb-swamp', musicVariant: 'gallowfen',
   towns: [], castles: [],
-  dungeons: ['dun_the_swelling', 'dun_the_blighted_holt'],
   neighbours: ['netherby_moors', 'the_sunder', 'verhal_sands'],
   palette: { grass: 0x4a6a44, dirt: 0x5a4c38, rock: 0x74706a, foliage: 0x27452a, water: 0x2c4a44, snow: 0xffffff },
   fog: { color: 0x93a89a, near: 15, far: 420 },
@@ -397,7 +399,6 @@ region({
   weather: { clear: 0.52, overcast: 0.2, rain: 0.16, storm: 0.03, snow: 0, fog: 0.09 },
   ambience: 'amb-coast', musicVariant: 'millhaven',
   towns: ['town_millhaven'], castles: [],
-  dungeons: ['dun_old_watch', 'dun_gullmouth'],
   neighbours: ['thornwick_vale', 'saltmarch', 'greywater_fen'],
   palette: { grass: 0x74803c, dirt: 0x8a7048, rock: 0x8c8578, foliage: 0x40682e, water: 0x2f7fa8, snow: 0xffffff },
   fog: { color: 0xcfd8d4, near: 100, far: 1600 },
@@ -422,7 +423,6 @@ region({
   weather: { clear: 0.44, overcast: 0.22, rain: 0.2, storm: 0.05, snow: 0, fog: 0.09 },
   ambience: 'amb-coast', musicVariant: 'saltmarch',
   towns: ['town_saltmarch'], castles: [],
-  dungeons: ['dun_brinelode', 'dun_underbrine', 'dun_sea_cloister', 'dun_the_dogleg'],
   neighbours: ['millhaven_downs', 'thornwick_vale', 'the_cindermoor', 'duskorn_waste'],
   palette: { grass: 0x6a7a40, dirt: 0x9a8858, rock: 0x8c8578, foliage: 0x365e2e, water: 0x2c86ae, snow: 0xffffff },
   fog: { color: 0xd0dad8, near: 70, far: 1300 },
@@ -447,7 +447,6 @@ region({
   weather: { clear: 0.24, overcast: 0.32, rain: 0.2, storm: 0.06, snow: 0.02, fog: 0.16 },
   ambience: 'amb-plains', musicVariant: 'duskorn',
   towns: ['town_duskorn'], castles: [],
-  dungeons: ['dun_choir_hall', 'dun_the_deep_choir'],
   neighbours: ['saltmarch', 'netherby_moors', 'gallowfen'],
   palette: { grass: 0x555c44, dirt: 0x5a5348, rock: 0x807c74, foliage: 0x33422e, water: 0x2e4a54, snow: 0xe8eef0 },
   fog: { color: 0x9aa0a0, near: 30, far: 800 },
@@ -473,7 +472,6 @@ region({
   weather: { clear: 0.66, overcast: 0.16, rain: 0.02, storm: 0.06, snow: 0, fog: 0.1 },
   ambience: 'amb-desert', musicVariant: 'verhal',
   towns: [], castles: [],
-  dungeons: ['dun_verhal_deep', 'dun_the_vent', 'dun_garden_of_statues'],
   neighbours: ['duskorn_waste', 'gallowfen'],
   palette: { grass: 0x8a8a4a, dirt: 0xb09a68, rock: 0x9a8a70, foliage: 0x5a6a38, water: 0x3a8aa0, snow: 0xffffff },
   fog: { color: 0xdcc8a0, near: 60, far: 1800 },
@@ -499,7 +497,6 @@ region({
   weather: { clear: 0.34, overcast: 0.26, rain: 0.2, storm: 0.08, snow: 0, fog: 0.12 },
   ambience: 'amb-coast', musicVariant: 'brackwater',
   towns: ['town_brackwater'], castles: [],
-  dungeons: ['dun_hessas_cave'],
   neighbours: ['greywater_fen'],
   palette: { grass: 0x63743c, dirt: 0x7a6a4a, rock: 0x8c8578, foliage: 0x36572c, water: 0x2f7fa8, snow: 0xffffff },
   fog: { color: 0xbcccd0, near: 50, far: 900 },
@@ -523,7 +520,6 @@ region({
   weather: { clear: 0.42, overcast: 0.24, rain: 0.18, storm: 0.06, snow: 0, fog: 0.1 },
   ambience: 'amb-plains', musicVariant: 'fallowmere',
   towns: ['town_fallowmere'], castles: [],
-  dungeons: ['dun_the_old_grange'],
   neighbours: ['greywater_fen'],
   palette: { grass: 0x6a7440, dirt: 0x7e6a48, rock: 0x8c8578, foliage: 0x3a5830, water: 0x2f7fa8, snow: 0xffffff },
   fog: { color: 0xc4d0d4, near: 60, far: 1100 },
@@ -548,7 +544,6 @@ region({
   weather: { clear: 0.24, overcast: 0.3, rain: 0.16, storm: 0.08, snow: 0.06, fog: 0.16 },
   ambience: 'amb-mountain', musicVariant: 'emberhold',
   towns: ['town_emberhold'], castles: [],
-  dungeons: ['dun_undercaldera'],
   neighbours: ['coldwater_sound'],
   palette: { grass: 0x4e5238, dirt: 0x53483c, rock: 0x6e6a66, foliage: 0x33402c, water: 0x27566a, snow: 0xe4e8ec },
   fog: { color: 0x9a938c, near: 30, far: 700 },
@@ -572,7 +567,6 @@ region({
   weather: { clear: 0, overcast: 0.2, rain: 0, storm: 0, snow: 0, fog: 0.8 },
   ambience: 'amb-dungeon', musicVariant: 'ossra',
   towns: [], castles: [],
-  dungeons: ['dun_ossra_deep'],
   neighbours: ['the_sunder'],
   palette: { grass: 0x3a4038, dirt: 0x44403a, rock: 0x6a7076, foliage: 0x2a3028, water: 0x1e3a44, snow: 0xd0d8dc },
   fog: { color: 0x30383c, near: 8, far: 220 },
@@ -585,10 +579,37 @@ export const REGION_LIST = Object.freeze(REGION_IDS.map((id) => REGIONS[id]));
 
 // ── Towns ───────────────────────────────────────────────────────────────────
 
+/**
+ * Where a town stands, in whatever frame the terrain was actually built at.
+ *
+ * Towns are authored against `WORLD_SIZE` (4096 m), which is the design frame.
+ * The terrain system builds at its own size — currently 2048 — so an authored
+ * pair handed straight to a teleport put the party outside the world
+ * altogether: a coach to Millhaven landed 1900 m past the map edge.
+ *
+ * A town that the world actually generates has a terrain landmark, and the
+ * landmark is the truth — it is what the heightfield was flattened around and
+ * what the streets were laid out from. `landmark` names it; everything else
+ * scales from the design frame and will need a landmark of its own the day it
+ * is built.
+ */
+export function townPosition(town, worldSize = WORLD_SIZE, terrain = null) {
+  const t = typeof town === 'string' ? TOWNS[town] : town;
+  if (!t) return null;
+  if (t.landmark && terrain?.landmark) {
+    const L = terrain.landmark(t.landmark);
+    if (L) return [L.x, L.z];
+  }
+  const k = worldSize / WORLD_SIZE;
+  return [t.position[0] * k, t.position[1] * k];
+}
+
 export const TOWNS = deepFreeze({
   town_millhaven: {
     id: 'town_millhaven', name: 'Millhaven', region: 'millhaven_downs', size: 'small',
-    position: [-1620, 1520], walls: true, dock: true, levelHint: 2,
+    // The only town the world builds so far; `landmark` is what makes its
+    // authored position deferrable to where the streets actually are.
+    position: [-1620, 1520], landmark: 'millhaven', walls: true, dock: true, levelHint: 2,
     shops: ['town_millhaven_weaponsmith', 'town_millhaven_armourer', 'town_millhaven_generalstore', 'town_millhaven_alchemist'],
     services: ['town_millhaven_temple', 'town_millhaven_trainer', 'town_millhaven_tavern', 'town_millhaven_guild_ember'],
     style: { wall: 'stone-grey', roof: 0x8a4a3a, timber: 0x5a4029, plaster: 0xd8cfae },
@@ -683,174 +704,6 @@ export const TOWNS = deepFreeze({
 
 export const TOWN_IDS = Object.freeze(Object.keys(TOWNS));
 
-// ── Dungeons ────────────────────────────────────────────────────────────────
-
-const dungeons = {};
-function dungeon(id, name, regionId, level, theme, monsterTable, boss, opts = {}) {
-  dungeons[id] = {
-    id, name, region: regionId, level, theme,
-    monsterTable: Object.freeze(monsterTable),
-    boss,
-    floors: opts.floors ?? Math.max(1, Math.ceil(level / 12)),
-    treasureTier: opts.treasure ?? Math.max(1, Math.min(6, Math.ceil(level / 8))),
-    ambience: opts.ambience ?? 'amb-dungeon',
-    music: 'dungeon',
-    /** Lighting mood the dungeon builder should aim for. */
-    light: Object.freeze(opts.light ?? { ambient: 0x12100c, torch: 0xffa040, density: 0.6 }),
-    palette: Object.freeze(opts.palette ?? { wall: 0x6a6258, floor: 0x4a443c, trim: 0x8c8578 }),
-    trapLevel: opts.trapLevel ?? level,
-    questIds: Object.freeze(opts.quests ?? []),
-    desc: opts.desc ?? '',
-  };
-  return dungeons[id];
-}
-
-dungeon('dun_old_watch', 'The Old Watch', 'millhaven_downs', 3, 'cave',
-  ['goblin', 'goblin_shaman', 'rat', 'bat', 'skeleton'], 'goblin_king',
-  { quests: ['main_01_a_small_errand', 'promo_cavalier', 'promo_wizard', 'side_watch_squatters'],
-    desc: 'A warren dug out under a Cindric signal tower, three levels deep and full of stolen tack.' });
-dungeon('dun_gullmouth', 'Gullmouth Cave', 'millhaven_downs', 5, 'sea-cave',
-  ['choir_penitent', 'goblin', 'bat', 'eel', 'skeleton'], 'choir_cantor',
-  { quests: ['main_02_the_singing_cave'],
-    desc: 'A tide cave under the headland. It floods to the roof twice a day and somebody has been singing in it anyway.' });
-dungeon('dun_vale_barrow', 'The Vale Barrow', 'thornwick_vale', 7, 'barrow',
-  ['skeleton', 'skeleton_knight', 'zombie', 'bat', 'ghost'], 'skeleton_lord',
-  { desc: 'The reeves of the vale are buried here, and not all of them are lying down.' });
-dungeon('dun_wolf_den', 'The Wolf Den', 'thornwick_vale', 6, 'cave',
-  ['wolf', 'dire_wolf', 'spider', 'giant_spider'], 'dire_wolf',
-  { floors: 1, quests: ['side_wolf_den'], desc: 'A limestone cave the packs have used for generations.' });
-dungeon('dun_brinelode', 'The Brine Lode', 'saltmarch', 10, 'mine',
-  ['ogre', 'imp', 'greater_imp', 'green_ooze', 'giant_spider'], 'ogre_lord',
-  { quests: ['side_brinelode'], desc: 'Worked out fifty years ago, reopened by something that does not need light.' });
-dungeon('dun_underbrine', 'The Underbrine', 'saltmarch', 13, 'cave',
-  ['ogre', 'ogre_mage', 'greater_imp', 'acid_ooze', 'bloodsucker'], 'ogre_lord',
-  { desc: 'Below the lode, where the tunnels stop being tunnels.' });
-dungeon('dun_sea_cloister', 'The Sea Cloister', 'saltmarch', 9, 'monastery',
-  ['harpy', 'bandit', 'brigand', 'ghost'], 'harpy_hag',
-  { quests: ['promo_initiate', 'side_sea_cloister'], desc: 'Cut into the sea cliff. The brothers are still there; so is something else.' });
-dungeon('dun_the_dogleg', 'The Dogleg', 'saltmarch', 15, 'hideout',
-  ['thief_monster', 'bandit', 'brigand', 'apprentice_mage'], 'brigand',
-  { quests: ['promo_rogue', 'promo_spy'], desc: 'Two doors, a false wall and the best-defended cellar on the coast.' });
-dungeon('dun_wenlow_manor', 'Wenlow Manor', 'ashford_hollow', 12, 'manor',
-  ['skeleton_knight', 'ghost', 'zombie', 'ghoul', 'apprentice_mage'], 'skeleton_lord',
-  { quests: ['side_wenlow_cellar'], desc: 'A burned-out manor with an intact cellar and a family that never left it.' });
-dungeon('dun_chapter_undercroft', 'The Chapter Undercroft', 'ashford_hollow', 14, 'castle',
-  ['skeleton_knight', 'guardian', 'choir_penitent', 'choir_cantor'], 'choir_precentor',
-  { quests: ['main_04_the_sword_warrant'], desc: 'Under the muster hall, older than the muster hall, and someone has been using it.' });
-dungeon('dun_imperial_conduit', 'The Imperial Conduit', 'the_cindermoor', 11, 'sewer',
-  ['giant_rat', 'plague_rat', 'green_ooze', 'acid_ooze', 'thief_monster', 'bandit'], 'gelatinous_cube',
-  { quests: ['side_conduit_contract', 'main_05_the_ledgers_warrant'],
-    desc: 'Eight centuries of imperial drain under the heath, still running, still draining something.' });
-dungeon('dun_kindled_shrine', 'The Kindled Shrine', 'the_cindermoor', 20, 'temple',
-  ['angel', 'guardian', 'spectre', 'choir_cantor'], 'archangel',
-  { quests: ['promo_priest_of_light', 'main_08_the_dawnbell_key'],
-    desc: 'Gold leaf, high windows and a font cold for twenty years. The town that kept it is gone.' });
-dungeon('dun_greenheart', 'The Greenheart', 'verdant_weald', 19, 'grotto',
-  ['earth_sprite', 'earth_elemental', 'phase_spider', 'gargoyle', 'angel'], 'mountain_lord',
-  { quests: ['promo_arch_druid', 'side_greenheart'], desc: 'A crystal cave under the root plate that hums at dawn.' });
-dungeon('dun_seven_altars', 'The Seven Altars', 'verdant_weald', 23, 'shrine',
-  ['angel', 'guardian', 'stone_gargoyle', 'earth_elemental'], 'archangel',
-  { quests: ['side_seven_altars'], desc: 'Seven altars, one per attribute, and something watching each of them.' });
-dungeon('dun_hoarfast_keep', 'Hoarfast Keep', 'the_whitemantle', 26, 'castle',
-  ['cyclops', 'dire_wolf', 'hell_hound', 'water_elemental', 'spectre'], 'cyclops_chieftain',
-  { quests: ['promo_master', 'side_hoarfast_keep'], desc: 'Abandoned in a season, sealed by the ice that followed.' });
-dungeon('dun_blue_hall', 'The Blue Hall', 'the_whitemantle', 31, 'ice-cave',
-  ['water_elemental', 'tide_lord', 'water_sprite', 'cyclops', 'ghost'], 'tide_lord',
-  { treasure: 5, palette: { wall: 0x9fd0e8, floor: 0x6a9ab8, trim: 0xd8f0ff },
-    desc: 'Blue ice all the way down, and the walls keep whatever they froze.' });
-dungeon('dun_tharn_vault', 'The Tharn Vault', 'malveth_spires', 38, 'tomb',
-  ['lich_monster', 'power_lich', 'skeleton_lord', 'wraith', 'master_mage'], 'master_lich',
-  { floors: 3, treasure: 6, quests: ['promo_lich'],
-    palette: { wall: 0x4a4438, floor: 0x2a261e, trim: 0x8040c0 },
-    desc: 'The Imperium buried an archmagus here and then buried the vault. Neither took.' });
-dungeon('dun_wyrmthroat', 'Wyrmthroat', 'malveth_spires', 33, 'cave',
-  ['dragon', 'hell_hound', 'inferno_lord', 'fire_elemental', 'minotaur_lord'], 'elder_dragon',
-  { treasure: 6, quests: ['side_wyrmthroat'], desc: 'Hot enough to blister at the second turning.' });
-dungeon('dun_cindral_foundry', 'The Cindral Foundry', 'malveth_spires', 29, 'forge',
-  ['fire_elemental', 'flame_sprite', 'guardian', 'greater_imp', 'imp_warlock'], 'inferno_lord',
-  { quests: ['side_cindral_foundry'], desc: 'An imperial foundry that never shut down. The hammers are still running and nobody is feeding them.' });
-dungeon('dun_gullhold', 'Gullhold', 'coldwater_sound', 18, 'fortress',
-  ['brigand', 'initiate_mage', 'steel_gargoyle', 'choir_cantor'], 'choir_precentor',
-  { quests: ['side_gullhold'], desc: 'A militia keep above the anchorage that has quietly changed hands.' });
-dungeon('dun_cantors_undercroft', "The Cantor's Undercroft", 'coldwater_sound', 24, 'temple',
-  ['choir_cantor', 'choir_precentor', 'devil', 'ghast'], 'choir_precentor',
-  { quests: ['main_09_the_long_shadow_key'], desc: 'Under a merchant house, behind an oil store, three levels down.' });
-dungeon('dun_netherhall', 'Netherhall', 'netherby_moors', 28, 'castle',
-  ['wraith', 'spectre', 'ghast', 'skeleton_lord', 'lich_monster'], 'lich_monster',
-  { quests: ['promo_black_knight', 'side_netherhall'], desc: 'Four floors of it, and the fourth is under the water table.' });
-dungeon('dun_the_nineteen', 'The Nineteen', 'netherby_moors', 24, 'barrow',
-  ['ghost', 'spectre', 'skeleton_lord', 'ghast', 'plague_rat'], 'wraith',
-  { quests: ['main_06_the_orders_warrant', 'side_barrow_survey'], desc: 'Nineteen barrows, eighteen of them opened.' });
-dungeon('dun_choir_hall', 'The Choir Hall', 'duskorn_waste', 21, 'temple',
-  ['choir_penitent', 'choir_cantor', 'greater_imp', 'ghast'], 'choir_precentor',
-  { quests: ['promo_villain', 'promo_priest_of_dark', 'promo_spy'],
-    desc: 'An imperial basilica with the pews taken out. The acoustics are the reason they chose it.' });
-dungeon('dun_the_deep_choir', 'The Deep Choir', 'duskorn_waste', 30, 'temple',
-  ['choir_precentor', 'devil', 'horned_devil', 'imp_warlock', 'skeleton_lord'], 'arch_devil',
-  { quests: ['main_12_the_deep_choir'], desc: 'Where the orders come from. Nine floors down, and the singing does not stop for you.' });
-dungeon('dun_the_swelling', 'The Swelling', 'gallowfen', 34, 'hive',
-  ['devil', 'horned_devil', 'devourer', 'gelatinous_cube', 'warden_engine'], 'arch_devil',
-  { floors: 4, treasure: 6, quests: ['side_the_swelling'],
-    light: { ambient: 0x100a14, torch: 0xff4030, density: 0.35 },
-    palette: { wall: 0x3a2a3a, floor: 0x241a24, trim: 0x8a2040 },
-    desc: 'Grown, not built. The walls are warm and they move if you watch them long enough.' });
-dungeon('dun_the_blighted_holt', 'The Blighted Holt', 'gallowfen', 22, 'grove',
-  ['devourer', 'bloodsucker', 'plague_rat', 'cave_troll', 'green_ooze'], 'troll_king',
-  { quests: ['promo_great_druid'], desc: 'It was the healthiest wood in Caerwen ten years ago.' });
-dungeon('dun_hall_beneath', 'The Hall Beneath', 'the_riven_steppe', 40, 'giant-hall',
-  ['titan', 'greater_titan', 'cyclops_king', 'mountain_lord', 'djinn_lord'], 'titan_lord',
-  { floors: 3, treasure: 6, quests: ['side_hall_beneath'],
-    palette: { wall: 0x8a8270, floor: 0x5a5448, trim: 0xd8b25c },
-    desc: 'The doors are forty feet high and they were built to be closed.' });
-dungeon('dun_the_long_stair', 'The Long Stair', 'the_riven_steppe', 36, 'giant-hall',
-  ['greater_titan', 'cyclops_king', 'storm_lord', 'seraph'], 'greater_titan',
-  { treasure: 6, quests: ['side_long_stair'], desc: 'A staircase cut into a canyon wall, each step waist-high, two thousand of them.' });
-dungeon('dun_the_glass_stair', 'The Glass Stair', 'the_sunder', 39, 'vessel',
-  ['iron_sentinel', 'warden_engine', 'master_mage', 'lich_monster', 'choir_precentor'], 'seraph',
-  { floors: 3, treasure: 6, quests: ['main_13_under_the_glass'],
-    light: { ambient: 0x101418, torch: 0xfff0b0, density: 0.5 },
-    desc: 'A shaft of black glass through the crater floor, with a stair inside it going down a great deal further than it should.' });
-dungeon('dun_the_second_swelling', 'The Second Swelling', 'the_sunder', 33, 'hive',
-  ['devil', 'horned_devil', 'devourer', 'hell_hound'], 'horned_devil',
-  { quests: ['side_second_swelling'], desc: 'Smaller than the one in the Gallowfen, newer, and being dug at speed.' });
-dungeon('dun_verhal_deep', 'The Verhal Deep', 'verhal_sands', 42, 'cindral',
-  ['warden_engine', 'iron_sentinel', 'guardian', 'fire_elemental'], 'warden_engine',
-  { floors: 4, treasure: 6, quests: ['main_07_the_ninefold_seal'],
-    light: { ambient: 0x0a1418, torch: 0x60ffff, density: 0.9 },
-    palette: { wall: 0xa0a8b0, floor: 0x2a2e34, trim: 0x60ffff },
-    desc: 'Aqueduct, cistern and a mile of imperial road, all of it under the dunes and none of it fallen in.' });
-dungeon('dun_the_vent', 'The Vent', 'verhal_sands', 37, 'volcanic',
-  ['inferno_lord', 'fire_elemental', 'efreeti', 'hell_hound', 'dragon'], 'inferno_lord',
-  { treasure: 6, quests: ['side_the_vent'], palette: { wall: 0x3a1a12, floor: 0x1e100a, trim: 0xff5020 },
-    desc: 'Cut into a live fissure. The floor glows in the low places.' });
-dungeon('dun_garden_of_statues', 'The Garden of Statues', 'verhal_sands', 35, 'temple',
-  ['gorgon_queen', 'medusa_matriarch', 'efreeti', 'iron_sentinel'], 'gorgon_queen',
-  { quests: ['side_garden_of_statues'], desc: 'Buried to the roofline. The figures in the forecourt were not carved.' });
-dungeon('dun_the_wreck', 'The Wreck', 'greywater_fen', 16, 'wreck',
-  ['giant_eel', 'eel', 'water_sprite', 'ghost', 'green_ooze'], 'sea_serpent',
-  { floors: 2, quests: ['side_the_wreck'], desc: 'A packet ship on a mud bank with its holds still sealed.' });
-dungeon('dun_tidelock', 'The Tidelock', 'greywater_fen', 13, 'cave',
-  ['brigand', 'bandit', 'giant_eel', 'harpy'], 'brigand',
-  { quests: ['side_smugglers_ledger'], desc: 'Tide-locked, and the tide is not on your schedule.' });
-dungeon('dun_hessas_cave', "Hessa's Cave", 'brackwater_isle', 17, 'cave',
-  ['troll', 'cave_troll', 'gargoyle', 'ghost'], 'cave_troll',
-  { quests: ['promo_master', 'side_hessas_cave'], desc: 'One chamber, one fire, and a great deal further back than it looks.' });
-dungeon('dun_the_old_grange', 'The Old Grange', 'fallowmere', 22, 'manor',
-  ['ghost', 'ghast', 'skeleton_knight', 'spectre', 'plague_rat'], 'wraith',
-  { quests: ['side_old_grange'], desc: 'The last family to farm here bricked themselves in. Something else got out.' });
-dungeon('dun_undercaldera', 'The Undercaldera', 'emberhold', 27, 'volcanic',
-  ['flame_sprite', 'fire_elemental', 'imp_warlock', 'steel_gargoyle', 'hell_hound'], 'inferno_lord',
-  { quests: ['side_sealed_galleries'], desc: 'The forge-cults cut down into the vent. Three of the lower galleries are bricked up and nobody will say why.' });
-dungeon('dun_ossra_deep', 'Ossra Deep', 'ossra_deep', 45, 'vessel',
-  ['warden_engine', 'iron_sentinel', 'choir_precentor', 'devil', 'power_lich'], 'seraph',
-  { floors: 4, treasure: 6, quests: ['main_14_ossra_deep'],
-    light: { ambient: 0x080e12, torch: 0x80ffe0, density: 1.0 },
-    palette: { wall: 0xb8c0c4, floor: 0x1e2428, trim: 0x80ffe0 },
-    desc: 'Corridors too regular to be caverns, doors that open to no key, and lights with no flame in them.' });
-
-export const DUNGEONS = deepFreeze(dungeons);
-export const DUNGEON_IDS = Object.freeze(Object.keys(DUNGEONS));
-
 // ── Lookups ─────────────────────────────────────────────────────────────────
 
 /** Region record by id, or undefined. */
@@ -885,15 +738,10 @@ export function townsIn(regionId) {
   return (REGIONS[regionId]?.towns ?? []).map((id) => TOWNS[id]).filter(Boolean);
 }
 
-/** Every dungeon record in a region. */
-export function dungeonsIn(regionId) {
-  return (REGIONS[regionId]?.dungeons ?? []).map((id) => DUNGEONS[id]).filter(Boolean);
-}
-
-/** Dungeon record by id, or undefined. */
-export function getDungeon(id) {
-  return DUNGEONS[id];
-}
+// The dungeons in a region, and a dungeon by id, live in `data/Dungeons.js` as
+// `dungeonsInRegion()` and `getDungeon()`. Nothing forwards them from here: a
+// forward would need this file to import that one, and that cycle is what the
+// note at the head of the file rules out.
 
 /** Town record by id, or undefined. */
 export function getTown(id) {
@@ -929,15 +777,14 @@ export function spawnLevelFor(regionId, partyLevel = 1) {
   return Math.max(lo, Math.min(hi, Math.round((lo + hi) / 2 + (partyLevel - (lo + hi) / 2) * 0.25)));
 }
 
-/** All monster ids referenced anywhere in the world, for integrity checks. */
+/**
+ * Every monster id the outdoor spawn tables name, for integrity checks. The
+ * catalogue answers for what waits underground — `referencedMonsterIds()` in
+ * `data/Dungeons.js` — and `validateData` checks both.
+ */
 export function referencedMonsterIds() {
   const ids = new Set();
   for (const r of REGION_LIST) for (const s of r.spawns) ids.add(s.monster);
-  for (const id of DUNGEON_IDS) {
-    const d = DUNGEONS[id];
-    for (const m of d.monsterTable) ids.add(m);
-    if (d.boss) ids.add(d.boss);
-  }
   return [...ids];
 }
 

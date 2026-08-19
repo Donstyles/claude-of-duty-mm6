@@ -38,8 +38,15 @@ import {
   MONSTERS, MONSTER_IDS, MONSTER_FAMILIES, BODY_PLANS, RESIST_CHANNELS, IMMUNE,
 } from './data/Monsters.js';
 import {
-  REGIONS, REGION_IDS, TOWNS, TOWN_IDS, DUNGEONS, DUNGEON_IDS, referencedMonsterIds,
+  REGIONS, REGION_IDS, TOWNS, TOWN_IDS, referencedMonsterIds as regionMonsterIds,
 } from './data/Regions.js';
+// The dungeon catalogue is its own file and its own source of truth: the world
+// builds from it, the campaign points at it, and so — since this pass — does
+// the validator. Regions no longer keeps a second table to disagree with.
+import {
+  DUNGEONS, DUNGEON_IDS, DUNGEON_THEMES, DUNGEON_ROLES,
+  dungeonsInRegion, referencedMonsterIds as dungeonMonsterIds,
+} from './data/Dungeons.js';
 import {
   NPCS, NPC_IDS, SHOPS, SHOP_IDS, TEMPLES, TEMPLE_IDS, GUILDS, GUILD_IDS,
   TAVERNS, TAVERN_IDS, TRAINING_HALLS, TRAINING_HALL_IDS, BANKS, BANK_IDS,
@@ -789,8 +796,15 @@ export function validateData() {
   }
 
   // ── Regions, towns, dungeons ─────────────────────────────────────────────
-  for (const id of referencedMonsterIds()) {
-    if (!has(MONSTERS, id)) bad(`spawn/dungeon table references unknown monster "${id}"`);
+  for (const id of regionMonsterIds()) {
+    if (!has(MONSTERS, id)) bad(`spawn table references unknown monster "${id}"`);
+  }
+  // Bosses, champions and floor tables are hints rather than hard references —
+  // the bestiary renames on its own schedule and the monster system falls back
+  // to the band — but a hint that names nothing is an author's typo, not a
+  // rename, so it is worth catching here rather than at the dungeon door.
+  for (const id of dungeonMonsterIds()) {
+    if (!has(MONSTERS, id)) bad(`dungeon catalogue references unknown monster "${id}"`);
   }
   for (const id of REGION_IDS) {
     const r = REGIONS[id];
@@ -801,7 +815,13 @@ export function validateData() {
     if (!(r.danger >= 1 && r.danger <= 10)) bad(`region "${id}" has danger ${r.danger}, expected 1..10`);
     if (r.levelRange[0] > r.levelRange[1]) bad(`region "${id}" has an inverted level range`);
     for (const t of r.towns) if (!has(TOWNS, t)) bad(`region "${id}" lists unknown town "${t}"`);
-    for (const d of r.dungeons) if (!has(DUNGEONS, d)) bad(`region "${id}" lists unknown dungeon "${d}"`);
+    // The region's dungeons are derived from the catalogue rather than listed
+    // here, so they cannot name a dungeon that does not exist. What can still
+    // go wrong is a region with no way underground at all, which is an
+    // authoring hole rather than a broken reference.
+    const dungeonsHere = dungeonsInRegion(id);
+    if (!dungeonsHere.length) bad(`region "${id}" has no dungeons`);
+    for (const d of dungeonsHere) if (!has(DUNGEONS, d.id)) bad(`region "${id}" lists unknown dungeon "${d.id}"`);
     for (const n of r.neighbours) if (!has(REGIONS, n)) bad(`region "${id}" borders unknown region "${n}"`);
     if (!r.ambience) bad(`region "${id}" has no ambience track`);
   }
@@ -815,13 +835,22 @@ export function validateData() {
       if (!found) bad(`town "${id}" lists unknown service "${s}"`);
     }
   }
+  if (new Set(DUNGEON_IDS).size !== DUNGEON_IDS.length) bad('two dungeons share an id');
   for (const id of DUNGEON_IDS) {
     const d = DUNGEONS[id];
+    if (d.id !== id) bad(`dungeon "${id}" has mismatched id`);
     if (!has(REGIONS, d.region)) bad(`dungeon "${id}" is in unknown region "${d.region}"`);
-    if (!REGIONS[d.region].dungeons.includes(id)) bad(`dungeon "${id}" is not listed by region "${d.region}"`);
-    if (!d.monsterTable.length) bad(`dungeon "${id}" has an empty monster table`);
-    if (d.boss && !has(MONSTERS, d.boss)) bad(`dungeon "${id}" has unknown boss "${d.boss}"`);
-    for (const q of d.questIds) if (!has(QUESTS, q)) bad(`dungeon "${id}" references unknown quest "${q}"`);
+    else if (!dungeonsInRegion(d.region).includes(d)) bad(`dungeon "${id}" is not listed by region "${d.region}"`);
+    if (!DUNGEON_THEMES.includes(d.theme)) bad(`dungeon "${id}" has unknown theme "${d.theme}"`);
+    if (!DUNGEON_ROLES.includes(d.role)) bad(`dungeon "${id}" has unknown role "${d.role}"`);
+    if (d.band[0] > d.band[1]) bad(`dungeon "${id}" has an inverted level band`);
+    if (!(d.floors > 0)) bad(`dungeon "${id}" has no floors`);
+    if (!d.monsters.length) bad(`dungeon "${id}" has an empty monster table`);
+    if (!d.boss?.id) bad(`dungeon "${id}" has nothing at the bottom of it`);
+    if (!d.holds) bad(`dungeon "${id}" does not say what it is for`);
+    // Every door is placed by `placeEntrances()`; a null one means the record
+    // was added after the pass ran, and the party would arrive at the origin.
+    if (!d.entrance || !d.entranceNormalized) bad(`dungeon "${id}" has no entrance`);
   }
 
   // ── NPCs and services ────────────────────────────────────────────────────
