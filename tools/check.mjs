@@ -119,6 +119,8 @@ const GATES = [
     why: 'no speaker in Caerwen falls back to a stranger of the wrong trade' },
   { name: 'journal', slow: false, cmd: 'node', args: ['tools/questtest.mjs'],
     why: 'the book shows what the party did, and an idle hour buys no deed' },
+  { name: 'save', slow: false, cmd: 'node', args: ['tools/savetest.mjs'],
+    why: 'a played party survives a write and a read with every field intact' },
   { name: 'physics', slow: false, cmd: 'node',
     args: ['--import', './tools/null-css.register.mjs', 'tools/phystest.mjs'],
     why: 'the player cannot leave the world, and the colliders are not empty' },

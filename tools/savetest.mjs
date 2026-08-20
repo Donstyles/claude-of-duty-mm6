@@ -39,6 +39,14 @@ const { ShopSystem, SHOPS } = await import('../src/game/ShopSystem.js');
 const { LootSystem } = await import('../src/game/LootSystem.js');
 const { Character } = await import('../src/game/Character.js');
 const { SpellSystem } = await import('../src/game/SpellSystem.js');
+const { AlchemySystem } = await import('../src/game/AlchemySystem.js');
+const { getItem } = await import('../src/game/data/Items.js');
+
+/** An instance of a catalogue record, the shape `PartySystem` hands out. */
+const startingItem = (id) => {
+  const base = getItem(id);
+  return base ? { ...base, baseId: id, identified: true, broken: false } : null;
+};
 const { getSpell } = await import('../src/game/data/Spells.js');
 const { CAMPAIGN_STAGE_IDS } = await import('../src/game/data/Campaign.js');
 const STAGE_IDS = CAMPAIGN_STAGE_IDS;
@@ -79,6 +87,13 @@ async function makeCtx() {
   const shop = add(new ShopSystem());
   const loot = add(new LootSystem());
   const spells = add(new SpellSystem());
+  // Alchemy was in the NOT COMPARED list purely because nothing here built
+  // one; its `init` wants a forked rng and an event listener and no renderer,
+  // so the omission cost a system's whole round-trip for nothing. `props` is
+  // the one that genuinely cannot join — it wants a scene — and the obelisk
+  // register it carries is the party's progress toward a fifteen-thousand-gold
+  // cache, so it is verified in that pass instead of here.
+  add(new AlchemySystem());
   await spells.init?.(ctx);
   const save = add(new SaveSystem());
 
@@ -93,6 +108,11 @@ async function makeCtx() {
   // the pickup meshes both come from there.
   await shop.init(ctx);
   await loot.init(ctx);
+  // `mix` reads `this._ctx`, so a system that is registered but never
+  // initialised refuses every mixture with "Nothing to mix." and the harness
+  // compares 0 against 0 and calls it clean — which is exactly what happened
+  // the first time, and why the brew count is printed below.
+  await ctx.get('alchemy').init(ctx);
   loot._ctx = ctx;
 
   // A fake player, so position and facing are part of the diff too.
@@ -177,6 +197,22 @@ function play(ctx) {
   shops.buy(smith, smith.stock[0], 0);
   const alchemist = shops.shop(ALCHEMIST);
   alchemist.favourDay = shops.day;
+
+  // A real mix at a real bench, not two counters poked to a number. The point
+  // of a round-trip harness is that the state it compares got there the way a
+  // player's would; a field set by the test is a field the test cannot fail on.
+  const brewer = party.members[2] ?? party.members[0];
+  brewer.skills = { ...(brewer.skills ?? {}), alchemy: { level: 14, mastery: 'expert' } };
+  brewer.refresh?.();
+  brewer.inventory.push(
+    { item: startingItem('potion_red'), x: 0, y: 5 },
+    { item: startingItem('potion_yellow'), x: 1, y: 5 },
+  );
+  ctx.get('alchemy').mix(
+    party.members.indexOf(brewer),
+    brewer.inventory.at(-2),
+    brewer.inventory.at(-1),
+  );
 
   // Two things left lying in the grass, a chest already emptied, and a relic
   // already claimed — the ground state a dungeon crawl leaves behind.
@@ -347,6 +383,12 @@ function snapshot(ctx) {
     'campaign.counters': campaign.state.counters,
     'campaign.flags': campaign.state.flags,
     'guilds.memberships': [...ctx.get('guilds').memberships.values()],
+    // Two counters, but they are the only record the game keeps of a Druid
+    // having ever stood at a bench, and the awards page is meant to be able to
+    // cite them. A system whose whole state is small is exactly the one that
+    // gets left out of a round-trip and never noticed.
+    'alchemy.brewed': ctx.get('alchemy')?.brewed ?? 0,   // must be > 0, see `play`
+    'alchemy.botched': ctx.get('alchemy')?.botched ?? 0,
     'services.balance': ctx.get('services').model.account.balance,
     'services.entries': ctx.get('services').model.account.entries,
     'services.donated': ctx.get('services').model.donated,
@@ -430,7 +472,13 @@ reportCoverage(a);
 {
   const shelves = Object.entries(a['shop.shelves']);
   console.log(`carried: ${shelves.length} shelves (${shelves.map(([id, s]) => `${id.split('_').pop()} ${s.stock.length}+${s.hidden.length}`).join(', ')}) · `
-    + `${a['loot.drops'].length} drops · ${a['loot.containers'].length} emptied containers · ${a['loot.claimed'].length} relics claimed`);
+    + `${a['loot.drops'].length} drops · ${a['loot.containers'].length} emptied containers · ${a['loot.claimed'].length} relics claimed`
+    + ` · ${a['alchemy.brewed']} brewed, ${a['alchemy.botched']} botched`);
+  // A round-trip of 0 to 0 passes for the wrong reason, so say the number out
+  // loud rather than trusting that the mix in `play` actually happened.
+  if (!(a['alchemy.brewed'] > 0)) {
+    console.log('  !! the bench never produced anything — alchemy compared 0 against 0');
+  }
 }
 if (!lost.length) {
   console.log('ROUND TRIP CLEAN — every field survived.');
