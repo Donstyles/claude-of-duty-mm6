@@ -41,7 +41,7 @@ import { GUILDS as GUILD_ORDERS, VENUES, venuesOfKind } from './data/Venues.js';
 import { TOWNS } from './data/Regions.js';
 import {
   experienceForLevel, trainingCost, heldSkill, actionState, worstCondition,
-  hpForLevel, spForLevel,
+  hpForLevel, spForLevel, skillPointsForLevel,
 } from './rules.js';
 
 function deepFreeze(o) {
@@ -985,10 +985,18 @@ export class GuildSystem extends System {
   /**
    * `Character.levelUp` for the interface's stand-in party, which holds its
    * maxima as plain fields instead of getters.
+   *
+   * The award comes from `rules.skillPointsForLevel`, the same call the real
+   * `Character.levelUp` makes. It read `getClass(...).skillPointsPerLevel ?? 5`
+   * and no class record has ever carried that key, so the fallback did the
+   * whole job: a stand-in party trained here banked five points a level where
+   * the rule says two, and three on every fifth. Two and a half times budget,
+   * from a field nothing defines — and the two halls disagreed about the one
+   * number a player counts.
    */
   _levelUp(char) {
     char.level = (char.level ?? 1) + 1;
-    char.skillPoints = (char.skillPoints ?? 0) + (getClass(char.classId)?.skillPointsPerLevel ?? 5);
+    char.skillPoints = (char.skillPoints ?? 0) + skillPointsForLevel(char.level);
     if (Number.isFinite(char.hpMax)) {
       char.hpMax = hpForLevel(char);
       char.hp = char.hpMax;

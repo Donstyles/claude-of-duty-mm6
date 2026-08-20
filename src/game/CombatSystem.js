@@ -4,6 +4,7 @@ import {
   toHitChance, resolveHit, damageRoll, applyResistance, resistanceCheck,
   critChance, recoveryTime, attackBonusFor, damageBonusFor,
   armourClassFor, effectiveStat, statBonus,
+  hasBuff, painReflection, weaponRiders, wardsCondition,
 } from './rules.js';
 import { evaluateSpell } from './data/Spells.js';
 
@@ -231,6 +232,46 @@ export class CombatSystem extends System {
       text: `${char.name} hits the ${target.def.name} for ${amount}${crit ? ' — critical!' : ''}`,
       kind: crit ? 'crit' : 'hit',
     });
+    this._resolveWeaponRiders(ctx, char, target, amount);
+  }
+
+  /**
+   * Fire Aura and Vampiric Weapon, cashed in on a blow that landed.
+   *
+   * `SpellSystem._castEnchant` writes `{ weaponRider, riderType, power }` onto
+   * the caster's buff list, logs that the blade has taken the enchantment, and
+   * stops — because the swing itself happens here, and nothing here read it. A
+   * `damage` rider adds its power as a second, separate element, filtered
+   * through the target's resistance to *that* element, so a Fire Aura is worth
+   * nothing against a fire elemental and choosing which blade to light matters.
+   * A `lifesteal` rider returns that percentage of what the blow actually did.
+   *
+   * Melee only: the enchantment binds to the weapon in hand, and `_castEnchant`
+   * never reaches for the bow.
+   */
+  _resolveWeaponRiders(ctx, char, target, dealt) {
+    for (const r of weaponRiders(char)) {
+      if (r.rider === 'damage') {
+        if (!target.alive) continue;
+        const extra = applyResistance(
+          r.power, target.def.resists?.[r.type] ?? 0,
+          effectiveStat(char, 'luck'), char.level ?? 1, this.rng.next(),
+        ).amount;
+        ctx.get('monsters')?.damage?.(ctx, target, extra, r.type);
+        ctx.events.emit('ui:log', {
+          text: `The blade's ${r.type} burns the ${target.def.name} for a further ${extra}.`,
+          kind: 'hit',
+        });
+      } else if (r.rider === 'lifesteal' && dealt > 0) {
+        const back = Math.max(1, Math.round(dealt * Math.min(100, r.power) / 100));
+        const healed = char.heal?.(back) ?? 0;
+        if (healed > 0) {
+          ctx.events.emit('ui:log', {
+            text: `${char.name}'s blade drinks — ${healed} back.`, kind: 'buff',
+          });
+        }
+      }
+    }
   }
 
   _launchProjectile(ctx, char, index, target, bow) {
@@ -313,7 +354,8 @@ export class CombatSystem extends System {
       }
 
       const roll = damageRoll(spec, this.rng, { crit: monster.enraged && this.rng.next() < 0.15 });
-      const dealt = this._hurtParty(ctx, party, pick.i, roll.amount, roll.type, def.level ?? 1);
+      const dealt = this._hurtParty(ctx, party, pick.i, roll.amount, roll.type, def.level ?? 1,
+        { kind: 'melee', source: monster });
 
       ctx.events.emit('ui:log', {
         text: `The ${monster.def.name} ${def.attack?.name ?? 'hits'} ${char.name} for ${dealt}.`,
@@ -335,19 +377,63 @@ export class CombatSystem extends System {
    * Luck reduces the odds of taking the full amount; the attacker's level
    * erodes the defence, which is what stops a low-tier resistance from making
    * a late region trivial.
+   *
+   * This is also the one place a wound is known before it is taken, so it is
+   * where the two defensive spells that are not a number on the sheet live:
+   * Shield's halving of missiles, and Pain Reflection's share going back the
+   * way it came. `opts.kind` names what threw it and `opts.source` names who,
+   * because a trap has nothing to reflect to.
    */
-  _hurtParty(ctx, party, index, amount, type, power) {
+  _hurtParty(ctx, party, index, amount, type, power, opts = {}) {
     const char = party.members[index];
     const resist = (char?.bonuses?.resists?.[type] ?? 0) + (char?.resists?.[type] ?? 0);
     const luck = effectiveStat(char, 'luck');
     const applied = type === 'physical' || !resist
       ? { amount, resisted: false }
       : applyResistance(amount, resist, luck, power, this.rng.next());
-    const dealt = party.damage(index, applied.amount, type);
+
+    // Air Shield: "halves damage from all missiles — arrows, bolts, thrown
+    // rocks and monster spit". It already granted the armour class its
+    // magnitude describes; this is the other half of its own description, and
+    // it is deliberately missiles only. A breath weapon is not a missile, which
+    // is the whole reason a dragon is still frightening through a Shield.
+    let incoming = applied.amount;
+    const shielded = opts.kind === 'missile' && hasBuff(char, 'air_shield');
+    if (shielded) incoming = Math.max(1, Math.round(incoming / 2));
+
+    const dealt = party.damage(index, incoming, type);
+    if (shielded) {
+      ctx.events.emit('ui:log', { text: `Hard air turns the worst of it aside.`, kind: 'info' });
+    }
     if (applied.resisted) {
       ctx.events.emit('ui:log', { text: `${char.name} shrugs off the worst of it.`, kind: 'info' });
     }
+    this._reflectPain(ctx, char, dealt, opts.source);
     return dealt;
+  }
+
+  /**
+   * Pain Reflection: a share of every wound the party takes, dealt straight
+   * back to whoever caused it.
+   *
+   * The buff's magnitude was the last unread number in the spellbook — the
+   * spell landed, logged, showed on the sheet and did nothing, because the only
+   * place that could spend it is the moment a wound is applied and that moment
+   * is here. It reflects what actually landed rather than what was thrown, so
+   * a resisted hit reflects less; and it needs something alive to reflect *to*,
+   * which is why a poison tick or a spike pit sends nothing back.
+   */
+  _reflectPain(ctx, char, dealt, source) {
+    if (!(dealt > 0) || !source?.alive) return 0;
+    const share = painReflection(char);
+    if (share <= 0) return 0;
+    const back = Math.max(1, Math.round(dealt * share));
+    ctx.get('monsters')?.damage?.(ctx, source, back, 'dark');
+    ctx.events.emit('ui:log', {
+      text: `${char.name}'s pain reflects — the ${source.def?.name ?? 'attacker'} takes ${back}.`,
+      kind: 'spell',
+    });
+    return back;
   }
 
   /** A monster's ranged attack or spell. */
@@ -408,6 +494,13 @@ export class CombatSystem extends System {
       const check = resistanceCheck(resist, effectiveStat(pick.m, 'luck'), spec.power ?? def.level, this.rng.next());
       if (check.resisted || check.immune) {
         ctx.events.emit('ui:log', { text: `${pick.m.name} looks away in time.`, kind: 'info' });
+      } else if (wardsCondition(pick.m, spec.condition)) {
+        // Protection from Magic: the shell turns the affliction aside before it
+        // can take hold. This is the only path in the game by which a monster
+        // inflicts a condition, so it is the whole of the spell's promise.
+        ctx.events.emit('ui:log', {
+          text: `The gaze breaks on the shell around ${pick.m.name}.`, kind: 'buff',
+        });
       } else {
         pick.m.addCondition?.(spec.condition) ?? pick.m.conditions?.push?.(spec.condition);
         ctx.events.emit('ui:log', {
@@ -446,7 +539,8 @@ export class CombatSystem extends System {
       }
       const roll = damageRoll(dmgSpec, this.rng);
       const amount = wide && caught.length > 2 ? Math.round(roll.amount * 0.7) : roll.amount;
-      const dealt = this._hurtParty(ctx, party, pick.i, amount, roll.type, spec.power ?? def.level ?? 1);
+      const dealt = this._hurtParty(ctx, party, pick.i, amount, roll.type, spec.power ?? def.level ?? 1,
+        { kind: spec.kind ?? 'missile', source: p.monster });
       ctx.events.emit('ui:log', {
         text: `The ${def.name}'s ${RANGED_NOUN[spec.kind] ?? 'attack'} hits ${pick.m.name} for ${dealt}.`,
         kind: 'damage',
@@ -492,15 +586,24 @@ export class CombatSystem extends System {
     return { dice: [2, 6], bonus: spec.power ?? 0, type: spec.type ?? 'magic' };
   }
 
-  /** Generic damage entry point used by spells and traps. */
-  applyDamage(ctx, targetRef, amount, type, sourceRef) {
+  /**
+   * Generic damage entry point used by spells and traps.
+   *
+   * It went straight to `party.damage`, which meant a wound arriving this way
+   * skipped resistance, skipped Shield and skipped Pain Reflection — three
+   * different systems that all live one function along. It delegates now, so
+   * there is exactly one path by which the party can be hurt.
+   */
+  applyDamage(ctx, targetRef, amount, type, sourceRef, opts = {}) {
     if (targetRef?.def) {
       return ctx.get('monsters')?.damage(ctx, targetRef, amount, type) ?? 0;
     }
     const party = ctx.get('party');
     const i = party?.members?.indexOf(targetRef) ?? -1;
-    if (i >= 0) return party.damage(i, amount, type);
-    return 0;
+    if (i < 0) return 0;
+    return this._hurtParty(ctx, party, i, amount, type, opts.power ?? 0, {
+      kind: opts.kind ?? 'spell', source: sourceRef,
+    });
   }
 
   // ── frame ────────────────────────────────────────────────────────────────

@@ -131,6 +131,47 @@ function route(mode, a, b, def) {
   }));
 }
 
+// ── What an hour on this board is worth ─────────────────────────────────────
+// The world is drawn at 1:100 (`LEAGUE_SCALE`, PlayerSystem.js), so a kilometre
+// of world is a hundred kilometres of kingdom and the party's own boots bill
+// 25 hours for it. Every fare below is a trade of gold for hours against that
+// number, which makes `hours` the price of the thing the player is buying and
+// not flavour text.
+//
+// Measured, the board had been authored by feel. Coach legs ran 8.0 to 22.9
+// hours per kilometre of world and packets 11.3 to 55.5, with the *shortest*
+// crossings quoted the slowest — the eel boats asked 22 hours for 396 m that
+// the same fleet covers in 4.5 elsewhere. At the bottom of that spread
+// `coach_duskorn_netherby` saved the party 8% of the hours walking would cost,
+// for ninety gold. That is not a decision, it is a screen nobody opens.
+//
+// So both modes are priced inside a stated band, and the band is the rule any
+// new leg has to hit:
+//
+//     coach    8–16 h per km of world   (12.5 down to 6.3 km/h of kingdom)
+//     packet  11–26 h per km of world   ( 9.1 down to 3.8 km/h of kingdom)
+//
+// The coach centre, 12.5 h/km, is eight km/h of real road: a stagecoach with
+// changes of horses, which is what the board's own average already implied.
+// The packet centre is not invented — Saltmarch to Coldwater is two days' sail
+// in the Ledger's timetable and 2.3 km of world, which pins a packet at
+// 17.4 h/km and makes that one leg the anchor every other sailing hangs off.
+// Do not reprice it without moving the fiction first.
+//
+// The bands are deliberately wide. A metalled coast road should beat a waste
+// road, and the run into the caldera should be the worst water on the map;
+// flattening the board to one rate would turn a timetable into a lookup table.
+// What the floor buys is the guarantee that the fare is worth reading: at
+// 16 h/km a coach still saves 36% of the hours the boots would cost, and at
+// 26 h/km a packet saves 58% of the swim. Below that the board is decoration.
+//
+// Cutting hours cannot undo the timetable, and that is checked rather than
+// hoped: ten legs still lose to the march on their worst departure day,
+// because the wait on a weekly service is 48 to 144 hours and shaving six off
+// a crossing never reaches it. Six days sitting in Greywater for the Duskorn
+// coach is still worse than walking, which is `waitHours` doing the one job it
+// exists for.
+
 // ── Coach roads ─────────────────────────────────────────────────────────────
 // The Cindric trunk road runs Millhaven–Thornwick–Ashford and north to the
 // fjord; the Ledger's own metalled roads close the loops. Every mainland town
@@ -140,19 +181,24 @@ route('coach', 'town_millhaven', 'town_thornwick', { fare: 40, hours: 14, danger
 route('coach', 'town_thornwick', 'town_ashford', { fare: 35, hours: 11, danger: 3, note: 'Uphill into the hollow. The last stage is walked in bad weather.' });
 route('coach', 'town_thornwick', 'town_saltmarch', { fare: 30, hours: 9, danger: 3, note: 'Straight across the vale on good stone.' });
 route('coach', 'town_ashford', 'town_netherby', { fare: 55, hours: 18, danger: 6, note: 'Over the moor. The driver will not stop after dark.' });
-route('coach', 'town_netherby', 'town_duskorn', { fare: 90, hours: 22, danger: 8, note: 'The road still runs. Nothing else out there does.' });
+// 22 h for 961 m was 22.9 h/km: ninety gold to save two hours off the march.
+// At the band's floor the waste road is the slowest coach in the kingdom and
+// still worth the fare — the story out here is the danger, never the speed.
+route('coach', 'town_netherby', 'town_duskorn', { fare: 90, hours: 15, danger: 8, note: 'The road still runs. Nothing else out there does.' });
 route('coach', 'town_ashford', 'town_greywater', { fare: 45, hours: 13, danger: 5, note: 'A spur to the fen, on causeway most of the way.' });
 route('coach', 'town_millhaven', 'town_saltmarch', { fare: 25, hours: 8, danger: 2, note: 'The flats road. Slow, flat, and dull, which is the recommendation.' });
 // The northern trunk. Coldwater stands on the mainland and always did; leaving
 // it off the roads made a fjord town reachable only by a ship two acts away.
-route('coach', 'town_ashford', 'town_coldwater', { fare: 70, hours: 20, danger: 6, days: [0, 2, 4, 6], note: 'The old imperial post road north. Milestones the whole way, and nothing else.' });
+// An imperial post road with milestones is the best surface on the board and
+// was quoting 20.8 h/km, slower than the moor. Priced as the road it is.
+route('coach', 'town_ashford', 'town_coldwater', { fare: 70, hours: 14, danger: 6, days: [0, 2, 4, 6], note: 'The old imperial post road north. Milestones the whole way, and nothing else.' });
 // The fen causeway, west side: Greywater stops being a spur off a spur.
 route('coach', 'town_millhaven', 'town_greywater', { fare: 38, hours: 12, danger: 4, note: 'Down the coast and in along the eel dykes. Wet boots at the last stage.' });
 route('coach', 'town_greywater', 'town_saltmarch', { fare: 42, hours: 12, danger: 4, days: [1, 4], note: 'The salt road. Two days a week, when the pans are being carted.' });
 // East across the vale, so Netherby and Duskorn are a loop and not a cul-de-sac.
 route('coach', 'town_thornwick', 'town_netherby', { fare: 60, hours: 16, danger: 6, note: 'Out of the orchards and onto the barrow road. Nobody sings on this stage.' });
 // The west coast road, so no mainland town is left hanging off one service.
-route('coach', 'town_coldwater', 'town_greywater', { fare: 65, hours: 19, danger: 6, days: [2, 5], note: 'Down the coast with the sea on your right the whole way. Cold work in winter.' });
+route('coach', 'town_coldwater', 'town_greywater', { fare: 65, hours: 16, danger: 6, days: [2, 5], note: 'Down the coast with the sea on your right the whole way. Cold work in winter.' });
 // The Ledger's own contract run to the ruin, direct, and priced like a dare.
 route('coach', 'town_duskorn', 'town_greywater', { fare: 105, hours: 26, danger: 8, days: [3], note: 'One coach a week, for the scavengers and what they carry back.' });
 
@@ -161,18 +207,26 @@ route('coach', 'town_duskorn', 'town_greywater', { fare: 105, hours: 26, danger:
 // chain: Emberhold used to be one leg off the end of the world.
 route('ship', 'town_millhaven', 'town_saltmarch', { fare: 35, hours: 12, danger: 1, days: [0, 1, 2, 3, 4, 5, 6], note: "A day's tide along the coast. Sails whenever there is water under her." });
 route('ship', 'town_saltmarch', 'town_brackwater', { fare: 60, hours: 20, danger: 3, note: 'Out past the channel markers.' });
-route('ship', 'town_brackwater', 'town_fallowmere', { fare: 70, hours: 24, danger: 4, note: 'Open water. Bring your own food.' });
+route('ship', 'town_brackwater', 'town_fallowmere', { fare: 70, hours: 14, danger: 4, note: 'Open water. Bring your own food.' });
+// The anchor leg. Two days' sail is the Ledger's own quote and 2.3 km of world
+// is the map's, and together they are what fixes a packet at 17.4 h/km. Every
+// other sailing is priced off this one; change it and the fleet loses its
+// speed. Leave the hours alone.
 route('ship', 'town_saltmarch', 'town_coldwater', { fare: 110, hours: 40, danger: 5, note: 'North two days. The sea changes colour on the second.' });
 route('ship', 'town_coldwater', 'town_fallowmere', { fare: 95, hours: 34, danger: 5, note: 'The long reach, with the current against you.' });
-route('ship', 'town_fallowmere', 'town_emberhold', { fare: 140, hours: 30, danger: 7, note: 'You will smell it before you see it.' });
+// The caldera approach is the worst water on the map and sits on the ceiling
+// at 26 h/km, which is where the band's slow end is supposed to be spent.
+route('ship', 'town_fallowmere', 'town_emberhold', { fare: 140, hours: 25, danger: 7, note: 'You will smell it before you see it.' });
 route('ship', 'town_millhaven', 'town_brackwater', { fare: 80, hours: 26, danger: 3, days: [5], note: 'Direct, if the packet is running. Watchday, and not often then.' });
 // The ore run: Emberhold's forges buy northern charcoal and sell finished
 // steel, which is a weekly sailing whatever the weather is doing.
-route('ship', 'town_coldwater', 'town_emberhold', { fare: 120, hours: 28, danger: 7, days: [3], note: 'The ore run. Charcoal north, steel south, passengers on the ballast.' });
+route('ship', 'town_coldwater', 'town_emberhold', { fare: 120, hours: 13, danger: 7, days: [3], note: 'The ore run. Charcoal north, steel south, passengers on the ballast.' });
 // The pilgrims' passage. One church, no priest, and people still go.
-route('ship', 'town_millhaven', 'town_fallowmere', { fare: 90, hours: 28, danger: 4, days: [0, 5], note: 'The pilgrims’ passage. They go out full and come back quiet.' });
-// The island shuttle. Cheap, short, and the reason Brackwater has a market.
-route('ship', 'town_brackwater', 'town_emberhold', { fare: 85, hours: 22, danger: 6, days: [1, 4], note: 'Eel boats running cargo for the caldera. Deck passage only.' });
+route('ship', 'town_millhaven', 'town_fallowmere', { fare: 90, hours: 16, danger: 4, days: [0, 5], note: 'The pilgrims’ passage. They go out full and come back quiet.' });
+// The island shuttle. Cheap, short, and the reason Brackwater has a market —
+// and it has to *read* short. 22 h for 396 m made the shortest crossing on the
+// board the slowest thing afloat, at 55.5 h/km, five times the packet north.
+route('ship', 'town_brackwater', 'town_emberhold', { fare: 85, hours: 10, danger: 6, days: [1, 4], note: 'Eel boats running cargo for the caldera. Deck passage only.' });
 
 export const ROUTES = deepFreeze(routes);
 

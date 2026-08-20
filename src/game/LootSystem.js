@@ -54,6 +54,12 @@ export class LootSystem extends System {
     this.drops = [];
     /** Artifacts already found. `unique` is only true if something enforces it. */
     this.claimed = new Set();
+    /**
+     * Containers already emptied, by key. A dungeon is rebuilt from its seed
+     * every time the party walks back in, so the room itself cannot remember
+     * that its chest is open — this ledger is the only thing that does.
+     */
+    this.containers = new Set();
     this._group = null;
     this._nextId = 1;
   }
@@ -347,6 +353,39 @@ export class LootSystem extends System {
     this._group.add(mesh);
   }
 
+  /** Give a drop record its body, and hang it in the scene. */
+  _body(d) {
+    if (!this._kits) return null;
+    const kit = d.kind === 'gold'
+      ? this._kits.gold
+      : (this._kits[d.item?.category] ?? this._kits.misc);
+    d.mesh = kit.clone();
+    d.mesh.position.copy(d.pos);
+    d.mesh.rotation.y = d.yaw ?? 0;
+    this._group?.add(d.mesh);
+    return d.mesh;
+  }
+
+  // ── containers ───────────────────────────────────────────────────────────
+
+  /**
+   * Has this container already been emptied?
+   *
+   * The key is the caller's to choose and only has to be stable across a
+   * rebuild of the room — `${dungeonId}:${index}` is what a chest has, since a
+   * dungeon's furniture is generated in a fixed order from a fixed seed.
+   */
+  containerOpened(key) {
+    return key != null && this.containers.has(String(key));
+  }
+
+  /** Remember that it was, so neither a re-entry nor a reload refills it. */
+  markContainerOpened(key) {
+    if (key == null) return false;
+    this.containers.add(String(key));
+    return true;
+  }
+
   /** Simple, readable pickup meshes — a glint in the grass is the point. */
   _buildMeshKits() {
     const gold = new THREE.Mesh(
@@ -456,6 +495,7 @@ export class LootSystem extends System {
 
     for (let i = this.drops.length - 1; i >= 0; i--) {
       const d = this.drops[i];
+      if (!d.mesh && !this._body(d)) continue;
       d.age += dt;
 
       // Gentle bob and spin so a drop catches the eye in long grass.
@@ -493,17 +533,64 @@ export class LootSystem extends System {
   // ── persistence ──────────────────────────────────────────────────────────
 
   /**
-   * Which relics have already been found. `SaveSystem` picks this up because
-   * the method exists, not because anything names this system; without it a
-   * reload would put every unique artifact back in the pool and the word
-   * "unique" would mean nothing across a session boundary.
+   * What the party has taken out of the world and what they have left lying in
+   * it. `SaveSystem` picks this up because the method exists, not because
+   * anything names this system.
+   *
+   * Three things, and all three are load-bearing. The relics, because without
+   * them a reload puts every unique artifact back in the pool and "unique"
+   * stops meaning anything across a session boundary. The emptied containers,
+   * because a dungeon is regenerated from its seed on entry and would otherwise
+   * hand back a chest the party has already carried off. And the drops,
+   * because a purse and a blade dropped in the grass are *items the party owns
+   * but has not bent down for yet* — a save that forgets them destroys loot the
+   * player has already earned, and `age` travels with them so a claim does not
+   * get the full despawn timer back for free.
    */
   toJSON() {
-    return { claimed: [...this.claimed] };
+    return {
+      claimed: [...this.claimed],
+      containers: [...this.containers],
+      drops: this.drops.map((d) => ({
+        kind: d.kind,
+        amount: d.amount ?? 0,
+        item: d.kind === 'item' ? d.item : null,
+        age: d.age ?? 0,
+        pos: [d.pos.x, d.pos.y, d.pos.z],
+        yaw: d.mesh?.rotation?.y ?? 0,
+      })),
+      nextId: this._nextId,
+    };
   }
 
   fromJSON(state) {
     this.claimed = new Set(state?.claimed ?? []);
+    this.containers = new Set(state?.containers ?? []);
+
+    // Whatever is on the ground now belongs to the world being left behind.
+    for (const d of this.drops) if (d.mesh) this._group?.remove(d.mesh);
+    this.drops = [];
+    for (const saved of state?.drops ?? []) {
+      const kind = saved?.kind === 'gold' ? 'gold' : 'item';
+      if (kind === 'item' && !saved.item) continue;   // an item that no longer exists
+      const [x, y, z] = saved.pos ?? [0, 0, 0];
+      const d = {
+        mesh: null, kind, amount: saved.amount ?? 0,
+        item: kind === 'item' ? saved.item : undefined,
+        age: saved.age ?? 0, yaw: saved.yaw ?? 0,
+        pos: new THREE.Vector3(x, y, z),
+      };
+      // A restore that lands before `init()` has built the kits leaves the
+      // record bodiless; the frame loop gives it one as soon as there is one.
+      this._body(d);
+      this.drops.push(d);
+    }
+    // Every restored item carries the uid it was minted with, so the counter
+    // has to clear them before this session mints anything new.
+    this._nextId = Math.max(
+      this._nextId, Math.floor(state?.nextId ?? 1),
+      ...this.drops.map((d) => Math.floor(d.item?.uid ?? 0) + 1),
+    );
   }
 
   dispose() {

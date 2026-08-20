@@ -218,6 +218,70 @@ export function charSkillEffect(char, skillId) {
   return resolveSkill(skillId, level, mastery);
 }
 
+// ── Buffs ───────────────────────────────────────────────────────────────────
+//
+// `SpellSystem` writes `{ spellId, expires, power, … }` onto every member a
+// buff lands on, and `Character.refresh()` cashes most of them in as an
+// `acBonus`, a `statBonus` or a `resistBonus`. Five do not fit that shape:
+// Pain Reflection, Shield's halving, Protection from Magic, Preservation and
+// the two weapon riders are read at the instant damage or a condition is
+// applied, by code that has no business knowing what a buff record looks like.
+// These accessors are that knowledge, kept here with the rest of the mechanics
+// so there is one reader rather than five guesses.
+
+/** The named buff, or null when it is not up. */
+export function findBuff(char, spellId) {
+  return (char?.buffs ?? []).find((b) => b?.spellId === spellId) ?? null;
+}
+
+/** A buff's magnitude, or 0 when it is not up. */
+export function buffPower(char, spellId) {
+  const b = findBuff(char, spellId);
+  return Number.isFinite(b?.power) ? b.power : 0;
+}
+
+/** Is a buff up at all? Several of them carry no number, only a promise. */
+export function hasBuff(char, spellId) {
+  return !!findBuff(char, spellId);
+}
+
+/**
+ * The timed riders on a caster's weapon — Fire Aura's element, Vampiric
+ * Weapon's lifesteal. `SpellSystem._castEnchant` writes `{ weaponRider,
+ * riderType, power }` and stops there, because the swing itself happens in
+ * CombatSystem; this reads it back so the melee step never has to name a spell.
+ */
+export function weaponRiders(char) {
+  const out = [];
+  for (const b of char?.buffs ?? []) {
+    if (!b?.weaponRider || !(b.power > 0)) continue;
+    out.push({ rider: b.weaponRider, type: b.riderType ?? 'magic', power: b.power });
+  }
+  return out;
+}
+
+/**
+ * The share of a wound Pain Reflection sends back, as a fraction.
+ * The buff's magnitude is a percentage; the ceiling is there so that a later
+ * retune of the spell's curve cannot make a party invulnerable by proxy.
+ */
+export const REFLECTION_CAP = 75;
+export function painReflection(char) {
+  return Math.min(REFLECTION_CAP, Math.max(0, buffPower(char, 'dark_pain_reflection'))) / 100;
+}
+
+// Everything Protection from Magic will *not* turn aside: the body's own
+// ledger, and the tavern's. Written as a blocklist because the spell's note
+// says "blocks incoming conditions outright" and a permitted-list would
+// silently stop warding whatever condition someone adds next.
+const UNWARDABLE = Object.freeze(['unconscious', 'dead', 'eradicated', 'drunk']);
+
+/** Would Protection from Magic turn this affliction aside? */
+export function wardsCondition(char, condId) {
+  if (UNWARDABLE.includes(condId)) return false;
+  return hasBuff(char, 'body_protection_from_magic');
+}
+
 // ── Hit points and spell points ─────────────────────────────────────────────
 
 /**
@@ -253,6 +317,29 @@ export function spForLevel(char) {
   const med = charSkillEffect(char, 'meditation').sp ?? 0;
   const items = char?.bonuses?.sp ?? 0;
   return Math.max(0, Math.round(cls.baseSP + perLevel * level + med + items));
+}
+
+/**
+ * How far past zero a blow drove a character, named.
+ *
+ * MM6's ladder, and the reason Preservation costs a sixth-level slot: zero
+ * knocks you down, minus your own maximum kills you, and gross overkill —
+ * twice that again in a single blow — destroys the body outright, which no
+ * temple will sell you back. Preservation stops only that last step, which is
+ * exactly what the condition table's own note promises it does.
+ *
+ * Nothing in the tree set `eradicated` before this, so the worst outcome in
+ * the game was unreachable and the spell that prevents it had nothing to
+ * prevent. Returns null when the character is still standing.
+ */
+export const ERADICATION_OVERKILL = 2;
+
+export function deathOutcome(hp, maxHP, preserved = false) {
+  const max = Math.max(1, maxHP || 1);
+  if (hp > 0) return null;
+  if (hp <= -max * ERADICATION_OVERKILL) return preserved ? 'dead' : 'eradicated';
+  if (hp <= -max) return 'dead';
+  return 'unconscious';
 }
 
 // ── Armour class ────────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@ import { EQUIP_SLOTS } from './data/Items.js';
 import {
   hpForLevel, spForLevel, armourClassFor, effectiveStat,
   experienceForLevel, levelForExperience, worstCondition, isIncapacitated,
-  skillPointsForLevel, CONDITIONS,
+  skillPointsForLevel, deathOutcome, hasBuff, ERADICATION_OVERKILL, CONDITIONS,
 } from './rules.js';
 import { DAMAGE_TYPES } from './data/Skills.js';
 
@@ -225,17 +225,29 @@ export class Character {
 
   /**
    * Apply damage. Returns what actually landed.
+   *
    * Dropping to zero knocks a character unconscious rather than killing them,
-   * which is MM6's behaviour and matters because it is recoverable.
+   * which is MM6's behaviour and matters because it is recoverable. Below minus
+   * your own maximum you are Dead; below twice that, in one blow, the body is
+   * Eradicated and only Divine Intervention brings it back — unless
+   * Preservation is up, which anchors the soul and leaves you merely Dead.
+   *
+   * The floor used to sit at exactly `-maxHP`, so no amount of overkill could
+   * reach the last rung: `eradicated` was a condition the game defined, priced
+   * at a temple, drew an icon for and could never inflict, and Preservation was
+   * a spell with nothing to prevent. `rules.deathOutcome` owns the ladder.
    */
   damage(amount) {
     if (this.isDead) return 0;
     const before = this.hp;
-    this.hp = Math.max(-this.maxHP, this.hp - amount);
-    if (this.hp <= 0 && !this.isUnconscious) this.addCondition('unconscious');
-    if (this.hp <= -this.maxHP) {
+    const max = this.maxHP;
+    this.hp = Math.max(-max * ERADICATION_OVERKILL, this.hp - amount);
+    const outcome = deathOutcome(this.hp, max, hasBuff(this, 'spirit_preservation'));
+    if (outcome === 'unconscious') {
+      this.addCondition('unconscious');
+    } else if (outcome) {
       this.removeCondition('unconscious');
-      this.addCondition('dead');
+      this.addCondition(outcome);
     }
     return before - this.hp;
   }

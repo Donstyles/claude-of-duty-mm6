@@ -34,6 +34,8 @@ const { ServicesSystem } = await import('../src/game/ServicesSystem.js');
 const { TravelSystem } = await import('../src/game/TravelSystem.js');
 const { VenueSystem } = await import('../src/game/VenueSystem.js');
 const { TownServices } = await import('../src/game/TownServices.js');
+const { ShopSystem, SHOPS, SHOP_IDS } = await import('../src/game/ShopSystem.js');
+const { LootSystem } = await import('../src/game/LootSystem.js');
 const { Character } = await import('../src/game/Character.js');
 const { CAMPAIGN_STAGE_IDS } = await import('../src/game/data/Campaign.js');
 const STAGE_IDS = CAMPAIGN_STAGE_IDS;
@@ -46,7 +48,7 @@ globalThis.localStorage = {
   removeItem: (k) => store.delete(k),
 };
 
-function makeCtx() {
+async function makeCtx() {
   const events = new EventBus();
   const systems = new Map();
   const ctx = {
@@ -55,6 +57,9 @@ function makeCtx() {
     state: { seed: 1234, worldTime: 0, modal: null },
     config: {},
     engine: { systems },
+    // `LootSystem` hangs its pickups off the scene graph; nothing here draws,
+    // so a graph that accepts and forgets is enough.
+    scene: { add() {}, remove() {} },
     get: (id) => systems.get(id) ?? null,
   };
   const add = (sys) => { systems.set(sys.constructor.id, sys); return sys; };
@@ -66,6 +71,8 @@ function makeCtx() {
   const services = add(new ServicesSystem());
   add(new TravelSystem());
   add(new VenueSystem());
+  const shop = add(new ShopSystem());
+  const loot = add(new LootSystem());
   const save = add(new SaveSystem());
 
   // The three that need more than a constructor to be usable.
@@ -75,6 +82,11 @@ function makeCtx() {
   guilds.ctx = ctx;
   party._events = events;
   save._ctx = ctx;
+  // The two that keep world state behind an `init` — the shelf's seed tag and
+  // the pickup meshes both come from there.
+  await shop.init(ctx);
+  await loot.init(ctx);
+  loot._ctx = ctx;
 
   // A fake player, so position and facing are part of the diff too.
   const player = {
@@ -145,6 +157,30 @@ function play(ctx) {
 
   ctx.get('venue').town = 'ferrin-coll';
 
+  /**
+   * A shelf the party has already picked over: the rack under the counter
+   * asked after, two pieces off the board, and the alchemist's one free
+   * appraisal spent for the day. None of that is derivable from the calendar,
+   * and a reload that rerolls it is a save-scum — quit, load, get a better rack.
+   */
+  const shops = ctx.get('shop');
+  const smith = shops.shop(SMITH);
+  shops.useService(smith, 0);
+  shops.buy(smith, smith.stock[0], 0);
+  shops.buy(smith, smith.stock[0], 0);
+  const alchemist = shops.shop(ALCHEMIST);
+  alchemist.favourDay = shops.day;
+
+  // Two things left lying in the grass, a chest already emptied, and a relic
+  // already claimed — the ground state a dungeon crawl leaves behind.
+  const loot = ctx.get('loot');
+  loot.dropGold(ctx, 240, { x: 410, y: 18, z: -900 });
+  loot.dropItem(ctx, loot.makeItem('sword_bastard'), { x: 405, y: 18, z: -898 });
+  loot.drops[0].age = 130.5;
+  loot.claimed.add('art_oathkeep');
+  loot.markContainerOpened('ashpit-workings:chest:2');
+  loot.markContainerOpened('crown-undercroft:chest:0');
+
   const player = ctx.get('player');
   player.teleport(412.5, 18.25, -903.75, 2.1);
   player.pitch = -0.14;
@@ -154,6 +190,36 @@ function play(ctx) {
 
 const sortBuffs = (list) => [...(list ?? [])]
   .sort((a, b) => String(a.spellId).localeCompare(String(b.spellId)));
+
+/** The two counters the party trades at: one with a rack, one with a favour. */
+const SMITH = 'town_thornwick_weaponsmith';
+const ALCHEMIST = 'town_millhaven_alchemist';
+
+/** A shelf, one line per piece: what it is, which copy, its state and price. */
+const shelf = (list) => (list ?? []).map((it) => (
+  `${it.baseId}#${it.uid}${it.identified === false ? '?' : ''}${it.broken ? '!' : ''}@${it.value}`
+));
+/** The same shelf without copy numbers, for comparing two deliveries. */
+const kinds = (list) => shelf(list).map((s) => s.replace(/#\d+/, ''));
+
+const shopState = (ctx) => {
+  const out = {};
+  for (const [id, live] of ctx.get('shop')._live ?? []) {
+    out[id] = {
+      epoch: live.epoch, favourDay: live.favourDay,
+      stock: shelf(live.stock), hidden: shelf(live.hidden),
+    };
+  }
+  return out;
+};
+
+const dropState = (ctx) => ctx.get('loot').drops.map((d) => ({
+  kind: d.kind,
+  amount: d.amount ?? 0,
+  age: Math.round(d.age * 100) / 100,
+  item: d.item ? `${d.item.baseId}#${d.item.uid}` : null,
+  pos: [d.pos.x, d.pos.y, d.pos.z].map((n) => Math.round(n * 1000) / 1000),
+}));
 
 /** Everything a player would notice going missing, in one comparable shape. */
 function snapshot(ctx) {
@@ -190,6 +256,10 @@ function snapshot(ctx) {
     'services.donated': ctx.get('services').model.donated,
     'services.blessing': ctx.get('services').model.blessing,
     'venue.town': ctx.get('venue').town,
+    'shop.shelves': shopState(ctx),
+    'loot.drops': dropState(ctx),
+    'loot.claimed': [...ctx.get('loot').claimed].sort(),
+    'loot.containers': [...(ctx.get('loot').containers ?? [])].sort(),
     'player.position': player.position.toArray(),
     'player.yaw': player.yaw,
     'player.pitch': player.pitch,
@@ -197,11 +267,11 @@ function snapshot(ctx) {
   };
 }
 
-const before = play(makeCtx());
+const before = play(await makeCtx());
 const wire = before.get('save').serialise(before);
 const json = JSON.parse(JSON.stringify(wire));
 
-const after = makeCtx();
+const after = await makeCtx();
 after.state.seed = 9999;          // a fresh boot rolls its own world
 after.state.worldTime = 0;
 const ok = after.get('save').restore(after, json);
@@ -224,7 +294,37 @@ for (const key of Object.keys(a)) {
 // load used to stack another copy on the party.
 after.get('save').restore(after, JSON.parse(JSON.stringify(wire)));
 
+/**
+ * The cart, after a load.
+ *
+ * A restored shelf has two ways to be wrong and only one to be right. It must
+ * not reroll the moment the file is read — that is the save-scum the epoch is
+ * there to prevent — and it must not freeze at the saved delivery for ever
+ * either. Push both worlds forward one restock period and the loaded one
+ * should take exactly the same delivery the unsaved one takes.
+ */
+const days = SHOPS[SMITH].restockDays;
+const held = after.get('shop')._live?.get(SMITH)?.epoch ?? null;
+for (const c of [before, after]) c.state.worldTime += 86400 * days;
+const cartBefore = before.get('shop').shop(SMITH);
+const cartAfter = after.get('shop').shop(SMITH);
+if (held === null || cartAfter.epoch !== held + 1) {
+  lost.push({
+    key: `shop.restock (${SMITH} ${days} days on)`,
+    saved: JSON.stringify(`epoch ${held === null ? 'not restored' : held} then ${held + 1}`),
+    loaded: JSON.stringify(`epoch ${cartAfter.epoch}`),
+  });
+}
+if (JSON.stringify(kinds(cartAfter.stock)) !== JSON.stringify(kinds(cartBefore.stock))) {
+  lost.push({
+    key: `shop.restock delivery (${SMITH})`,
+    saved: JSON.stringify(kinds(cartBefore.stock)),
+    loaded: JSON.stringify(kinds(cartAfter.stock)),
+  });
+}
+
 console.log(`restore() returned ${ok}`);
+console.log(`the cart came once on day ${Math.floor(after.state.worldTime / 86400)}: epoch ${held} → ${cartAfter.epoch}, ${cartAfter.stock.length} pieces`);
 console.log(`seed recorded in the file: ${json.seed} (the running world's is ${after.state.seed} — restore warns)`);
 console.log(`slot label: ${JSON.stringify(before.get('save').list?.() ? json.meta : null)}`);
 console.log(`save is ${JSON.stringify(json).length} bytes over ${Object.keys(json.systems).length} systems`);

@@ -1,6 +1,8 @@
 import { System } from '../core/Engine.js';
 import { RNG, hashSeed } from '../core/RNG.js';
 import { getVenue, venuesInTown, VENUE_KINDS } from './data/Venues.js';
+import { getStage } from './data/Campaign.js';
+import { getClass } from './data/Classes.js';
 
 /**
  * Conversation: who is behind a door, what they will say, and what they will
@@ -34,8 +36,16 @@ import { getVenue, venuesInTown, VENUE_KINDS } from './data/Venues.js';
 /** MM6 hires at most two, and shows them in the sidebar's two panes. */
 const RETINUE_LIMIT = 2;
 
-/** As many options as the wooden board holds before it wants a scroll. */
-const TOPIC_LIMIT = 7;
+/**
+ * As many options as the wooden board holds before it wants a scroll.
+ *
+ * Nine, not seven, because the number keys go to nine and because a catalogue
+ * NPC's own business must never be pushed off the board by ours: the topics
+ * that hand out quests are the reason the party walked through the door, and
+ * `topics()` fills the board with those first and spends what is left on the
+ * generic four.
+ */
+const TOPIC_LIMIT = 9;
 
 /**
  * The party's standing, in five bands.
@@ -514,6 +524,12 @@ const TOWN_TAGS = Object.freeze({
  * Talk. Deliberately more of it than one playthrough will exhaust, tagged so a
  * fen village does not repeat a whaling story, and rotated weekly so the same
  * neighbour has something new when the party comes back.
+ *
+ * `act` is the earliest act a line may be said in. A kingdom where the Choir
+ * has taken Duskorn does not gossip about coach fares in the same tone it did
+ * in act one, and a neighbour who is still talking about sheep after the
+ * capital has mustered is a neighbour nobody believes in. Untagged lines are
+ * the standing complaints of a small country and hold all the way through.
  */
 const RUMOURS = Object.freeze([
   { towns: null, text: 'The coach fares went up again and the Ledger says it is the state of the roads. The Ledger owns the roads.' },
@@ -548,6 +564,24 @@ const RUMOURS = Object.freeze([
   { towns: ['town_emberhold'], text: 'Smith-Cantor is turning away commissions from the capital. Turning them away, with the money on the counter.' },
   { towns: ['town_duskorn'], text: 'Somebody is walking the colonnade at night with a light. There is nobody in this city with a light.' },
   { towns: ['town_duskorn'], text: 'Two doors in the lower quarter opened this spring that have been shut eight hundred years. Nothing came out. Nothing that anyone saw.' },
+
+  // Act two: the warrants. The crown has started asking for things in writing,
+  // which in this kingdom is how everyone finds out something is wrong.
+  { towns: null, act: 2, text: 'Warrant Street has been lit all night for a fortnight. My cousin clerks there and has stopped telling me anything.' },
+  { towns: null, act: 2, text: 'The Chapter is certifying companies again. They have not done that since my father\'s time and he would not say why either.' },
+  { towns: null, act: 2, text: 'Every packet out of the ports is carrying a queen\'s seal now, and the Ledger is charging the crown for the privilege.' },
+  // Act three: the nine keys. Guild business becomes public business.
+  { towns: null, act: 3, text: 'Nine guilds and not one of them will say what it has been asked for. That is nine people keeping the same secret badly.' },
+  { towns: null, act: 3, text: 'They have taken the lamps off the eastern road. Nobody takes lamps off a road unless they want it dark.' },
+  { towns: null, act: 3, text: 'A Concord adept came through weighing things. Not measuring — weighing, on a beam, and writing the numbers twice.' },
+  // Act four: Duskorn falls, the magister is named, three regions go.
+  { towns: null, act: 4, text: 'The scavengers came off the Duskorn road in one week, all of them, and none of them will go back for any money.' },
+  { towns: null, act: 4, text: 'They read a name off the muster steps and the whole square went quiet. A magister\'s name. I will not say it in my own doorway.' },
+  { towns: null, act: 4, text: 'Three parishes east have stopped sending anything to market. Not late. Stopped.' },
+  { towns: null, act: 4, text: 'The singing is in the daytime now. That is the change. It used to wait for dark.' },
+  // Act five: under the glass.
+  { towns: null, act: 5, text: 'The crater has gone quiet, and quiet is not what it did before. My grandmother would have had us all indoors.' },
+  { towns: null, act: 5, text: 'Whatever you are going down there to do, do it. Nobody in this street has slept properly in a month and we do not know why.' },
 ]);
 
 /**
@@ -864,7 +898,26 @@ export class DialogueSystem extends System {
       sex: guessSex(def.name, rng),
       // Their own words come first; ours only fill in around them.
       greeting: firstLine(def.dialogue?.greeting) ?? null,
-      catalogueTopics: topics.map((t) => ({ id: t.id, label: t.label, text: t.text })).slice(0, 4),
+      // Every field the catalogue authored, carried whole.
+      //
+      // This used to be `{ id, label, text }` and a `.slice(0, 4)`, which is
+      // the seam this round was hunting: a topic record spells four more
+      // fields — `requires`, `gives`, `service`, `promotes` — and all four were
+      // dropped here, silently, because `text` was present and the branch that
+      // reads it had a plausible answer to give. The effect was that all 95
+      // quest-giving topics, all 46 that route to a counter and all 23 that
+      // open a promotion printed a line of prose and did nothing whatsoever,
+      // including Wat Fletcher's "Work", which is the first quest in the game.
+      // The slice then cut three more topics off three NPCs' boards outright.
+      catalogueTopics: topics.map((t) => ({
+        id: t.id,
+        label: t.label,
+        text: t.text,
+        requires: t.requires ?? null,
+        gives: t.gives ?? null,
+        service: t.service ?? null,
+        promotes: t.promotes ?? null,
+      })),
       desc: def.desc ?? '',
     }, rng);
   }
@@ -984,9 +1037,14 @@ export class DialogueSystem extends System {
    */
   _rumoursFor(s) {
     const week = Math.floor(this.day() / 7);
-    const rng = rngFor(`${s.key}:rumour:${week}`);
-    const local = RUMOURS.filter((r) => r.towns?.includes(s.town));
-    const wide = RUMOURS.filter((r) => !r.towns);
+    const rng = rngFor(`${s.key}:rumour:${week}:a${this.act()}`);
+    const act = this.act();
+    const current = (r) => (r.act ?? 1) <= act;
+    const local = RUMOURS.filter((r) => current(r) && r.towns?.includes(s.town));
+    // Later acts talk about later acts: once the kingdom has something worse to
+    // discuss than the coach fares, weight the pool towards it.
+    const late = RUMOURS.filter((r) => !r.towns && (r.act ?? 1) === act && act > 1);
+    const wide = late.length && rng.chance(0.65) ? late : RUMOURS.filter((r) => current(r) && !r.towns);
     const out = [];
     if (local.length) out.push(rng.pick(local).text);
     for (let i = 0; i < 6 && out.length < 2; i++) {
@@ -1197,6 +1255,146 @@ export class DialogueSystem extends System {
     return kind && VENUE_KINDS[kind] ? kind : 'house';
   }
 
+  // ── the catalogue's own topics ────────────────────────────────────────────
+
+  /**
+   * Whether a topic's `requires` clause is satisfied.
+   *
+   * The catalogue has spelled this field on every topic record since the roster
+   * was written and nothing has ever read it, which is the same thing as it not
+   * existing. It exists now. Five clauses, all of them answerable from state
+   * that is already serialised:
+   *
+   *   `quests`   ids that must be finished — journal quests or campaign stages
+   *   `flags`    flags that must be raised
+   *   `notFlags` flags that must not be
+   *   `level`    the party's average level
+   *   `act`      how far the main quest has opened the world
+   *
+   * A clause outside that set fails loudly rather than passing quietly. The
+   * whole lesson of this codebase is that a reader with a plausible fallback
+   * hides a misspelling forever, so an unrecognised key closes the topic and
+   * says why on the console.
+   */
+  meets(req) {
+    if (!req) return { ok: true, missing: [] };
+    const quests = this._quests();
+    const camp = this._campaign();
+    const missing = [];
+    const known = new Set(['quests', 'flags', 'notFlags', 'level', 'act']);
+    for (const key of Object.keys(req)) {
+      if (known.has(key)) continue;
+      console.warn(`[dialogue] topic requires "${key}", which nothing reads`);
+      missing.push(key);
+    }
+    const raised = (f) => !!(quests?.hasFlag?.(f) || camp?.hasFlag?.(f));
+    for (const id of req.quests ?? []) {
+      if (quests?.completed?.has?.(id) || camp?.isDone?.(id)) continue;
+      missing.push(getStage(id)?.title ?? id);
+    }
+    for (const f of req.flags ?? []) if (!raised(f)) missing.push(f);
+    for (const f of req.notFlags ?? []) if (raised(f)) missing.push(f);
+    if (req.level && this.partyLevel() < req.level) missing.push(`level ${req.level}`);
+    if (req.act && this.act() < req.act) missing.push(`act ${req.act}`);
+    return { ok: !missing.length, missing };
+  }
+
+  _quests() { return this.ctx?.get?.('quests') ?? null; }
+
+  _campaign() { return this.ctx?.get?.('campaign') ?? null; }
+
+  /** How far the main quest has opened the world, when anything is tracking it. */
+  act() {
+    const n = this._campaign()?.act ?? this._quests()?.act;
+    return Number.isFinite(n) ? n : 1;
+  }
+
+  /**
+   * Where a quest id stands with the party.
+   *
+   * Two registries answer to one field: `data/Quests.js` holds the journal's
+   * quests and `data/Campaign.js` holds the main line's stages, and a topic's
+   * `gives` may name either. A stage the campaign has not opened yet is a beat
+   * the speaker has not heard about, so the topic is not on the board — which
+   * is the whole of "does anybody react to campaign state" and the reason the
+   * Marshal does not offer act-four business in act one.
+   */
+  questState(id) {
+    const quests = this._quests();
+    const camp = this._campaign();
+    if (quests?.completed?.has?.(id) || camp?.isDone?.(id)) return { state: 'done' };
+    if (quests?.active?.has?.(id)) {
+      const entry = (quests.journal?.() ?? []).find((q) => q.id === id) ?? null;
+      return { state: 'running', name: entry?.name ?? null, lines: entry?.text ? [entry.text] : null };
+    }
+    const stage = getStage(id);
+    if (stage) {
+      const lines = (stage.says ?? []).slice(0, 2).map(strip);
+      // No campaign system running (headless, or the capture harness): offer it
+      // rather than hiding it, because a blank board is the worse failure.
+      if (!camp) return { state: 'open', name: stage.title, lines };
+      if (camp.isOpen?.(id)) return { state: 'running', name: stage.title, lines };
+      return { state: 'early' };
+    }
+    const take = quests?.canTake?.(id);
+    if (take && !take.ok) return { state: 'blocked', missing: take.missing ?? [] };
+    return { state: 'open' };
+  }
+
+  /** Whoever in the party could actually take this promotion, if anybody can. */
+  promotionCandidate(classId) {
+    const members = this.ctx?.get?.('party')?.members;
+    if (!Array.isArray(members) || !members.length) return true;   // nobody to ask
+    return members.find((m) => getClass(m?.classId)?.promotesTo?.includes(classId)) ?? null;
+  }
+
+  /**
+   * What the board should do with one catalogue topic: show it, and in what
+   * state, or leave it off entirely.
+   */
+  topicState(topic) {
+    if (!topic) return { show: false, state: 'unknown' };
+    const gate = this.meets(topic.requires);
+    if (!gate.ok) return { show: false, state: 'gated', missing: gate.missing };
+    // "Become a Cavalier" offered to four wizards is a topic that cannot fire.
+    if (topic.promotes && !this.promotionCandidate(topic.promotes)) {
+      return { show: false, state: 'unqualified' };
+    }
+    if (topic.gives) {
+      const q = this.questState(topic.gives);
+      if (q.state === 'done' || q.state === 'early') return { show: false, ...q };
+      return { show: true, ...q };
+    }
+    return { show: true, state: 'talk' };
+  }
+
+  /** Put a quest in the journal. True when it was actually taken. */
+  takeQuest(id) {
+    const quests = this._quests();
+    if (typeof quests?.start !== 'function') return false;
+    return !!quests.start(this.ctx, id);
+  }
+
+  /**
+   * Walk the party through the door the speaker just pointed at.
+   *
+   * `service` names a venue id, and a venue already knows which screen it opens
+   * and with what — so this hands off to the venue system where there is one
+   * and falls back to the same pair of events it would have emitted. The
+   * innkeep saying "bed, board and no questions about the mud" should put you
+   * in the tavern, not describe it.
+   */
+  openService(venueId) {
+    const venue = getVenue(venueId);
+    if (!venue) return { ok: false, venue: null };
+    const sys = this.ctx?.get?.('venue');
+    if (typeof sys?.enter === 'function' && sys.enter(venue.id)) return { ok: true, venue };
+    const kind = VENUE_KINDS[venue.kind];
+    if (!kind) return { ok: false, venue };
+    this.ctx?.events?.emit?.('ui:forcePanel', { id: kind.panel, opts: { ...kind.context, venue: venue.id } });
+    return { ok: true, venue };
+  }
+
   // ── clock ─────────────────────────────────────────────────────────────────
 
   day() { return Math.floor((this.ctx?.state?.worldTime ?? 0) / 86400) + 1; }
@@ -1299,34 +1497,53 @@ class Conversation {
     if (this.branch === 'errand') return this._errandBranch();
     if (this.branch === 'hire') return this._hireBranch();
 
-    const out = [];
+    // The board is filled in two passes. Everything this person in particular
+    // has to offer goes on first and is never trimmed; the four topics anybody
+    // in the kingdom could answer spend whatever room is left.
+    const head = [];
     const delivery = this.model.deliveryFor(s);
-    if (delivery) out.push({ id: 'hand-over', label: 'The Packet', special: true });
+    if (delivery) head.push({ id: 'hand-over', label: 'The Packet', special: true });
 
     const errand = s.errand;
     if (errand) {
       const e = this.model.entry(errand.key);
       if (e.state === 'offered' && this.standing.quests) {
-        out.push({ id: 'errand', label: errand.def.kind === 'favour' ? 'A Favour' : 'Work', special: true });
+        head.push({ id: 'errand', label: errand.def.kind === 'favour' ? 'A Favour' : 'Work', special: true });
       } else if (e.state === 'taken') {
-        out.push({ id: 'errand', label: errand.def.name, special: true });
+        head.push({ id: 'errand', label: errand.def.name, special: true });
       }
     }
 
     // A quest the journal is already tracking, when this is its giver.
     const running = this._runningQuest();
-    if (running) out.push({ id: 'journal', label: running.name, special: true });
+    if (running) head.push({ id: 'journal', label: running.name, special: true });
 
-    for (const t of s.catalogueTopics ?? []) out.push({ id: `own:${t.id}`, label: t.label ?? 'Talk' });
+    for (const t of s.catalogueTopics ?? []) {
+      const st = this.model.topicState(t);
+      if (!st.show) continue;
+      // A topic that hands over work, opens a door or opens a career is a
+      // decision, and the board marks decisions.
+      head.push({
+        id: `own:${t.id}`,
+        label: t.label ?? 'Talk',
+        special: !!(t.gives || t.service || t.promotes),
+        tip: topicTip(t, st, this.model),
+      });
+    }
 
-    if (s.trade || KIND_TRADE[s.venueKind]) out.push({ id: 'trade', label: 'Their Trade' });
-    out.push({ id: 'town', label: (TOWN_NOTES[s.town] ?? TOWN_NOTES.generic).name });
-    out.push({ id: 'rumour', label: 'News' });
-    out.push({ id: 'directions', label: 'Directions' });
-    if (s.hire && this.standing.hires) out.push({ id: 'hire', label: 'Take Service' });
-    out.push({ id: 'opinion', label: 'Our Standing' });
+    // A speaker who already has a topic about the town does not need ours, and
+    // two rows reading "Millhaven" is what that looked like on Wat's board.
+    const spoken = new Set(head.map((t) => String(t.label ?? '').toLowerCase()));
+    const tail = [];
+    const add = (row) => { if (!spoken.has(String(row.label).toLowerCase())) tail.push(row); };
+    if (s.trade || KIND_TRADE[s.venueKind]) add({ id: 'trade', label: 'Their Trade' });
+    add({ id: 'town', label: (TOWN_NOTES[s.town] ?? TOWN_NOTES.generic).name });
+    add({ id: 'rumour', label: 'News' });
+    add({ id: 'directions', label: 'Directions' });
+    if (s.hire && this.standing.hires) add({ id: 'hire', label: 'Take Service' });
+    add({ id: 'opinion', label: 'Our Standing' });
 
-    return out.slice(0, TOPIC_LIMIT);
+    return [...head, ...tail].slice(0, Math.max(head.length, TOPIC_LIMIT));
   }
 
   _errandBranch() {
@@ -1489,19 +1706,74 @@ class Conversation {
       }
 
       default: {
-        if (id.startsWith('own:')) {
-          const key = id.slice(4);
-          const topic = (s.catalogueTopics ?? []).find((t) => t.id === key);
-          this.text = {
-            lines: [strip(topic?.text) || 'They think about it and decide against saying it.'],
-            note: topic?.label ?? null,
-            tone: 'plain',
-          };
-          return;
-        }
+        if (id.startsWith('own:')) return this._ownTopic(id.slice(4));
         this.text = { lines: [pick(this.rng, EXHAUSTED)], note: null, tone: 'plain' };
       }
     }
+  }
+
+  /**
+   * One of the catalogue's own topics, and whatever it was authored to do.
+   *
+   * Three verbs, and the record spells all three: `service` walks the party
+   * through a door, `gives` puts a quest in the journal, `promotes` is a career
+   * that arrives with its quest. Until this round every one of them printed its
+   * prose and stopped there.
+   */
+  _ownTopic(key) {
+    const s = this.speaker;
+    const model = this.model;
+    const topic = (s.catalogueTopics ?? []).find((t) => t.id === key);
+    if (!topic) {
+      this.text = { lines: [pick(this.rng, EXHAUSTED)], note: null, tone: 'plain' };
+      return;
+    }
+    const said = strip(topic.text) || 'They weigh it, and decide it is not yours to hear.';
+
+    if (topic.service) {
+      const opened = model.openService(topic.service);
+      this.text = {
+        lines: [said],
+        note: opened.ok ? `${opened.venue.name} — through the door.` : topic.label ?? null,
+        tone: opened.ok ? 'good' : 'plain',
+      };
+      return;
+    }
+
+    if (topic.gives) {
+      const st = model.topicState(topic);
+      if (st.state === 'running') {
+        this.text = {
+          lines: st.lines?.length ? st.lines : [said],
+          note: st.name ?? topic.label ?? null,
+          tone: 'quest',
+        };
+        return;
+      }
+      if (st.state === 'blocked') {
+        this.text = {
+          lines: [said, `Not yet, mind. Not until ${listOf(st.missing)}.`],
+          note: topic.label ?? null,
+          tone: 'warn',
+        };
+        return;
+      }
+      const took = model.takeQuest(topic.gives);
+      const title = st.name ?? topic.label ?? null;
+      this.text = {
+        lines: st.lines?.length ? st.lines : [said],
+        note: took ? `Taken: ${title}.` : title,
+        tone: 'quest',
+      };
+      if (topic.promotes) {
+        const who = model.promotionCandidate(topic.promotes);
+        const name = who && who !== true ? who.name : null;
+        if (name) this.text.note = `${name}'s road, if it is walked. ${this.text.note ?? ''}`.trim();
+      }
+      return;
+    }
+
+    this.text = { lines: [said], note: topic.label ?? null, tone: 'plain' };
   }
 
   /** Where things are, read off the town's own catalogue of buildings. */
@@ -1512,15 +1784,21 @@ class Conversation {
       return ['There is nothing here to find. The nearest of anything is a day up the road and you will smell it before you see it.'];
     }
     const rng = rngFor(`${s.key}:directions:${this.model.day()}`);
-    const notes = TOWN_NOTES[s.town] ?? TOWN_NOTES.generic;
     const picked = [];
     const bag = [...here];
     for (let i = 0; i < 2 && bag.length; i++) picked.push(bag.splice(Math.floor(rng.next() * bag.length), 1)[0]);
+    // The street is seeded on the *building*, not on the day and the speaker.
+    // It used to be `rng.pick(notes.streets)` off the direction stream, which
+    // meant the same forge stood on a different street every morning and two
+    // neighbours never agreed about where anything was — directions that are
+    // false are worse than no directions, and this is the one topic on the
+    // board whose entire job is to be true.
     return picked.map((v) => {
-      const label = (VENUE_KINDS[v.kind] ?? {}).label ?? 'a house';
-      const street = rng.pick(notes.streets);
-      const keeper = v.keeper ? `Ask for ${v.keeper}.` : 'Nobody keeps it now.';
-      return `${label}: ${v.name}, on ${street}. ${keeper}`;
+      const label = ((VENUE_KINDS[v.kind] ?? {}).label ?? 'a house').toLowerCase();
+      const street = streetFor(v, s.town);
+      return v.keeper
+        ? `${v.name} is on ${street} — the ${label}. Ask for ${v.keeper} and say who sent you, or do not, it makes no odds.`
+        : `${v.name} is on ${street}. It was the ${label} once. Nobody keeps it now.`;
     });
   }
 
@@ -1676,6 +1954,60 @@ class Conversation {
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Which street a building stands on.
+ *
+ * Seeded on the venue id alone, so every person in the town gives the same
+ * address for the same door and gives it again tomorrow.
+ */
+function streetFor(venue, townId) {
+  const notes = TOWN_NOTES[townId] ?? TOWN_NOTES.generic;
+  const streets = notes.streets;
+  return streets[hashSeed(`street:${venue.id}`) % streets.length];
+}
+
+/** `a, b and c` — for a list of things the party has not got yet. */
+function listOf(items) {
+  const list = (items ?? []).map((s) => String(s)).filter(Boolean);
+  if (!list.length) return 'the rest of it is settled';
+  if (list.length === 1) return list[0];
+  return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+}
+
+/**
+ * The terms hanging off a catalogue topic.
+ *
+ * The speech stays speech (STYLE.md §5); what a topic will cost, open or set
+ * running belongs on the option, where the shop and the hire branch already put
+ * their numbers.
+ */
+function topicTip(topic, state, model) {
+  if (topic.service) {
+    const venue = getVenue(topic.service);
+    if (!venue) return null;
+    return {
+      title: venue.name,
+      subtitle: (VENUE_KINDS[venue.kind] ?? {}).label ?? 'A door',
+      lines: venue.keeper ? [{ k: 'Kept by', v: venue.keeper }] : [],
+      flavour: 'They will take you through.',
+    };
+  }
+  if (!topic.gives) return null;
+  const promo = topic.promotes ? getClass(topic.promotes) : null;
+  const who = topic.promotes ? model.promotionCandidate(topic.promotes) : null;
+  const lines = [];
+  if (promo) lines.push({ k: 'Opens', v: promo.name ?? topic.promotes });
+  if (who && who !== true) lines.push({ k: 'For', v: who.name });
+  if (state.state === 'running') lines.push({ k: 'Standing', v: 'Already in hand' });
+  if (state.state === 'blocked') lines.push({ k: 'Wants', v: listOf(state.missing) });
+  return {
+    title: state.name ?? topic.label ?? 'Work',
+    subtitle: state.state === 'running' ? 'In the journal' : 'Work on offer',
+    lines,
+    flavour: state.state === 'blocked' ? 'They will hold it for you.' : 'Say yes and it goes in the journal.',
+  };
+}
 
 /** An errand definition from a ledger key — the id is its last segment. */
 function errandDef(key) {
