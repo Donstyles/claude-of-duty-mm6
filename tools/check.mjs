@@ -93,8 +93,16 @@ const GATES = [
   // destructive, and `-w` rather than a bare wait so a stale lock cannot hang
   // a gate run forever.
   { name: 'build', slow: false, cmd: 'flock',
-    args: ['-w', '900', '/tmp/mm6-capture.lock', 'npx', 'vite', 'build', '--logLevel', 'error'],
-    why: 'the tree compiles (queued behind any running capture)' },
+    args: ['-w', '900', '-E', '75', '/tmp/mm6-capture.lock', 'npx', 'vite', 'build', '--logLevel', 'error'],
+    why: 'the tree compiles (queued behind any running capture)',
+    // `-E 75` is what separates "the tree is broken" from "somebody else is
+    // using the machine". Without it the first version of this fix reported
+    // FAIL after waiting fifteen minutes behind a long capture — which is a
+    // false alarm, and false alarms are precisely what teach people to stop
+    // reading a gate. 75 is EX_TEMPFAIL, and `blockedBy` below turns it into a
+    // stated skip rather than a failure.
+    blockedExit: 75,
+    blockedBy: 'a capture is holding the build lock' },
   { name: 'content', slow: false, cmd: 'node', args: ['tools/lint-content.mjs'],
     why: 'every quest, dungeon, NPC and route id resolves, and the campaign completes' },
   { name: 'scope', slow: false, cmd: 'python3', args: ['tools/scopecheck.py', '--gate'],
@@ -131,6 +139,7 @@ function run(gate) {
 }
 
 const skipped = [];
+const blocked = [];
 const failed = [];
 
 for (const gate of GATES) {
@@ -140,6 +149,9 @@ for (const gate of GATES) {
   const secs = (r.ms / 1000).toFixed(1);
   if (r.code === 0) {
     console.log(`ok    ${secs}s   ${gate.why}`);
+  } else if (gate.blockedExit && r.code === gate.blockedExit) {
+    console.log(`--    ${secs}s   BLOCKED: ${gate.blockedBy} — not run, not failed`);
+    blocked.push(gate);
   } else {
     console.log(`FAIL  ${secs}s   ${gate.why}`);
     failed.push({ gate, out: r.out });
@@ -152,9 +164,16 @@ for (const f of failed) {
   console.error(f.out.split('\n').slice(-40).join('\n'));
 }
 
+if (blocked.length) {
+  console.log(`\n[check] ${blocked.map((g) => g.name).join(', ')} could not run — ${blocked[0].blockedBy}.`);
+  console.log('[check] That is not a pass. Re-run when the machine is quiet.');
+}
+
 if (skipped.length) {
   console.log(`\n[check] skipped ${skipped.map((g) => g.name).join(', ')} — run with --full before merging.`);
 }
 
-console.log(`\n[check] ${GATES.length - skipped.length - failed.length}/${GATES.length - skipped.length} gates passed`);
+const ran = GATES.length - skipped.length - blocked.length;
+console.log(`\n[check] ${ran - failed.length}/${ran} gates passed`
+  + (blocked.length ? `, ${blocked.length} blocked` : ''));
 process.exit(failed.length ? 1 : 0);
