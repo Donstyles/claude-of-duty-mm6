@@ -77,8 +77,24 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const full = process.argv.includes('--full');
 
 const GATES = [
-  { name: 'build', slow: false, cmd: 'npx', args: ['vite', 'build', '--logLevel', 'error'],
-    why: 'the tree compiles' },
+  // The build takes the capture lock, and that is not fussiness.
+  //
+  // A 52-screen menu capture serves `dist/` for the better part of an hour.
+  // Every agent in a fan-out is told to run this file before finishing, and
+  // this gate's first act is to rewrite `dist/` with new content-hashed chunk
+  // names — so "did my change compile?" silently rewrote the artefact a
+  // capture was mid-way through photographing. The run completed and looked
+  // fine; the screens on either side of each check had come from DIFFERENT
+  // TREES, which is exactly the class of invalid evidence this project has
+  // already thrown away two review rounds to.
+  //
+  // `flock -w 900` waits up to fifteen minutes for the lock `shoot-queued.sh`
+  // holds, then builds. A check during a capture is now slow instead of
+  // destructive, and `-w` rather than a bare wait so a stale lock cannot hang
+  // a gate run forever.
+  { name: 'build', slow: false, cmd: 'flock',
+    args: ['-w', '900', '/tmp/mm6-capture.lock', 'npx', 'vite', 'build', '--logLevel', 'error'],
+    why: 'the tree compiles (queued behind any running capture)' },
   { name: 'content', slow: false, cmd: 'node', args: ['tools/lint-content.mjs'],
     why: 'every quest, dungeon, NPC and route id resolves, and the campaign completes' },
   { name: 'scope', slow: false, cmd: 'python3', args: ['tools/scopecheck.py', '--gate'],

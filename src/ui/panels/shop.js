@@ -49,12 +49,17 @@ const PACK_ROWS = 9;
 const CELL = 32;
 
 /**
- * Where the goods hang, in the viewport's own 460x352 pixels. The band clears
- * the ceiling beams at the top and the foreground counter at the bottom, so the
- * stock reads as hung on the shop's back wall rather than floating in the room.
- * `unit` is one pack cell blown up to object size, shrunk only as far as it
- * takes to fit the run: at 44 a plain sword stands a little under half the
- * panel high, which is where the reference wall puts it.
+ * Where the goods hang, as a *fraction* of the board, quoted from the
+ * reference's own 460x352 viewport. The band clears the ceiling beams at the
+ * top and the foreground counter at the bottom, so the stock reads as hung on
+ * the shop's back wall rather than floating in the room. `unit` is one pack
+ * cell blown up to object size, shrunk only as far as it takes to fit the run:
+ * at 40 a plain sword stands a little under half the panel high, which is where
+ * the reference wall puts it.
+ *
+ * `x`/`w`/`y`/`h` are native pixels *of the reference frame* and are turned
+ * into native pixels of ours by `_band()`. They are not used directly — see
+ * the note there for what went wrong when they were.
  */
 const WALL = Object.freeze({
   // The band is the part of the painted room where the *back wall* is actually
@@ -64,6 +69,8 @@ const WALL = Object.freeze({
   // disappeared, which read as the shop stocking three things instead of nine.
   x: 14, y: 26, w: 432, h: 172,
   pad: 4, gap: 8, unit: 40, minTall: 34,
+  // The frame those four numbers were measured in.
+  frameW: 460, frameH: 352,
 });
 
 /**
@@ -234,6 +241,12 @@ export class ShopPanel extends Panel {
   }
 
   onKey(e) {
+    // Escape backs out one step, the same step the brass oval and the right
+    // button take. Left to the global handler it closed the whole shop from
+    // inside a submenu, so the only way back to the counter from the goods was
+    // the mouse — and a player who pressed Escape to stop buying found himself
+    // out in the street with the door shut behind him.
+    if (e.key === 'Escape' && this.mode) { this.setMode(null); return true; }
     const hot = { b: 'buy', s: 'sell', i: 'identify', r: 'repair' }[e.key?.toLowerCase()];
     if (hot) { this.setMode(hot); return true; }
     if (e.key >= '1' && e.key <= '4') { this.ui.selectMember(Number(e.key) - 1); return true; }
@@ -299,6 +312,15 @@ export class ShopPanel extends Panel {
    * and nothing else; the keeper's own words go to the caption over the room.
    */
   _prompt() {
+    // Something was just traded and the keeper has answered on the strip —
+    // "Bought a Longsword for 180 gold", or "Come back heavier", or the price
+    // of an appraisal nobody could afford. `_trade` and the Special handler
+    // have always raised `_quiet` to say so, and nothing has ever read it: the
+    // redraw that follows a trade overwrote the answer with the same standing
+    // instruction that was already there, one frame after the model wrote it.
+    // Every reaction to every purchase, refusal, botched repair and short purse
+    // in the game went into the strip and straight back out of it.
+    if (this._quiet) { this._quiet = false; return; }
     const line = MODES.find(([id]) => id === this.mode)?.[2];
     this.ui.hud?.setMessage(line ?? this._arrival ?? '');
   }
@@ -382,12 +404,44 @@ export class ShopPanel extends Panel {
 
   // ── the goods wall ────────────────────────────────────────────────────────
 
+  /**
+   * The board, in *our* native pixels, measured rather than quoted.
+   *
+   * `WALL` records the reference's board inside MM6's 460x352 viewport, and the
+   * wall was hung inside that rectangle whatever frame it was drawn into. Ours
+   * is not that frame: `--u` is locked to the height, so the phone this ships on
+   * gives the viewport about 668 native pixels of width against the original's
+   * 460. The stock therefore hung on the left 65% of the board and the right
+   * third was bare in every shop in the game — visible in both wall captures,
+   * and worst where a keeper has only three things to sell, which huddled into
+   * one corner with two thirds of the wall empty beside them.
+   *
+   * So take the same *proportions* off the live element: a wider frame gets a
+   * wider wall, not a wider gutter.
+   */
+  _band() {
+    const u = parseFloat(getComputedStyle(this.el).getPropertyValue('--u'));
+    const w = (this.wallEl?.clientWidth ?? 0) / u;
+    const h = (this.wallEl?.clientHeight ?? 0) / u;
+    // Before the panel has been laid out there is nothing to measure, and the
+    // reference numbers are a better guess than zero.
+    if (!(w > 0) || !(h > 0)) return WALL;
+    return {
+      ...WALL,
+      x: (w * WALL.x) / WALL.frameW,
+      w: (w * WALL.w) / WALL.frameW,
+      y: (h * WALL.y) / WALL.frameH,
+      h: (h * WALL.h) / WALL.frameH,
+    };
+  }
+
   _buildWall(sys, shop, trader) {
-    const hung = layoutWall(shop.stock, shop.id);
+    const band = this._band();
+    const hung = layoutWall(shop.stock, shop.id, band);
     const nodes = hung.map(({ item, x, y, w, h }) => {
       const node = itemSprite(item, nu(w), nu(h), 'mm-shop-item');
-      node.style.left = nu(WALL.x + x);
-      node.style.top = nu(WALL.y + y);
+      node.style.left = nu(band.x + x);
+      node.style.top = nu(band.y + y);
       node.style.color = STROKE[itemMaterial(item)] ?? STROKE.iron;
       if (!isIdentified(item)) node.classList.add('is-unknown');
       if (item.broken) node.classList.add('is-broken');
@@ -573,33 +627,40 @@ export class ShopPanel extends Panel {
  * always hangs its wall the same way and no two neighbours sit at the same
  * height.
  */
-function layoutWall(stock, seed = '') {
+function layoutWall(stock, seed = '', band = WALL) {
   const items = stock.slice(0, 9);
   if (!items.length) return [];
-  const usable = WALL.w - WALL.pad * 2;
+  const usable = band.w - band.pad * 2;
 
   // How tall a thing stands comes from its pack footprint — a staff is five
   // cells and a ring is one — but how wide it is comes from its own painted
   // proportions, so a sword is a sword and not a stretched icon.
   const drawn = items.map((item) => {
     const fp = itemFootprint(item);
-    const h = Math.max(WALL.minTall, fp.h * WALL.unit);
+    const h = Math.max(band.minTall, fp.h * band.unit);
     const ratio = itemPlateUrl(item) ? plateAspect(item) : fp.w / fp.h;
     return { item, w: h * ratio, h };
   });
 
-  // Then shrink the whole wall, in proportion, until the run fits the board.
-  const air = WALL.gap * (drawn.length - 1);
-  let run = drawn.reduce((s, d) => s + d.w, 0);
-  if (run + air > usable) {
-    const k = (usable - air) / run;
-    for (const d of drawn) { d.w *= k; d.h *= k; }
-    run = usable - air;
-  }
+  // One column per piece, of equal width, and the piece centred in its own.
+  //
+  // Measured off the reference board: its six pieces sit on evenly spaced
+  // centres spanning the whole width, at a pitch of one sixth of the board —
+  // not justified into a run with the slack pushed between them. The difference
+  // only shows when a keeper is nearly sold out, and then it shows badly: with
+  // the old justify a three-item wall put its pieces flush left, flush centre
+  // and flush right with two chasms between, or — once the frame grew wider
+  // than the constants it was quoted in — bunched all three into one corner.
+  const pitch = usable / drawn.length;
 
-  const gap = drawn.length > 1
-    ? Math.max(WALL.gap, (usable - run) / (drawn.length - 1))
-    : 0;
+  // Then shrink the whole wall, in proportion, until every piece clears its
+  // column with the house gap still between neighbours.
+  const widest = drawn.reduce((m, d) => Math.max(m, d.w), 0);
+  const room = Math.max(band.minTall, pitch - band.gap);
+  if (widest > room) {
+    const k = room / widest;
+    for (const d of drawn) { d.w *= k; d.h *= k; }
+  }
 
   // Stratified heights: one band per piece, shuffled, so the wall reads as hung
   // by hand rather than stepped or scattered into a heap.
@@ -612,14 +673,16 @@ function layoutWall(stock, seed = '') {
     [bands[i], bands[j]] = [bands[j], bands[i]];
   }
 
-  const out = [];
-  let x = WALL.pad + Math.max(0, (usable - run - gap * (drawn.length - 1)) / 2);
-  drawn.forEach((d, i) => {
-    const room = Math.max(0, WALL.h - d.h - WALL.pad * 2);
-    out.push({ item: d.item, x, y: WALL.pad + room * bands[i], w: d.w, h: d.h });
-    x += d.w + gap;
+  return drawn.map((d, i) => {
+    const drop = Math.max(0, band.h - d.h - band.pad * 2);
+    return {
+      item: d.item,
+      x: band.pad + pitch * i + (pitch - d.w) / 2,
+      y: band.pad + drop * bands[i],
+      w: d.w,
+      h: d.h,
+    };
   });
-  return out;
 }
 
 /** First-fit the pack into the 14x9 grid, in the order it is carried. */
