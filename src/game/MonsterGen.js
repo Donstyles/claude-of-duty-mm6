@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { MONSTER_PLATE_MEAN, monsterPlateUrl } from '../ui/monsterPlates.js';
+import { MONSTERS, MONSTER_FAMILIES } from './data/Monsters.js';
 
 /**
  * Procedural creature construction.
@@ -16,6 +18,119 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  */
 
 const _v = new THREE.Vector3();
+
+/**
+ * Creature hides, one per family, loaded once and shared by every instance.
+ *
+ * For most of this project's life the answer to "what is a monster's surface?"
+ * was `MeshStandardMaterial({ color: pal.primary })` and nothing else — no
+ * `map` at all. Ninety-nine creatures were ninety-nine flat solid colours, and
+ * a dragon and an ooze differed only in silhouette and hue. The two emissive
+ * eyes were doing all the work, which is why the comment beside them says they
+ * are the cheapest way to make a shape read as alive: on a shape with nothing
+ * else on it, they were the only thing that was.
+ *
+ * A hide belongs to the FAMILY rather than the monster because the bestiary
+ * says so — the three tiers of a family are authored as palette swaps of one
+ * silhouette. Thirty-three surfaces cover ninety-nine creatures, and the
+ * palette still tints each tier, so the ladder keeps reading as a ladder.
+ *
+ * Nothing here can stall a boot or throw at any quality tier. The map is
+ * attached in the load callback rather than up front: a `Texture` with no
+ * image behind it makes three warn on the first upload and paints nothing, so
+ * a creature is flat-coloured for the frame or two it takes the PNG to arrive
+ * and is textured from then on. A 404 leaves it flat-coloured for good, which
+ * is exactly what `itemPlateUrl` does for an item sprite that was never drawn.
+ */
+const _hides = new Map();
+let _hideLoader = null;
+
+/**
+ * Bind this family's hide to a material, now or when it lands.
+ *
+ * Returns whether a hide exists to bind at all, because the caller has to
+ * decide whether to correct the palette colour for it before the texture is
+ * anywhere near being loaded.
+ */
+function bindHide(mat, family) {
+  const url = family ? monsterPlateUrl(family) : null;
+  // `TextureLoader` reaches for `document.createElement('img')`. The bestiary
+  // is imported by node-side gates that have no DOM, and a creature is never
+  // built in one — but a guard costs a line and a thrown constructor costs a
+  // gate.
+  if (!url || typeof document === 'undefined') return false;
+
+  let rec = _hides.get(family);
+  if (!rec) {
+    rec = { tex: null, failed: false, waiting: [] };
+    _hides.set(family, rec);
+    _hideLoader ??= new THREE.TextureLoader();
+    _hideLoader.load(url, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;   // it is an albedo, not data
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.anisotropy = 4;
+      rec.tex = tex;
+      for (const m of rec.waiting) { m.map = tex; m.needsUpdate = true; }
+      rec.waiting.length = 0;
+    }, undefined, () => {
+      rec.failed = true;
+      rec.waiting.length = 0;
+    });
+  }
+  if (rec.failed) return false;
+  if (rec.tex) { mat.map = rec.tex; mat.needsUpdate = true; }
+  else rec.waiting.push(mat);
+  return true;
+}
+
+/**
+ * Drop every loaded hide. The cache outlives a `MonsterSystem`, so clearing it
+ * is part of tearing one down or the next world starts with disposed textures.
+ */
+export function disposeHides() {
+  for (const rec of _hides.values()) rec.tex?.dispose?.();
+  _hides.clear();
+}
+
+/**
+ * How far a family's palettes can be lifted before one of them hits white.
+ *
+ * The lift has to be decided for the FAMILY and not for the creature, and this
+ * is the one part of the colour correction that is not obvious. Dividing each
+ * palette by the hide's mean and then clamping that creature on its own
+ * brightest channel gives every pale creature the same answer — white — and
+ * the answer is right for each of them individually and wrong for the ladder.
+ * Measured: it took the Skeleton and the Skeleton Knight, whose palettes are
+ * 0.166 apart in linear RGB, to 0.005 apart. Two rungs of a three-rung ladder
+ * became the same colour, which is precisely what the palette was kept for.
+ *
+ * One headroom for the whole family instead. Every tier is scaled by the same
+ * number, so their ratios to one another survive exactly, and the family as a
+ * whole sits as bright as its brightest member can go. Measured across the
+ * bestiary that is twenty-three of the thirty-three families lifted the full
+ * 2.01× and rendering at exactly the flat colour they had before they had a
+ * surface; the other ten held back to between 0.94 and 0.50 of it, the pale
+ * ones — angels, titans, skeletons — furthest. No tier pair anywhere collapses
+ * and no albedo channel reaches 1, so nothing clips either.
+ */
+const _lift = new Map();
+
+function familyLift(family, mean) {
+  let k = _lift.get(family);
+  if (k !== undefined) return k;
+  const c = new THREE.Color();
+  let peak = 0;
+  for (const id of MONSTER_FAMILIES[family] ?? []) {
+    const hex = MONSTERS[id]?.visual?.palette?.primary;
+    if (hex === undefined) continue;
+    c.setHex(hex);
+    peak = Math.max(peak, c.r / mean[0], c.g / mean[1], c.b / mean[2]);
+  }
+  k = peak > 1 ? 1 / peak : 1;
+  _lift.set(family, k);
+  return k;
+}
 
 /** Build a capsule-ish limb segment between two points. */
 function limb(from, to, r0, r1, seg = 7) {
@@ -199,6 +314,10 @@ const PLANS = {
             boxAt(0.07, 0.035, 0.11, s * 0.11, 0.02, z - 0.02),
           ],
           swing: 'leg', side: (z < 0 ? 1 : -1) * s,
+          // `side` is the gait phase, which for a quadruped is diagonal — so
+          // it cannot also say which end of the animal a leg is on, and a
+          // lunge needs to know. `tag` says that, `xside` says which flank.
+          tag: z < 0 ? 'fore' : 'hind', xside: s,
         });
       }
     }
@@ -275,7 +394,12 @@ const PLANS = {
       const next = V(Math.sin(t * 5.2) * 0.12, y, z);
       const seg = limb(prev, next, 0.10 * (1 - t * 0.55) + 0.03, 0.10 * (1 - (t + 0.1) * 0.55) + 0.03, 7);
       if (i > 6) {
-        parts.push({ name: `coil${i}`, pivot: prev.clone(), geom: [seg], swing: 'coil', side: i % 2 ? 1 : -1 });
+        // `rank` runs 0 at the body toward 1 at the head, so a strike can whip
+        // through the chain instead of rotating it as one stick.
+        parts.push({
+          name: `coil${i}`, pivot: prev.clone(), geom: [seg],
+          swing: 'coil', side: i % 2 ? 1 : -1, rank: (i - 6) / 3,
+        });
       } else body.push(seg);
       prev = next;
     }
@@ -307,6 +431,9 @@ const PLANS = {
             limb(V(kx, 0.46, kz), V(kx * 1.28, 0.02, kz * 1.15), 0.02, 0.012, 5),
           ],
           swing: 'leg', side: (i % 2 ? 1 : -1) * s,
+          // Pair 0 is the frontmost — `kz` runs from -0.29 to +0.16 — and the
+          // front pair is the one that comes off the ground in a strike.
+          tag: `pair${i}`, xside: s,
         });
       }
     }
@@ -341,6 +468,9 @@ const PLANS = {
             0.026, 0.008, 5,
           )],
           swing: 'tendril', side: i % 2 ? 1 : -1,
+          // Which way this tendril hangs, so a dive can lash the leading ones
+          // forward and trail the rest: -1 is behind the creature, +1 ahead.
+          xside: Math.sin(a), rank: -Math.cos(a),
         });
       }
     }
@@ -377,7 +507,7 @@ const PLANS = {
         name: `coil${i}`,
         pivot: V(0, 0.12 + t * 0.72, 0),
         geom: [sphere(0, 0.12 + t * 0.72, 0, r, 10)],
-        swing: 'swirl', side: i % 2 ? 1 : -1,
+        swing: 'swirl', side: i % 2 ? 1 : -1, rank: t,
       });
     }
     body.push(sphere(0, 0.88, 0, 0.10, 10));
@@ -414,7 +544,11 @@ const PLANS = {
     let prev = V(0, backY, 0.42);
     for (let i = 1; i <= 4; i++) {
       const next = V(Math.sin(i * 1.3) * 0.10, backY - i * 0.06, 0.42 + i * 0.22);
-      parts.push({ name: `tail${i}`, pivot: prev.clone(), geom: [limb(prev, next, 0.10 - i * 0.02, 0.085 - i * 0.02, 6)], swing: 'coil', side: i % 2 ? 1 : -1 });
+      parts.push({
+        name: `tail${i}`, pivot: prev.clone(),
+        geom: [limb(prev, next, 0.10 - i * 0.02, 0.085 - i * 0.02, 6)],
+        swing: 'coil', side: i % 2 ? 1 : -1, rank: i / 4,
+      });
       prev = next;
     }
     for (const s of [-1, 1]) {
@@ -437,6 +571,7 @@ const PLANS = {
             boxAt(0.10, 0.04, 0.16, s * 0.20, 0.03, z - 0.03),
           ],
           swing: 'leg', side: (z < 0 ? 1 : -1) * s,
+          tag: z < 0 ? 'fore' : 'hind', xside: s,
         });
       }
     }
@@ -481,7 +616,8 @@ const PLANS = {
  *
  * @param {object} def   entry from data/Monsters.js
  * @param {import('../core/RNG.js').RNG} rng
- * @returns {{ group: THREE.Group, rig: object[], height: number, radius: number }}
+ * @returns {{ group: THREE.Group, root: THREE.Group, body: THREE.Mesh|null,
+ *            plan: string, rig: object[], height: number, radius: number }}
  */
 export function buildMonster(def, rng) {
   const vis = def.visual ?? {};
@@ -510,6 +646,35 @@ export function buildMonster(def, rng) {
     roughness: 0.8, metalness: 0.05, side: THREE.DoubleSide,
   });
 
+  // The hide multiplies into the palette, so the palette has to be corrected
+  // for what the hide's own average already contributes — otherwise the tier
+  // ladder stops being a ladder.
+  //
+  // The shader computes `albedo = color * map`. Left alone, a hide whose mean
+  // linear colour is (0.21, 0.18, 0.12) darkens every creature wearing it by
+  // roughly five times and drags its hue toward the hide's, so the three tiers
+  // of a family converge on one brown instead of separating. Dividing the
+  // palette by the hide's MEASURED per-channel mean makes the product average
+  // out at exactly the flat colour the creature had before it had a surface:
+  // the hide then supplies variation and nothing else, which is the whole
+  // reason `color` is kept rather than replaced.
+  //
+  // The means live in `src/ui/monsterPlates.js` beside the index, measured off
+  // the plates themselves. Guessing them would put this in the same class as
+  // the "1.42× darker" figure STYLE.md §0 spends a page retracting.
+  if (bindHide(skin, def.family)) {
+    const mean = MONSTER_PLATE_MEAN[def.family];
+    if (mean) {
+      const c = skin.color;
+      c.setRGB(c.r / Math.max(mean[0], 0.01), c.g / Math.max(mean[1], 0.01), c.b / Math.max(mean[2], 0.01));
+      // Then one scalar for the whole family, never a per-channel clip: a clip
+      // shifts the hue, and the hue is the palette's whole job. See
+      // `familyLift` for why the scalar belongs to the family rather than to
+      // this creature.
+      c.multiplyScalar(familyLift(def.family, mean));
+    }
+  }
+
   // Kit: clothing, armour and weapons. This is what separates "a green man"
   // from "a goblin" — the silhouette needs a blade and a rag, not more polygons
   // on the body.
@@ -522,13 +687,28 @@ export function buildMonster(def, rng) {
   }
 
   const group = new THREE.Group();
+  /**
+   * Everything the creature is made of hangs off `root`, and `root` hangs off
+   * `group`.
+   *
+   * The extra node is what makes a whole-body move possible at all.
+   * `MonsterSystem._move` owns `group.position` and `group.rotation.y` and
+   * rewrites both from `m.pos` every fixed step, so an animation that lunged
+   * by adding to `group.position` would be erased on the next tick and would
+   * accumulate on any frame the fixed step did not run. `root` is untouched by
+   * the simulation, so a lunge, a rear, a dive or a topple can be written into
+   * it absolutely — no accumulation, no fight over who owns the transform.
+   */
+  const root = new THREE.Group();
+  group.add(root);
 
   // Static body merges to one mesh; each animated part gets its own pivot.
   const bodyGeom = built.body.length ? mergeGeometries(clean(built.body), false) : null;
+  let bodyMesh = null;
   if (bodyGeom) {
-    const mesh = new THREE.Mesh(bodyGeom, skin);
-    mesh.castShadow = true;
-    group.add(mesh);
+    bodyMesh = new THREE.Mesh(bodyGeom, skin);
+    bodyMesh.castShadow = true;
+    root.add(bodyMesh);
   }
 
   const rig = [];
@@ -540,8 +720,14 @@ export function buildMonster(def, rng) {
     const mesh = new THREE.Mesh(geom, part.swing === 'wing' ? trim : skin);
     mesh.position.copy(part.pivot);
     mesh.castShadow = true;
-    group.add(mesh);
-    rig.push({ mesh, swing: part.swing, side: part.side ?? 1, phase: rng.range(0, Math.PI * 2) });
+    root.add(mesh);
+    rig.push({
+      mesh, swing: part.swing, side: part.side ?? 1, phase: rng.range(0, Math.PI * 2),
+      // What this part is within its own plan. `swing` says how it idles;
+      // these say where it sits, which is what a strike needs to know.
+      tag: part.tag ?? null, xside: part.xside ?? 0, rank: part.rank ?? 0,
+      rest: mesh.position.clone(),
+    });
   }
 
   // Eyes — the cheapest, most effective way to make a shape read as alive.
@@ -556,7 +742,10 @@ export function buildMonster(def, rng) {
     for (const s of [-1, 1]) {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), eyeMat);
       eye.position.set(s * 0.038, eyeY, eyeZ);
-      group.add(eye);
+      // On the body, not on the root: a dragon that rears its neck back and
+      // leaves its eyes hanging in the air where its head used to be is worse
+      // than a dragon with no eyes.
+      (bodyMesh ?? root).add(eye);
     }
   }
 
@@ -564,6 +753,9 @@ export function buildMonster(def, rng) {
 
   return {
     group,
+    root,
+    body: bodyMesh,
+    plan: planName,
     rig,
     hover: !!built.hover,
     wobble: !!built.wobble,
@@ -588,22 +780,303 @@ function clean(list) {
 }
 
 /**
+ * Where a creature is inside one blow, as a signed reach.
+ *
+ * -1 is fully wound up, 0 is at guard, +1 is fully extended, and the argument
+ * `u` is how far through the recovery period the creature is: 0 the instant
+ * its last blow landed, 1 the instant the next one lands. `MonsterSystem`
+ * derives `u` from the same `attackCooldown` that decides when damage is
+ * rolled, so the pose and the damage are the same clock rather than two clocks
+ * that happen to run at similar rates.
+ *
+ * The shape matters more than the numbers. Full extension arrives at u = 1,
+ * which is the frame the blow lands — that is what makes the wind-up a
+ * telegraph instead of a decoration. Before it there is a slow draw-back over
+ * WINDUP of the period, and the whole reversal happens inside SNAP. Measured
+ * against the bestiary's own recovery times, which run from 64 frames to 109
+ * and so from 1.07 s to 1.82 s, the draw-back alone is 0.36 s on the fastest
+ * creature in the game and 0.62 s on the slowest — the window in which a
+ * player can see the blow coming and get out of it.
+ *
+ * Interpolating from -1 straight to +1 at the boundary was the first version
+ * and it was wrong: a one-frame reversal is a pop, not a strike. The snap has
+ * to have a duration or the eye reads a teleport.
+ */
+const FOLLOW = 0.25;   // fraction of the period spent recovering from the blow
+const WINDUP = 0.34;   // fraction spent drawing back
+const SNAP = 0.10;     // fraction the reversal itself takes
+/** How much of a recovery a creature needs in hand to telegraph its first blow. */
+export const STRIKE_LEAD = WINDUP + SNAP;
+
+const ease = (x) => x * x * (3 - 2 * x);
+
+function strikeCurve(u) {
+  const t = u - Math.floor(u);
+  if (t < FOLLOW) return 1 - ease(t / FOLLOW);
+  const draw = 1 - STRIKE_LEAD;
+  if (t < draw) return 0;
+  if (t < 1 - SNAP) return -ease((t - draw) / WINDUP);
+  return -1 + 2 * ease((t - (1 - SNAP)) / SNAP);
+}
+
+/**
+ * Blend an attack angle over whatever the idle loop left on this limb.
+ *
+ * A limb that the strike drives has already been given its walking sway a few
+ * lines earlier, and overwriting it means the limb JUMPS the moment the
+ * creature enters the attack state — from wherever the sway had it to the
+ * strike's neutral. On a goblin that is a centimetre and invisible. Measured
+ * on a Titan Lord, whose group is scaled fourteen times up and whose axe
+ * reaches a nominal unit past the shoulder, it is 1.10 m in a single frame.
+ * Crossfading on |a| means the pose leaves the sway exactly as the draw-back
+ * starts and arrives at the strike exactly at full reach.
+ */
+function over(mesh, axis, want, a) {
+  const k = Math.abs(a);
+  mesh.rotation[axis] = mesh.rotation[axis] * (1 - k) + want * k;
+}
+
+/**
+ * What each body plan does with that reach.
+ *
+ * Forty-five of the ninety-nine creatures in this game had no attack animation
+ * at all. The only `state === 'attack'` branch in this file was on parts whose
+ * `swing` is `'arm'`, and arms are produced by exactly three plans — so every
+ * dragon, elemental, floating thing, serpent, quadruped, arachnid, insectoid,
+ * bird and ooze in the bestiary hit the party with no motion whatsoever. The
+ * damage arrived out of a creature standing perfectly still.
+ *
+ * Each function below reads only what the idle loop wrote this same call and
+ * never its own previous output, so `a = 0` is exactly the resting pose and
+ * the whole thing stays a pure function of its arguments — which is what lets
+ * `MonsterSystem` skip a creature for an hour and still have it in the right
+ * pose on the frame the party opens its door.
+ *
+ * Signs, because they are counter-intuitive and got written down wrong twice:
+ * local -Z is forward (`_move` sets `rotation.y = atan2(-dx, -dz)`, and every
+ * head in this file is built at negative Z). A positive `rotation.x` on the
+ * body tips it BACKWARD; a positive `rotation.x` on a limb hanging down from
+ * its pivot swings the far end FORWARD.
+ */
+const ATTACKS = {
+  /** Overhead chop with the weapon arm; the other arm counterweights. */
+  humanoid(built, a) {
+    for (const p of built.rig) {
+      if (p.swing !== 'arm') continue;
+      over(p.mesh, 'x', p.side > 0 ? a * (a >= 0 ? 0.95 : 2.20) : -a * 0.35, a);
+    }
+    built.root.rotation.x = -a * 0.14;
+    built.root.position.z = -a * 0.06;
+  },
+
+  /** Bones do not wind up their spine. A short, stiff, fast jab instead. */
+  skeletal(built, a) {
+    for (const p of built.rig) {
+      if (p.swing !== 'arm') continue;
+      over(p.mesh, 'x', p.side > 0 ? a * (a >= 0 ? 1.25 : 1.30) : -a * 0.20, a);
+    }
+    built.root.position.z = -a * 0.11;
+  },
+
+  /** A beat of the wings on the wind-up lifts it; then it rakes downward. */
+  'winged-humanoid'(built, a) {
+    for (const p of built.rig) {
+      if (p.swing === 'arm') {
+        over(p.mesh, 'x', p.side > 0 ? a * (a >= 0 ? 1.05 : 2.30) : -a * 0.45, a);
+      } else if (p.swing === 'wing') {
+        p.mesh.rotation.z -= p.side * a * 0.50;
+      }
+    }
+    built.root.rotation.x = -a * 0.18;
+    built.root.position.y = Math.max(0, -a) * 0.10;
+    built.root.position.z = -a * 0.09;
+  },
+
+  /** Heavier, wider, and it puts its shoulder into it. */
+  brute(built, a) {
+    for (const p of built.rig) {
+      if (p.swing !== 'arm') continue;
+      over(p.mesh, 'x', p.side > 0 ? a * (a >= 0 ? 1.15 : 2.50) : -a * 0.50, a);
+    }
+    built.root.rotation.x = -a * 0.20;
+    built.root.rotation.y = a * 0.16;      // the torso turns through the swing
+    built.root.position.z = -a * 0.09;
+  },
+
+  /** Both fists together, and its whole weight comes down behind them. */
+  giant(built, a) {
+    for (const p of built.rig) {
+      if (p.swing !== 'arm') continue;
+      over(p.mesh, 'x', a * (a >= 0 ? 1.30 : 2.60), a);
+    }
+    built.root.rotation.x = -a * 0.24;
+    built.root.position.y = -Math.max(0, a) * 0.07;
+    built.root.position.z = -a * 0.08;
+  },
+
+  /** A piston, not a swing: no lean, a stiff arm, and a mechanical recoil. */
+  construct(built, a) {
+    for (const p of built.rig) {
+      if (p.swing !== 'arm') continue;
+      // The off arm braces through the whole blow and comes back to rest at
+      // guard, rather than sitting at a fixed angle whenever the creature
+      // happens to be in the attack state.
+      over(p.mesh, 'x', p.side > 0 ? a * (a >= 0 ? 1.05 : 1.90) : -0.30 * Math.abs(a), a);
+    }
+    built.root.position.z = -a * 0.05;
+    built.root.position.y = -Math.max(0, a) * 0.035;
+  },
+
+  /** Gather on the haunches, then lunge and snap, head first. */
+  quadruped(built, a) {
+    for (const p of built.rig) {
+      over(p.mesh, 'x', p.tag === 'fore' ? a * 0.55 : -a * 0.35, a);
+    }
+    built.root.rotation.x = -a * 0.34;
+    built.root.position.z = -a * 0.30;
+    built.root.position.y = -Math.max(0, -a) * 0.06;
+  },
+
+  /** Front legs up over its head, then everything comes down at once. */
+  arachnid(built, a) {
+    for (const p of built.rig) {
+      if (p.tag === 'pair0' || p.tag === 'pair1') {
+        over(p.mesh, 'z', p.xside * -a * (a >= 0 ? 0.45 : 0.95), a);
+        over(p.mesh, 'x', -a * 0.30, a);
+      } else {
+        over(p.mesh, 'x', a * 0.14, a);    // the back four brace
+      }
+    }
+    built.root.rotation.x = -a * 0.25;
+    built.root.position.z = -a * 0.12;
+    built.root.position.y = Math.max(0, -a) * 0.05;
+  },
+
+  /** Mandibles: the front pair spreads on the draw and scissors shut on the hit. */
+  insectoid(built, a) {
+    for (const p of built.rig) {
+      if (p.tag === 'pair0') {
+        over(p.mesh, 'z', -p.xside * a * 0.55, a);
+        over(p.mesh, 'x', a * 0.35, a);
+      } else {
+        over(p.mesh, 'x', -a * 0.12, a);
+      }
+    }
+    built.root.rotation.x = -a * 0.18;
+    built.root.position.z = -a * 0.22;
+  },
+
+  /** Climb, hang, then stoop. Wings flare open and then sweep hard back. */
+  avian(built, a) {
+    for (const p of built.rig) {
+      if (p.swing === 'wing') {
+        p.mesh.rotation.z -= p.side * a * 0.50;
+        p.mesh.rotation.x -= a * 0.30;
+      } else if (p.swing === 'leg') {
+        over(p.mesh, 'x', a * 0.70, a);    // talons forward into the stoop
+      }
+    }
+    built.root.rotation.x = -a * 0.45;
+    built.root.position.y = -a * 0.14;
+    built.root.position.z = -a * 0.26;
+  },
+
+  /** Draw the S tight, then throw the whole length of it forward. */
+  serpent(built, a) {
+    for (const p of built.rig) {
+      if (p.swing !== 'coil') continue;
+      p.mesh.rotation.y -= a * 0.45 * p.side * (0.4 + p.rank * 0.6);
+      p.mesh.rotation.x = -a * 0.22 * p.rank;
+    }
+    built.root.rotation.x = -a * 0.30;
+    built.root.position.z = -a * 0.42;
+  },
+
+  /** Rise, then stoop with everything trailing behind. */
+  floating(built, a) {
+    for (const p of built.rig) {
+      if (p.swing !== 'tendril') continue;
+      p.mesh.rotation.x += a * 0.55 * (0.5 + p.rank * 0.5);
+      p.mesh.rotation.z += a * 0.25 * p.xside;
+    }
+    built.root.rotation.x = -a * 0.20;
+    built.root.position.y = -a * 0.22;
+    built.root.position.z = -a * 0.24;
+  },
+
+  /** Rear up on the hind legs, wings open, and bring the head down on you. */
+  dragon(built, a) {
+    for (const p of built.rig) {
+      if (p.tag === 'fore') over(p.mesh, 'x', a >= 0 ? -a * 0.35 : -a * 0.65, a);
+      else if (p.tag === 'hind') over(p.mesh, 'x', a * 0.20, a);
+      else if (p.swing === 'wing') p.mesh.rotation.z -= p.side * a * 0.60;
+      else if (p.swing === 'coil') p.mesh.rotation.x = a * 0.28 * (0.3 + p.rank);
+    }
+    built.root.rotation.x = -a * 0.42;
+    built.root.position.y = Math.max(0, -a) * 0.16;
+    built.root.position.z = -Math.max(0, a) * 0.20;
+  },
+
+  /**
+   * It has no parts at all — the whole creature is one merged blob — so the
+   * strike is the blob itself: bunch backward and flatten, then throw the mass
+   * forward. Scaling about the root keeps its base on the floor.
+   */
+  amorphous(built, a) {
+    built.root.scale.set(1 - a * 0.16, 1 + a * 0.22, 1 + a * 0.24);
+    built.root.position.z = -a * 0.22;
+  },
+
+  /** The column gathers and compresses, then throws its top forward. */
+  elemental(built, a) {
+    for (const p of built.rig) {
+      if (p.swing !== 'swirl') continue;
+      p.mesh.rotation.y += -a * 0.9 * p.side;
+      p.mesh.position.z -= a * 0.14 * p.rank;
+      p.mesh.position.y = p.rest.y - a * 0.05 * (1 - p.rank);
+    }
+    built.root.scale.set(1 - a * 0.10, 1 + a * 0.18, 1 + a * 0.16);
+    built.root.position.z = -a * 0.26;
+  },
+};
+
+/**
  * Drive a built rig. Procedural rather than keyframed: gait is a function of
  * actual ground speed, so a creature never moonwalks or skates.
+ *
+ * `swing` is the strike phase described above `strikeCurve`. It defaults to
+ * the middle of the period — at guard — so a caller that does not know about
+ * strike timing gets a creature standing ready rather than one frozen mid-blow.
+ *
+ * `'ranged'` is the same pose at RANGED_REACH of the amplitude. Fifty-three of
+ * the ninety-nine creatures here throw something, and that path had no motion
+ * of its own either — an archer put an arrow through the party while standing
+ * at parade rest. The shape a plan uses to deliver a blow is the shape it uses
+ * to deliver a bolt: a dragon rears to breathe, a serpent lunges to spit, a
+ * shaman brings its staff over and through. Damped, because a throw does not
+ * commit the body the way a swing does, and it has to read as the other thing
+ * at a glance.
  */
-export function animateRig(built, t, speed, state = 'idle') {
+const RANGED_REACH = 0.65;
+
+export function animateRig(built, t, speed, state = 'idle', swing = 0.5) {
   const gait = Math.min(1, speed / 3.5);
   const stride = t * (4.5 + gait * 5.5);
+  const throwing = state === 'ranged';
+  const a = (state === 'attack' || throwing)
+    ? strikeCurve(swing) * (throwing ? RANGED_REACH : 1)
+    : 0;
+
   for (const p of built.rig) {
     const ph = p.phase;
     switch (p.swing) {
       case 'leg':
         p.mesh.rotation.x = Math.sin(stride + (p.side > 0 ? 0 : Math.PI)) * (0.12 + gait * 0.55);
+        p.mesh.rotation.z = 0;
         break;
       case 'arm':
-        p.mesh.rotation.x = state === 'attack'
-          ? -1.3 + Math.sin(t * 14) * 0.5
-          : Math.sin(stride + (p.side > 0 ? Math.PI : 0)) * (0.08 + gait * 0.40);
+        p.mesh.rotation.x = Math.sin(stride + (p.side > 0 ? Math.PI : 0)) * (0.08 + gait * 0.40);
+        p.mesh.rotation.z = 0;
         break;
       case 'wing':
         p.mesh.rotation.z = p.side * (0.25 + Math.sin(t * 5.5 + ph) * 0.55);
@@ -611,6 +1084,7 @@ export function animateRig(built, t, speed, state = 'idle') {
         break;
       case 'coil':
         p.mesh.rotation.y = Math.sin(t * 2.4 + ph) * 0.28 * p.side;
+        p.mesh.rotation.x = 0;
         break;
       case 'tendril':
         p.mesh.rotation.x = Math.sin(t * 2.0 + ph) * 0.34;
@@ -618,16 +1092,169 @@ export function animateRig(built, t, speed, state = 'idle') {
         break;
       case 'swirl':
         p.mesh.rotation.y = t * 1.6 * p.side + ph;
-        p.mesh.position.x = Math.sin(t * 2.2 + ph) * 0.05;
-        p.mesh.position.z = Math.cos(t * 2.2 + ph) * 0.05;
+        p.mesh.position.x = p.rest.x + Math.sin(t * 2.2 + ph) * 0.05;
+        p.mesh.position.z = p.rest.z + Math.cos(t * 2.2 + ph) * 0.05;
+        p.mesh.position.y = p.rest.y;
         break;
       default:
         break;
     }
   }
-  if (built.wobble) {
-    const s = built.group.scale.x;
-    built.group.scale.set(s, s * (1 + Math.sin(t * 3.1) * 0.06), s);
+
+  const root = built.root;
+  if (root) {
+    root.position.set(0, 0, 0);
+    root.rotation.set(0, 0, 0);
+    root.scale.set(1, 1, 1);
+    if (state === 'attack' || throwing) ATTACKS[built.plan]?.(built, a, t);
+    // The wobble multiplies into whatever the strike left, so an ooze that is
+    // mid-surge still breathes. It used to be written onto `group.scale`,
+    // which is the simulation's, and it read its own previous output back as
+    // its base — one dropped frame and the creature kept the squash.
+    if (built.wobble) root.scale.y *= 1 + Math.sin(t * 3.1) * 0.06;
+  }
+}
+
+/**
+ * Fall over.
+ *
+ * `MonsterSystem.kill` has always set `STATE.DEAD` and started a `deathTimer`,
+ * and `update` has always bailed on `!m.alive`, so the rig was never touched
+ * again: a creature died in whatever pose it happened to be standing in and
+ * the corpse was hinged over as one rigid plank by `_cull`. This is driven off
+ * that same `deathTimer` and costs no new state.
+ *
+ * Two beats everywhere, because that is what a body does: the legs go first
+ * and the mass follows. `d` is seconds since the blow that killed it, and
+ * everything here is settled by about 1.2 s — well before `_cull` starts
+ * sinking the corpse at 6 s.
+ */
+export function animateDeath(built, d) {
+  const root = built.root;
+  if (!root) return;
+  const fall = ease(Math.min(1, d / 0.85));          // the topple itself
+  const buckle = ease(Math.min(1, d / 0.30));        // the legs going out
+  const settle = ease(Math.min(1, Math.max(0, d - 0.85) / 0.6));
+
+  root.position.set(0, 0, 0);
+  root.rotation.set(0, 0, 0);
+  root.scale.set(1, 1, 1);
+
+  switch (built.plan) {
+    case 'amorphous':
+      // It does not topple, it stops holding itself together.
+      root.scale.set(1 + fall * 0.45, 1 - fall * 0.72, 1 + fall * 0.45);
+      break;
+
+    case 'floating':
+    case 'elemental': {
+      // Nothing was holding it up. It sags, tips, and goes out.
+      root.rotation.x = fall * 0.5;
+      root.rotation.z = fall * 0.35;
+      root.position.y = -fall * 0.55;
+      root.scale.set(1 + fall * 0.2, 1 - fall * 0.45, 1 + fall * 0.2);
+      for (const p of built.rig) {
+        if (p.swing === 'tendril') { p.mesh.rotation.x = 0; p.mesh.rotation.z = 0; }
+        if (p.swing === 'swirl') {
+          p.mesh.position.set(p.rest.x, p.rest.y - fall * 0.10 * (1 - p.rank), p.rest.z);
+        }
+      }
+      break;
+    }
+
+    case 'serpent':
+      // It uncoils on the way down rather than staying in its S.
+      root.rotation.z = fall * (Math.PI / 2);
+      root.position.y = -fall * 0.06;
+      for (const p of built.rig) {
+        // Absolute, never a running decay: `animateDeath` has to give the same
+        // pose for the same `d` whatever frames it was or was not called on.
+        if (p.swing === 'coil') {
+          p.mesh.rotation.y = Math.sin(p.phase) * 0.28 * p.side * (1 - fall);
+          p.mesh.rotation.x = 0;
+        }
+      }
+      break;
+
+    case 'arachnid':
+    case 'insectoid':
+      // The legs curl in and up under it — the one death pose everybody knows.
+      root.position.y = -buckle * 0.10;
+      root.rotation.x = fall * 0.30;
+      root.rotation.z = fall * 0.22;
+      for (const p of built.rig) {
+        p.mesh.rotation.z = p.xside * buckle * 1.15;
+        p.mesh.rotation.x = -buckle * 0.45;
+      }
+      break;
+
+    case 'quadruped':
+      // Legs splay, then it goes down on its flank. The dip is given back as
+      // the topple takes over, or the corpse ends up half inside the floor:
+      // toppling rotates about the feet, so the body is already coming down.
+      root.position.y = -(buckle - fall * 0.8) * 0.12;
+      root.rotation.z = fall * (Math.PI / 2) * 0.86;
+      root.rotation.x = fall * 0.18;
+      for (const p of built.rig) p.mesh.rotation.x = (p.tag === 'fore' ? 1 : -1) * buckle * 0.5;
+      break;
+
+    case 'avian':
+      // Out of the air, wings open and limp, and it rolls as it lands.
+      root.rotation.x = -fall * 0.9;
+      root.rotation.z = fall * 1.1;
+      root.position.y = -fall * 0.30;
+      for (const p of built.rig) {
+        if (p.swing === 'wing') { p.mesh.rotation.z = p.side * 0.9 * fall; p.mesh.rotation.x = 0; }
+        if (p.swing === 'leg') p.mesh.rotation.x = -fall * 0.6;
+      }
+      break;
+
+    case 'dragon':
+      // Too heavy to fall over. It comes down on its chest, and the neck and
+      // the wings go last.
+      root.rotation.x = -fall * 0.34;
+      root.position.y = -fall * 0.22;
+      root.rotation.z = settle * 0.30;
+      for (const p of built.rig) {
+        if (p.swing === 'wing') { p.mesh.rotation.z = p.side * (0.1 + fall * 0.7); p.mesh.rotation.x = 0; }
+        else if (p.swing === 'coil') p.mesh.rotation.y = Math.sin(p.phase) * 0.28 * p.side * (1 - fall);
+        else p.mesh.rotation.x = (p.tag === 'fore' ? -1 : 1) * buckle * 0.55;
+      }
+      break;
+
+    case 'construct':
+      // A built thing has no knees to give. It goes over in one piece and
+      // rocks once on the way down.
+      root.rotation.x = fall * (Math.PI / 2) - Math.sin(fall * Math.PI) * 0.18;
+      root.position.y = -fall * 0.05;
+      for (const p of built.rig) p.mesh.rotation.x = 0;
+      break;
+
+    default: {
+      // Everything upright and boned: humanoid, skeletal, winged, brute, giant.
+      // Knees first, then the mass, and a lean sideways so a heap of dead
+      // goblins is not a heap of identical hinged planks.
+      const lean = built.rig.length && built.rig[0].phase > Math.PI ? 1 : -1;
+      // The knee dip is given back as the topple takes over. Toppling rotates
+      // about the feet, so it is already bringing the body down; holding the
+      // dip as well leaves the corpse half inside the floor.
+      root.position.y = -(buckle - fall * 0.8) * 0.16;
+      root.rotation.x = fall * (Math.PI / 2) * 0.92;
+      root.rotation.z = lean * fall * 0.34;
+      for (const p of built.rig) {
+        if (p.swing === 'arm') {
+          p.mesh.rotation.x = -buckle * 0.55;
+          p.mesh.rotation.z = p.side * buckle * 0.45;
+        } else if (p.swing === 'leg') {
+          p.mesh.rotation.x = buckle * 0.85;
+          p.mesh.rotation.z = 0;
+        } else if (p.swing === 'wing') {
+          p.mesh.rotation.z = p.side * (0.15 + fall * 0.55);
+          p.mesh.rotation.x = 0;
+        }
+      }
+      break;
+    }
   }
 }
 

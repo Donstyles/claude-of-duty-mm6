@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { System } from '../core/Engine.js';
-import { buildMonster, animateRig } from './MonsterGen.js';
+import { buildMonster, animateRig, animateDeath, disposeHides, STRIKE_LEAD } from './MonsterGen.js';
 import { MONSTERS, MONSTER_FAMILIES } from './data/Monsters.js';
 import { REGION_LIST, TOWNS, townPosition, spawnPool } from './data/Regions.js';
 import { charSkillEffect } from './rules.js';
@@ -94,6 +94,8 @@ const DESPAWN_RADIUS = 520;
 const CAMP_RADIUS = 420;
 /** Nothing hostile plants a camp this close to a town gate. */
 const TOWN_CLEARANCE = 110;
+
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
 export class MonsterSystem extends System {
   static id = 'monsters';
@@ -303,7 +305,15 @@ export class MonsterSystem extends System {
 
     const m = {
       type, def, group,
-      built: { group, rig, wobble: proto.wobble, hover: proto.hover },
+      // `root` is the clone's animation node and the only direct child
+      // `buildMonster` puts under the group; `plan` is what tells `animateRig`
+      // which of the fifteen strikes this creature owns. Both used to be
+      // dropped on the floor here, which is part of why forty-five creatures
+      // had no attack pose: the rig arrived without any idea what it was.
+      built: {
+        group, root: group.children[0], rig,
+        plan: proto.plan, wobble: proto.wobble, hover: proto.hover,
+      },
       hp: def.hp, maxHP: def.hp,
       state: STATE.IDLE,
       pos: new THREE.Vector3(x, y, z),
@@ -629,7 +639,7 @@ export class MonsterSystem extends System {
           m.stateTimer = this.rng.range(1.2, 2.6);
           break;
         }
-        if (dist <= reach) { m.state = STATE.ATTACK; break; }
+        if (dist <= reach) { this._closeToStrike(m); break; }
         // Pack hunters spread out as they close instead of queueing up.
         if (m.behaviour === BEHAVIOUR.PACK && dist < m.aggro && this.rng.chance(0.6 * dt)) {
           m.state = STATE.CIRCLE;
@@ -648,7 +658,10 @@ export class MonsterSystem extends System {
         break;
 
       case STATE.CIRCLE:
-        if (m.stateTimer <= 0 || dist <= reach) { m.state = dist <= reach ? STATE.ATTACK : STATE.CHASE; }
+        if (m.stateTimer <= 0 || dist <= reach) {
+          if (dist <= reach) this._closeToStrike(m);
+          else m.state = STATE.CHASE;
+        }
         break;
 
       case STATE.ATTACK: {
@@ -687,6 +700,71 @@ export class MonsterSystem extends System {
       ctx.events.emit('ui:log', { text: `The ${m.def.name} breaks and runs!`, kind: 'info' });
     }
     if (m.state === STATE.FLEE && m.stateTimer <= 0) m.state = STATE.CHASE;
+  }
+
+  /**
+   * Enter the swing, leaving room for the wind-up to be seen.
+   *
+   * The first blow of a fight used to arrive with no warning at all, and not
+   * because the animation was missing — because of the timing. `attackCooldown`
+   * counts down while the creature closes, so by the time it is in reach the
+   * cooldown is already zero and `_think` rolls damage on the same tick that
+   * the creature enters `ATTACK`. There is no interval in which to telegraph
+   * anything; the pose and the damage are simultaneous by construction.
+   *
+   * So the creature arrives owing itself a wind-up. `STRIKE_LEAD` is the share
+   * of a recovery `MonsterGen` spends drawing back and snapping — the same
+   * constant the curve is built from, imported rather than restated, because a
+   * telegraph that disagrees with the animation is worse than none. Every
+   * subsequent blow in the fight already had this interval: `attackCooldown`
+   * is set to a full `recovery` after each swing, and the wind-up is the last
+   * `STRIKE_LEAD` of it.
+   *
+   * The cost is that a creature's opening blow lands about half a second later
+   * than it used to. That is the point — it is the half second in which the
+   * player can back out of reach.
+   */
+  _closeToStrike(m) {
+    m.state = STATE.ATTACK;
+    m.attackCooldown = Math.max(m.attackCooldown, m.recovery * STRIKE_LEAD);
+  }
+
+  /**
+   * Which pose this creature should be in, and where it is inside it.
+   *
+   * The phase is the fraction of a cooldown elapsed since the last blow: 0 the
+   * instant it struck, 1 the instant it strikes again. It is read straight off
+   * the same cooldown that decides when damage is rolled, so the pose cannot
+   * drift out of step with the blow.
+   *
+   * A creature that is shooting rather than swinging gets the same treatment
+   * off `rangedCooldown` — an archer used to put an arrow through the party
+   * while standing at parade rest, and there are fifty-three creatures in the
+   * bestiary that throw something. There is one honest hole in it, and it is
+   * the first shot of an encounter: `rangedCooldown` starts at zero, so the
+   * opening bolt leaves before there is any cooldown to telegraph inside. The
+   * melee side of that hole is fixed in `_closeToStrike`, which can pre-charge
+   * because closing to reach is a single moment. Coming into bow range is not
+   * a moment — `_fireRanged` is reached from two states and only ever asks
+   * whether the cooldown has expired — so pre-charging it would mean holding
+   * the shot, which is a change to how a fight is paced and not a change to
+   * how it looks. Every shot after the first has a full cooldown to wind up in.
+   *
+   * A cooldown that has already expired reads as guard, not as full extension.
+   * Otherwise a shooter waiting out a turn in turn-based mode would hold the
+   * end of its throw for the whole round.
+   */
+  static poseOf(m, player) {
+    if (m.state === STATE.ATTACK && m.recovery > 0) {
+      return { state: 'attack', swing: 1 - clamp01(m.attackCooldown / m.recovery) };
+    }
+    const r = m.def.ranged;
+    const shooting = m.state === STATE.CHASE || m.state === STATE.KITE || m.state === STATE.CIRCLE;
+    if (r && player && shooting && m.rangedCooldown > 0
+        && m.pos.distanceTo(player.position) <= (r.range ?? 24)) {
+      return { state: 'ranged', swing: 1 - clamp01(m.rangedCooldown / (r.cooldown ?? 3.5)) };
+    }
+    return { state: m.state, swing: 0.5 };
   }
 
   /**
@@ -807,9 +885,12 @@ export class MonsterSystem extends System {
         }
         continue;
       }
-      // Corpses topple, sink, and are removed.
+      // Corpses sink and are removed. The toppling itself moved into
+      // `animateDeath`, which does it on the rig's own root and per body plan:
+      // hinging the whole group over its feet turned a dragon, an ooze and a
+      // hovering spectre into the same falling plank, and it fought `_move`
+      // for ownership of `group.rotation`.
       const t = m.deathTimer ?? 0;
-      m.group.rotation.x = Math.min(Math.PI / 2, t * 3.2);
       if (t > 6) {
         m.group.position.y -= 0.6 * (1 / 60);
       }
@@ -824,17 +905,22 @@ export class MonsterSystem extends System {
     const t = ctx.state.elapsed;
     const cam = ctx.camera.position;
     const den = this._markDen(ctx);
+    const player = ctx.get('player');
     // The camera is at eye height and bobs; the floor test wants the feet.
-    const groundY = ctx.get('player')?.position.y ?? cam.y;
+    const groundY = player?.position.y ?? cam.y;
     for (const m of this.monsters) {
-      if (!m.alive) continue;
-      // Same cut as the AI, for the same reason — and `animateRig` is a pure
-      // function of world time, so a rig that was skipped for an hour is in
+      // Same cut as the AI, for the same reason — and both of these are pure
+      // functions of their clock, so a rig that was skipped for an hour is in
       // the right pose on the frame the party opens its door.
       if (!this._atHand(m, den, groundY)) continue;
       if (m.pos.distanceToSquared(cam) > SIM_RADIUS * SIM_RADIUS) continue;
+      // The dead were skipped here entirely, which is why nothing in this game
+      // had a death animation: `kill` started a `deathTimer` and no code path
+      // ever read it back onto the rig.
+      if (!m.alive) { animateDeath(m.built, m.deathTimer ?? 0); continue; }
       const speed = Math.hypot(m.vel.x, m.vel.z);
-      animateRig(m.built, t + m.hoverPhase, speed, m.state);
+      const pose = MonsterSystem.poseOf(m, player);
+      animateRig(m.built, t + m.hoverPhase, speed, pose.state, pose.swing);
     }
   }
 
@@ -877,6 +963,10 @@ export class MonsterSystem extends System {
       proto.group.traverse((o) => o.geometry?.dispose?.());
       for (const m of proto.materials ?? []) m.dispose();
     }
+    // The hides are cached module-side and shared across every prototype, so
+    // they outlive this system unless it says otherwise — and a second world
+    // built after this one would bind textures that had already been freed.
+    disposeHides();
     this.group?.parent?.remove(this.group);
     this.monsters.length = 0;
     this._prototypes.clear();

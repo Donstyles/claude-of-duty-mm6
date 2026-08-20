@@ -1742,6 +1742,15 @@ class Conversation {
         const line = pool[this._rumourIndex] ?? null;
         if (line) {
           this._rumourIndex += 1;
+          // A tavern rumour is the canonical MM6 auto-note, and this was the
+          // one place in the game that generated the line and then handed it
+          // only to the panel drawing it. `QuestSystem` has had the listener
+          // hung for it — `eventcheck` was reporting it as heard by nobody,
+          // which is the right way round: the door was up and needed knocking
+          // on from here.
+          model.ctx?.events?.emit('dialogue:heard', {
+            group: 'Rumours', text: line, from: s.name, town: s.town,
+          });
           this.text = {
             lines: [line],
             note: `Being said in ${(TOWN_NOTES[s.town] ?? TOWN_NOTES.generic).name} this week.`,

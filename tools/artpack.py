@@ -254,6 +254,123 @@ def _write_item_index(names):
         )
 
 
+
+# ── creature hides ──────────────────────────────────────────────────────────
+#
+# Lifted verbatim from the pass that generated them, which could not edit this
+# file. Two things in it are load-bearing and non-obvious, and both are
+# explained where they are done: a cross-fade at the left and right edges,
+# because `MonsterGen` merges primitives and keeps their own UVs so a cylinder
+# limb wraps u once around its circumference and the plate's two edges meet
+# down the length of every arm in the game; and a per-channel gamma to a fixed
+# linear mean, because the generator returns dark images and the shader
+# computes `albedo = color * map` — uncorrected, the median creature came out
+# at 54% of the flat colour it had before it had a surface and the worst at 4%.
+# A texture that turns the bestiary black is not an improvement on no texture.
+
+MONSTER_SIZE = 256
+MONSTER_BAND = 0.08
+MONSTER_TARGET = 0.50
+
+
+
+def _to_linear(a):
+    return np.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4)
+
+
+def _to_srgb(a):
+    return np.where(a <= 0.0031308, a * 12.92, 1.055 * np.power(np.clip(a, 0, 1), 1 / 2.4) - 0.055)
+
+
+def _seam(a):
+    """Make the left and right edges meet, so a wrapped limb has no line."""
+    h, w, _ = a.shape
+    band = max(2, int(w * MONSTER_BAND))
+    out = a.copy()
+    for i in range(band):
+        t = i / band              # 0 at the edge, 1 at the inside of the band
+        other = 0.5 * (1.0 - t)   # how much of the far edge bleeds in
+        out[:, i] = a[:, i] * (1 - other) + a[:, w - 1 - i] * other
+        out[:, w - 1 - i] = a[:, w - 1 - i] * (1 - other) + a[:, i] * other
+    return out
+
+
+def _level(a, target=MONSTER_TARGET):
+    """Gamma each channel until its mean linear value is `target`."""
+    lin = _to_linear(a / 255.0)
+    for c in range(3):
+        ch = lin[..., c]
+        lo, hi = 0.02, 8.0
+        for _ in range(40):
+            g = 0.5 * (lo + hi)
+            if float(np.mean(ch ** g)) > target:
+                lo = g          # too bright: a larger gamma darkens
+            else:
+                hi = g
+        lin[..., c] = ch ** (0.5 * (lo + hi))
+    return _to_srgb(lin) * 255.0
+
+
+def pack_monsters(root=ROOT, size=MONSTER_SIZE, report=False):
+    out = 0
+    for src in sorted(glob.glob(os.path.join(root, 'monsters', '*.png'))):
+        if src.endswith('.plate.png'):
+            continue
+        im = Image.open(src).convert('RGB').resize((size, size), Image.LANCZOS)
+        a = _level(_seam(np.asarray(im, dtype=np.float32)))
+        if report:
+            lin = _to_linear(np.clip(a, 0, 255) / 255.0)
+            print(f'  {os.path.basename(src)[:-4]:18s} mean {lin.reshape(-1, 3).mean(0).round(3)}'
+                  f'  sd {lin.reshape(-1, 3).std(0).round(3)}')
+        dst = src[:-4] + '.plate.png'
+        Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), 'RGB').save(dst, 'PNG', optimize=True)
+        out += 1
+    return out
+
+
+def _write_monster_index():
+    """Which hides exist, mirroring `_write_item_index`.
+
+    `MonsterGen.bindHide` consults this before asking for a texture, so a
+    family with no plate keeps today's flat colour silently instead of
+    attaching a `Texture` with no image — which makes three warn and paint
+    nothing at all.
+    """
+    repo = os.path.dirname(os.path.dirname(ROOT))
+    dst = os.path.join(repo, 'src', 'ui', 'monsterPlates.js')
+    rows = []
+    for src in sorted(glob.glob(os.path.join(ROOT, 'monsters', '*.plate.png'))):
+        name = os.path.basename(src)[:-10]
+        lin = _to_linear(np.asarray(Image.open(src).convert('RGB'), dtype=np.float32) / 255.0)
+        rows.append((name, lin.reshape(-1, 3).mean(0)))
+    names = '\n'.join(f"  '{n}'," for n, _ in rows)
+    means = '\n'.join(f"  {n}: [{m[0]:.4f}, {m[1]:.4f}, {m[2]:.4f}]," for n, m in rows)
+    with open(dst, 'w') as f:
+        f.write(
+            '/**\n'
+            ' * Which creature hides have been generated, and how bright each one is.\n'
+            ' *\n'
+            ' * Written by tools/artpack.py, not by hand.\n'
+            ' *\n'
+            ' * The mean is measured in LINEAR light, not by averaging sRGB bytes,\n'
+            ' * which would be about twice wrong. `MonsterGen` divides the palette\n'
+            ' * by it so the product averages out at exactly the flat colour the\n'
+            ' * creature had before it had a surface, and the hide contributes only\n'
+            ' * the variation.\n'
+            ' */\n'
+            'export const MONSTER_PLATES = new Set([\n' + names + '\n]);\n\n'
+            "export const MONSTER_PLATE_BASE = 'art/monsters/';\n\n"
+            'export const MONSTER_PLATE_MEAN = {\n' + means + '\n};\n\n'
+            '/** The plate for a family, or null so the caller keeps its flat colour. */\n'
+            'export function monsterPlateUrl(family) {\n'
+            "  return family && MONSTER_PLATES.has(family)\n"
+            "    ? `${MONSTER_PLATE_BASE}${family}.plate.png`\n"
+            '    : null;\n'
+            '}\n'
+        )
+    return len(rows)
+
+
 def _write_interior_index():
     """Which venue interiors exist, and how many variants each kind has.
 
@@ -383,6 +500,8 @@ if __name__ == '__main__':
     t = pack_items()
     i = pack_flat('interiors', 960)
     _write_interior_index()
+    m = pack_monsters()
+    _write_monster_index()
     # The school covers sit in the same folder as the spell plates but are
     # opaque framed paintings rather than matted cut-outs, so they take the
     # flat treatment; pack_spells skips them by prefix for the same reason.
@@ -398,6 +517,7 @@ if __name__ == '__main__':
     # replaces so hard to look at.
     e = pack_flat('emblems', 192)
     print(f'[artpack] {p} portraits, {s} spell plates, {c} school covers, '
-          f'{i} interiors, {f} figures, {t} item sprites, {n} scenes, {e} emblems')
+          f'{i} interiors, {f} figures, {t} item sprites, {n} scenes, {e} emblems, '
+          f'{m} creature hides')
     for name, cover in suspect:
         print(f'  ?  {name}: matte kept {cover:.0%} of the frame - check it')
