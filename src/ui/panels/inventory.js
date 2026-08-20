@@ -2,6 +2,7 @@ import './inventory.css';
 import { Panel, itemFootprint, itemSprite } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, clamp } from '../widgets.js';
 import { getClass } from '../../game/data/Classes.js';
+import { getItem } from '../../game/data/Items.js';
 import { packCase } from '../art/packCase.js';
 
 const GRID_COLS = 14;
@@ -635,7 +636,30 @@ export class InventoryPanel extends Panel {
     if (item.category === 'weapon') {
       return `${titleCase(item.weaponType ?? 'weapon')}, ${item.hands === 2 ? 'two-handed' : 'one-handed'}`;
     }
+    if (item.category === 'artifact') return 'Relic, unique';
     return titleCase(item.category ?? 'item');
+  }
+
+  /**
+   * What a piece gives just by being worn, before any enchantment.
+   *
+   * Rings, amulets and the top rungs of the small slots carry their own stat,
+   * resistance and pool bonuses now, and a tooltip that shows only armour class
+   * would say a Goldsmith's Loop is worth three points and nothing else.
+   */
+  _worth(item) {
+    // Read the catalogue entry, not the copy: a copy has its enchantment folded
+    // in already, and the enchantment says its own piece on the magic line
+    // below. This line is what the piece is worth plain.
+    const base = getItem(item.baseId ?? item.id);
+    if (!base || base.category === 'artifact') return '';
+    const bits = [];
+    for (const [k, v] of Object.entries(base.statBonus ?? {})) bits.push(`${v > 0 ? '+' : ''}${v} ${titleCase(k)}`);
+    if (base.hpBonus) bits.push(`+${base.hpBonus} hit points`);
+    if (base.spBonus) bits.push(`+${base.spBonus} spell points`);
+    for (const [k, v] of Object.entries(base.resistBonus ?? {})) bits.push(`+${v} ${k} resistance`);
+    for (const [k, v] of Object.entries(base.skillBonus ?? {})) bits.push(`+${v} ${titleCase(k.replace(/_/g, ' '))}`);
+    return bits.join(', ');
   }
 
   _tip(item, src) {
@@ -648,7 +672,10 @@ export class InventoryPanel extends Panel {
         lines.push({ k: 'Damage', v: `${d[0]}d${d[1]}${item.damageBonus ? ` +${item.damageBonus}` : ''}` });
         lines.push({ k: 'Speed', v: `${item.recovery ?? 60} frames` });
       }
-      if (item.ac) lines.push({ k: 'Armor Class', v: `+${item.ac}` });
+      const ac = getItem(item.baseId ?? item.id)?.ac ?? item.ac ?? 0;
+      if (ac) lines.push({ k: 'Armor Class', v: `+${ac}` });
+      const worth = this._worth(item);
+      if (worth) lines.push({ k: 'Grants', v: worth });
       if (item.recoveryPenalty) lines.push({ k: 'Recovery', v: `+${item.recoveryPenalty} frames` });
       if (item.charges != null) lines.push({ k: 'Charges', v: `${item.charges} / ${item.maxCharges ?? item.charges}` });
       if (item.effect && item.effect !== 'none') lines.push({ k: 'Effect', v: titleCase(item.effect) });

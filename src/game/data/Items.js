@@ -57,16 +57,32 @@ export const WEAPON_TYPES = deepFreeze({
 const weapons = {};
 function wpn(id, name, type, tier, bonus, value, opts = {}) {
   const t = WEAPON_TYPES[type];
+  const damageType = opts.damageType ?? t.damageType;
   weapons[id] = {
     id, name, category: 'weapon', weaponType: type, skill: t.skill,
     slot: opts.slot ?? t.slot,
     hands: opts.hands ?? t.hands,
     dice: t.dice, damageBonus: bonus,
-    damageType: opts.damageType ?? t.damageType,
+    /**
+     * The rolled spec `CombatSystem` reads straight off `equipment.mainhand`.
+     * It has to live on the record rather than be assembled at swing time,
+     * because a shelf copy is a plain spread of this object and a weapon that
+     * arrives without it silently swings for a barehanded 1d3.
+     *
+     * `bonus` stays nought here on purpose: the flat side of the swing goes
+     * through `damageBonus`, which `rules.damageBonusFor` already adds on top
+     * of the roll. Putting it in both places pays a Great Sword's +9 twice.
+     */
+    damage: { dice: t.dice, bonus: 0, type: damageType },
+    damageType,
     recovery: opts.recovery ?? t.recovery,
     tier, value, weight: opts.weight ?? 4 + tier * 2,
     levelBand: [Math.max(1, tier * 6 - 5), tier * 12],
     enchantable: opts.enchantable !== false,
+    /** Off the treasure tables and off every shelf: a story item, not a find. */
+    droppable: opts.droppable !== false,
+    /** Lowest treasure band that may produce it, whatever its tier says. */
+    minBand: opts.minBand ?? 0,
     desc: opts.desc ?? '',
   };
   return weapons[id];
@@ -76,10 +92,20 @@ const armours = {};
 function arm(id, name, category, skill, ac, tier, value, opts = {}) {
   armours[id] = {
     id, name, category, skill, slot: opts.slot ?? category,
-    ac, tier, value, weight: opts.weight ?? 2 + tier * 3,
+    ac,
+    /** `Character.refresh` sums `acBonus`, not `ac`; carry both. */
+    acBonus: ac,
+    tier, value, weight: opts.weight ?? 2 + tier * 3,
     levelBand: [Math.max(1, tier * 6 - 5), tier * 12],
     recoveryPenalty: opts.recoveryPenalty ?? 0,
     enchantable: opts.enchantable !== false,
+    // Jewellery earns its keep by what it does, not by what it stops: the
+    // three bonus bags below are how a Loop differs from a Band.
+    statBonus: opts.statBonus ? { ...opts.statBonus } : undefined,
+    resistBonus: opts.resistBonus ? { ...opts.resistBonus } : undefined,
+    skillBonus: opts.skillBonus ? { ...opts.skillBonus } : undefined,
+    hpBonus: opts.hp ?? 0,
+    spBonus: opts.sp ?? 0,
     desc: opts.desc ?? '',
   };
   return armours[id];
@@ -130,8 +156,20 @@ wpn('bow_composite', 'Composite Bow', 'bow', 3, 4, 560);
 wpn('bow_elven', 'Elven Bow', 'bow', 4, 6, 1200, { recovery: 50 });
 wpn('bow_great', 'Great Bow', 'bow', 5, 9, 2400, { weight: 12 });
 
-wpn('blaster_blaster', 'Blaster', 'blaster', 6, 0, 6000, { enchantable: false, desc: 'Lifted out of the wreck under the glass. Nothing in Caerwen resists it.' });
-wpn('blaster_rifle', 'Blaster Rifle', 'blaster', 6, 10, 15000, { hands: 2, enchantable: false, desc: 'The long-barrelled version. The wreck held racks of them; six are still working.' });
+// Tier 6: the Emberhold forge-cult's own work, and the only mundane steel that
+// is still an upgrade after level thirty. Without this rung the ladder stopped
+// at tier 5 — reachable around level twenty-five — and the last twenty levels
+// of the campaign had nothing left to find but artifacts.
+wpn('sword_ember', 'Emberhold Greatblade', 'sword', 6, 12, 3600, { hands: 2, weight: 17, recovery: 85, desc: 'Folded over a caldera vent by people who count the folds aloud. It comes out of the quench still warm a day later.' });
+wpn('axe_caldera', 'Caldera Axe', 'axe', 6, 12, 4000, { hands: 2, weight: 19, recovery: 105, desc: 'The forge-cult sells one a year and chooses the buyer.' });
+wpn('spear_wyrmpike', 'Wyrm Pike', 'spear', 6, 11, 3800, { hands: 2, weight: 19, desc: 'Long enough to reach a Malveth wyrm from ground it cannot land on.' });
+wpn('mace_forgehammer', 'Forge Hammer', 'mace', 6, 12, 3400, { hands: 2, weight: 17, recovery: 80, desc: 'A smith\'s hammer that was never meant to leave the anvil, and did.' });
+wpn('dagger_emberfang', 'Emberfang', 'dagger', 6, 8, 2600, { recovery: 42, desc: 'Caldera glass ground to an edge one molecule wide and about as forgiving.' });
+wpn('staff_caldera', 'Caldera Staff', 'staff', 6, 10, 3200, { desc: 'Basalt cored with slow-cooling iron. The Guild of the Ember will not say what for.' });
+wpn('bow_wyrmhorn', 'Wyrmhorn Bow', 'bow', 6, 12, 4200, { weight: 13, recovery: 55, desc: 'Horn, sinew and a great deal of nerve on the part of whoever collected the horn.' });
+
+wpn('blaster_blaster', 'Blaster', 'blaster', 6, 0, 6000, { enchantable: false, droppable: false, desc: 'Lifted out of the wreck under the glass. Nothing in Caerwen resists it.' });
+wpn('blaster_rifle', 'Blaster Rifle', 'blaster', 6, 10, 15000, { hands: 2, enchantable: false, minBand: 6, desc: 'The long-barrelled version. The wreck held racks of them; six are still working.' });
 
 export const WEAPONS = deepFreeze(weapons);
 
@@ -142,12 +180,14 @@ arm('leather_studded', 'Studded Leather', 'armour', 'leather', 5, 2, 190, { reco
 arm('leather_hardened', 'Hardened Leather', 'armour', 'leather', 7, 3, 440, { recoveryPenalty: 7 });
 arm('leather_elven', 'Elven Leather', 'armour', 'leather', 10, 4, 1100, { recoveryPenalty: 4 });
 arm('leather_dragon', 'Dragon Hide', 'armour', 'leather', 14, 5, 2600, { recoveryPenalty: 5, desc: 'Scaled and supple. Malveth hunters swear the seams still smoke in the cold.' });
+arm('leather_wyrmscale', 'Wyrmscale', 'armour', 'leather', 18, 6, 6200, { recoveryPenalty: 6, resistBonus: { fire: 15 }, desc: 'Off a Malveth wyrm that had outlived four hunting parties. It is scaled the whole way round, which is the difficulty.' });
 
 arm('chain_ring', 'Ring Mail', 'armour', 'chain', 6, 1, 120, { recoveryPenalty: 15 });
 arm('chain_chain', 'Chain Mail', 'armour', 'chain', 8, 2, 320, { recoveryPenalty: 18 });
 arm('chain_splint', 'Splint Mail', 'armour', 'chain', 11, 3, 700, { recoveryPenalty: 20 });
 arm('chain_scale', 'Scale Mail', 'armour', 'chain', 13, 4, 1500, { recoveryPenalty: 22 });
 arm('chain_elven', 'Elven Chain', 'armour', 'chain', 17, 5, 3400, { recoveryPenalty: 12 });
+arm('chain_sunder', 'Sundermail', 'armour', 'chain', 21, 6, 7800, { recoveryPenalty: 10, resistBonus: { magic: 12 }, desc: 'Riveted from alloy off the hull. It weighs like linen and turns like plate, and the Concord would very much like it back.' });
 
 arm('plate_plate', 'Plate Mail', 'armour', 'plate', 10, 2, 500, { recoveryPenalty: 35 });
 arm('plate_field', 'Field Plate', 'armour', 'plate', 13, 3, 1100, { recoveryPenalty: 38 });
@@ -160,41 +200,60 @@ arm('shield_small', 'Small Shield', 'shield', 'shield', 4, 2, 130, { slot: 'offh
 arm('shield_kite', 'Kite Shield', 'shield', 'shield', 6, 3, 350, { slot: 'offhand', recoveryPenalty: 12 });
 arm('shield_tower', 'Tower Shield', 'shield', 'shield', 9, 4, 800, { slot: 'offhand', recoveryPenalty: 18 });
 arm('shield_aegis', 'Aegis', 'shield', 'shield', 12, 5, 2000, { slot: 'offhand', recoveryPenalty: 14 });
+arm('shield_bulwark', 'Caldera Bulwark', 'shield', 'shield', 16, 6, 5200, { slot: 'offhand', recoveryPenalty: 16, resistBonus: { fire: 15 } });
 
 arm('helm_leather_cap', 'Leather Cap', 'helm', 'leather', 1, 1, 25);
 arm('helm_coif', 'Chain Coif', 'helm', 'chain', 2, 2, 90);
 arm('helm_helm', 'Helm', 'helm', 'plate', 4, 3, 260);
 arm('helm_great', 'Great Helm', 'helm', 'plate', 6, 4, 620);
 arm('helm_crown', 'Crown', 'helm', null, 8, 5, 1800, { desc: 'Ceremonial, but the goldsmiths of Thornwick build them to stop a mace.' });
+arm('helm_visored', 'Visored Sallet', 'helm', 'plate', 11, 6, 4200, { desc: 'Emberhold\'s answer to a wyrm looking down at you.' });
 
 arm('gauntlets_leather', 'Leather Gloves', 'gauntlets', 'leather', 1, 1, 20);
+arm('gauntlets_ring', 'Ringed Mitts', 'gauntlets', 'chain', 2, 2, 75);
 arm('gauntlets_gauntlets', 'Gauntlets', 'gauntlets', 'chain', 3, 3, 180);
 arm('gauntlets_plate', 'Plate Gauntlets', 'gauntlets', 'plate', 5, 4, 480);
+arm('gauntlets_forge', 'Forge Gauntlets', 'gauntlets', 'plate', 7, 5, 1300, { desc: 'Cut for handling the crucible. They will hold a bar at cherry heat and a blade at any.' });
+arm('gauntlets_caldera', 'Caldera Gauntlets', 'gauntlets', 'plate', 9, 6, 3200);
 
 arm('boots_sandals', 'Sandals', 'boots', null, 1, 1, 10);
 arm('boots_leather', 'Leather Boots', 'boots', 'leather', 2, 2, 70);
 arm('boots_boots', 'Boots', 'boots', 'chain', 4, 3, 220);
 arm('boots_plate', 'Plate Boots', 'boots', 'plate', 6, 4, 540);
+arm('boots_marching', 'Marchwarden\'s Boots', 'boots', 'leather', 8, 5, 1500, { recoveryPenalty: -4, desc: 'Cut for a warden who walked the Saltmarch channels twice a day for thirty years.' });
+arm('boots_greaves', 'Caldera Greaves', 'boots', 'plate', 10, 6, 3400);
 
 arm('belt_leather', 'Leather Belt', 'belt', null, 1, 1, 15);
 arm('belt_studded', 'Studded Belt', 'belt', null, 2, 2, 80);
 arm('belt_plate', 'Plate Belt', 'belt', null, 4, 3, 260);
 arm('belt_girdle', 'Girdle', 'belt', null, 5, 4, 640);
+arm('belt_warbelt', 'War Belt', 'belt', null, 7, 5, 1600, { hp: 15, desc: 'Sword Chapter issue. Six buckles, and a serjeant will make you use all of them.' });
+arm('belt_forgeband', 'Forge Band', 'belt', null, 9, 6, 3600, { hp: 30, statBonus: { might: 8 } });
 
 arm('cloak_cloak', 'Cloak', 'cloak', null, 1, 1, 20);
 arm('cloak_cape', 'Cape', 'cloak', null, 2, 2, 85);
 arm('cloak_fur', 'Fur Cloak', 'cloak', null, 3, 3, 270);
 arm('cloak_ermine', 'Ermine Cloak', 'cloak', null, 5, 4, 700);
+arm('cloak_whalehide', 'Whalehide Mantle', 'cloak', null, 7, 5, 1700, { resistBonus: { water: 15 }, desc: 'Coldwater work, oiled black. Nothing gets through it, including air.' });
+arm('cloak_ashweave', 'Ashweave Cloak', 'cloak', null, 9, 6, 3800, { resistBonus: { fire: 20 }, desc: 'Woven from the fibre that grows on the caldera lip, which does not burn and does not explain itself.' });
 
-arm('amulet_amulet', 'Amulet', 'amulet', null, 0, 1, 50);
-arm('amulet_pendant', 'Pendant', 'amulet', null, 0, 2, 180);
-arm('amulet_talisman', 'Talisman', 'amulet', null, 0, 3, 500);
-arm('amulet_necklace', 'Necklace', 'amulet', null, 0, 4, 1400);
+// Jewellery. These four-rung ladders used to be eight records with an identical
+// stat block — nought armour, nought anything — separated only by price, so a
+// 1400-gold Necklace and a 50-gold Amulet did exactly as much as each other,
+// which is to say nothing at all. A ring is not a lesser breastplate; it is the
+// slot where a party buys something armour cannot give it, so each rung now
+// carries its own small, legible gift on top of whatever it is enchanted with.
+arm('amulet_amulet', 'Copper Charm', 'amulet', null, 0, 1, 50, { sp: 6, desc: 'A pilgrim\'s charm off a Kindled Lamp stall. Worth what the copper is worth, and a little more.' });
+arm('amulet_pendant', 'Lampwright\'s Pendant', 'amulet', null, 0, 2, 180, { hp: 15, resistBonus: { dark: 10 } });
+arm('amulet_talisman', 'Cindric Talisman', 'amulet', null, 0, 3, 500, { sp: 22, resistBonus: { magic: 12 } , desc: 'Imperial work, and the hand that cut the sigils was in a hurry.' });
+arm('amulet_necklace', 'Concord Necklace', 'amulet', null, 0, 4, 1400, { sp: 40, statBonus: { intellect: 8 }, desc: 'Nine links, one per school. The Concord gives them to its own and prices them for everyone else.' });
+arm('amulet_reliquary', 'Reliquary Locket', 'amulet', null, 0, 5, 3600, { sp: 60, hp: 25, resistBonus: { dark: 20 }, desc: 'A thumbnail of bone from a saint the Order will not name, set in glass by a hand that shook.' });
 
-arm('ring_ring', 'Ring', 'ring', null, 0, 1, 40);
-arm('ring_signet', 'Signet Ring', 'ring', null, 0, 2, 160);
-arm('ring_band', 'Band', 'ring', null, 0, 3, 450);
-arm('ring_loop', 'Loop', 'ring', null, 0, 4, 1250);
+arm('ring_ring', 'Iron Ring', 'ring', null, 1, 1, 40, { desc: 'A soldier\'s ring, hammered off a nail. It has turned one knife in its time.' });
+arm('ring_signet', 'Signet Ring', 'ring', null, 1, 2, 160, { statBonus: { personality: 8 }, skillBonus: { merchant: 2 } });
+arm('ring_band', 'Warded Band', 'ring', null, 2, 3, 450, { resistBonus: { magic: 14 }, desc: 'Concord-cut and Concord-numbered. Losing one is a fine; selling one is worse.' });
+arm('ring_loop', 'Goldsmith\'s Loop', 'ring', null, 3, 4, 1250, { statBonus: { luck: 12 }, hp: 20 });
+arm('ring_oathring', 'Oathring', 'ring', null, 4, 5, 3300, { statBonus: { might: 10, endurance: 10 }, desc: 'Sworn on, not worn for show. The Sword Chapter casts one per serjeant and takes it back at the grave.' });
 
 export const ARMOURS = deepFreeze(armours);
 
@@ -612,42 +671,97 @@ export function itemsForLevel(level, categories = null) {
 
 export const TREASURE_TABLES = deepFreeze([
   {
-    id: 'treasure_1', tier: 1, levels: [1, 6], gold: [10, 80],
+    id: 'treasure_1', tier: 1, levels: [1, 6], gold: [10, 80], items: [1, 2],
     weights: { weapon: 22, armour: 18, shield: 6, helm: 6, boots: 5, belt: 4, cloak: 4, gauntlets: 4, amulet: 3, ring: 4, potion: 14, scroll: 8, reagent: 8, gem: 2, wand: 2, misc: 4 },
     itemTiers: [1, 2], enchantChance: 0.10, doubleEnchantChance: 0, artifactChance: 0,
     potionLayers: [1, 2], scrollMaxLevel: 4, gemTiers: [1, 2],
   },
   {
-    id: 'treasure_2', tier: 2, levels: [7, 13], gold: [60, 300],
+    id: 'treasure_2', tier: 2, levels: [7, 13], gold: [60, 300], items: [1, 3],
     weights: { weapon: 22, armour: 18, shield: 6, helm: 6, boots: 5, belt: 4, cloak: 4, gauntlets: 4, amulet: 4, ring: 5, potion: 13, scroll: 8, reagent: 6, gem: 4, wand: 3, misc: 3 },
     itemTiers: [1, 3], enchantChance: 0.22, doubleEnchantChance: 0.03, artifactChance: 0,
     potionLayers: [1, 3], scrollMaxLevel: 6, gemTiers: [1, 3],
   },
   {
-    id: 'treasure_3', tier: 3, levels: [14, 21], gold: [200, 900],
+    id: 'treasure_3', tier: 3, levels: [14, 21], gold: [200, 900], items: [2, 3],
     weights: { weapon: 21, armour: 17, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 4, amulet: 5, ring: 6, potion: 11, scroll: 7, reagent: 4, gem: 5, wand: 4, misc: 2 },
     itemTiers: [2, 4], enchantChance: 0.35, doubleEnchantChance: 0.08, artifactChance: 0.004,
     potionLayers: [2, 3], scrollMaxLevel: 8, gemTiers: [2, 4],
   },
   {
-    id: 'treasure_4', tier: 4, levels: [22, 32], gold: [700, 2500],
+    id: 'treasure_4', tier: 4, levels: [22, 32], gold: [700, 2500], items: [2, 4],
     weights: { weapon: 20, armour: 16, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 5, amulet: 6, ring: 7, potion: 10, scroll: 6, reagent: 3, gem: 6, wand: 4, misc: 2 },
     itemTiers: [3, 5], enchantChance: 0.50, doubleEnchantChance: 0.15, artifactChance: 0.012,
     potionLayers: [2, 4], scrollMaxLevel: 10, gemTiers: [3, 5],
   },
   {
-    id: 'treasure_5', tier: 5, levels: [33, 45], gold: [2000, 7000],
+    id: 'treasure_5', tier: 5, levels: [33, 45], gold: [2000, 7000], items: [2, 4],
     weights: { weapon: 19, armour: 15, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 5, amulet: 7, ring: 8, potion: 9, scroll: 5, reagent: 2, gem: 8, wand: 4, misc: 1 },
     itemTiers: [4, 6], enchantChance: 0.65, doubleEnchantChance: 0.28, artifactChance: 0.025,
     potionLayers: [3, 4], scrollMaxLevel: 11, gemTiers: [3, 5],
   },
   {
-    id: 'treasure_6', tier: 6, levels: [46, 200], gold: [6000, 20000],
+    id: 'treasure_6', tier: 6, levels: [46, 200], gold: [6000, 20000], items: [3, 5],
     weights: { weapon: 18, armour: 14, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 5, amulet: 8, ring: 9, potion: 8, scroll: 4, reagent: 1, gem: 10, wand: 5, misc: 1 },
     itemTiers: [5, 6], enchantChance: 0.80, doubleEnchantChance: 0.40, artifactChance: 0.05,
     potionLayers: [3, 4], scrollMaxLevel: 11, gemTiers: [4, 5],
   },
 ]);
+
+/**
+ * Every id a treasure band may produce in one category, with the band's own
+ * gates applied.
+ *
+ * This is the seam the tables were written for and never had: `weights` above
+ * says a tier-1 chest is 22 parts weapon to 8 parts scroll and 2 parts gem, and
+ * without a per-category pool there was nothing to hang those parts on, so the
+ * roller fell back to one flat draw over `itemsForLevel` — where ninety-nine
+ * scrolls and thirty-six potions outnumber the gear four to one and gems, being
+ * bandless, never appeared at all.
+ *
+ * Cached: a band's pools do not change, and this is called once per drop.
+ */
+const _bandPools = new Map();
+export function tablePool(table, category) {
+  const key = `${table?.id ?? 'none'}:${category}`;
+  const hit = _bandPools.get(key);
+  if (hit) return hit;
+  const [loTier, hiTier] = table?.itemTiers ?? [1, 6];
+  const [loLayer, hiLayer] = table?.potionLayers ?? [1, 4];
+  const [loGem, hiGem] = table?.gemTiers ?? [1, 5];
+  const out = ITEM_IDS.filter((id) => {
+    const it = ITEMS[id];
+    if (it.category !== category) return false;
+    if (it.unique || it.droppable === false) return false;
+    // A handful of things exist but are not found lying about at any depth the
+    // band allows: the wreck's racks are an Ossra Deep find and nothing else.
+    if (it.minBand && (table?.tier ?? 1) < it.minBand) return false;
+    switch (category) {
+      // A bottle of water is not treasure, and neither is a layer-4 elixir at
+      // level three: the ladder is gated by the band exactly as gear is.
+      case 'potion': return it.layer >= loLayer && it.layer <= hiLayer;
+      case 'scroll': return (it.spellLevel ?? 1) <= (table?.scrollMaxLevel ?? 11);
+      case 'gem': return it.tier >= loGem && it.tier <= hiGem;
+      // Reagents ladder on their power boost rather than on a tier field.
+      case 'reagent': return 1 + Math.floor((it.boost ?? 0) / 5) <= hiTier;
+      case 'misc': return true;
+      default: return (it.tier ?? 1) >= loTier && (it.tier ?? 1) <= hiTier;
+    }
+  });
+  _bandPools.set(key, Object.freeze(out));
+  return out;
+}
+
+/** Artifacts a band may turn up, cheapest first so the ladder reads. */
+export function artifactsForTable(table) {
+  // A relic ladder of its own: the cheapest come first, and the eighty-thousand
+  // gold pieces stay in the last band where the campaign puts the party.
+  const cap = 10000 + (table?.tier ?? 1) * 12000;
+  return Object.values(ARTIFACTS)
+    .filter((a) => a.value <= cap)
+    .sort((a, b) => a.value - b.value)
+    .map((a) => a.id);
+}
 
 /** The treasure band covering a level. Always returns a table. */
 export function treasureTableFor(level) {

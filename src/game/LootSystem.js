@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { System } from '../core/Engine.js';
 import {
-  ITEMS, getItem, itemsForLevel, treasureTableFor,
-  enchantmentsFor, enchantedValue, itemDisplayName, PREFIXES, SUFFIXES,
+  getItem, treasureTableFor, tablePool, artifactsForTable,
+  enchantmentsFor, enchantedValue, itemDisplayName,
 } from './data/Items.js';
 import { merchantPrice } from './rules.js';
 
@@ -18,6 +18,32 @@ import { merchantPrice } from './rules.js';
 const PICKUP_RADIUS = 2.2;
 const DROP_LIFETIME = 900;    // seconds before an unclaimed drop despawns
 
+/** Kinds a prefix or a suffix can sit on. Jewellery is the point of jewellery. */
+const ENCHANTABLE = new Set([
+  'weapon', 'armour', 'shield', 'helm', 'gauntlets', 'boots', 'belt', 'cloak',
+  'amulet', 'ring',
+]);
+
+/** One readable line for what an effect bag does, for the pack's tooltip. */
+function describeEffects(f) {
+  const bits = [];
+  if (f.damage) bits.push(`${f.damage > 0 ? '+' : ''}${f.damage} damage`);
+  if (f.attack) bits.push(`${f.attack > 0 ? '+' : ''}${f.attack} attack`);
+  if (f.ac) bits.push(`${f.ac > 0 ? '+' : ''}${f.ac} armour class`);
+  if (f.hp) bits.push(`${f.hp > 0 ? '+' : ''}${f.hp} hit points`);
+  if (f.sp) bits.push(`${f.sp > 0 ? '+' : ''}${f.sp} spell points`);
+  if (f.recovery) bits.push(`${f.recovery > 0 ? '+' : ''}${f.recovery} recovery`);
+  if (f.lifesteal) bits.push(`drains ${Math.round(f.lifesteal * 100)}% of damage dealt`);
+  if (f.bonusDamage) bits.push(`+${f.bonusDamage.amount} ${f.bonusDamage.type} damage`);
+  if (f.slaying) bits.push(`x${f.slaying.multiplier} damage to ${f.slaying.family}s`);
+  if (f.curse) bits.push(String(f.curse).replace(/-/g, ' '));
+  for (const [k, v] of Object.entries(f.stats ?? {})) bits.push(`${v > 0 ? '+' : ''}${v} ${k}`);
+  for (const [k, v] of Object.entries(f.resists ?? {})) bits.push(`${v > 0 ? '+' : ''}${v} ${k} resistance`);
+  for (const [k, v] of Object.entries(f.skills ?? {})) bits.push(`+${v} ${k.replace(/_/g, ' ')}`);
+  for (const c of f.immune ?? []) bits.push(`immune to ${c.replace(/_/g, ' ')}`);
+  return bits.join(', ');
+}
+
 export class LootSystem extends System {
   static id = 'loot';
   static order = 150;
@@ -26,6 +52,8 @@ export class LootSystem extends System {
     super();
     /** @type {object[]} items lying on the ground */
     this.drops = [];
+    /** Artifacts already found. `unique` is only true if something enforces it. */
+    this.claimed = new Set();
     this._group = null;
     this._nextId = 1;
   }
@@ -49,43 +77,80 @@ export class LootSystem extends System {
     const base = getItem(itemId);
     if (!base) return null;
 
+    /**
+     * Start from the catalogue record rather than from a hand-picked list of
+     * fields. The old constructor named eleven of them and dropped the rest,
+     * which is how every weapon in the game came to swing for a barehanded
+     * 1d3: `CombatSystem` reads `equipment.mainhand.damage`, the record carries
+     * `dice` and `damageBonus`, and the translation between them was never
+     * written. The pack's tooltip lost `dice`, `hands`, `weaponType` and the
+     * description the same way. Spreading the record fixes both directions at
+     * once; the block below then derives the few fields the record cannot hold
+     * because they are per-copy rather than per-kind.
+     */
     const item = {
+      ...base,
       uid: this._nextId++,
       baseId: itemId,
-      name: base.name,
-      category: base.category,
-      slot: base.slot ?? null,
-      value: base.value ?? 0,
-      weight: base.weight ?? 1,
       identified: opts.identified ?? true,
       broken: false,
-      charges: base.charges ?? null,
+      value: base.value ?? 0,
+      weight: base.weight ?? 1,
+      slot: base.slot ?? null,
+      // The bonus bags are merged onto, so they must be this copy's own.
+      statBonus: { ...(base.statBonus ?? {}) },
+      resistBonus: { ...(base.resistBonus ?? {}) },
+      skillBonus: { ...(base.skillBonus ?? {}) },
+      hpBonus: base.hpBonus ?? 0,
+      spBonus: base.spBonus ?? 0,
+      acBonus: base.acBonus ?? base.ac ?? 0,
+      attackBonus: base.attackBonus ?? 0,
+      damageBonus: base.damageBonus ?? 0,
       damage: base.damage ? { ...base.damage } : null,
-      acBonus: base.ac ?? 0,
-      recovery: base.recovery ?? null,
-      skill: base.skill ?? null,
-      statBonus: {},
-      resistBonus: {},
-      hpBonus: 0, spBonus: 0, attackBonus: 0, damageBonus: 0,
       prefixId: null, suffixId: null,
+      bonus: '',
       icon: base.icon ?? base.category,
       gridW: base.gridW ?? 1,
       gridH: base.gridH ?? 1,
     };
+    if (base.charges != null) item.maxCharges = base.maxCharges ?? base.charges;
 
-    // Enchantments.
+    // An artifact is a base item plus a fixed effect bag and a fixed cost; it
+    // is never enchanted on top, because the cost is the enchantment.
+    if (base.category === 'artifact') {
+      const under = getItem(base.baseItem);
+      if (under) {
+        for (const k of ['dice', 'weaponType', 'skill', 'hands', 'recovery', 'recoveryPenalty', 'damageType']) {
+          if (under[k] !== undefined) item[k] = under[k];
+        }
+        item.slot = under.slot ?? under.category ?? item.slot;
+        item.damage = under.damage ? { ...under.damage } : null;
+        // A relic's effect bag is what it adds to the piece it was made from,
+        // so the base blade's own edge and the base harness's own plate still
+        // count. Without this a Great Sword reforged into a relic lost its +9.
+        item.damageBonus += under.damageBonus ?? 0;
+        item.acBonus += under.acBonus ?? under.ac ?? 0;
+        item.ac = under.ac ?? 0;
+      }
+      this._fold(item, base.effects ?? {});
+      this._fold(item, base.downside ?? {});
+      // A relic says what it gives and what it takes, in that order, on one
+      // line — the pack's tooltip has nowhere else to put it.
+      item.bonus = [describeEffects(base.effects ?? {}), describeEffects(base.downside ?? {})]
+        .filter(Boolean).join(' — but ');
+      item.identified = opts.identified ?? true;
+      return item;
+    }
+
+    // Enchantments. Jewellery is included on purpose: a ring's whole reason to
+    // exist is the thing hung on it.
     const level = opts.level ?? 1;
-    if (opts.enchant && (base.category === 'weapon' || base.category === 'armour')) {
-      if (rng.chance(0.35)) {
-        const pick = enchantmentsFor(base.category, level, 'suffix');
-        const id = pick?.length ? rng.pick(pick) : null;
-        if (id && SUFFIXES[id]) this._applyEnchant(item, SUFFIXES[id], id, 'suffix');
-      }
-      if (rng.chance(0.18)) {
-        const pick = enchantmentsFor(base.category, level, 'prefix');
-        const id = pick?.length ? rng.pick(pick) : null;
-        if (id && PREFIXES[id]) this._applyEnchant(item, PREFIXES[id], id, 'prefix');
-      }
+    const enchantable = base.enchantable !== false && ENCHANTABLE.has(base.category);
+    if (opts.enchant && enchantable) {
+      const chance = opts.enchantChance ?? 0.35;
+      const both = opts.doubleChance ?? 0.1;
+      if (rng.chance(chance)) this._roll(item, base.category, level, rng, 'suffix');
+      if (rng.chance(chance * both * 4)) this._roll(item, base.category, level, rng, 'prefix');
       item.name = itemDisplayName(itemId, item.prefixId, item.suffixId);
       item.value = enchantedValue(base.value ?? 0, item.prefixId, item.suffixId);
     }
@@ -93,35 +158,109 @@ export class LootSystem extends System {
     return item;
   }
 
-  _applyEnchant(item, ench, id, kind) {
-    if (kind === 'prefix') item.prefixId = id;
-    else item.suffixId = id;
-    for (const [k, v] of Object.entries(ench.statBonus ?? {})) {
-      item.statBonus[k] = (item.statBonus[k] ?? 0) + v;
-    }
-    for (const [k, v] of Object.entries(ench.resistBonus ?? {})) {
-      item.resistBonus[k] = (item.resistBonus[k] ?? 0) + v;
-    }
-    item.hpBonus += ench.hpBonus ?? 0;
-    item.spBonus += ench.spBonus ?? 0;
-    item.acBonus += ench.acBonus ?? 0;
-    item.attackBonus += ench.attackBonus ?? 0;
-    item.damageBonus += ench.damageBonus ?? 0;
+  /** Pick one legal enchantment of a kind and fold it on. */
+  _roll(item, category, level, rng, kind) {
+    // `enchantmentsFor` hands back records, not ids. Indexing the table with a
+    // record yields `undefined`, so the old guard `if (id && SUFFIXES[id])` was
+    // false every single time and not one item in the game was ever enchanted.
+    const pool = enchantmentsFor(category, level, kind);
+    if (!pool.length) return;
+    this._applyEnchant(item, rng.pick(pool), kind);
   }
 
-  /** Roll a treasure haul appropriate to a level. */
+  _applyEnchant(item, ench, kind) {
+    if (!ench) return;
+    if (kind === 'prefix') item.prefixId = ench.id;
+    else item.suffixId = ench.id;
+    this._fold(item, ench.effects ?? {});
+    const note = describeEffects(ench.effects ?? {});
+    item.bonus = [item.bonus, note ? `${ench.name}: ${note}` : ench.name].filter(Boolean).join(' · ');
+  }
+
+  /**
+   * Merge an effect bag onto a copy. The bag's shape is the one `Items.js`
+   * documents — `stats` / `resists` / `skills` plus named flags — and the
+   * fields it lands in are the ones `Character.refresh` actually sums. The old
+   * version read `statBonus`/`hpBonus`/`acBonus` off the enchantment, which no
+   * enchantment has ever carried, so even a fixed pick would have applied zero.
+   */
+  _fold(item, f) {
+    for (const [k, v] of Object.entries(f.stats ?? {})) {
+      item.statBonus[k] = (item.statBonus[k] ?? 0) + v;
+    }
+    for (const [k, v] of Object.entries(f.resists ?? {})) {
+      item.resistBonus[k] = (item.resistBonus[k] ?? 0) + v;
+    }
+    for (const [k, v] of Object.entries(f.skills ?? {})) {
+      item.skillBonus[k] = (item.skillBonus[k] ?? 0) + v;
+    }
+    item.hpBonus += f.hp ?? 0;
+    item.spBonus += f.sp ?? 0;
+    item.acBonus += f.ac ?? 0;
+    item.ac = (item.ac ?? 0) + (f.ac ?? 0);
+    item.attackBonus += f.attack ?? 0;
+    // Flat damage lands in `damageBonus` only — `rules.damageBonusFor` adds it
+    // to whatever `damage.dice` rolled, so writing it into both doubles it.
+    item.damageBonus += f.damage ?? 0;
+    if (f.recovery) item.recovery = Math.max(20, (item.recovery ?? 60) + f.recovery);
+    for (const k of ['lifesteal', 'bonusDamage', 'slaying', 'onHit', 'curse', 'immune',
+      'regenHP', 'regenSP', 'splashRadius', 'splashDamage', 'armourShred',
+      'stunChance', 'tripleChance', 'arrows', 'waterBreathing', 'waterWalk']) {
+      if (f[k] !== undefined) item[k] = f[k];
+    }
+  }
+
+  /**
+   * Roll a treasure haul appropriate to a level.
+   *
+   * This now reads the treasure band it is handed. It did not before: it asked
+   * for `minItems`, `maxItems` and `categories`, none of which any band has,
+   * then drew flat from every item whose level band contained the level. The
+   * measured result was a chest that was 55% potions at level 1 and 57% scrolls
+   * at level 40 — because there are ninety-nine scrolls and thirty-six potions
+   * against thirty-eight weapons — while `weights`, `itemTiers`,
+   * `potionLayers`, `scrollMaxLevel`, `gemTiers`, `enchantChance` and
+   * `artifactChance` sat in the data doing nothing at all, and the forty-seven
+   * bandless records (every gem, every reagent, every artifact) could not be
+   * found by any means in the game.
+   */
   rollTreasure(level, rng = this.rng) {
-    const table = treasureTableFor(level) ?? {};
+    const table = treasureTableFor(level);
     const out = [];
-    const count = rng.int(table.minItems ?? 1, table.maxItems ?? 2);
+    const [lo, hi] = table.items ?? [1, 2];
+    const count = rng.int(lo, hi);
+    const cats = Object.keys(table.weights);
+    const weights = cats.map((c) => table.weights[c]);
+
     for (let i = 0; i < count; i++) {
-      const pool = itemsForLevel(level, table.categories ?? null);
-      if (!pool?.length) continue;
-      const id = rng.pick(pool);
-      const item = this.makeItem(typeof id === 'string' ? id : id.id, rng, { enchant: true, level });
+      if (rng.chance(table.artifactChance ?? 0)) {
+        const art = this._rollArtifact(table, rng);
+        if (art) { out.push(art); continue; }
+      }
+      const pool = tablePool(table, rng.weighted(cats, weights));
+      if (!pool.length) continue;
+      const item = this.makeItem(rng.pick(pool), rng, {
+        enchant: true,
+        level,
+        enchantChance: table.enchantChance ?? 0.1,
+        doubleChance: table.doubleEnchantChance ?? 0,
+      });
       if (item) out.push(item);
     }
     return out;
+  }
+
+  /**
+   * One artifact, and never the same one twice in a campaign — `unique` in the
+   * catalogue has to mean something, and a second Oathkeep would say it does
+   * not. The claimed set is part of the world, so it saves and loads with it.
+   */
+  _rollArtifact(table, rng) {
+    const pool = artifactsForTable(table).filter((id) => !this.claimed.has(id));
+    if (!pool.length) return null;
+    const id = rng.pick(pool);
+    this.claimed.add(id);
+    return this.makeItem(id, rng);
   }
 
   // ── drops ────────────────────────────────────────────────────────────────
@@ -132,7 +271,14 @@ export class LootSystem extends System {
     if (!ctx) return;
     const level = def.level ?? 1;
 
-    const gold = this.rng.int(level * 3, level * 14 + 8);
+    // Purses come off the band the level sits in, so a Duskorn revenant is not
+    // paying out on the same scale as a Millhaven rat. The old formula was a
+    // straight line in level — 3..14 gold per level — which left the tables'
+    // own `gold` range unread and the endgame paying pocket change.
+    const table = treasureTableFor(level);
+    const [glo, ghi] = table.gold ?? [10, 80];
+    const share = (def.treasure ?? 0) > 0 ? 1 : 0.35;
+    const gold = Math.round(this.rng.int(glo, ghi) * share);
     if (gold > 0) this.dropGold(ctx, gold, position);
 
     const tier = def.treasure ?? 0;
@@ -204,7 +350,18 @@ export class LootSystem extends System {
       wand: mk(new THREE.CylinderGeometry(0.025, 0.035, 0.44, 7), 0x6a4a8a, 0.3, 0.4),
       reagent: mk(new THREE.SphereGeometry(0.09, 8, 6), 0x6a8a3a, 0.0, 0.8),
       misc: mk(new THREE.BoxGeometry(0.18, 0.18, 0.18), 0x8a7a5a, 0.1, 0.7),
+      // A relic on the grass has to read as a relic from across a field, so it
+      // gets the one shape and the one glow nothing else in the kit uses.
+      artifact: mk(new THREE.IcosahedronGeometry(0.16), 0xffd27a, 0.9, 0.15),
     };
+    this._kits.shield = this._kits.armour;
+    this._kits.helm = this._kits.armour;
+    this._kits.gauntlets = this._kits.armour;
+    this._kits.boots = this._kits.armour;
+    this._kits.belt = this._kits.armour;
+    this._kits.cloak = this._kits.armour;
+    this._kits.amulet = this._kits.gem;
+    this._kits.ring = this._kits.gem;
   }
 
   // ── inventory ────────────────────────────────────────────────────────────
@@ -306,8 +463,25 @@ export class LootSystem extends System {
     }
   }
 
+  // ── persistence ──────────────────────────────────────────────────────────
+
+  /**
+   * Which relics have already been found. `SaveSystem` picks this up because
+   * the method exists, not because anything names this system; without it a
+   * reload would put every unique artifact back in the pool and the word
+   * "unique" would mean nothing across a session boundary.
+   */
+  toJSON() {
+    return { claimed: [...this.claimed] };
+  }
+
+  fromJSON(state) {
+    this.claimed = new Set(state?.claimed ?? []);
+  }
+
   dispose() {
-    for (const kit of Object.values(this._kits ?? {})) {
+    // Several categories share one kit, so dispose the set, not the map.
+    for (const kit of new Set(Object.values(this._kits ?? {}))) {
       kit.geometry?.dispose();
       kit.material?.dispose();
     }
