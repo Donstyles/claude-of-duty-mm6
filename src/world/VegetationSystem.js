@@ -6,6 +6,7 @@ import { buildTreeLibrary, SPECIES_NAMES, SLOT } from './TreeGen.js';
 import {
   setWind, advanceWind, patchFoliageMaterial, makeImposterMaterial,
 } from './vegetation.shader.js';
+import { regionAt, WORLD_SIZE } from '../game/data/Regions.js';
 
 /**
  * Everything that grows: trees, grass and the wind that moves them.
@@ -251,8 +252,21 @@ export class VegetationSystem extends System {
 
   /* ─────────────────────────── placement ──────────────────────────────── */
 
-  /** Species mix for a site: altitude, biome and the shoreline all steer it. */
-  _siteWeights(h, biome, coastal) {
+  /**
+   * Species mix for a site: altitude, biome, the shoreline and the region.
+   *
+   * The region term is the point of this function. Without it the mix was a
+   * pure function of height and slope, which is exactly the fault the ground
+   * had: twenty authored regions, one forest. Two hundred metres of altitude
+   * separated every tree in the world into "oak below, pine above", and the
+   * Whitemantle grew the same broadleaf as the Millhaven Downs wherever their
+   * relief agreed. `Regions.js` says what grows where; this reads it.
+   *
+   * The terms are multiplicative on top of the altitude rules rather than
+   * replacing them, so a snowfield still turns to pine at height — it just
+   * turns to pine *sooner*, and holds no fruit tree at any height.
+   */
+  _siteWeights(h, biome, coastal, x = 0, z = 0) {
     const w = { oak: 34, pine: 18, birch: 16, dead: 6, palm: 0, fruit: 14 };
     if (coastal || biome === 'sand') {
       w.palm = 46; w.oak = 10; w.birch = 5; w.pine = 2; w.fruit = 4; w.dead = 5;
@@ -261,6 +275,39 @@ export class VegetationSystem extends System {
     if (h > 150) { w.pine = 68; w.dead = 18; w.oak = 4; w.birch = 8; w.fruit = 0; w.palm = 0; }
     if (biome === 'rock') { w.dead += 12; w.fruit = 1; w.palm = 0; }
     if (biome === 'dirt') { w.fruit += 6; w.dead += 3; }
+
+    const m = regionAt(x, z, this._worldSize ?? WORLD_SIZE)?.biomes;
+    if (!m) return w;
+    // Boreal: conifer and birch take over, and no orchard survives a snowline.
+    const snow = m.snow ?? 0;
+    if (snow > 0.05) {
+      w.pine *= 1 + snow * 3.2; w.birch *= 1 + snow * 1.4;
+      w.oak *= Math.max(0.08, 1 - snow * 2.0);
+      w.fruit *= Math.max(0, 1 - snow * 3.0); w.palm = 0;
+    }
+    // Carr: alder and willow country. Standing water kills the crown of half
+    // of what grows in it, so a fen is birch and standing deadwood.
+    const wet = (m.swamp ?? 0) + (m.water ?? 0) * 0.5;
+    if (wet > 0.18) {
+      w.dead *= 1 + wet * 4.5; w.birch *= 1 + wet * 1.8;
+      w.oak *= Math.max(0.2, 1 - wet * 0.9); w.fruit *= Math.max(0, 1 - wet * 1.6);
+    }
+    // Waste: standing deadwood everywhere, and palm only where there is
+    // actually sand. Gating the palm on `arid` instead put date palms down a
+    // basalt shaft, because a region that is 62% rock clears the same bar.
+    const arid = (m.sand ?? 0) + (m.rock ?? 0) * 0.4;
+    if (arid > 0.3) {
+      if ((m.sand ?? 0) > 0.25) w.palm = Math.max(w.palm, 10) * (1 + arid);
+      w.dead *= 1 + arid * 2.2;
+      w.oak *= Math.max(0.05, 1 - arid * 1.3); w.pine *= Math.max(0.05, 1 - arid * 1.2);
+      w.birch *= Math.max(0.05, 1 - arid * 1.5); w.fruit *= Math.max(0, 1 - arid);
+    }
+    // Weald: closed broadleaf canopy, and the orchards that follow it.
+    const forest = m.forest ?? 0;
+    if (forest > 0.24) {
+      w.oak *= 1 + forest * 1.5; w.birch *= 1 + forest * 0.9;
+      w.fruit *= 1 + forest * 0.8; w.dead *= Math.max(0.3, 1 - forest);
+    }
     return w;
   }
 
@@ -339,6 +386,9 @@ export class VegetationSystem extends System {
 
   _plant(ctx, terrain, rng, q) {
     const half = terrain.worldSize / 2 - 70;
+    // The region lookup takes the terrain's own extent, so a world built at a
+    // different scale still resolves the authored normalised bounds.
+    this._worldSize = terrain.worldSize;
 
     const exclusions = [];
     for (const [name, r] of Object.entries(LANDMARK_CLEAR)) {
@@ -371,7 +421,7 @@ export class VegetationSystem extends System {
       const h = terrain.heightAt(x, z);
       const biome = terrain.biomeAt(x, z);
       const coastal = h < 20 && this._nearWater(terrain, x, z, 62);
-      const weights = this._siteWeights(h, biome, coastal);
+      const weights = this._siteWeights(h, biome, coastal, x, z);
       const names = Object.keys(weights);
       const dominant = rng.weighted(names, names.map((n) => weights[n]));
 
@@ -417,7 +467,7 @@ export class VegetationSystem extends System {
       const h = terrain.heightAt(x, z);
       const biome = terrain.biomeAt(x, z);
       const coastal = h < 20 && this._nearWater(terrain, x, z, 62);
-      const w = this._siteWeights(h, biome, coastal);
+      const w = this._siteWeights(h, biome, coastal, x, z);
       const names = Object.keys(w);
       this._addTree(terrain, rng, x, z, rng.weighted(names, names.map((k) => w[k])));
       i++;

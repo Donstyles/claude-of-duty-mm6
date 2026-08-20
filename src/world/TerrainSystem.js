@@ -4,6 +4,7 @@ import { getMaterialLibrary } from '../render/MaterialLibrary.js';
 import {
   generateTerrain, WORLD_SIZE, GRID, CELL, SEA_LEVEL, LANDMARKS, HORIZON_DIRS,
 } from './TerrainGen.js';
+import { regionAt } from '../game/data/Regions.js';
 
 /**
  * The ground.
@@ -294,6 +295,7 @@ export class TerrainSystem extends System {
     const horizon = this._buildHorizonTextures();
     const uniforms = {
       uSplat: { value: splatTex },
+      uRegion: { value: this._buildRegionTexture() },
       uHorizonA: { value: horizon[0] },
       uHorizonB: { value: horizon[1] },
       // Direction *to* the sun, and how much say the shadow test gets. The
@@ -347,6 +349,12 @@ export class TerrainSystem extends System {
         .replace('#include <common>', `#include <common>
           varying vec3 vTerrainWorld;
           uniform sampler2D uSplat;
+          uniform sampler2D uRegion;
+          // Set in <map_fragment>, read in <roughnessmap_fragment>, which
+          // three.js emits later in the same main(). Globals rather than a
+          // varying: both are fragment-local quantities.
+          float gTerrainSnow = 0.0;
+          float gTerrainWet = 0.0;
           uniform sampler2D uHorizonA;
           uniform sampler2D uHorizonB;
           uniform vec3 uSunDir;
@@ -507,6 +515,49 @@ export class TerrainSystem extends System {
           float lip = 4.0 * bw.x * bw.y;
           albedo *= mix(vec3(1.0), vec3(0.84, 0.78, 0.70), lip * 0.42);
 
+          // ── regional character ─────────────────────────────────────────
+          // See _buildRegionTexture. All four terms are zero in the Millhaven
+          // Downs by construction, so nothing below can move a graded frame.
+          vec4 rgn = texture2D(uRegion, splatUv);
+
+          // Peat. Standing water and rotting leaf litter darken ground and
+          // pull it green; it collects on low flat land and never on a face,
+          // which is why the swamp regions read wet and the fen edges do not.
+          float wet = rgn.y
+            * (1.0 - smoothstep(12.0, 52.0, vTerrainWorld.y))
+            * (1.0 - smoothstep(0.14, 0.40, vertical));
+          albedo = mix(albedo, albedo * vec3(0.68, 0.80, 0.62), clamp(wet * 1.5, 0.0, 0.62));
+
+          // Sun-bleached ground: warmer, brighter, and much lower in chroma —
+          // the desert reads pale because its materials have lost colour, not
+          // because a yellow filter was laid over them.
+          float arid = clamp(rgn.z * 1.25, 0.0, 0.7);
+          float aridGrey = dot(albedo, vec3(0.299, 0.587, 0.114));
+          albedo = mix(albedo, mix(albedo, vec3(aridGrey), 0.55) * vec3(1.16, 1.07, 0.90), arid);
+
+          // Verdancy, signed about 0.5. Above the downs the ground reads as a
+          // closed canopy floor — cooler, deeper green. Below it the cover is
+          // failing and stone is showing through: chroma drops and the whole
+          // surface warms toward the rock under it.
+          float verd = rgn.w * 2.0 - 1.0;
+          float bareGrey = dot(albedo, vec3(0.299, 0.587, 0.114));
+          albedo = mix(albedo, albedo * vec3(0.86, 0.97, 0.84), clamp(verd * 1.4, 0.0, 0.5));
+          albedo = mix(albedo,
+            mix(albedo, vec3(bareGrey), 0.34) * vec3(1.06, 1.00, 0.93),
+            clamp(-verd * 1.1, 0.0, 0.55));
+
+          // A real snowline. The share sets the altitude it starts at — a
+          // region with no snow in its mix gets a mask identically zero at
+          // every height, so this term costs the other seventeen regions
+          // nothing. Snow lies on the flat and slides off a face.
+          float snowLo = mix(340.0, 76.0, clamp(rgn.x * 1.7, 0.0, 1.0));
+          float snowMask = clamp(rgn.x * 2.2, 0.0, 1.0)
+            * smoothstep(snowLo, snowLo + 46.0, vTerrainWorld.y)
+            * (1.0 - smoothstep(0.34, 0.66, vertical));
+          albedo = mix(albedo, vec3(0.79, 0.83, 0.90), snowMask * 0.92);
+          gTerrainSnow = snowMask;
+          gTerrainWet = wet;
+
           // diffuseColor is declared further up main(); assign, never redeclare.
           // <color_fragment> runs after this and applies vColor itself, so the
           // macro tint must not be multiplied in here as well.
@@ -519,6 +570,11 @@ export class TerrainSystem extends System {
             + texture2D(uOrm2, uv2).rgb * bw.z
             + texture2D(uOrm3, uv3).rgb * bw.w;
           float roughnessFactor = roughness * clamp(orm.g, 0.06, 1.0);
+          // Wet ground holds a sheen; snow does not. Without this the two
+          // would be colour swaps and nothing more, which is the trap this
+          // whole pass exists to avoid.
+          roughnessFactor = mix(roughnessFactor, 0.42, clamp(gTerrainWet * 1.3, 0.0, 0.55));
+          roughnessFactor = mix(roughnessFactor, 0.93, gTerrainSnow * 0.9);
         `)
         .replace('#include <normal_fragment_maps>', `
           vec3 tn =
@@ -562,6 +618,108 @@ export class TerrainSystem extends System {
       px[i * 4 + 3] = Math.round(s[i * 4 + 3] * 255);
     }
     const tex = new THREE.DataTexture(px, GRID, GRID, THREE.RGBAFormat);
+    tex.needsUpdate = true;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.generateMipmaps = false;
+    return tex;
+  }
+
+  /**
+   * Regional ground character, as one small RGBA texture over the whole world.
+   *
+   * `Regions.js` authors twenty regions with a `biomes` mix apiece and eight
+   * biome names — and until this map existed not one of those numbers reached
+   * the ground. The splat is a pure function of height, slope and one noise
+   * field, so the Duskorn Waste and the Millhaven Downs surfaced from the
+   * *same* rule: identical materials wherever their relief happened to agree.
+   * Twenty regions, one look. `snow` and `swamp` were the worst of it, being
+   * names that no layer, no tint and no shader line anywhere answered to.
+   *
+   * The four channels are the four ways a region departs from the downs:
+   *
+   * | ch | term | drawn from | reads as |
+   * | -- | ---- | ---------- | -------- |
+   * | R | snow | `snow` | a real snowline: white above an altitude the share sets |
+   * | G | wet  | `swamp + water/2` | peat — ground darkens and greens on low flat land |
+   * | B | arid | `sand + rock*0.4` | sun-bleached, warmer, lower in chroma |
+   * | A | verdancy | `forest + grass/2` | **signed**: green above 0.5, bare and stony below |
+   *
+   * Verdancy is the one channel biased about 0.5 rather than clamped at zero,
+   * and it had to be. Clamping every term left three regions — the Cindermoor,
+   * the Duskorn Waste and the downs themselves — reading *identically* neutral,
+   * because a region can only be poorer in cover than the downs, never richer
+   * in nothing. A waste that is 36% rock and 12% forest has a look, and it is
+   * not the look of a green down; the signed channel is what lets it have one.
+   *
+   * **Every term is a difference against `millhaven_downs`, and that is the
+   * whole safety argument.** The downs host the capture viewpoints and every
+   * settled grade measurement in `STYLE.md`; subtracting their own mix makes
+   * all four channels exactly zero there, so this map is an identity transform
+   * on the frames the grade was measured in and cannot move a single one of
+   * them. It only ever adds character to the nineteen regions nobody had ever
+   * photographed.
+   *
+   * Resolution is deliberately coarse — 42 m a texel — and then blurred, so a
+   * region boundary crosses over roughly 200 m of ground. The authored bounds
+   * are a rectangular grid, and at full resolution the world would wear that
+   * grid as visible seams, which is a worse fault than the sameness it cures.
+   */
+  _buildRegionTexture() {
+    const R = 96;
+    const half = WORLD_SIZE / 2;
+    // The neutral. Read off the region rather than written as literals so the
+    // two cannot drift if the downs are ever re-authored.
+    const home = regionAt(-1536, 1536, WORLD_SIZE)?.biomes ?? {};
+    const b0 = (m) => ({
+      snow: m.snow ?? 0,
+      wet: (m.swamp ?? 0) + (m.water ?? 0) * 0.5,
+      arid: (m.sand ?? 0) + (m.rock ?? 0) * 0.4,
+      verd: (m.forest ?? 0) + (m.grass ?? 0) * 0.5,
+    });
+    const ref = b0(home);
+
+    const raw = new Float32Array(R * R * 4);
+    for (let iz = 0; iz < R; iz++) {
+      for (let ix = 0; ix < R; ix++) {
+        const wx = ((ix + 0.5) / R) * WORLD_SIZE - half;
+        const wz = ((iz + 0.5) / R) * WORLD_SIZE - half;
+        // Open ocean falls outside every region; it reads as the neutral.
+        const c = b0(regionAt(wx, wz, WORLD_SIZE)?.biomes ?? home);
+        const i = (iz * R + ix) * 4;
+        raw[i + 0] = Math.max(0, c.snow - ref.snow);
+        raw[i + 1] = Math.max(0, c.wet - ref.wet);
+        raw[i + 2] = Math.max(0, c.arid - ref.arid);
+        raw[i + 3] = 0.5 + Math.max(-0.5, Math.min(0.5, c.verd - ref.verd)) * 0.5;
+      }
+    }
+
+    // Three box passes. Linear filtering alone only softens one texel of the
+    // border; this widens it to the ~200 m the note above asks for.
+    const tmp = new Float32Array(raw.length);
+    const at = (x, y) => (Math.min(R - 1, Math.max(0, y)) * R + Math.min(R - 1, Math.max(0, x))) * 4;
+    for (let pass = 0; pass < 3; pass++) {
+      for (let iz = 0; iz < R; iz++) {
+        for (let ix = 0; ix < R; ix++) {
+          const o = (iz * R + ix) * 4;
+          for (let k = 0; k < 4; k++) {
+            let sum = 0;
+            for (let dz = -1; dz <= 1; dz++) {
+              for (let dx = -1; dx <= 1; dx++) sum += raw[at(ix + dx, iz + dz) + k];
+            }
+            tmp[o + k] = sum / 9;
+          }
+        }
+      }
+      raw.set(tmp);
+    }
+
+    const px = new Uint8Array(R * R * 4);
+    for (let i = 0; i < px.length; i++) px[i] = Math.round(Math.min(1, raw[i]) * 255);
+
+    const tex = new THREE.DataTexture(px, R, R, THREE.RGBAFormat);
     tex.needsUpdate = true;
     tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.minFilter = THREE.LinearFilter;
@@ -871,6 +1029,7 @@ export class TerrainSystem extends System {
     for (const chunk of this.chunks) chunk.geom.dispose();
     for (const tex of this._horizonTex ?? []) tex.dispose();
     this._uniforms?.uSplat?.value?.dispose?.();
+    this._uniforms?.uRegion?.value?.dispose?.();
     this.material?.dispose();
     this.group?.parent?.remove(this.group);
     this.chunks.length = 0;
