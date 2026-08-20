@@ -479,21 +479,27 @@ export class ServicesPanel extends Panel {
     // A keeper asked for the news does not stand there silently: the first
     // thing he has to say is already said by the time the page is drawn.
     if (!this.rumour && !this.model.told(venue).length) {
-      this.rumour = this.model.rumour(venue);
-      this.model.remember(venue, this.rumour);
+      this.rumour = this._ask(venue);
       // The board already shows this line in full, in curly quotes. Repeating
       // it in the strip was the same sentence in two channels at once, which
       // STYLE.md §5 forbids.
     }
     const told = this.model.told(venue);
     const current = this.rumour ?? told[0];
+    // A keeper who has said his piece for the night keeps the option — MM6
+    // never takes an entry off a house menu — but the control goes idle, so
+    // asking again is visibly not going to produce anything new.
+    const spent = !!current?.spent;
 
-    const ask = el('button', { className: 'mm-svc-plaque mm-raised', type: 'button' },
-      el('span', { text: 'And what else?' }));
+    const ask = el('button', {
+      className: `mm-svc-plaque mm-raised${spent ? ' is-idle' : ''}`, type: 'button',
+    }, el('span', { text: 'And what else?' }));
     ask.addEventListener('click', () => {
-      const r = this.model.rumour(venue);
-      this.model.remember(venue, r);
-      this.rumour = r;
+      if (spent) {
+        this.ui.log('The keeper has told the party everything he has tonight.', 'warn');
+        return;
+      }
+      this.rumour = this._ask(venue);
       // Not to the strip: the board below already carries this line in full,
       // in curly quotes, and one sentence never occupies two channels (§5).
       this.refresh();
@@ -571,6 +577,21 @@ export class ServicesPanel extends Panel {
   }
 
   // ── pieces ───────────────────────────────────────────────────────────────
+
+  /**
+   * Ask the keeper for one more piece of news, and file it if it is news.
+   *
+   * A keeper out of gossip answers with a notice rather than a rumour, and
+   * that notice used to be filed with the rest: "Earlier this evening" then
+   * listed *"That is everything worth the telling tonight"* as though it were
+   * something the party had learned. The model flags those, so they are shown
+   * and not remembered.
+   */
+  _ask(venue) {
+    const entry = this.model.rumour(venue);
+    if (!entry.spent) this.model.remember(venue, entry);
+    return entry;
+  }
 
   /** A group header on the near-black plate MM6 uses for exactly this. */
   _head(text) {
@@ -786,7 +807,9 @@ export class ServicesPanel extends Panel {
         this._snapshot();
         purse(860);
         const venue = this.model.resolve({ service: 'tavern', venue: 'town_millhaven_tavern' });
-        for (let i = 0; i < 3; i++) this.model.remember(venue, this.model.rumour(venue));
+        // Through `_ask`, so a keeper who runs dry mid-shot files a short
+        // history rather than three copies of the same notice.
+        for (let i = 0; i < 3; i++) this._ask(venue);
         this.rumour = this.model.told(venue)[0] ?? null;
         this.ui.openPanel('services', { service: 'tavern', venue: venue?.id, page: 'rumours' });
       },

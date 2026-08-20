@@ -263,11 +263,21 @@ export class RestPanel extends Panel {
     };
   }
 
-  /** Hours from now to the next `hour` o'clock, never zero. */
+  /**
+   * Hours from now to the next `hour` o'clock, never zero.
+   *
+   * Reckoned to the minute rather than to the quarter, because this number is
+   * both what the button does *and*, through `_wakeText`, what it says. Rounded
+   * to quarters, any clock inside seven minutes of dawn rounded down to nothing
+   * and fell through to the full day: the button read "6:00 am" and advanced
+   * the calendar by one. Standing exactly on the hour is the only case that
+   * really does mean the next one, a day out.
+   */
   _until(hour) {
     const now = ((this.ctx?.state?.worldTime ?? 0) / 3600) % 24;
     const delta = (hour - now + 24) % 24;
-    return Math.max(0.25, Math.round(delta * 4) / 4 || 24);
+    const minutes = Math.round(delta * 60);
+    return minutes > 0 ? minutes / 60 : 24;
   }
 
   // ── drawing ───────────────────────────────────────────────────────────────
