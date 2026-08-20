@@ -716,6 +716,29 @@ const OPINIONS = Object.freeze({
   ],
 });
 
+/**
+ * What knocking at the wrong hour sounds like.
+ *
+ * The clock was read in exactly one place before this — the corner of the
+ * caption, where it printed the word "evening" and changed nothing — so a
+ * neighbour greeted four armed strangers at two in the morning exactly as they
+ * greeted them at noon. A town that keeps hours is a town, and it costs three
+ * lines to say so.
+ */
+const AFTER_DARK = Object.freeze([
+  'It is the middle of the night. Whatever this is, it had better not keep.',
+  'I have been asleep. You can see that I have been asleep. Be quick.',
+  'Knocking at this hour means a death or a fire. Which is it.',
+  'The shutters are up for a reason and the reason is out there. Get in or go on.',
+]);
+
+/** First light, when a working house is already up and does not thank you for it. */
+const FIRST_LIGHT = Object.freeze([
+  'You are up before the bread is. Say it standing, I have my hands full.',
+  'Early. Well, so am I, and I am not glad about either.',
+  'Nobody knocks at first light with good news. Go on.',
+]);
+
 /** How a closed door sounds. */
 const REFUSALS = Object.freeze([
   'No. Whatever it is, no. Try the next door and they will tell you the same.',
@@ -883,15 +906,25 @@ export class DialogueSystem extends System {
     const town = def.town ?? this._townId();
     const notes = TOWN_NOTES[town] ?? TOWN_NOTES.generic;
     const topics = Array.isArray(def.dialogue?.topics) ? def.dialogue.topics : [];
+    // The room they are standing in.
+    //
+    // This was hardcoded `null`, which sent every named person in the kingdom
+    // to the cottage front room — the Prior in her own temple, the Adept in her
+    // own guild hall, the Marshal in his own muster hall. `Venues.js` names the
+    // keeper of all ninety buildings, so the building is a lookup away.
+    // Matched on the bare name, because the sign over the door and the roster
+    // disagree about titles — `Adept Sella Roon` keeps one building and
+    // `Sella Roon` keeps the roster entry, and they are the same woman.
+    const post = venuesInTown(town).find((v) => v.keeper && bareName(v.keeper) === bareName(def.name)) ?? null;
     return this._finish({
       key,
       source: 'catalogue',
       name: def.name,
       trade: null,
       profession: def.profession ?? 'Townsperson',
-      place: building ?? notes.name,
+      place: building ?? post?.name ?? notes.name,
       town,
-      venueKind: null,
+      venueKind: post?.kind ?? null,
       tier: 2,
       manner: MANNER_IDS[hashSeed(key) % MANNER_IDS.length],
       age: def.look?.age ?? 'adult',
@@ -1465,8 +1498,13 @@ class Conversation {
     if (!this.standing.deals) {
       return { lines: [pick(this.rng, REFUSALS)], note: `${s.name} will not deal with you.`, tone: 'warn' };
     }
-    // A catalogue NPC's own greeting always wins; ours is what fills the gap.
-    const own = s.greeting ? [strip(s.greeting)] : [pick(this.rng, this._manner().greet)];
+    // A catalogue NPC's own greeting always wins; ours is what fills the gap —
+    // except at an hour when nobody in Caerwen wants to be greeting anybody.
+    const hour = this.model.hour();
+    const nightly = hour < 5 ? AFTER_DARK : hour < 7 ? FIRST_LIGHT : null;
+    const own = s.greeting && !nightly ? [strip(s.greeting)]
+      : nightly ? [pick(rngFor(`${s.key}:night:${this.model.day()}`), nightly)]
+        : [pick(this.rng, this._manner().greet)];
     const delivery = this.model.deliveryFor(s);
     if (delivery) {
       const def = errandDef(delivery.key);
@@ -1514,9 +1552,12 @@ class Conversation {
       }
     }
 
-    // A quest the journal is already tracking, when this is its giver.
+    // A quest the journal is already tracking, when this is its giver — unless
+    // one of their own topics is the one that handed it over, in which case
+    // that topic already answers for it and two rows would say the same thing.
     const running = this._runningQuest();
-    if (running) head.push({ id: 'journal', label: running.name, special: true });
+    const ownGives = new Set((s.catalogueTopics ?? []).map((t) => t.gives).filter(Boolean));
+    if (running && !ownGives.has(running.id)) head.push({ id: 'journal', label: running.name, special: true });
 
     for (const t of s.catalogueTopics ?? []) {
       const st = this.model.topicState(t);
@@ -1622,8 +1663,14 @@ class Conversation {
 
       case 'trade': {
         const trade = TRADE_BY_ID[s.trade];
+        // The last resort is still somebody talking about their own work. It
+        // used to be "I do what the town needs doing, and it does not need
+        // much", which is the shrug this file's own header forbids.
         const lines = trade ? [...trade.work]
-          : (KIND_TRADE[s.venueKind] ?? ['I do what the town needs doing, and it does not need much.']);
+          : (KIND_TRADE[s.venueKind] ?? [
+            'Whatever the day brings and the town will pay for. That has covered a great many things and buried a few.',
+            'It is not a trade with a name on it. It is a trade with a roof over it, which is the part that matters.',
+          ]);
         this.text = { lines, note: null, tone: 'plain' };
         return;
       }
@@ -1728,7 +1775,11 @@ class Conversation {
       this.text = { lines: [pick(this.rng, EXHAUSTED)], note: null, tone: 'plain' };
       return;
     }
-    const said = strip(topic.text) || 'They weigh it, and decide it is not yours to hear.';
+    // A catalogue topic with no text is a hole in the roster, and the line that
+    // fills it is still a line somebody says out loud — never a stage direction
+    // about them deciding not to.
+    const said = strip(topic.text)
+      || 'I have said as much about that as I mean to, and you have had the useful half.';
 
     if (topic.service) {
       const opened = model.openService(topic.service);
@@ -1794,11 +1845,16 @@ class Conversation {
     // false are worse than no directions, and this is the one topic on the
     // board whose entire job is to be true.
     return picked.map((v) => {
-      const label = ((VENUE_KINDS[v.kind] ?? {}).label ?? 'a house').toLowerCase();
+      const label = ((VENUE_KINDS[v.kind] ?? {}).label ?? 'house').toLowerCase();
       const street = streetFor(v, s.town);
+      // "The Harbour Office — the harbour office" is what naming a building
+      // after its trade does to a sentence. Say the trade only when the sign
+      // over the door has not already said it.
+      const said = v.name.toLowerCase().includes(label.split(' ').pop());
+      const what = said ? '' : ` — the ${label}`;
       return v.keeper
-        ? `${v.name} is on ${street} — the ${label}. Ask for ${v.keeper} and say who sent you, or do not, it makes no odds.`
-        : `${v.name} is on ${street}. It was the ${label} once. Nobody keeps it now.`;
+        ? `${v.name} is on ${street}${what}. Ask for ${v.keeper}, and do not knock during the dinner hour.`
+        : `${v.name} is on ${street}${what || ', or was'}. Nobody keeps it now.`;
     });
   }
 
@@ -1954,6 +2010,15 @@ class Conversation {
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+
+/** A name with any rank, order or courtesy stripped off the front of it. */
+const TITLE_RE = /^(lord\s+marshal|lord|lady|dame|prior|prioress|sister|brother|father|mother|adept|archivist|magister|warden|factor|master|mistress|serjeant|sergeant|captain|marshal|harbourmaster|driver|smith|goodwife|goodman|widow|old|the)\s+/i;
+
+function bareName(name) {
+  let n = String(name ?? '').trim();
+  for (let i = 0; i < 2 && TITLE_RE.test(n); i++) n = n.replace(TITLE_RE, '');
+  return n.toLowerCase();
+}
 
 /**
  * Which street a building stands on.
