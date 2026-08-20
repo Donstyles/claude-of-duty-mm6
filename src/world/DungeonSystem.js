@@ -2337,12 +2337,19 @@ export class DungeonSystem extends System {
       // Both come off catalogue textures rather than being flat colours: a
       // crust for the lava, a wet mottle under the water. ARCHITECTURE §6.
       //
-      // Cloned with the source's `userData` lifted out from under it, because
-      // `Material.copy` deep-copies that field through `JSON.stringify` and
-      // above the low tier the forge leaves a render target in there — a cycle,
-      // and a throw. It threw on every hazard dungeon in the catalogue at the
-      // quality this actually ships at, and nothing caught it because the
-      // headless tools all boot at `quality=low`.
+      // Cloned with the source's `userData` lifted out from under it. That was
+      // once load-bearing against a throw: the forge parked a render target on
+      // its textures' `userData`, closing a cycle `Material.copy` could not
+      // survive — it deep-copies that field through `JSON.stringify` — and
+      // above the low tier that was every detail material in the catalogue.
+      // The forge holds its targets in a WeakMap now, so this clone is safe
+      // with the lift or without it, as are the two sites that never had one.
+      //
+      // The lift stays for the smaller thing it was always also doing.
+      // `JSON.stringify` of a live uniform block yields a frozen snapshot of
+      // it, and a pool has no use for `mud`'s detail uniforms, nor for a
+      // `forge` descriptor still naming `mud`. Empty is what this material's
+      // `userData` honestly holds.
       const src = this.lib.get(kind === 'lava' ? 'rubble' : 'mud', { repeat: 1.6 });
       const keep = src.userData;
       src.userData = {};
