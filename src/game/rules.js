@@ -212,10 +212,24 @@ export function heldSkill(char, skillId) {
   return { level: s?.level ?? 0, mastery: s?.mastery ?? MASTERY.NORMAL };
 }
 
-/** Resolve one of a character's own skills. */
+/**
+ * Resolve one of a character's own skills, gear and retinue included.
+ *
+ * `bonuses.skills` is the bag `Character.refresh()` sums out of `skillBonus`
+ * and the standing buffs. `spellPower` has always added it for the nine magic
+ * schools; nothing added it anywhere else, so of Drill, of Perception, of
+ * Alchemy, of Meditation and of Identifying reached this far and stopped —
+ * the tooltip said +5 and the number behind it never moved.
+ *
+ * Deliberately not folded into `heldSkill`, which is what guild ranks, spell
+ * requirements and mastery gates ask: a worn ring should sharpen what you can
+ * already do, not buy an Order's rank you would lose again by taking it off.
+ * Zero stays zero for the same reason — a bonus needs a skill to add to.
+ */
 export function charSkillEffect(char, skillId) {
   const { level, mastery } = heldSkill(char, skillId);
-  return resolveSkill(skillId, level, mastery);
+  const gear = level > 0 ? (char?.bonuses?.skills?.[skillId] ?? 0) : 0;
+  return resolveSkill(skillId, level + gear, mastery);
 }
 
 // ── Buffs ───────────────────────────────────────────────────────────────────
@@ -567,6 +581,21 @@ export function trainingCost(level, hallMult = 1) {
 /** Skill points awarded on reaching a level. MM6 gives a flat two. */
 export function skillPointsForLevel(level) {
   return level % 5 === 0 ? 3 : 2;
+}
+
+/**
+ * Skill points to raise a skill from `level` to the next.
+ *
+ * MM6 charges the level you are *at*, not the one you are buying. Erzibeth
+ * with Air at 4 is quoted "Du brauchst 4 Fähigkeitspunkte, um aufzusteigen" —
+ * `reference/mm6/Screenshot 2026-07-09 144812.png`, the skills page with Luft
+ * picked out in red at 4 and four points wanted for 5. We charged `level + 1`,
+ * so a character holding exactly the points the screen would have asked for
+ * was refused, and every skill in the game cost one point more than MM6's over
+ * its whole climb.
+ */
+export function skillPointCost(level) {
+  return Math.max(1, Math.floor(level || 1));
 }
 
 /** Experience actually banked after the Learning skill is applied. */

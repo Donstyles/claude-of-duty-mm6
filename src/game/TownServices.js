@@ -1178,11 +1178,17 @@ export class TownServices {
   /**
    * Push the retinue onto the party.
    *
-   * The stat and armour parts go through the buff list, because `refresh()`
-   * folds those back in by itself and they therefore survive a change of
-   * armour. The rest — attack, skills, spell cost — live on fields `refresh()`
-   * rebuilds from equipment alone, so they are rewritten here and re-applied
-   * after every rest and every hiring, which are the only moments they change.
+   * The stat, armour and skill parts go through the buff list, because
+   * `refresh()` folds those back in by itself and they therefore survive a
+   * change of armour. The rest — attack, spell cost — live on fields
+   * `refresh()` rebuilds from equipment alone, so they are rewritten here and
+   * re-applied after every rest and every hiring, which are the only moments
+   * they change.
+   *
+   * Skills used to be in that second group, written straight onto
+   * `bonuses.skills` — and `refresh()` replaces the whole `bonuses` object, so
+   * the Acolyte's two levels of Spirit lasted exactly until the player changed
+   * a helm and then vanished until the next rest. They ride the buff now.
    */
   _applyRetinue() {
     const bag = this.retinueEffect();
@@ -1193,7 +1199,7 @@ export class TownServices {
       if (this.retinue.length) {
         m.buffs.push({
           spellId: 'retinue', expires: Infinity, power: this.retinue.length,
-          statBonus: bag.stats, acBonus: bag.ac,
+          statBonus: bag.stats, acBonus: bag.ac, skillBonus: bag.skills,
         });
       }
       m.refresh?.();
@@ -1214,7 +1220,15 @@ export class TownServices {
     m.bonuses.attack = (m.bonuses.attack ?? 0) + bag.attack;
     m.bonuses.damage = (m.bonuses.damage ?? 0) + bag.damage;
     m.bonuses.spellCostReduction = bag.spellCostReduction;
-    m.bonuses.skills = { ...bag.skills };
+    // Skills are on the retinue buff and `Character.refresh()` sums them with
+    // whatever the gear carries, so adding them again here would pay the
+    // Acolyte twice. Only a stand-in that cannot refresh — the interface's
+    // view-model party, in a tree with no party system — needs them written.
+    if (typeof m.refresh !== 'function') {
+      const skills = { ...(m.bonuses.skills ?? {}) };
+      for (const [k, v] of Object.entries(bag.skills)) skills[k] = (skills[k] ?? 0) + v;
+      m.bonuses.skills = skills;
+    }
     if (blessing) {
       // Two spellings exist in the tree — `resist` on the character, and
       // `resistances` on the view model the sheet reads. Write both rather

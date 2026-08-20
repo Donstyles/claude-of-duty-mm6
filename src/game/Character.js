@@ -9,7 +9,8 @@ import { EQUIP_SLOTS } from './data/Items.js';
 import {
   hpForLevel, spForLevel, armourClassFor, effectiveStat,
   experienceForLevel, levelForExperience, worstCondition, isIncapacitated,
-  skillPointsForLevel, deathOutcome, hasBuff, ERADICATION_OVERKILL, CONDITIONS,
+  skillPointsForLevel, skillPointCost, deathOutcome, hasBuff, ERADICATION_OVERKILL,
+  CONDITIONS,
 } from './rules.js';
 import { DAMAGE_TYPES } from './data/Skills.js';
 
@@ -57,7 +58,7 @@ export class Character {
     this.resistances = { ...(spec.resistances ?? spec.resists ?? {}) };
 
     /** Aggregate item/spell bonuses, recomputed by refresh(). */
-    this.bonuses = { stats: {}, resist: {}, hp: 0, sp: 0, ac: 0, attack: 0, damage: 0 };
+    this.bonuses = { stats: {}, skills: {}, resist: {}, hp: 0, sp: 0, ac: 0, attack: 0, damage: 0 };
     // Before the first refresh() as well as after it: a character built and
     // handed straight to combat must already answer to all four spellings.
     this._publishResists();
@@ -101,11 +102,11 @@ export class Character {
     return true;
   }
 
-  /** Spend skill points. MM6 charges the new level in points. */
+  /** Spend skill points. MM6 charges the level you hold — `skillPointCost`. */
   trainSkill(id) {
     const s = this.skills[id];
     if (!s) return false;
-    const cost = s.level + 1;
+    const cost = skillPointCost(s.level);
     if (this.skillPoints < cost) return false;
     this.skillPoints -= cost;
     s.level += 1;
@@ -127,13 +128,23 @@ export class Character {
 
   /** Recompute equipment bonuses. Call after any equipment change. */
   refresh() {
-    const b = { stats: {}, resist: {}, hp: 0, sp: 0, ac: 0, attack: 0, damage: 0 };
+    const b = { stats: {}, skills: {}, resist: {}, hp: 0, sp: 0, ac: 0, attack: 0, damage: 0 };
     // One quantity, spelled four ways across the tree. Read both spellings so a
     // shop's `resists` bag and a loot roll's `resistBonus` land in the same
     // place; `_publishResists` then writes that place under every name the rest
     // of the game asks for.
     const takeResist = (bag) => {
       for (const [k, v] of Object.entries(bag ?? {})) b.resist[k] = (b.resist[k] ?? 0) + v;
+    };
+    // Seventeen enchantments carry a skills payload and fourteen of them carry
+    // nothing else — every `of <School> Magic` suffix, of Identifying, of
+    // Alchemy, of Meditation, of Perception, of Drill. `LootSystem._fold`
+    // writes them to `skillBonus` and the pack's tooltip prints them, but this
+    // loop never read the key, so an Amulet of Fire Magic saying "+5 fire" was
+    // a label with nothing behind it: `rules.spellPower` asks every cast for
+    // `bonuses.skills[school]` and got `undefined` for the life of the game.
+    const takeSkills = (bag) => {
+      for (const [k, v] of Object.entries(bag ?? {})) b.skills[k] = (b.skills[k] ?? 0) + v;
     };
     for (const slot of EQUIP_SLOTS) {
       const item = this.equipment[slot];
@@ -143,6 +154,7 @@ export class Character {
       }
       takeResist(item.resistBonus);
       takeResist(item.resists);
+      takeSkills(item.skillBonus);
       b.hp += item.hpBonus ?? 0;
       b.sp += item.spBonus ?? 0;
       b.ac += item.acBonus ?? 0;
@@ -159,6 +171,10 @@ export class Character {
       // did not move and `CombatSystem._hurtParty` never saw a point of it.
       takeResist(buff.resistBonus);
       takeResist(buff.resists);
+      // The retinue rides here too — an Acolyte's two levels of Spirit are a
+      // standing buff, not a worn item, and this is what carries them across a
+      // change of gear now that they are rebuilt rather than written on top.
+      takeSkills(buff.skillBonus);
       b.ac += buff.acBonus ?? 0;
     }
     this.bonuses = b;
