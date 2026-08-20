@@ -39,10 +39,23 @@
  *               sidestep to the left swung the party's weapon, and `Enter`
  *               opened a door AND started turn-based combat. Two entries
  *               claiming one code is invisible to every other gate.
+ *   seam        eleven of round twelve's fourteen findings were one bug: a
+ *               field name that does not match across a seam. `def.damage`
+ *               against a record that spells it `attack.damage`, and every
+ *               monster hits for 1d4. `temple.healCost` against a record that
+ *               spells it `healPerHP`, and every temple charges a flat thirty.
+ *               They fail silently, because the reader has a plausible
+ *               fallback — which is exactly what hides them.
  *
- * The last two run in seconds and were the two cheapest gates available for
- * eight months. They sat in a scratchpad because `import './touch.css'` throws
- * in plain Node — one loader hook, and the whole controller is testable.
+ * Note what `content` and `seam` each do NOT do. `content` checks that ids
+ * RESOLVE: that a quest naming an NPC names one who exists. It never checks
+ * that a FIELD exists, so it was green through all eleven. `seam` is the other
+ * half of that question and cost 0.5 s to add.
+ *
+ * The three cheapest gates here — seam, physics, input — total 1.1 s and were
+ * all available for months. Two sat in a scratchpad because
+ * `import './touch.css'` throws in plain Node. One loader hook, and the
+ * character controller is testable without a browser.
  */
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -57,6 +70,8 @@ const GATES = [
     why: 'every quest, dungeon, NPC and route id resolves, and the campaign completes' },
   { name: 'scope', slow: false, cmd: 'python3', args: ['tools/scopecheck.py', '--gate'],
     why: 'no panel stylesheet can reach another screen (STYLE.md §11)' },
+  { name: 'seam', slow: false, cmd: 'node', args: ['tools/seamcheck.mjs', '--gate'],
+    why: 'every module agrees with the catalogues on what the fields are called' },
   { name: 'physics', slow: false, cmd: 'node',
     args: ['--import', './tools/null-css.register.mjs', 'tools/phystest.mjs'],
     why: 'the player cannot leave the world, and the colliders are not empty' },

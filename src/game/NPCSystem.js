@@ -778,14 +778,40 @@ export class NPCSystem extends System {
       return { ok: true, text: this.rng.pick(RUMOURS) ?? 'Nothing much happens here.' };
     }
 
+    // Healing is priced by `TownServices`, not here.
+    //
+    // This branch used to read `temple.healCost` and `temple.canResurrect`,
+    // and a temple record carries NEITHER — it carries `healPerHP` and a
+    // seventeen-entry `curePrices` table. So `?? 30` did all the work: every
+    // temple in the kingdom charged a flat thirty gold a head regardless of
+    // tier, town, standing or how badly hurt anyone was, and because
+    // `canResurrect` was always undefined, no temple anywhere would raise the
+    // dead — including the one whose own price list quotes 300 gold to do it.
+    //
+    // The right pricing already existed one file away and had done all along.
+    // Routing through it also picks up holy-day refusals, the standing
+    // discount and the per-condition bill, none of which this branch knew
+    // about. The fallback keeps the door working headless, and uses the fields
+    // the record actually has.
     if (topicId === 'heal') {
-      const temple = TEMPLES[npc.defId] ?? { healCost: 30 };
+      const temple = TEMPLES[npc.defId] ?? null;
+      const venue = temple ?? { town: npc.town, tier: 1 };
       const hurt = party.members.filter((m) => m.hp < m.maxHP || m.conditions.length);
       if (!hurt.length) return { ok: true, text: 'You are all in good health.' };
-      const cost = (temple.healCost ?? 30) * hurt.length;
+
+      const services = ctx.get('services')?.model ?? ctx.get('townServices') ?? null;
+      if (services?.healParty) {
+        const result = services.healParty(venue);
+        if (result?.text) return { ok: result.ok !== false, text: result.text };
+      }
+
+      const perHP = temple?.healPerHP ?? 0.8;
+      const cure = (m) => (m.conditions ?? [])
+        .reduce((sum, c) => sum + (temple?.curePrices?.[c.id ?? c] ?? 20), 0);
+      const cost = Math.max(1, Math.round(hurt
+        .reduce((sum, m) => sum + (m.maxHP - m.hp) * perHP + cure(m), 0)));
       if (!party.spendGold(cost)) return { ok: false, text: `That would be ${cost} gold.` };
       for (const m of party.members) {
-        if (m.isDead && !temple.canResurrect) continue;
         m.clearConditions();
         m.hp = m.maxHP;
         m.sp = m.maxSP;
@@ -795,7 +821,11 @@ export class NPCSystem extends System {
     }
 
     if (topicId === 'train') {
-      const hall = TRAINING_HALLS[npc.defId] ?? { maxLevel: 100, costMult: 1 };
+      // `priceMult`, not `costMult` — see the note on healing above. The old
+      // name is on no hall record in the game, so every yard in the kingdom
+      // charged the same multiplier of 1 and the authored price ladder from
+      // Millhaven's cheap drill yard to the Ice Yard's did nothing.
+      const hall = TRAINING_HALLS[npc.defId] ?? { maxLevel: 100, priceMult: 1 };
       const char = party.active;
       if (!char) return { ok: false, text: '' };
       if (char.level >= (hall.maxLevel ?? 100)) {
@@ -804,7 +834,7 @@ export class NPCSystem extends System {
       if (char.experience < experienceForLevel(char.level + 1)) {
         return { ok: false, text: 'You are not ready. Go and earn it.' };
       }
-      const cost = trainingCost(char.level + 1, hall.costMult ?? 1);
+      const cost = trainingCost(char.level + 1, hall.priceMult ?? 1);
       if (!party.spendGold(cost)) return { ok: false, text: `Training costs ${cost} gold.` };
       char.levelUp();
       ctx.events.emit('party:levelUp', { index: party.activeIndex, level: char.level });
