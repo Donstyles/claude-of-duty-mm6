@@ -56,12 +56,13 @@ const MAGIC_IDS = new Set(MAGIC_SCHOOL_IDS ?? []);
 const PACK_STACK = 466.7;
 
 /**
- * As large as a mouse-driven window is ever allowed to force the frame. Above
- * 442 px of window `height/480` is bigger anyway, so this only shapes the band
- * between the backpack's ceiling and that crossover — its job is to keep `u`
- * monotonic in height, not to be a target.
+ * As large as a mouse-driven window is ever allowed to force the frame.
+ *
+ * Still 0.9, and the measurement that was supposed to raise it is why. See
+ * `_applyScale`: the backpack has stopped being the binding screen, but two
+ * others now sit below it and 0.9050 is where the first of them gives out.
  */
-const UI_SCALE_FLOOR = 0.92;
+const UI_SCALE_FLOOR = 0.9;
 
 /**
  * What a timed potion is a quantity *of* — the potion table's answer to the
@@ -306,42 +307,48 @@ export class UISystem extends System {
    * character sheet is drawn for. A floor cannot help a device; it can only
    * push the frame off it.
    *
-   * ── the floor is not a constant, because the backpack is the ceiling ──────
+   * ── the ceiling moved, and it did not move to where it was expected ───────
    *
-   * This comment used to say the floor could not be raised at all, and quoted
-   * 0.9006 as the ceiling — six ten-thousandths above the flat 0.9. That was
-   * true when it was written and is not true now: the number came entirely
-   * from the backpack's `Arrange` control clearing the oval row beneath it by
-   * 0.30 px, and `inventory.css` has since lifted `.mm-inv-strip` from 304u to
-   * 296u and trimmed it from 13u to 12u. Re-swept on the shipped build at
-   * 932 × 430 in steps of 0.0002:
+   * This comment used to quote 0.9006 as the ceiling of the whole interface,
+   * off the backpack's `Arrange` control clearing the oval row beneath it by
+   * 0.30 px at u = 0.9. `inventory.css` has since lifted `.mm-inv-strip` from
+   * 304u to 296u and trimmed it 13u → 12u, so that number is stale. Re-swept
+   * on the shipped build at 932 × 430 in steps of 0.0002:
    *
-   *   | `--u`  | gap under `Arrange` |
-   *   | ------ | ------------------- |
-   *   | 0.8958 |  12.14 px           |
-   *   | 0.9000 |  10.17 px  (was 0.30) |
-   *   | 0.9186 |   1.47 px           |
-   *   | 0.9218 |   0.02 px — the ceiling |
-   *   | 0.9220 |  −0.09 px — collides |
+   *   | `--u`  | `Arrange` → ovals | `.mm-opt-choice` → `.mm-cell` | `.mm-sv` → plaque |
+   *   | ------ | ----------------- | ----------------------------- | ----------------- |
+   *   | 0.9000 | 10.17 px (was 0.30) | 2.05 px                     | 5.42 px           |
+   *   | 0.9050 |  7.83 px          | **0.00 px — gives out**       | 3.11 px           |
+   *   | 0.9114 |  4.85 px          | −2.85 px                      | **0.00 px**       |
+   *   | 0.9218 |  **0.02 px**      | −7.48 px                      | −4.63 px          |
    *
-   * The sweep is a straight line, and the line is the whole rule: the gap is
-   * `height − 466.7·u`. Under the strip sit 307.5u of control and 31.2u of
-   * oval; over the panel body sits the 128u bar. Nothing else in the suite
-   * binds before that sum does.
+   * So the ten native pixels freed in the pack are real and the backpack's own
+   * ceiling did go 0.9006 → 0.9218 — but the backpack is no longer what binds.
+   * The options screen is, at **0.9050**, where a choice row runs into the
+   * party portrait beneath it; the save list follows at 0.9114. Both were
+   * hidden behind the backpack the whole time, which is what happens when a
+   * ceiling is measured on one screen: the number you get is that screen's,
+   * not the interface's. Raising the floor to 0.905 is worth 0.56 %, not the
+   * ~2 % the backpack alone promised, and it is not worth spending the last
+   * pixel of two other screens on. The floor stays at 0.9 until `options.css`
+   * and `menu.css` are given the air `inventory.css` just took.
    *
-   * So the floor becomes what the glass can hold rather than a constant —
-   * `min(0.92, (height − 1)/466.7)`. The −1 buys a pixel of clearance so a
-   * font metric or a device-pixel rounding cannot push the control through the
-   * oval; the 0.92 cap keeps `u` monotonic in height, since `height/480`
-   * overtakes it at 442 px and a shorter window must never draw *larger* than
-   * a taller one.
+   * ── what the sweep did turn up: the flat floor was broken short of 420 px ─
    *
-   * Two things come of it. On the 932 × 430 target `u` goes 0.9 → 0.9186, so
-   * every touch target and every glyph in the game is 2.07 % bigger. And the
-   * old flat floor turns out to have been broken below 420 px of window —
-   * `Arrange` sat 19.8 px through the oval row at a 400 px-tall desktop window
-   * and 20 px through it at 360 — where the clamp now keeps 1.4 px of air at
-   * every height it applies to.
+   * The gap under `Arrange` is a straight line in `u` — `height − 466.7·u`,
+   * residual 0.02 px across the sweep, being 128u of bar, 307.5u of strip and
+   * control, and 31.2u of oval row sharing `height`. A *constant* floor takes
+   * no notice of that, so on a mouse it forced 0.9 onto windows with nowhere
+   * to put it: `Arrange` sat **19.8 px through** the oval row at a 400 px-tall
+   * window and 79.8 px through it at 340. Nobody found it because nobody drags
+   * a window that short — but the floor exists precisely for people who do.
+   *
+   * So the floor is clamped by what the glass can hold rather than applied
+   * flat: `min(0.9, (height − 1)/466.7)`. The −1 leaves a pixel against font
+   * metrics and device-pixel rounding. Above 421 px of window this is exactly
+   * the old behaviour and every screen is byte-identical; below it, the clamp
+   * keeps 1.2 px of air at every height instead of driving the control through
+   * the row.
    */
   _applyScale(width, height) {
     if (!this.root) return;
@@ -1113,8 +1120,11 @@ export class UISystem extends System {
 
     if (effect === 'harden-item') {
       // "One bottle, one item, no second chances" — so it wants something worn
-      // to land on, and a broken piece before an intact one, since that is the
-      // only state `Character.refresh()` already reads off an item.
+      // to land on, and a broken piece before an intact one, since `broken` is
+      // the only state `Character.refresh()` already reads off an item and
+      // clearing it is worth what an armourer charges to. `hardened` is the
+      // half nothing reads yet: `ShopSystem` breaks gear on the loot roll and
+      // has no exemption to consult, so this is the flag for it to grow one.
       const worn = Object.values(c.equipment ?? {}).filter(Boolean);
       const target = worn.find((it) => it.broken) ?? worn.find((it) => !it.hardened);
       if (!target) {
