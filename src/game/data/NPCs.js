@@ -943,6 +943,57 @@ npc({
 // dangle.
 
 npc({
+  id: 'npc_old_tolm', name: 'Tolm', profession: 'Keeper of the Charcoal Burner',
+  town: 'town_ashford', location: 'ashford_hollow', portrait: 'townsfolk',
+  look: { build: 'average', age: 'older', dress: 'apron', palette: 0x4e4034 },
+  greeting: '"Mind the settle by the fire, it belongs to a burner who is not here yet and will be."',
+  topics: [
+    { id: 'room', label: 'A Bed', text: '"Beds under the eaves. They smell of smoke and so will you, and that is how the hollow knows you have been made welcome."', service: 'town_ashford_tavern' },
+    { id: 'burners', label: 'The Burners', text: '"Six weeks up at the camps watching a heap that must not catch. Men who do that come down with a particular way of looking at you."' },
+    { id: 'chapter', label: 'The Sword Chapter', text: '"Oakhallow drills them on the green where the market used to be. Nobody has said out loud that the market is not coming back."' },
+  ],
+  desc: 'Has kept the same fire in for forty years and says so as though it were nothing.',
+});
+
+npc({
+  id: 'npc_brother_cade', name: 'Brother Cade', profession: 'Almoner of the Lamp of the Hollow',
+  town: 'town_ashford', location: 'ashford_hollow', portrait: 'priest',
+  look: { build: 'lean', age: 'adult', dress: 'robe', palette: 0xc0a878 },
+  greeting: '"Come in out of the smoke. Everything in this valley is either burning or about to be."',
+  topics: [
+    { id: 'heal', label: 'Healing', text: '"Burns, mostly. We are very good at burns and it is not a distinction I wanted."', service: 'town_ashford_temple' },
+    { id: 'moor', label: 'The Moor Road', text: '"Netherby is eighteen hours over the moor and the drivers will not stop after dark. Ask a driver why and watch him find something to do."' },
+    { id: 'lamp', label: 'The Lamp', text: '"Every house of the Order keeps one lit. Ours has never gone out. Coldwater\'s has never gone out. The Kindled Shrine\'s went out twenty years ago and the Order will not say a word about it."' },
+  ],
+  desc: 'Runs the almshouse and the burn ward and treats them as the same ward.',
+});
+
+npc({
+  id: 'npc_gam_pryor', name: 'Gam Pryor', profession: 'Keeper of Ashford Stores',
+  town: 'town_ashford', location: 'ashford_hollow', portrait: 'townsfolk',
+  look: { build: 'broad', age: 'adult', dress: 'commoner', palette: 0x6b5a3e },
+  greeting: '"Everything a man needs for six weeks alone on a hillside. I sell a great deal of it."',
+  topics: [
+    { id: 'buy', label: 'Trade', text: '"Rope, oil, salt pork, spades. Nothing here is clever and all of it works."', service: 'town_ashford_generalstore' },
+    { id: 'hollow', label: 'The Hollow', text: '"We sit in a bowl of oak and we have been cutting it down for two hundred years, and the wood is still winning. Take that how you like."' },
+  ],
+  desc: 'Knows the stores list of every charcoal camp on the ridge by heart.',
+});
+
+npc({
+  id: 'npc_driver_ims', name: 'Ims', profession: 'Driver of the Hollow Post',
+  town: 'town_ashford', location: 'ashford_hollow', portrait: 'townsfolk',
+  look: { build: 'lean', age: 'adult', dress: 'travel-coat', palette: 0x4a4237 },
+  greeting: '"Post leaves when the horses are ready and not when you are. Sit down."',
+  topics: [
+    { id: 'travel', label: 'Take a Seat', text: '"Down to Thornwick on good stone, out to Greywater on causeway, over the moor to Netherby if you have the stomach. Ledger warrant or you walk."', service: 'town_ashford_coachstop' },
+    { id: 'moor', label: 'The Moor', text: '"Eighteen hours and I do the last four at a trot whatever the horses think of it. I have been asked to stop out there once. I did not stop."' },
+    { id: 'duskorn', label: 'Duskorn', text: '"Ockham drives that road. Four times a year, and he comes back thinner every time, and he keeps taking the run. Ask him. He will laugh at you."' },
+  ],
+  desc: 'Drives three roads and will only talk about the one he hates.',
+});
+
+npc({
   id: 'npc_skald_vey', name: 'Skald Vey', profession: 'Keeper of the Long Dark',
   town: 'town_coldwater', location: 'coldwater_sound', portrait: 'townsfolk',
   look: { build: 'broad', age: 'older', dress: 'furs', palette: 0x5b4a3c },
