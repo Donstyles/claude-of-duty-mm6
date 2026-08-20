@@ -552,6 +552,9 @@ export class CampaignSystem extends System {
     this.state.counters = { ...(json.counters ?? {}) };
     this.state.flags = [...(json.flags ?? [])];
     this.state.complete = !!json.complete;
+    // A load moves the clock by however long ago the save was written. Forget
+    // the last sample so the jump is not paid out as a vigil nobody sat.
+    this._lastHour = null;
     this._refresh();
     this._ctx?.events.emit('campaign:act', { act: this.state.act, title: getAct(this.state.act)?.title });
   }

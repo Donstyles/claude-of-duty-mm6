@@ -39,6 +39,15 @@ export class QuestSystem extends System {
     this._bossByName = new Map();
     /** dungeon display name → id, because the world layer announces names. */
     this._dungeonByName = new Map();
+    /**
+     * Where the party is standing. A quest names its place in `location`, and
+     * that is how `flag` and `survive` objectives find out that the work in
+     * front of them is the work the party is actually doing. Not saved: the
+     * world re-announces the party's place on load.
+     */
+    this._where = { region: null, town: null, dungeon: null };
+    /** Last whole hour of world time credited against a vigil or a fast. */
+    this._lastHour = null;
   }
 
   async init(ctx) {
@@ -66,28 +75,54 @@ export class QuestSystem extends System {
       if (named && named !== id) this._progress('kill', named);
       const owner = this._bossOwner.get(id) ?? this._bossOwner.get(key);
       if (owner) this._progress('clear', owner);
+      this._creditPlace();
     });
-    on('loot:picked', ({ item } = {}) => this._progress('collect', item?.baseId ?? item?.id));
+    on('loot:picked', ({ item } = {}) => {
+      this._progress('collect', item?.baseId ?? item?.id);
+      this._creditPlace();
+    });
     on('player:enteredRegion', ({ region } = {}) => {
       this._progress('reach', region);
       const dun = this._dungeonByName.get(String(region).toLowerCase());
       if (dun) this._progress('reach', dun);
+      this._arrived(dun ? { dungeon: dun, region } : { region });
     });
-    on('player:enteredTown', ({ town } = {}) => this._progress('reach', town));
-    on('travel:arrived', ({ to } = {}) => this._progress('reach', to));
+    on('player:enteredTown', ({ town } = {}) => {
+      this._progress('reach', town);
+      this._arrived({ town });
+    });
+    on('travel:arrived', ({ to } = {}) => {
+      this._progress('reach', to);
+      this._arrived(this._classify(to));
+    });
     on('dungeon:cleared', ({ dungeon } = {}) => {
       this._progress('clear', dungeon);
       this._progress('reach', dungeon);
+      this._arrived({ dungeon });
     });
     on('npc:dialogue', ({ npc } = {}) => {
       const id = npc?.defId ?? npc?.id;
       this._progress('talk', id);
       this._progress('deliver', id);
+      this._creditPlace();
     });
+    // A rite, a ward, a sealing. Several flags are cast rather than spoken —
+    // the heart into the jar, the answer to the question of fire — and this is
+    // the only thing the world says about them.
+    on('spell:cast', () => this._creditPlace());
     // Gold changing hands closes a `spend` objective — a bribe, a bond posted,
     // a berth bought. The world layer says how much; the objective says how
     // much is enough, and partial payments accumulate like any other counter.
+    //
+    // `party:spent` is the event this was written against and nothing has ever
+    // emitted it, which left three quests — the Hold, the Blue Throat, the
+    // cistern toll — unable to take the party's money. `party:gold` is what
+    // `PartySystem` actually emits, on every purse movement, with the sign of
+    // the change in `delta`; spending is that with a minus in front of it.
     on('party:spent', ({ gold } = {}) => this._progress('spend', 'gold', gold ?? 1));
+    on('party:gold', ({ delta } = {}) => {
+      if (delta < 0) this._progress('spend', 'gold', -delta);
+    });
     // Anything scripted: a vigil kept, a fast held, a question answered.
     on('quest:flag', ({ flag } = {}) => this.setFlag(flag));
 
@@ -116,6 +151,7 @@ export class QuestSystem extends System {
     });
     ctx?.events.emit('quest:updated', { questId, state: 'started' });
     ctx?.events.emit('ui:log', { text: `New quest: ${def.name}`, kind: 'quest' });
+    this._applyStandingFlags(questId);
     return true;
   }
 
@@ -180,13 +216,36 @@ export class QuestSystem extends System {
     return out;
   }
 
+  /**
+   * Raise a world flag: a fact about the playthrough that is now true.
+   *
+   * Idempotent, because a fact does not become truer for being stated twice.
+   * That is also its limit, and it used to be a silent one: this was the only
+   * way to move a `survive` objective, so anything asking for a count above
+   * one — three trial fights, twenty-four hours of vigil, five bouts on the
+   * Thornwick card — could never be finished no matter what happened in the
+   * world. Counting is `tick`'s job, below.
+   */
   setFlag(flag) {
     if (!flag || this.flags.has(flag)) return;
     this.flags.add(flag);
     // A flag is a checkable objective in its own right — a watch stood, a rite
     // held, a question answered — so raising one is progress before it is state.
-    this._progress('flag', flag);
-    this._progress('survive', flag);
+    this.tick(flag);
+  }
+
+  /**
+   * One unit of progress against a scripted objective: a fight won, an hour of
+   * the fast held, a novice walked out.
+   *
+   * Deliberately the same name and shape as `CampaignSystem.tick`, so the side
+   * catalogue and the spine agree on how counted work is reported and a caller
+   * holding either system does not have to know which one it has.
+   */
+  tick(target, n = 1) {
+    if (!target || n <= 0) return;
+    this._progress('flag', target, n);
+    this._progress('survive', target, n);
   }
 
   hasFlag(flag) { return this.flags.has(flag); }
@@ -248,6 +307,100 @@ export class QuestSystem extends System {
     }
   }
 
+  // ── the flag layer ───────────────────────────────────────────────────────
+  //
+  // `flag` and `survive` were the two objective types with no world event
+  // behind them. `quest:flag` had a listener above and no emitter anywhere,
+  // which meant twenty-three quests carried an objective that no amount of
+  // play could satisfy — every promotion chain among them.
+  //
+  // The fix is the same one the campaign spine uses, and it is the same code
+  // because the two catalogues describe the same world: every quest already
+  // says where its work happens, in `location`. Work done there counts. A
+  // kill, a pickup, a conversation, a spell, an arrival, or an hour of world
+  // time, while the party stands in the named place, is one unit against that
+  // quest's open flag. Nothing outside this file has to learn what a quest
+  // flag is; the flag layer watches the world instead of being told about it.
+
+  /** Note an arrival, then credit it — getting there is itself work done. */
+  _arrived(where) {
+    if (where?.region) { this._where.region = where.region; this._where.dungeon = null; }
+    if (where?.town) this._where.town = where.town;
+    if (where?.dungeon) this._where.dungeon = where.dungeon;
+    this._creditPlace();
+  }
+
+  /** Which of the three kinds of place an id names. `travel:arrived` carries
+   *  towns and trailheads alike and says only `to`, so the id has to be read. */
+  _classify(id) {
+    if (!id) return null;
+    const dun = this._dungeonByName.get(String(id).toLowerCase());
+    if (dun) return { dungeon: dun };
+    if (String(id).startsWith('dun_')) return { dungeon: id };
+    if (String(id).startsWith('town_')) return { town: id };
+    return { region: id };
+  }
+
+  /** Is the party standing where this quest says the work is? */
+  _atPlace(location) {
+    if (!location) return false;
+    return location === this._where.region
+      || location === this._where.town
+      || location === this._where.dungeon;
+  }
+
+  /** Credit `n` units of work to every open flag objective set where we are. */
+  _creditPlace(n = 1) {
+    if (n <= 0) return;
+    for (const [id, q] of [...this.active]) {
+      const def = QUESTS[id];
+      if (!def || !this._atPlace(def.location)) continue;
+      for (const obj of objectivesAtStage(id, q.stage)) {
+        if (obj.type !== 'flag' && obj.type !== 'survive') continue;
+        // A tick can turn the stage or finish the quest outright, which moves
+        // the ground under this loop — so re-check before every one.
+        if (!this.active.has(id) || q.stage !== obj.stage) break;
+        if ((q.counters[obj.id] ?? 0) >= obj.count) continue;
+        this.tick(obj.target, n);
+      }
+    }
+  }
+
+  /**
+   * A vigil, a fast and a watch are counted in hours, and hours only move when
+   * the party rests or travels — so this samples the clock instead of counting
+   * frames. Two divisions and a compare per frame, and nothing else happens
+   * until the hour turns.
+   */
+  update(dt, ctx) {
+    const hour = Math.floor(((ctx ?? this._ctx)?.state?.worldTime ?? 0) / 3600);
+    if (this._lastHour === null) { this._lastHour = hour; return; }
+    if (hour === this._lastHour) return;
+    // A loaded save can move the clock by any amount, and a week is longer
+    // than the longest fast in the catalogue — enough, without paying for the
+    // rest of the journal as well.
+    const elapsed = Math.min(Math.max(0, hour - this._lastHour), 168);
+    this._lastHour = hour;
+    this._creditPlace(elapsed);
+  }
+
+  /**
+   * Everything already true, applied to whatever just came into view.
+   *
+   * A flag raised before the objective asking for it opened is still raised,
+   * and sending the party back to do it again reads as a bug rather than as
+   * design. Called when a quest starts and whenever it turns a stage.
+   */
+  _applyStandingFlags(id) {
+    const q = this.active.get(id);
+    if (!q) return;
+    for (const obj of objectivesAtStage(id, q.stage)) {
+      if (obj.type !== 'flag' || !this.flags.has(obj.target)) continue;
+      if ((q.counters[obj.id] ?? 0) >= obj.count) continue;
+      this.tick(obj.target);
+    }
+  }
+
   _advance(ctx, id, q, def) {
     q.stage++;
     // A quest ends when it runs out of objectives, not when it runs out of
@@ -263,6 +416,7 @@ export class QuestSystem extends System {
       text: `${def.name}: ${def.stages?.[q.stage]?.journal?.split('. ')[0] ?? 'updated'}.`,
       kind: 'quest',
     });
+    this._applyStandingFlags(id);
   }
 
   /**
@@ -328,5 +482,8 @@ export class QuestSystem extends System {
     this.completed = new Set(json.completed ?? []);
     this.awards = json.awards ?? [];
     this.flags = new Set(json.flags ?? []);
+    // A load moves the clock by however long ago the save was written. Forget
+    // the last sample so the jump is not paid out as a fast nobody held.
+    this._lastHour = null;
   }
 }
