@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { System } from '../core/Engine.js';
 import {
-  toHitChance, resolveHit, damageRoll, applyResistance,
+  toHitChance, resolveHit, damageRoll, applyResistance, resistanceCheck,
   critChance, recoveryTime, attackBonusFor, damageBonusFor,
   armourClassFor, effectiveStat, statBonus,
 } from './rules.js';
+import { evaluateSpell } from './data/Spells.js';
 
 /**
  * Combat, in both of MM6's modes.
@@ -21,6 +22,26 @@ import {
 
 const MELEE_REACH = 3.6;
 const PROJECTILE_SPEED = 42;
+
+/** What a bolt of each element looks like in flight. */
+const ELEMENT_TINT = Object.freeze({
+  fire: { body: 0xff7a2a, glow: 0xff5a10 },
+  air: { body: 0xdff0ff, glow: 0x8fd0ff },
+  water: { body: 0x4fb0d8, glow: 0x1f70b8 },
+  earth: { body: 0x8a7a4a, glow: 0x4a6020 },
+  spirit: { body: 0xf0e4c0, glow: 0xd8b060 },
+  mind: { body: 0xd090ff, glow: 0x8040d0 },
+  body: { body: 0x90d060, glow: 0x408020 },
+  light: { body: 0xfff4d0, glow: 0xffd870 },
+  dark: { body: 0x7040a0, glow: 0x300850 },
+  magic: { body: 0xc0a0ff, glow: 0x6040c0 },
+  physical: { body: 0x9a9a9a, glow: 0x000000 },
+});
+
+/** How the log names each kind of ranged attack. */
+const RANGED_NOUN = Object.freeze({
+  missile: 'shot', spell: 'spell', breath: 'breath', gaze: 'gaze',
+});
 
 export class CombatSystem extends System {
   static id = 'combat';
@@ -196,7 +217,11 @@ export class CombatSystem extends System {
     let amount = roll.amount + damageBonusFor(char, weapon);
 
     const resist = target.def.resists?.[roll.type] ?? 0;
-    const applied = applyResistance(amount, resist, 0, char.level, this.rng.next());
+    // Luck belongs on the roll: it was passed as a flat 0, which made the
+    // attribute worth nothing at all on the one path that consulted resists.
+    const applied = applyResistance(
+      amount, resist, effectiveStat(char, 'luck'), char.level, this.rng.next(),
+    );
     amount = applied.amount;
 
     ctx.get('monsters').damage(ctx, target, amount, roll.type);
@@ -236,39 +261,93 @@ export class CombatSystem extends System {
 
   // ── monster attacks ──────────────────────────────────────────────────────
 
-  /** A monster swings at the party. Picks a living member, weighted forward. */
+  /**
+   * How hard a monster swings, and how accurately.
+   *
+   * Both used to be invented here from `def.level` and a `def.damage` field
+   * that Monsters.js does not have — the bestiary keeps its melee profile under
+   * `def.attack`, so `def.damage ?? [1, 4, 0]` fell through the default for all
+   * ninety-nine creatures. A Titan Lord and a rat hit for the same 1d4. These
+   * two helpers are the single place that reads the real statblock.
+   */
+  static attackBonusOf(def) {
+    // Tier sharpens accuracy on top of level, so a family's boss is not merely
+    // a bigger sack of hit points but genuinely harder to turn aside.
+    return (def.level ?? 1) * 2 + (def.tier ?? 1) * 3;
+  }
+
+  static meleeSpecOf(def) {
+    const a = def.attack ?? {};
+    const [count, sides, bonus] = a.damage ?? [1, 4, 0];
+    return { dice: [count, sides], bonus: bonus ?? 0, type: a.type ?? 'physical' };
+  }
+
+  /**
+   * A monster swings at the party. Picks a living member, weighted forward, and
+   * throws `attacksPerRound` blows — the reason a tier-3 creature is dangerous
+   * even when its dice are only a little larger.
+   */
   monsterAttack(monster) {
     const ctx = this._ctx;
     if (!ctx) return;
     const party = ctx.get('party');
-    const living = party?.members?.map((m, i) => ({ m, i })).filter(({ m }) => !m.isDead && !m.isUnconscious);
-    if (!living?.length) return;
+    const def = monster.def;
+    const spec = CombatSystem.meleeSpecOf(def);
+    const attack = CombatSystem.attackBonusOf(def) + (monster.enraged ? 6 : 0);
+    const swings = Math.max(1, def.attacksPerRound ?? 1);
 
-    // The front of the party takes the brunt, as in MM6's marching order.
-    const weights = living.map((_, k) => (k < 2 ? 3 : 1));
-    const pick = this.rng.weighted(living, weights);
-    const char = pick.m;
+    for (let s = 0; s < swings; s++) {
+      const living = party?.members?.map((m, i) => ({ m, i }))
+        .filter(({ m }) => !m.isDead && !m.isUnconscious);
+      if (!living?.length) break;
 
-    const attack = (monster.def.level ?? 1) * 2 + 4;
-    const { hit } = resolveHit({ attack }, { ac: armourClassFor(char) }, this.rng.next());
-    if (!hit) {
-      ctx.events.emit('ui:log', { text: `The ${monster.def.name} misses ${char.name}.`, kind: 'miss' });
-      return;
-    }
+      // The front of the party takes the brunt, as in MM6's marching order.
+      const weights = living.map((_, k) => (k < 2 ? 3 : 1));
+      const pick = this.rng.weighted(living, weights);
+      const char = pick.m;
 
-    const [count, sides, bonus] = monster.def.damage ?? [1, 4, 0];
-    const roll = damageRoll({ dice: [count, sides], bonus, type: 'physical' }, this.rng);
-    const dealt = party.damage(pick.i, roll.amount, 'physical');
+      const { hit } = resolveHit({ attack }, { ac: armourClassFor(char) }, this.rng.next());
+      if (!hit) {
+        ctx.events.emit('ui:log', { text: `The ${monster.def.name} misses ${char.name}.`, kind: 'miss' });
+        continue;
+      }
 
-    ctx.events.emit('ui:log', {
-      text: `The ${monster.def.name} hits ${char.name} for ${dealt}.`,
-      kind: 'damage',
-    });
-    ctx.get('audio')?.playSfx?.('hit-party');
-    if (char.isUnconscious) {
-      ctx.events.emit('ui:log', { text: `${char.name} falls unconscious!`, kind: 'warn' });
+      const roll = damageRoll(spec, this.rng, { crit: monster.enraged && this.rng.next() < 0.15 });
+      const dealt = this._hurtParty(ctx, party, pick.i, roll.amount, roll.type, def.level ?? 1);
+
+      ctx.events.emit('ui:log', {
+        text: `The ${monster.def.name} ${def.attack?.name ?? 'hits'} ${char.name} for ${dealt}.`,
+        kind: 'damage',
+      });
+      ctx.get('audio')?.playSfx?.('hit-party');
+      if (char.isUnconscious) {
+        ctx.events.emit('ui:log', { text: `${char.name} falls unconscious!`, kind: 'warn' });
+      }
     }
     if (this.mode === 'turnbased') this.endTurn(ctx);
+  }
+
+  /**
+   * Damage the party through their resistances.
+   *
+   * `party.damage()` takes a damage type but drops it on the floor, so a Fire
+   * Resistance ring was decoration until the roll was filtered here instead.
+   * Luck reduces the odds of taking the full amount; the attacker's level
+   * erodes the defence, which is what stops a low-tier resistance from making
+   * a late region trivial.
+   */
+  _hurtParty(ctx, party, index, amount, type, power) {
+    const char = party.members[index];
+    const resist = (char?.bonuses?.resists?.[type] ?? 0) + (char?.resists?.[type] ?? 0);
+    const luck = effectiveStat(char, 'luck');
+    const applied = type === 'physical' || !resist
+      ? { amount, resisted: false }
+      : applyResistance(amount, resist, luck, power, this.rng.next());
+    const dealt = party.damage(index, applied.amount, type);
+    if (applied.resisted) {
+      ctx.events.emit('ui:log', { text: `${char.name} shrugs off the worst of it.`, kind: 'info' });
+    }
+    return dealt;
   }
 
   /** A monster's ranged attack or spell. */
@@ -278,11 +357,17 @@ export class CombatSystem extends System {
     const spec = monster.def.ranged;
     if (!spec) return;
 
-    const geom = new THREE.SphereGeometry(spec.kind === 'spell' ? 0.16 : 0.05, 8, 6);
+    // The bestiary distinguishes an arrow from a bolt of fire from a dragon's
+    // breath, and they should not all be the same orange pea. Breath is a fat,
+    // fast, unmissable cone; a spell is a glowing bolt; a shot is a splinter.
+    const bolt = spec.kind !== 'missile' || spec.projectile !== 'arrow';
+    const tint = ELEMENT_TINT[spec.type ?? 'physical'] ?? ELEMENT_TINT.fire;
+    const radius = spec.kind === 'breath' ? 0.34 : bolt ? 0.16 : 0.05;
+    const geom = new THREE.SphereGeometry(radius, 8, 6);
     const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
-      color: spec.kind === 'spell' ? 0xff7a2a : 0x6b4a2a,
-      emissive: spec.kind === 'spell' ? 0xff5a10 : 0x000000,
-      emissiveIntensity: spec.kind === 'spell' ? 2.2 : 0,
+      color: bolt ? tint.body : 0x6b4a2a,
+      emissive: bolt ? tint.glow : 0x000000,
+      emissiveIntensity: bolt ? (spec.kind === 'breath' ? 3.2 : 2.2) : 0,
       roughness: 0.5,
     }));
     mesh.position.copy(from);
@@ -292,9 +377,119 @@ export class CombatSystem extends System {
       mesh, from, target: null,
       dir: to.clone().sub(from).normalize(),
       travelled: 0, distance: from.distanceTo(to),
-      monster, kind: spec.kind === 'spell' ? 'spell' : 'arrow',
+      monster, kind: bolt ? 'spell' : 'arrow',
       towardParty: true,
     });
+  }
+
+  /**
+   * A monster's ranged attack landing on the party.
+   *
+   * The bestiary describes four quite different things here and this used to
+   * resolve all of them as 2d6 of fire: a `missile` is a shot with dice of its
+   * own, a `breath` is a wide cone that catches more than one character, a
+   * `spell` borrows the real spell's damage curve from Spells.js at the
+   * monster's own power, and a `gaze` deals no damage at all — it petrifies.
+   */
+  _resolveMonsterRanged(ctx, p) {
+    const party = ctx.get('party');
+    const def = p.monster.def;
+    const spec = def.ranged;
+    const at = p.mesh.position.clone();
+    const living = party?.members?.map((m, i) => ({ m, i })).filter(({ m }) => !m.isDead);
+    if (!living?.length || !spec) return;
+
+    if (spec.kind === 'gaze') {
+      // A gaze is a saving throw, not a projectile: resisting it is the whole
+      // interaction, so it reads the target's resistance directly.
+      const pick = this.rng.weighted(living, living.map((_, k) => (k < 2 ? 3 : 1)));
+      const channel = spec.condition === 'stoned' ? 'earth' : 'body';
+      const resist = (pick.m?.bonuses?.resists?.[channel] ?? 0) + (pick.m?.resists?.[channel] ?? 0);
+      const check = resistanceCheck(resist, effectiveStat(pick.m, 'luck'), spec.power ?? def.level, this.rng.next());
+      if (check.resisted || check.immune) {
+        ctx.events.emit('ui:log', { text: `${pick.m.name} looks away in time.`, kind: 'info' });
+      } else {
+        pick.m.addCondition?.(spec.condition) ?? pick.m.conditions?.push?.(spec.condition);
+        ctx.events.emit('ui:log', {
+          text: `The ${def.name}'s gaze catches ${pick.m.name} — ${spec.condition}!`, kind: 'warn',
+        });
+      }
+      ctx.get('particles')?.burst?.('sparkle', at, 16);
+      return;
+    }
+
+    // Breath fans out: everyone in the front rank is caught, and the back rank
+    // only if the cone is wide. It is the one attack the marching order cannot
+    // protect you from, which is what makes dragons frightening.
+    const wide = spec.kind === 'breath';
+    const caught = wide
+      ? living.filter((_, k) => k < ((spec.cone ?? 40) >= 45 ? 4 : 2))
+      : [this.rng.weighted(living, living.map((_, k) => (k < 2 ? 3 : 1)))];
+
+    const dmgSpec = this._rangedDamageSpec(spec, def);
+    if (!dmgSpec) {
+      // A pure condition spell such as a fear chant: no dice to roll.
+      ctx.events.emit('ui:log', { text: `The ${def.name} intones something.`, kind: 'warn' });
+      return;
+    }
+
+    for (const pick of caught) {
+      // A missile can miss; a breath or a bolt of raw element cannot, it is
+      // only resisted. That asymmetry is what makes archers worth flanking.
+      if (spec.kind === 'missile') {
+        const attack = CombatSystem.attackBonusOf(def);
+        const { hit } = resolveHit({ attack }, { ac: armourClassFor(pick.m) }, this.rng.next());
+        if (!hit) {
+          ctx.events.emit('ui:log', { text: `The ${def.name}'s shot misses ${pick.m.name}.`, kind: 'miss' });
+          continue;
+        }
+      }
+      const roll = damageRoll(dmgSpec, this.rng);
+      const amount = wide && caught.length > 2 ? Math.round(roll.amount * 0.7) : roll.amount;
+      const dealt = this._hurtParty(ctx, party, pick.i, amount, roll.type, spec.power ?? def.level ?? 1);
+      ctx.events.emit('ui:log', {
+        text: `The ${def.name}'s ${RANGED_NOUN[spec.kind] ?? 'attack'} hits ${pick.m.name} for ${dealt}.`,
+        kind: 'damage',
+      });
+      if (pick.m.isUnconscious) {
+        ctx.events.emit('ui:log', { text: `${pick.m.name} falls unconscious!`, kind: 'warn' });
+      }
+    }
+    ctx.get('particles')?.burst?.(
+      spec.kind === 'missile' ? 'sparkle' : 'magic-fire', at, wide ? 30 : 14,
+    );
+  }
+
+  /**
+   * The dice a ranged spec throws. Spell-casting monsters have no dice of their
+   * own — they name a spell and a power, and the real spell table answers.
+   */
+  _rangedDamageSpec(spec, def) {
+    if (spec.damage) {
+      const [count, sides, bonus] = spec.damage;
+      return { dice: [count, sides], bonus: bonus ?? 0, type: spec.type ?? 'physical' };
+    }
+    if (spec.spellId) {
+      const power = spec.power ?? def.level ?? 1;
+      // Tier stands in for mastery: a family's boss casts the same spell the
+      // way a Master would, which is where the late-game spike comes from.
+      const mastery = (def.tier ?? 1) >= 3 ? 'master' : (def.tier ?? 1) >= 2 ? 'expert' : 'normal';
+      const dmg = evaluateSpell(spec.spellId, power, mastery)?.damage;
+      if (!dmg) return null;
+      // The spell tables are written for a player who spent forty levels
+      // earning that curve; read raw, a Titan Lord's bolt averages 1225 and
+      // deletes the party from off-screen. A monster casts at a ceiling tied to
+      // its own level, so a spell stays roughly a heavy melee round's worth.
+      const cap = (def.level ?? 1) * 3 + 12;
+      const avg = dmg.dice[0] * (dmg.dice[1] + 1) / 2 + (dmg.bonus ?? 0);
+      const scale = avg > cap ? cap / avg : 1;
+      return {
+        dice: [Math.max(1, Math.round(dmg.dice[0] * scale)), dmg.dice[1]],
+        bonus: Math.round((dmg.bonus ?? 0) * scale),
+        type: dmg.type ?? 'magic',
+      };
+    }
+    return { dice: [2, 6], bonus: spec.power ?? 0, type: spec.type ?? 'magic' };
   }
 
   /** Generic damage entry point used by spells and traps. */
@@ -360,21 +555,7 @@ export class CombatSystem extends System {
 
   _impact(ctx, p, player) {
     if (p.towardParty) {
-      const party = ctx.get('party');
-      const living = party?.members?.map((m, i) => ({ m, i })).filter(({ m }) => !m.isDead);
-      if (!living?.length) return;
-      const pick = this.rng.pick(living);
-      const spec = p.monster.def.ranged;
-      const roll = damageRoll(
-        { dice: [2, 6], bonus: spec.power ?? 0, type: spec.kind === 'spell' ? 'fire' : 'physical' },
-        this.rng,
-      );
-      const dealt = party.damage(pick.i, roll.amount, roll.type);
-      ctx.events.emit('ui:log', {
-        text: `The ${p.monster.def.name}'s ${spec.kind === 'spell' ? 'spell' : 'shot'} hits ${pick.m.name} for ${dealt}.`,
-        kind: 'damage',
-      });
-      ctx.get('particles')?.burst?.(spec.kind === 'spell' ? 'magic-fire' : 'sparkle', p.mesh.position.clone(), 14);
+      this._resolveMonsterRanged(ctx, p);
       return;
     }
 
@@ -390,7 +571,13 @@ export class CombatSystem extends System {
     const crit = this.rng.next() < critChance(p.owner, p.weapon);
     const spec = p.weapon?.damage ?? { dice: [1, 5], bonus: 0, type: 'physical' };
     const roll = damageRoll(spec, this.rng, { crit, targetHP: target.hp });
-    const amount = roll.amount + damageBonusFor(p.owner, p.weapon);
+    // Arrows used to skip resistance entirely, which quietly made a bow the
+    // best answer to every creature that shrugs off steel. It is not.
+    const raw = roll.amount + damageBonusFor(p.owner, p.weapon);
+    const amount = applyResistance(
+      raw, target.def.resists?.[roll.type] ?? 0,
+      effectiveStat(p.owner, 'luck'), p.owner.level, this.rng.next(),
+    ).amount;
     ctx.get('monsters').damage(ctx, target, amount, roll.type);
     ctx.events.emit('ui:log', {
       text: `${p.owner.name}'s arrow hits the ${target.def.name} for ${amount}${crit ? ' — critical!' : ''}`,

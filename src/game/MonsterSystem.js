@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { System } from '../core/Engine.js';
 import { buildMonster, animateRig } from './MonsterGen.js';
-import { MONSTERS } from './data/Monsters.js';
+import { MONSTERS, MONSTER_FAMILIES } from './data/Monsters.js';
+import { REGION_LIST, TOWNS, townPosition, spawnPool } from './data/Regions.js';
 
 /**
  * Monster spawning, behaviour and animation.
@@ -15,23 +16,71 @@ import { MONSTERS } from './data/Monsters.js';
  * of twelve goblins costs one geometry build.
  */
 
-const STATE = { IDLE: 'idle', PATROL: 'patrol', CHASE: 'chase', ATTACK: 'attack', FLEE: 'flee', DEAD: 'dead' };
+const STATE = {
+  IDLE: 'idle', PATROL: 'patrol', CHASE: 'chase', ATTACK: 'attack',
+  KITE: 'kite', CIRCLE: 'circle', FLEE: 'flee', DEAD: 'dead',
+};
 
-/** Fixed encounter posts across the region. */
-const CAMPS = [
-  { at: [-520, -300], types: ['goblin', 'goblin', 'goblin', 'goblin_shaman'], radius: 22 },
-  { at: [-380, 60], types: ['goblin', 'goblin'], radius: 16 },
-  { at: [120, -180], types: ['skeleton', 'skeleton'], radius: 20 },
-  { at: [40, -520], types: ['wolf', 'wolf', 'wolf'], radius: 26 },
-  { at: [-140, 150], types: ['goblin'], radius: 14 },
-  { at: [-700, 640], types: ['bat', 'bat'], radius: 18 },
-  { at: [300, 300], types: ['spider'], radius: 18 },
-  { at: [470, -430], types: ['skeleton'], radius: 20 },
-];
+/**
+ * How a creature fights, which is the difference between a bestiary and a list.
+ *
+ * Every monster used to run one script — sprint at the party, then swing —
+ * with a ranged attack bolted on as a free extra while sprinting, so an archer,
+ * a lich and a boar all read as the same animal. These seven archetypes are
+ * derived from the statblock rather than authored twice, so adding a monster to
+ * Monsters.js gets it the right temperament for free.
+ */
+const BEHAVIOUR = {
+  /** Closes and swings. Boars, oozes, anything with no other idea. */
+  RUSHER: 'rusher',
+  /** Closes, but at a flanking offset, and presses harder with company. */
+  PACK: 'pack',
+  /** Keeps its bow at its own comfortable range and backs away when closed. */
+  ARCHER: 'archer',
+  /** Like an archer but hangs further back and will not melee if it can help it. */
+  CASTER: 'caster',
+  /** Darts in, hits, and withdraws before the counter-swing. */
+  SKIRMISHER: 'skirmisher',
+  /** Holds its post. Constructs and guardians do not chase you home. */
+  SENTINEL: 'sentinel',
+  /** Never breaks, enrages when hurt, and calls its lessers up. */
+  WARLORD: 'warlord',
+};
+
+/** Families that hunt as a unit — the ones a party should never let surround it. */
+const PACK_FAMILIES = new Set([
+  'wolf', 'rat', 'bat', 'goblin', 'spider', 'harpy', 'insect', 'hound', 'imp',
+]);
+
+/**
+ * Pick the archetype a statblock implies. Order matters: the boss check comes
+ * first because a warlord that also casts should still hold the field.
+ */
+export function behaviourFor(def) {
+  if (def.flags?.boss) return BEHAVIOUR.WARLORD;
+  if (def.flags?.mindless && !def.ranged) return BEHAVIOUR.RUSHER;
+  const r = def.ranged;
+  if (r) {
+    if (r.kind === 'missile') return BEHAVIOUR.ARCHER;
+    // A gaze has to look at you, so it holds ground like a caster rather than
+    // kiting — but everything that throws a spell wants distance.
+    return BEHAVIOUR.CASTER;
+  }
+  // Built things guard the place they were set down in. They do not pursue,
+  // which is what makes a corridor of them a puzzle rather than a chase.
+  if (def.visual?.bodyPlan === 'construct' || (def.speed ?? 3.2) <= 2.2) return BEHAVIOUR.SENTINEL;
+  if ((def.size === 'tiny' || def.size === 'small') && (def.speed ?? 3.2) >= 4.5) return BEHAVIOUR.SKIRMISHER;
+  if (PACK_FAMILIES.has(def.family)) return BEHAVIOUR.PACK;
+  return BEHAVIOUR.RUSHER;
+}
 
 const MAX_ACTIVE = { low: 24, medium: 40, high: 70, ultra: 100 };
 const SIM_RADIUS = 220;       // metres — beyond this a monster is frozen
 const DESPAWN_RADIUS = 520;
+/** A camp wakes up at this distance and is torn down again past despawn range. */
+const CAMP_RADIUS = 420;
+/** Nothing hostile plants a camp this close to a town gate. */
+const TOWN_CLEARANCE = 110;
 
 export class MonsterSystem extends System {
   static id = 'monsters';
@@ -55,20 +104,145 @@ export class MonsterSystem extends System {
     this.rng = ctx.rng.fork('monsters');
     this.maxActive = MAX_ACTIVE[ctx.config.quality] ?? 70;
 
-    for (const camp of CAMPS) {
-      const [cx, cz] = camp.at;
-      for (const type of camp.types) {
-        const a = this.rng.range(0, Math.PI * 2);
-        const r = this.rng.range(0, camp.radius);
-        const x = cx + Math.sin(a) * r;
-        const z = cz + Math.cos(a) * r;
-        if (terrain?.isWater?.(x, z)) continue;
-        this.spawn(ctx, type, x, z, { home: new THREE.Vector2(cx, cz), leash: camp.radius + 14 });
-      }
-    }
+    this.camps = this._planCamps(ctx, terrain);
+    // Wake whatever the party can already see, so a screenshot taken on frame
+    // one is not of an empty world.
+    this._streamCamps(ctx, ctx.get('player')?.position ?? new THREE.Vector3());
 
     this._registerShots(ctx);
     this._ready = true;
+  }
+
+  // ── the encounter map ────────────────────────────────────────────────────
+
+  /**
+   * Lay out every outdoor encounter post in the kingdom, once, from the region
+   * spawn tables.
+   *
+   * This used to be eight hand-typed camps holding six creature types between
+   * them, all of them clustered near the world origin — which is nowhere near
+   * any of the twenty regions the party actually walks through. Regions.js had
+   * carried 180 weighted spawn entries, pack sizes, night flags and per-region
+   * budgets the whole time and nothing read a line of it. Now the difficulty
+   * banding in `CANON.md` §3 is what you meet on the road: Millhaven Downs
+   * fields goblins and rats, Malveth Spires fields wyrms.
+   */
+  _planCamps(ctx, terrain) {
+    const rng = this.rng.fork('camp-plan');
+    const worldSize = terrain?.worldSize ?? 4096;
+    const half = worldSize / 2;
+    const camps = [];
+
+    // Towns are safe ground; a camp planted on a market square is a bug the
+    // player reads as the world being broken, not as danger.
+    const townPts = Object.values(TOWNS)
+      .map((t) => townPosition(t, worldSize, terrain))
+      .filter(Boolean);
+
+    for (const region of REGION_LIST) {
+      if (region.kind === 'underdeep') continue;   // reached through a dungeon door
+      const b = region.boundsNormalized;
+      const minX = b.minX * half, maxX = b.maxX * half;
+      const minZ = b.minZ * half, maxZ = b.maxZ * half;
+
+      // A post is about five creatures, so the region's own budget decides how
+      // many posts it can carry. Danger buys density as well as level.
+      const posts = Math.max(3, Math.round((region.spawnBudget ?? 36) / 5));
+      const pool = region.spawns ?? [];
+      if (!pool.length) continue;
+
+      for (let i = 0; i < posts; i++) {
+        let x = 0, z = 0, placed = false;
+        // Rejection-sample rather than clamp: a clamped point piles camps onto
+        // the region border, which is exactly where the roads run.
+        for (let attempt = 0; attempt < 24 && !placed; attempt++) {
+          x = rng.range(minX + 40, maxX - 40);
+          z = rng.range(minZ + 40, maxZ - 40);
+          if (terrain?.isWater?.(x, z)) continue;
+          if (townPts.some(([tx, tz]) => Math.hypot(tx - x, tz - z) < TOWN_CLEARANCE)) continue;
+          placed = true;
+        }
+        if (!placed) continue;
+
+        camps.push({
+          regionId: region.id,
+          danger: region.danger,
+          at: [x, z],
+          radius: rng.range(14, 30),
+          // Which creatures stand here is decided at wake time, because the
+          // night-only entries in the table depend on the hour the party
+          // arrives — a barrow that is empty at noon and occupied at midnight.
+          seed: `camp:${region.id}:${i}`,
+          spawned: [],
+          awake: false,
+        });
+      }
+    }
+    return camps;
+  }
+
+  /**
+   * Wake camps the party is approaching and tear down the ones behind them.
+   * The kingdom is 4096 metres across; only the couple of hundred metres in
+   * front of the party can afford to be alive.
+   */
+  _streamCamps(ctx, eye) {
+    if (!this.camps) return;
+    const hour = ((ctx.state?.worldTime ?? 43200) / 3600) % 24;
+    let live = this.livingCount();
+
+    for (const camp of this.camps) {
+      const d = Math.hypot(camp.at[0] - eye.x, camp.at[1] - eye.z);
+      if (!camp.awake && d < CAMP_RADIUS && live < this.maxActive) {
+        live += this._wakeCamp(ctx, camp, hour);
+      } else if (camp.awake && d > DESPAWN_RADIUS) {
+        this._sleepCamp(camp);
+      }
+    }
+  }
+
+  /** Roll this camp's occupants from its region's table and stand them up. */
+  _wakeCamp(ctx, camp, hour) {
+    const rng = this.rng.fork(`${camp.seed}:${Math.floor(hour / 6)}`);
+    const pool = spawnPool(camp.regionId, hour);
+    if (!pool.ids.length) { camp.awake = true; return 0; }
+
+    const idx = pool.ids.map((_, i) => i);
+    const choice = rng.weighted(idx, pool.weights);
+    const type = pool.ids[choice];
+    const [lo, hi] = pool.packs[choice] ?? [1, 1];
+    const count = rng.int(lo, hi);
+
+    // Roughly a third of posts are mixed — a warband with its shaman, rather
+    // than four identical silhouettes. It is the cheapest variety there is.
+    const second = rng.chance(0.34) ? pool.ids[rng.weighted(idx, pool.weights)] : null;
+
+    const terrain = ctx.get('terrain');
+    const home = new THREE.Vector2(camp.at[0], camp.at[1]);
+    let made = 0;
+    for (let k = 0; k < count; k++) {
+      const a = rng.range(0, Math.PI * 2);
+      const r = rng.range(0, camp.radius);
+      const x = camp.at[0] + Math.sin(a) * r;
+      const z = camp.at[1] + Math.cos(a) * r;
+      if (terrain?.isWater?.(x, z)) continue;
+      const t = second && k === count - 1 ? second : type;
+      const m = this.spawn(ctx, t, x, z, { home, leash: camp.radius + 14, camp });
+      if (m) { camp.spawned.push(m); made++; }
+    }
+    camp.awake = true;
+    return made;
+  }
+
+  /** Remove a camp's survivors; it will be rerolled next time it is approached. */
+  _sleepCamp(camp) {
+    for (const m of camp.spawned) {
+      const i = this.monsters.indexOf(m);
+      if (i >= 0) this.monsters.splice(i, 1);
+      this.group.remove(m.group);
+    }
+    camp.spawned.length = 0;
+    camp.awake = false;
   }
 
   isSettled() { return this._ready; }
@@ -122,11 +296,24 @@ export class MonsterSystem extends System {
       home: opts.home ?? new THREE.Vector2(x, z),
       leash: opts.leash ?? 24,
       speed: def.speed ?? 3.2,
-      aggro: def.aggro ?? 18,
+      // `def.aggro` and `def.attackRounds` never existed: the bestiary spells
+      // these `aggroRadius` and `attack.recovery`, so every creature in the
+      // game was noticing at a flat 18 metres and swinging every two seconds
+      // regardless of what its statblock said.
+      aggro: def.aggroRadius ?? 18,
+      reach: def.attack?.reach ?? (1.6 + (def.height ?? 1.8) * 0.35),
+      recovery: Math.max(0.4, (def.attack?.recovery ?? 90) / 60),
+      behaviour: behaviourFor(def),
+      camp: opts.camp ?? null,
+      /** Preferred standoff for anything that would rather not be in reach. */
+      standoff: def.ranged ? Math.max(6, (def.ranged.range ?? 24) * 0.65) : 0,
+      enraged: false,
+      summonsLeft: def.flags?.boss ? 2 : 0,
       attackCooldown: 0,
       rangedCooldown: 0,
       stateTimer: this.rng.range(0, 4),
       wanderTarget: null,
+      strafe: this.rng.chance(0.5) ? 1 : -1,
       hoverPhase: this.rng.range(0, Math.PI * 2),
       alive: true,
     };
@@ -188,6 +375,11 @@ export class MonsterSystem extends System {
     const combat = ctx.get('combat');
     const turnBased = combat?.mode === 'turnbased';
 
+    // Encounters stream in and out with the party. Cheap enough to run every
+    // tick — it is a distance test per camp, a few hundred in the whole world —
+    // and doing it here means the outdoors repopulates behind you.
+    if (!turnBased) this._streamCamps(ctx, eye);
+
     for (const m of this.monsters) {
       if (!m.alive) {
         m.deathTimer = (m.deathTimer ?? 0) + dt;
@@ -214,8 +406,18 @@ export class MonsterSystem extends System {
   }
 
   _think(ctx, m, dist, eye, dt) {
-    const reach = 1.4 + (m.def.height ?? 1.6) * 0.5;
+    const reach = m.reach;
     const ranged = m.def.ranged;
+
+    // A warlord that is badly hurt stops fighting carefully and starts
+    // fighting fast. This is the only "second phase" a statblock needs.
+    if (!m.enraged && m.behaviour === BEHAVIOUR.WARLORD && m.hp < m.maxHP * 0.35) {
+      m.enraged = true;
+      m.speed *= 1.25;
+      m.recovery *= 0.7;
+      ctx.events.emit('ui:log', { text: `The ${m.def.name} roars and comes on!`, kind: 'warn' });
+      this._summonRetinue(ctx, m);
+    }
 
     switch (m.state) {
       case STATE.IDLE:
@@ -242,35 +444,111 @@ export class MonsterSystem extends System {
         break;
 
       case STATE.CHASE: {
-        // Lose interest well outside the aggro ring, so a monster does not
-        // follow the party across the whole map.
-        if (dist > m.aggro * 2.4) { m.state = STATE.IDLE; m.stateTimer = 2; break; }
-        if (dist <= reach) { m.state = STATE.ATTACK; break; }
+        // A sentinel guards a post: step outside its leash and it goes home
+        // rather than following you across the county.
+        const patience = m.behaviour === BEHAVIOUR.SENTINEL ? m.leash * 1.1 : m.aggro * 2.4;
+        if (dist > patience) { m.state = STATE.IDLE; m.stateTimer = 2; break; }
+
         if (ranged && dist < (ranged.range ?? 24) && m.rangedCooldown <= 0) {
           this._fireRanged(ctx, m, eye);
+        }
+        // Shooters do not want to be here. Once they are inside their own
+        // standoff they back off and keep working, which is what turns an
+        // archer line into a problem you have to charge.
+        if (m.standoff && dist < m.standoff * 0.75 &&
+            (m.behaviour === BEHAVIOUR.ARCHER || m.behaviour === BEHAVIOUR.CASTER)) {
+          m.state = STATE.KITE;
+          m.stateTimer = this.rng.range(1.2, 2.6);
+          break;
+        }
+        if (dist <= reach) { m.state = STATE.ATTACK; break; }
+        // Pack hunters spread out as they close instead of queueing up.
+        if (m.behaviour === BEHAVIOUR.PACK && dist < m.aggro && this.rng.chance(0.6 * dt)) {
+          m.state = STATE.CIRCLE;
+          m.stateTimer = this.rng.range(0.8, 1.8);
         }
         break;
       }
 
-      case STATE.ATTACK:
+      case STATE.KITE:
+        // A caster keeps casting while it withdraws; that is the whole point
+        // of being a caster.
+        if (ranged && dist < (ranged.range ?? 24) && m.rangedCooldown <= 0) {
+          this._fireRanged(ctx, m, eye);
+        }
+        if (m.stateTimer <= 0 || dist > m.standoff) { m.state = STATE.CHASE; }
+        break;
+
+      case STATE.CIRCLE:
+        if (m.stateTimer <= 0 || dist <= reach) { m.state = dist <= reach ? STATE.ATTACK : STATE.CHASE; }
+        break;
+
+      case STATE.ATTACK: {
         if (dist > reach * 1.4) { m.state = STATE.CHASE; break; }
+        // A caster caught in melee would rather be anywhere else.
+        if (m.behaviour === BEHAVIOUR.CASTER && m.standoff && this.rng.chance(0.9 * dt)) {
+          m.state = STATE.KITE;
+          m.stateTimer = this.rng.range(1.0, 2.0);
+          break;
+        }
         if (m.attackCooldown <= 0) {
-          m.attackCooldown = 60 / Math.max(1, m.def.attackRounds ?? 30);
+          m.attackCooldown = m.recovery;
           ctx.get('combat')?.monsterAttack?.(m);
+          // A skirmisher does not stand and trade: it hits and gives ground.
+          if (m.behaviour === BEHAVIOUR.SKIRMISHER) {
+            m.state = STATE.FLEE;
+            m.stateTimer = this.rng.range(0.7, 1.4);
+          }
         }
         break;
+      }
 
       default:
         break;
     }
 
-    // Badly wounded low-level creatures break and run.
-    if (m.alive && m.hp < m.maxHP * 0.2 && (m.def.level ?? 1) <= 3 &&
-        m.state !== STATE.FLEE && this.rng.chance(0.4 * dt)) {
+    // Morale. Wounded creatures break and run — but a warlord never does, and
+    // a mindless one has nothing to break. The threshold scales with tier, so
+    // a rank-and-file goblin routs long before its king would have.
+    const brave = m.behaviour === BEHAVIOUR.WARLORD || m.def.flags?.mindless;
+    const breakPoint = m.maxHP * (0.3 - (m.def.tier ?? 1) * 0.06);
+    if (m.alive && !brave && m.hp < breakPoint &&
+        m.state !== STATE.FLEE && this.rng.chance(0.6 * dt)) {
       m.state = STATE.FLEE;
       m.stateTimer = this.rng.range(3, 6);
+      ctx.events.emit('ui:log', { text: `The ${m.def.name} breaks and runs!`, kind: 'info' });
     }
     if (m.state === STATE.FLEE && m.stateTimer <= 0) m.state = STATE.CHASE;
+  }
+
+  /**
+   * A warlord calls up the lesser members of its own family.
+   *
+   * Nothing needs authoring for this: every family in Monsters.js is a
+   * three-rung ladder, so the boss simply shouts down its own ladder. Capped at
+   * two summons a fight, or a boss room becomes a war of attrition nobody wins.
+   */
+  _summonRetinue(ctx, m) {
+    if (m.summonsLeft <= 0) return;
+    const ladder = MONSTER_FAMILIES[m.def.family] ?? [];
+    const lesser = ladder.find((id) => MONSTERS[id]?.tier === 1);
+    if (!lesser || this.livingCount() >= this.maxActive) return;
+
+    m.summonsLeft--;
+    for (let k = 0; k < 2; k++) {
+      const a = this.rng.range(0, Math.PI * 2);
+      const spawned = this.spawn(
+        ctx, lesser, m.pos.x + Math.sin(a) * 3.5, m.pos.z + Math.cos(a) * 3.5,
+        { home: new THREE.Vector2(m.pos.x, m.pos.z), leash: 20, camp: m.camp },
+      );
+      if (!spawned) continue;
+      // Summons belong to the floor their master stands on, not the terrain.
+      if (Number.isFinite(m.indoorY)) { spawned.indoorY = m.indoorY; spawned.pos.y = m.indoorY; }
+      spawned.state = STATE.CHASE;
+      m.camp?.spawned?.push(spawned);
+      ctx.get('particles')?.burst?.('magic-fire', spawned.pos.clone().setY(spawned.pos.y + 1), 18);
+    }
+    ctx.events.emit('ui:log', { text: `The ${m.def.name} calls up its own!`, kind: 'warn' });
   }
 
   _fireRanged(ctx, m, target) {
@@ -287,21 +565,38 @@ export class MonsterSystem extends System {
 
     if (m.state === STATE.CHASE || m.state === STATE.ATTACK) desired = player.position;
     else if (m.state === STATE.PATROL) desired = m.wanderTarget;
-    else if (m.state === STATE.FLEE && player) {
+    else if ((m.state === STATE.FLEE || m.state === STATE.KITE) && player) {
+      // Kiting is retreating that keeps facing you; fleeing is retreating that
+      // does not. Mechanically both walk directly away from the party.
       desired = m.pos.clone().multiplyScalar(2).sub(player.position);
+    } else if (m.state === STATE.CIRCLE && player) {
+      // Strafe around the party at the radius the creature is already at, so
+      // a wolf pack arrives from three sides instead of one queue.
+      const to = new THREE.Vector3().subVectors(m.pos, player.position);
+      const side = new THREE.Vector3(-to.z, 0, to.x).normalize().multiplyScalar(m.strafe * 6);
+      desired = m.pos.clone().add(side).sub(to.clone().normalize().multiplyScalar(2.5));
     }
 
     if (desired && m.state !== STATE.ATTACK) {
       const dx = desired.x - m.pos.x;
       const dz = desired.z - m.pos.z;
       const len = Math.hypot(dx, dz) || 1;
-      const speed = m.state === STATE.PATROL ? m.speed * 0.4 : m.speed;
+      const speed = m.state === STATE.PATROL ? m.speed * 0.4
+        : m.state === STATE.KITE ? m.speed * 0.8
+          : m.speed;
       m.vel.x = (dx / len) * speed;
       m.vel.z = (dz / len) * speed;
       m.pos.x += m.vel.x * dt;
       m.pos.z += m.vel.z * dt;
-      // Face the way it is going.
-      m.group.rotation.y = Math.atan2(-m.vel.x, -m.vel.z);
+      // Face the way it is going — unless it is kiting, in which case it walks
+      // backwards with its bow up, which is the whole read of the behaviour.
+      if (m.state === STATE.KITE) {
+        m.group.rotation.y = Math.atan2(
+          -(player.position.x - m.pos.x), -(player.position.z - m.pos.z),
+        );
+      } else {
+        m.group.rotation.y = Math.atan2(-m.vel.x, -m.vel.z);
+      }
     } else {
       m.vel.set(0, 0, 0);
       if (m.state === STATE.ATTACK && player) {
@@ -371,8 +666,12 @@ export class MonsterSystem extends System {
 
     // Frame the goblin camp from a few metres off, the way MM6's ambush
     // screenshots are composed: creatures filling the middle of the frame.
-    const camp = CAMPS[0].at;
-    const [cx, cz] = camp;
+    // The shot frames whatever the starting region actually planted, rather
+    // than a hard-coded coordinate that no longer corresponds to anything.
+    const first = (this.camps ?? []).find((c) => c.regionId === 'millhaven_downs')
+      ?? (this.camps ?? [])[0];
+    if (!first) return;
+    const [cx, cz] = first.at;
     const px = cx + 16, pz = cz + 16;
     capture.registerShot('monsters-camp', {
       description: 'The goblin camp, seen from the approach.',
