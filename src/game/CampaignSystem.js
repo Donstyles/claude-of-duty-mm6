@@ -290,6 +290,27 @@ export class CampaignSystem extends System {
     return out;
   }
 
+  /**
+   * What closing a stage turned up, for the journal's autonotes.
+   *
+   * Every stage in the catalogue carries a `completion` — the cart in the ditch
+   * with the tally stick still in the coat, four boats rowing to the point
+   * rather than past it — and nothing has ever read one. The journal prints
+   * `journal`, the strip prints the title, and eighty authored sentences about
+   * what the party actually found sat in `Campaign.js` unread from the day they
+   * were written. They are the campaign's half of an autonote page: facts
+   * learned by doing, in the order they were done, and they stay on the page
+   * long after the stage that produced them has scrolled out of the journal.
+   */
+  notes() {
+    const out = [];
+    for (const id of this.state.done) {
+      const stage = getStage(id);
+      if (stage?.completion) out.push({ group: 'The main road', text: stage.completion });
+    }
+    return out;
+  }
+
   /** One line per act for the map screen: what is finished and what is not. */
   outline() {
     return ACTS.map((a) => ({
@@ -345,9 +366,14 @@ export class CampaignSystem extends System {
   // Rather than ask nine other systems to learn what a campaign flag is, the
   // flag layer watches the world instead. Every stage already says WHERE its
   // work happens, in `where`. So: work done where the stage says, counts. A
-  // kill, a pickup, a conversation, a spell, an arrival, an hour of world time
-  // — any of them, while the party stands in the named region, town or
-  // dungeon, is one unit against that stage's flag.
+  // kill, a pickup, a conversation, a spell or an arrival, while the party
+  // stands in the named region, town or dungeon, is one unit against that
+  // stage's flag.
+  //
+  // An hour of world time is not on that list and used to be, which is the
+  // subject of the long note on `_creditPlace` below: a deed is something the
+  // party did, and waiting is not one. Hours pay a `survive` stage, because a
+  // vigil is hours and nothing else.
   //
   // It is deliberately loose, for the same reason `_progress` matches on type
   // and target only: a main quest that advances a beat early is a blemish, and
@@ -387,13 +413,36 @@ export class CampaignSystem extends System {
       || (!!where.dungeon && where.dungeon === this._where.dungeon);
   }
 
-  /** Credit `n` units of work to every open flag stage set where we stand. */
-  _creditPlace(n = 1) {
+  /**
+   * Credit `n` units of work to every open flag stage set where we stand.
+   *
+   * `fromClock` separates the two types and is the whole of the difference
+   * between them. A `survive` stage is *measured* in hours — the Steady Hand's
+   * vigil, the night on the Netherby gate, the crossing of the glass — so the
+   * clock turning is the work, and the clock pays it. A `flag` stage is a deed:
+   * boats counted, a runner caught, nineteen barrows resealed. Hours do not do
+   * deeds, and paying them for one meant the deed could be waited out. Measured
+   * by `tools/questtest.mjs`, with the party standing where each stage says the
+   * work is and doing nothing else: **every flag stage in the catalogue closed
+   * on a single day of world time**, the nineteen barrows of
+   * `a4_netherby_4_the_reseal` included — and the stage act three ends with
+   * among them, so act four came free to anyone who sat down in the Sunder for
+   * a day.
+   *
+   * `QuestSystem` had the same hole and fixed it first; this is the same guard,
+   * so the spine and the side catalogue agree about what an hour buys. An hour
+   * pays a `survive` and nothing else. A deed still needs an act done in the
+   * named place — a kill, a pickup, a conversation, a spell or an arrival — and
+   * every one of those reaches here through `_creditPlace()` with no clock
+   * behind it, so none of them changes.
+   */
+  _creditPlace(n = 1, fromClock = false) {
     if (n <= 0) return;
     for (const id of [...this.state.open]) {
       const stage = getStage(id);
       const obj = stage?.objective;
       if (!obj || (obj.type !== 'flag' && obj.type !== 'survive')) continue;
+      if (fromClock && obj.type === 'flag') continue;
       if (!this._atPlace(stage.where)) continue;
       this.tick(obj.target, n);
     }
@@ -413,7 +462,7 @@ export class CampaignSystem extends System {
     // longest vigil in the catalogue and stops one from paying for the rest.
     const elapsed = Math.min(Math.max(0, hour - this._lastHour), 168);
     this._lastHour = hour;
-    this._creditPlace(elapsed);
+    this._creditPlace(elapsed, true);
   }
 
   /** A `talk`/`deliver` objective whose giver keeps this shop is satisfied. */

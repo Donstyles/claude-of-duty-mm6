@@ -1043,12 +1043,15 @@ stage({
     'a3_eye_2_the_disputation', 'a3_quiet_2_the_ninth_sleeper', 'a3_ember_2_the_standing_nine',
     'a3_hand_2_the_long_night', 'a3_gale_2_the_wind_stair', 'a3_dawn_2_what_coll_wants',
   ],
-  // Nine keys, nine wards, and the count is load-bearing rather than flavour.
-  // `CampaignSystem._creditPlace` pays a `flag` for any action in the named
-  // place, an idle hour included, so at `count: 1` the stage that opens act
-  // four closed after sixty minutes of standing on the crater floor doing
-  // nothing. One unit per ward is what the fiction always said the work was.
-  objective: { type: 'flag', target: 'a3_wards_opened', count: 9, text: 'Set all nine keys in the rim wards.' },
+  // Deliberately `count: 1`, and it was briefly nine. This is the stage act
+  // three ends with, and it used to close after sixty minutes of standing on
+  // the crater floor doing nothing — so act four came free to anyone who sat
+  // down in the Sunder for an hour. Raising it to one unit per ward was the
+  // wrong lever: it priced a deed in hours, which is the thing that was broken.
+  // `CampaignSystem._creditPlace` now refuses to pay a `flag` off the clock at
+  // all, so a unit here means an act done on the glass rather than an hour
+  // spent on it, and one is the right number of times to open one gate.
+  objective: { type: 'flag', target: 'a3_wards_opened', text: 'Set all nine keys in the rim wards.' },
   completion: 'Eight wards open to their keys. The ninth is already open, and was opened from the crater side.',
   reward: {
     xp: 40000, gold: 9000, item: 'plate_gothic',
@@ -1257,7 +1260,13 @@ stage({
   where: { region: 'netherby_moors', town: 'town_netherby' },
   trigger: 'Nineteen opened barrows will not stay quiet because their foreman is dead.',
   after: ['a4_netherby_3_chorister_nolt'],
-  objective: { type: 'flag', target: 'a4_netherby_sealed', count: 19, text: 'Stand the Quiet Hall’s rite over all nineteen barrows.' },
+  // Nineteen barrows, and until `_creditPlace` stopped paying deeds off the
+  // clock this was nineteen idle hours in Netherby — the single worst offender
+  // in the catalogue. A `flag` cannot carry a count this high honestly: there
+  // is no world event that means "one barrow resealed", so the number could
+  // only ever be paid in hours. What there is one of per barrow is the thing
+  // that comes up out of it, which is what the rite is being read over.
+  objective: { type: 'kill', target: 'wraith', count: 19, text: 'Stand the Quiet Hall’s rite over all nineteen barrows, and put down what comes up out of each.' },
   completion: 'Nineteen barrows closed, timbered passages fired, and the moor is quiet enough that Netherby opens its gate at night again.',
   reward: { xp: 50000, gold: 12000, item: 'amulet_necklace', access: ['region:netherby_moors'], award: 'Netherby Moors retaken' },
   journal: 'Four days, nineteen barrows, and the office read over each of them by an adept who has not slept. Netherby opened its gate after dark on the fifth night for the first time since the spring, mostly to prove it could. One region back.',

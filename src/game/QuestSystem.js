@@ -1,6 +1,7 @@
 import { System } from '../core/Engine.js';
 import { QUESTS, canAccept, objectivesAtStage, questsFrom } from './data/Quests.js';
 import { DUNGEONS } from './data/Dungeons.js';
+import { getTown } from './data/Regions.js';
 
 /**
  * The journal.
@@ -18,7 +19,12 @@ import { DUNGEONS } from './data/Dungeons.js';
  * bounty pinned up in a tavern.
  *
  * MM6 keeps completed quests in the journal permanently and adds separate
- * "awards" for notable deeds, so both are tracked here.
+ * "awards" for notable deeds, so both are tracked here. Two more things the
+ * journal screen shows live here for the same reason — they belong to the
+ * playthrough rather than to any one screen, and this system is already
+ * serialised: the party's `reputation`, which every quest in the catalogue pays
+ * into and `DialogueSystem` spends, and `notes`, the autonotes the party writes
+ * down as it learns them.
  */
 
 export class QuestSystem extends System {
@@ -33,6 +39,24 @@ export class QuestSystem extends System {
     this.awards = [];
     /** Arbitrary world flags quests can set and test. */
     this.flags = new Set();
+    /**
+     * The party's standing, which is what every quest in the catalogue has
+     * been paying into and nothing was collecting.
+     *
+     * It is held here rather than in `PartySystem` for one reason: it has to
+     * survive a save, and `PartySystem.toJSON` writes six named fields and
+     * would silently drop a seventh nobody told it about. This system is
+     * already serialised, so the number keeps itself; `addReputation` pushes
+     * every change out to `party.reputation`, which is the field
+     * `DialogueSystem` reads to decide whether people will deal with you.
+     */
+    this.reputation = 0;
+    /**
+     * The autonotes: things the party learned by doing, in the order it
+     * learned them. `{ group, text }`, plain data, because this goes in the
+     * save file the same way everything else here does.
+     */
+    this.notes = [];
     /** boss id or display name → the dungeon it is at the bottom of. */
     this._bossOwner = new Map();
     /** named monster display name → its id. */
@@ -105,7 +129,33 @@ export class QuestSystem extends System {
       this._progress('talk', id);
       this._progress('deliver', id);
       this._creditPlace();
+      this._notePerson(npc);
     });
+    // A rumour heard across a table is the autonote MM6 is actually made of,
+    // and the game generates them already: `DialogueSystem._rumoursFor` picks
+    // two lines a week per speaker out of `RUMOURS`, and `Conversation.choose`
+    // hands one to the panel under `case 'rumour'`. It hands it to the panel
+    // and to nobody else — the line is painted and forgotten, so the party can
+    // be told the same thing forty times and never have written it down.
+    //
+    // One line makes this live, and it belongs beside the text it is already
+    // building: `src/game/DialogueSystem.js`, in `Conversation.choose()`, in
+    // `case 'rumour':` immediately after `this._rumourIndex += 1` — around line
+    // 1744 as that file stands today, though the structure is the address that
+    // will not rot. `s` and `model` are both already in scope there —
+    //
+    //   model.ctx?.events?.emit(
+    //     'dialogue:heard', { group: 'Rumours', text: line, from: s.name, town: s.town });
+    //
+    // (The event name sits on its own line so `eventcheck` does not read this
+    // comment as an emitter and stop reporting the listener as unheard.)
+    //
+    // It is not written here because that file belongs to somebody else this
+    // round. The listener is not speculative decoration: `tools/eventcheck.mjs`
+    // fails a build for an emit with no listener and prints a listener with no
+    // emitter as inert, which is the right way round — the door is hung, and
+    // whoever owns that file only has to knock.
+    on('dialogue:heard', ({ group, text } = {}) => this.note(group ?? 'Rumours', text));
     // A rite, a ward, a sealing. Several flags are cast rather than spoken —
     // the heart into the jar, the answer to the question of fire — and this is
     // the only thing the world says about them.
@@ -152,6 +202,7 @@ export class QuestSystem extends System {
     ctx?.events.emit('quest:updated', { questId, state: 'started' });
     ctx?.events.emit('ui:log', { text: `New quest: ${def.name}`, kind: 'quest' });
     this._applyStandingFlags(questId);
+    this._applyCarried(questId);
     return true;
   }
 
@@ -249,6 +300,99 @@ export class QuestSystem extends System {
   }
 
   hasFlag(flag) { return this.flags.has(flag); }
+
+  /**
+   * Force a quest closed and pay it out.
+   *
+   * The same signature and the same purpose as `CampaignSystem.complete` —
+   * scripted turn-ins, the debug console, and the capture harness, which has to
+   * be able to photograph a finished journal without faking one. Anything that
+   * wants a quest closed goes through the payout path rather than writing to
+   * `completed` behind it; that is how a "finished" quest ends up owing the
+   * party its gold.
+   */
+  complete(questId) {
+    const def = QUESTS[questId];
+    if (!def || !this.active.has(questId)) return false;
+    this._complete(this._ctx, questId, def);
+    return true;
+  }
+
+  /**
+   * Pay standing into the party's reputation, and make sure somebody collects.
+   *
+   * Sixty-seven of the ninety-one quests in the catalogue award reputation, 578
+   * points between them, and the payout line was `party?.addReputation?.()`
+   * against a `PartySystem` that has never defined the method. Optional call,
+   * no method, no error, no reputation: every point of it was paid into a hole
+   * for as long as the catalogue has existed.
+   *
+   * The field it belongs in already exists and is already read. `DialogueSystem`
+   * keeps `party.reputation` as the party's standing, bands it through
+   * `STANDING`, and gates real behaviour on the band — whether a stranger will
+   * deal with you at all, whether quest topics appear on the board, whether a
+   * neighbour will take service, and what a hireling charges a day (×1.5 at
+   * Notorious down to ×0.8 at Honoured). So this does not invent a consumer; it
+   * fills the tank the consumer was already drawing on.
+   *
+   * `adjust` is the canonical way in when the dialogue model is present: it
+   * clamps, mirrors the number onto the party, and announces a band change in
+   * the player's own words. Without it we do the same job by hand, clamped to
+   * the same ±100 that `DialogueSystem`'s setter uses, so the number a party
+   * holds never depends on which systems a build happened to load.
+   */
+  addReputation(delta) {
+    const n = Math.round(Number(delta) || 0);
+    if (!n) return this.reputation;
+    const ctx = this._ctx;
+    const dialogue = ctx?.get?.('dialogue');
+    if (dialogue && typeof dialogue.adjust === 'function') {
+      dialogue.adjust(n);
+      this.reputation = dialogue.reputation ?? this.reputation + n;
+    } else {
+      this.reputation = Math.max(-100, Math.min(100, this.reputation + n));
+    }
+    this._pushReputation();
+    return this.reputation;
+  }
+
+  /**
+   * Put the held number where the readers look.
+   *
+   * `party.reputation` first, because that is the field `DialogueSystem` reads.
+   * A `party.addReputation` gets first refusal if a future `PartySystem` ever
+   * grows one, so this stops being a bridge the day the party owns the field
+   * itself. The dialogue model keeps a fallback copy for a build with no party
+   * at all, and its own setter is what keeps the two in step — which is why it
+   * is only touched when it disagrees.
+   */
+  _pushReputation() {
+    const ctx = this._ctx;
+    const party = ctx?.get?.('party');
+    if (party && typeof party.addReputation === 'function') {
+      const delta = this.reputation - (party.reputation ?? 0);
+      if (delta) party.addReputation(delta);
+    } else if (party) {
+      party.reputation = this.reputation;
+    }
+    const dialogue = ctx?.get?.('dialogue');
+    if (dialogue && dialogue.reputation !== this.reputation) dialogue.reputation = this.reputation;
+  }
+
+  /**
+   * Write one autonote, once.
+   *
+   * Deduplicated on the sentence itself: the party can be told the same thing
+   * in four towns and the page should say it once. The order is the order it
+   * was learned in, which is the only order a notebook has.
+   */
+  note(group, text) {
+    const line = String(text ?? '').trim();
+    if (!line) return false;
+    if (this.notes.some((n) => n.text === line)) return false;
+    this.notes.push({ group: String(group || 'Noted'), text: line });
+    return true;
+  }
 
   addAward(text) {
     if (!text || this.awards.includes(text)) return;
@@ -417,6 +561,84 @@ export class QuestSystem extends System {
     }
   }
 
+  /**
+   * "We have met this person", which is the smallest true note the world
+   * already broadcasts and the one MM6 fills half a page with.
+   *
+   * A bare name is not a fact worth a line — the interesting half is the trade
+   * and the town, and a doorway resident generated on the spot may have
+   * neither. So a note is written only when there is something in it beyond
+   * the name.
+   *
+   * `profession` and nothing else, because that is the field both emitters
+   * carry: `NPCs.js` writes it out ("Innkeep of the Bell and Anchor") and
+   * `NPCSystem._keeperFromVenue` composes one for a keeper the sign names and
+   * the roster does not. A trade *id* would read as `weaponsmith` on a page of
+   * sentences, which is worse than no line at all.
+   */
+  _notePerson(npc) {
+    const def = npc?.def ?? npc;
+    const name = String(def?.name ?? '').trim();
+    if (!name) return;
+    const trade = String(def?.profession ?? '').trim();
+    const town = getTown(def?.town)?.name ?? null;
+    if (trade && town) this.note('People', `${name}, ${trade}, in ${town}.`);
+    else if (trade) this.note('People', `${name}, ${trade}.`);
+    else if (town) this.note('People', `${name}, of ${town}.`);
+  }
+
+  /**
+   * How many of an item the party is holding right now.
+   *
+   * Two pack shapes are in the tree and both are real: `stowInPack` writes
+   * `{ item, x, y }` for the grid, `LootSystem.addToInventory` pushes the item
+   * itself. Nothing stacks, so an entry is one of the thing. Worn gear counts
+   * too — a quest that asks for a bow does not stop being satisfied because
+   * somebody drew it.
+   */
+  _carried(itemId) {
+    if (!itemId) return 0;
+    let held = 0;
+    const matches = (it) => !!it && (it.baseId ?? it.id) === itemId;
+    for (const m of this._ctx?.get?.('party')?.members ?? []) {
+      for (const entry of m?.inventory ?? []) if (matches(entry?.item ?? entry)) held += 1;
+      for (const worn of Object.values(m?.equipment ?? {})) if (matches(worn)) held += 1;
+    }
+    return held;
+  }
+
+  /**
+   * Credit what the party is already carrying against the objectives that have
+   * just come into view.
+   *
+   * `_progress` only ever counts a `collect` at the moment `loot:picked` fires,
+   * and only against a quest that is active and standing on the right stage.
+   * That is exactly backwards for the way this world is built: the quest items
+   * are seeded into dungeon chests by `DungeonSystem`, a chest is emptied once
+   * and never refills, and a party that clears the hole before anybody asks it
+   * to — which is the normal way to play — walks out holding the psalter with
+   * no way left to be credited for it. The quest could then never be finished
+   * by any sequence of actions, and nothing anywhere said so.
+   *
+   * So the pack is asked at the two moments the question can have changed: when
+   * a quest is taken, and when it turns a stage. This is the item half of
+   * `_applyStandingFlags` above and exists for the same reason — being sent to
+   * do a thing that is already done reads as a bug, not as design.
+   */
+  _applyCarried(id) {
+    const q = this.active.get(id);
+    if (!q) return;
+    const stage = q.stage;
+    for (const obj of objectivesAtStage(id, stage)) {
+      if (obj.type !== 'collect') continue;
+      // Crediting can turn the stage or finish the quest outright, which moves
+      // the ground under this loop — so re-check before every one.
+      if (!this.active.has(id) || this.active.get(id).stage !== stage) break;
+      const short = this._carried(obj.target) - (q.counters[obj.id] ?? 0);
+      if (short > 0) this._progress('collect', obj.target, short);
+    }
+  }
+
   _advance(ctx, id, q, def) {
     q.stage++;
     // A quest ends when it runs out of objectives, not when it runs out of
@@ -433,6 +655,7 @@ export class QuestSystem extends System {
       kind: 'quest',
     });
     this._applyStandingFlags(id);
+    this._applyCarried(id);
   }
 
   /**
@@ -461,7 +684,7 @@ export class QuestSystem extends System {
       if (typeof loot.giveToParty === 'function') loot.giveToParty(made);
       else loot?.addToInventory?.(0, made);
     }
-    if (reputation) party?.addReputation?.(reputation);
+    if (reputation) this.addReputation(reputation);
     if (skillPoints) party?.grantSkillPoints?.(skillPoints);
     // Promotion is the party layer's business — it owns what a class *is*. We
     // say which title was earned and let it decide who in the party earns it.
@@ -489,6 +712,8 @@ export class QuestSystem extends System {
       completed: [...this.completed],
       awards: this.awards,
       flags: [...this.flags],
+      reputation: this.reputation,
+      notes: this.notes.map((n) => ({ group: n.group, text: n.text })),
     };
   }
 
@@ -498,6 +723,14 @@ export class QuestSystem extends System {
     this.completed = new Set(json.completed ?? []);
     this.awards = json.awards ?? [];
     this.flags = new Set(json.flags ?? []);
+    this.reputation = Math.max(-100, Math.min(100, Math.round(Number(json.reputation) || 0)));
+    this.notes = (json.notes ?? [])
+      .map((n) => (typeof n === 'string' ? { group: 'Noted', text: n } : n))
+      .filter((n) => n && n.text);
+    // Standing is held here because it has to survive a save, but it is read
+    // off the party — so a load has to put it back where the readers look, or
+    // a reloaded game deals with everybody as a stranger again.
+    this._pushReputation();
     // A load moves the clock by however long ago the save was written. Forget
     // the last sample so the jump is not paid out as a fast nobody held.
     this._lastHour = null;

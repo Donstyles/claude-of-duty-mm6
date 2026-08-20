@@ -1,8 +1,9 @@
 import './quests.css';
 import { Panel } from './base.js';
-import { el, setChildren, nu, fmt, ellipsis, tooltip, tipMarkup, goldOval } from '../widgets.js';
+import { el, setChildren, nu, fmt, ellipsis, tooltip, tipMarkup, goldOval, attribute } from '../widgets.js';
 import { icon } from '../Icons.js';
 import { QUESTS } from '../../game/data/Quests.js';
+import { obeliskInscription } from '../../game/data/Regions.js';
 
 /**
  * The quest book.
@@ -16,9 +17,24 @@ import { QUESTS } from '../../game/data/Quests.js';
  * black upright body text with no shadow, an outlined calligraphic header on
  * an ivory cartouche, green cloth binding with gilt clasps.
  *
- * The catalogue is read live from the quest system. Where the campaign's own
- * script has not landed yet the book falls back to the chronicle below rather
- * than to placeholder rows, so the page is always a real page.
+ * **Everything on these four pages is the party's own history and nothing
+ * else.** This file used to carry a hand-written chronicle of ten quests — a
+ * draft catalogue from before the real one landed, with ids like
+ * `main_02_the_queens_summons` that this game has never heard of — and printed
+ * it whenever the live journal came back empty. It did come back empty: a book
+ * opened by a party that had taken nothing showed eight jobs in hand, two
+ * already settled, and an Awards page citing the two settlements. Nothing threw
+ * and nothing was logged; the page was simply a lie told with authority. A
+ * journal whose fallback is fiction is worse than an empty one, because the
+ * empty one is true — so the empty pages here are written to be read.
+ *
+ * The four tabs draw from three live registers, all of them already serialised:
+ * `QuestSystem` for the side work, the awards and the autonotes the party
+ * writes as it learns things; `CampaignSystem` for the main line — both the
+ * stages themselves, which this book had never shown, and the line the
+ * catalogue authored about what closing each one turned up; and `PropSystem`'s
+ * obelisk register for the clauses of the Verast Line the party has stood in
+ * front of and read.
  */
 
 const TABS = [
@@ -26,188 +42,6 @@ const TABS = [
   { id: 'completed', label: 'Completed Quests', tab: 'Done' },
   { id: 'notes', label: 'Auto Notes', tab: 'Notes' },
   { id: 'awards', label: 'Awards', tab: 'Awards' },
-];
-
-/**
- * Place tokens that prove a quest catalogue is Caerwen's.
- *
- * The journal is the one screen that reproduces authored prose verbatim, so it
- * checks whose world the prose is set in before printing it: a catalogue whose
- * quests are pinned to places that do not exist in this kingdom is a catalogue
- * from another game, and printing it would put another game's names on our
- * page. When the real script lands this test passes and the fallback below
- * stops being reached.
- */
-const CANON_PLACES = [
-  'millhaven', 'thornwick', 'ashford', 'saltmarch', 'greywater', 'coldwater',
-  'netherby', 'brackwater', 'fallowmere', 'emberhold', 'duskorn', 'cindermoor',
-  'weald', 'gallowfen', 'whitemantle', 'riven', 'malveth', 'verhal', 'sunder',
-  'ossra', 'caerwen',
-];
-
-/** The opening chapters, as the party would have written them down. */
-const CHRONICLE = [
-  {
-    id: 'main_01_a_small_errand', name: 'A Small Errand', kind: 'main', chapter: 1,
-    giver: 'Wat Fletcher', place: 'Millhaven',
-    summary: 'Sheep are going off the downs in ones and twos, and the shepherd who followed them has not come back.',
-    stages: [
-      'Wat Fletcher keeps the Bell and Anchor and hears everything twice. Four ewes and a shepherd gone in a fortnight, and the reeve will not send anyone until it is six.',
-      'The trail off the downs ends at a sea cave under the headland. Somebody has cut steps into it, recently and badly.',
-      'There were nine of them down there, in grey, singing. They had the shepherd. They were not planning to let him go.',
-    ],
-    objectives: [
-      { text: 'Ask after the missing shepherd in Millhaven.', done: true },
-      { text: 'Follow the trail across Millhaven Downs.', done: true },
-      { text: 'Clear the sea cave under the headland.', done: false },
-      { text: 'Bring what you find back to Wat Fletcher.', done: false },
-    ],
-    rewards: { xp: 400, gold: 150, reputation: 2 },
-  },
-  {
-    id: 'main_02_the_queens_summons', name: "The Queen's Summons", kind: 'main', chapter: 1,
-    giver: 'Queen Ysolde Caerwen', place: 'Thornwick',
-    summary: 'A rider from Thornwick with the crown seal. The Queen has read the reeve\'s report and wants the party in front of her.',
-    stages: [
-      'The seal is real, the ink is fresh, and the rider would not sit down. Thornwick is fourteen hours up the coast road.',
-      'The Queen will not move against a cult on the word of four strangers. She wants three warrants: one from the Sword Chapter, one from the Ledger, one from the Order.',
-    ],
-    objectives: [
-      { text: 'Travel to Thornwick and present yourselves at the palace.', done: true },
-      { text: 'Earn the warrant of the Sword Chapter.', done: false },
-      { text: 'Earn the warrant of the Ledger.', done: false },
-      { text: 'Earn the warrant of the Order of the Kindled Lamp.', done: false },
-    ],
-    rewards: { xp: 1200, gold: 400, reputation: 5, unlocks: ['The coach roads open'] },
-  },
-  {
-    id: 'warrant_sword_chapter', name: 'The Marshal’s Price', kind: 'main', chapter: 2,
-    giver: 'Lord Marshal Bren Oakhallow', place: 'Ashford',
-    summary: 'The Sword Chapter signs nothing for anyone who has not done its work. Its work, this month, is in Ashford Hollow.',
-    stages: [
-      'Oakhallow commands from a hall with no door on it, which he says is deliberate. Three of his bounties are unclaimed and he is short of riders.',
-      'Two bounties down. The third was not a beast: it was a charcoal-burner selling the road times of the Ashford coaches.',
-    ],
-    objectives: [
-      { text: 'Claim three bounties from the Ashford board.', done: true },
-      { text: 'Find who has been selling the coach road times.', done: false },
-      { text: 'Return to Lord Marshal Oakhallow for the warrant.', done: false },
-    ],
-    rewards: { xp: 1800, gold: 600, reputation: 4, items: ['The Sword Chapter’s warrant'] },
-  },
-  {
-    id: 'warrant_ledger', name: 'A Clean Set of Books', kind: 'main', chapter: 2,
-    giver: 'Factor Merrigan Salter', place: 'Saltmarch',
-    summary: 'The Ledger will lend its name to anyone who can explain where four hundred crowns of salt went.',
-    stages: [
-      'Merrigan Salter runs travel for the whole coast and has never once been seen outside her counting house. Her ledger is short four hundred crowns of salt.',
-      'The salt left Saltmarch on a boat with no name and came back as coin through a temple that does not take coin.',
-    ],
-    objectives: [
-      { text: 'Audit the Saltmarch salt pans.', done: true },
-      { text: 'Trace the missing cargo through the smugglers’ channels.', done: false },
-      { text: 'Bring Factor Salter a name.', done: false },
-    ],
-    rewards: { xp: 1800, gold: 900, reputation: 4, items: ['The Ledger’s warrant'] },
-  },
-  {
-    id: 'warrant_order', name: 'The Lamp Relit', kind: 'main', chapter: 2,
-    giver: 'Prior Tamsin Ashe', place: 'Thornwick',
-    summary: 'The Order will not sign until the chapel at Fallowmere has a light in it again.',
-    stages: [
-      'Prior Ashe is polite, tired, and entirely unmoved by the crown seal. Fallowmere has had no priest for eleven years and its lamp is out.',
-      'There is a reason nobody replaced the priest at Fallowmere, and it is in the crypt under the chancel.',
-    ],
-    objectives: [
-      { text: 'Sail to Fallowmere and open the church.', done: false },
-      { text: 'Find out what happened to the last priest.', done: false },
-      { text: 'Relight the lamp and report to Prior Ashe.', done: false },
-    ],
-    rewards: { xp: 2000, gold: 500, reputation: 6, items: ['The Order’s warrant'] },
-  },
-  {
-    id: 'guild_ember_admission', name: 'Admission to the Ember', kind: 'guild', chapter: 1,
-    giver: 'Adept Sella Roon', place: 'Millhaven',
-    summary: 'The Guild of the Ember licenses fire. It also, quietly, licenses whoever is willing to go into a burning barn for it.',
-    stages: [
-      'Sella Roon keeps the smallest guild hall in Caerwen and the tidiest. Admission costs a fee, a sponsor, or a favour; the party has no fee and no sponsor.',
-    ],
-    objectives: [
-      { text: 'Recover the guild’s ember-glass from the burnt mill.', done: false },
-      { text: 'Return it to Adept Roon unbroken.', done: false },
-    ],
-    rewards: { xp: 600, gold: 0, skillPoints: 1, unlocks: ['Fire spells to Expert'] },
-  },
-  {
-    id: 'side_hessa', name: 'What Old Hessa Saw', kind: 'side', chapter: 2,
-    giver: 'Old Hessa', place: 'Brackwater Isle',
-    summary: 'The hermit on Brackwater Isle went into the Sunder two hundred miles and forty years ago, and came back.',
-    stages: [
-      'Everyone on the island says the same thing about Hessa: do not ask her about the crater, and do not go before dark.',
-      'She talks about corridors. Not caves — corridors. She drew one on the floor in ash and would not let us copy it.',
-    ],
-    objectives: [
-      { text: 'Find Old Hessa’s hut on Brackwater Isle.', done: false },
-      { text: 'Bring her a bottle of Millhaven ink.', done: false },
-      { text: 'Listen to the whole of it.', done: false },
-    ],
-    rewards: { xp: 700, gold: 0, reputation: 1 },
-  },
-  {
-    id: 'side_barrow_opened', name: 'The Barrow That Opened', kind: 'side', chapter: 3,
-    giver: 'Reeve Corliss Ashe', place: 'Netherby',
-    summary: 'Netherby walls itself against its own dead. Last week one of the barrows opened from the inside.',
-    stages: [
-      'The gate captain has counted the barrows on the moor every morning for nineteen years. There is one fewer standing than there was.',
-    ],
-    objectives: [
-      { text: 'Walk the barrow line north of Netherby.', done: false },
-      { text: 'Close whatever came out of it.', done: false },
-    ],
-    rewards: { xp: 1500, gold: 350, reputation: 3 },
-  },
-  {
-    id: 'side_wolves_on_the_downs', name: 'Wolves on the Downs', kind: 'side', chapter: 1,
-    giver: 'Sergeant Bray', place: 'Millhaven', complete: true,
-    summary: 'A winter pack came down off the downs and took two dogs and a gate.',
-    stages: [
-      'Sergeant Bray trains the Millhaven yard and pays out of his own purse, which tells you what the yard is worth.',
-      'Eleven wolves. Bray paid for eleven and said nothing about the twelfth, which was not a wolf.',
-    ],
-    objectives: [
-      { text: 'Thin the pack on Millhaven Downs.', done: true },
-      { text: 'Collect the bounty from Sergeant Bray.', done: true },
-    ],
-    rewards: { xp: 300, gold: 90, reputation: 1 },
-  },
-  {
-    id: 'side_the_riveted_coat', name: 'The Riveted Coat', kind: 'side', chapter: 1,
-    giver: 'Alard Cooper', place: 'Millhaven', complete: true,
-    summary: 'The armourer’s mail shipment never came off the packet from Saltmarch.',
-    stages: [
-      'Alard Cooper has been waiting three weeks for eight coats of ring mail and is making do with boiled leather and temper.',
-      'The mail was on the boat. So were two men who did not get off at Millhaven.',
-    ],
-    objectives: [
-      { text: 'Find the missing mail shipment.', done: true },
-      { text: 'Return it to the Riveted Coat.', done: true },
-    ],
-    rewards: { xp: 250, gold: 120 },
-  },
-];
-
-/** What the party has learned, kept the way MM6 keeps autonotes: by kind. */
-const AUTONOTES = [
-  { group: 'Rumours', text: 'The grey singers in the sea cave were not local. Nobody in Millhaven knew the tune, and Wat Fletcher knows every tune on this coast.' },
-  { group: 'Rumours', text: 'Coach drivers out of Ashford will not take the Netherby road after dark for any fare. They say the barrows count you as you pass.' },
-  { group: 'Rumours', text: 'Somebody in Thornwick is paying Duskorn scavengers in crown coin. The temples will not take crown coin from a scavenger.' },
-  { group: 'Lore', text: 'The Cindral Imperium held this coast eight centuries ago. It built the roads we still ride, the aqueducts we still drink from, and the doors nobody has opened since.' },
-  { group: 'Lore', text: 'The Ninefold Concord licenses eight schools of magic and pretends the ninth does not exist. The Guild of the Long Shadow has a hall in three towns regardless.' },
-  { group: 'Lore', text: 'Vellory’s Beacon sets an anchor you can return to from anywhere. Archivist Nim Vellory invented it, and will tell you so.' },
-  { group: 'Places', text: 'Ossra Deep lies under the Sunder. The glass floor of the crater is its ceiling.' },
-  { group: 'Places', text: 'Duskorn was killed in a single night and is still standing. Isabeau Ossran sells what she scavenges out of a stall in the old forum.' },
-  { group: 'Places', text: 'The ford east of the Millhaven mill is passable below waist height, and only below waist height.' },
-  { group: 'Recipes', text: 'Fen lily and a bloodhaw berry, ground cold, make a draught that holds a fever off for a day. Ground warm they make a poison.' },
 ];
 
 export class QuestPanel extends Panel {
@@ -449,7 +283,11 @@ export class QuestPanel extends Panel {
     setChildren(this.footEl);
     if (!notes.length) {
       setChildren(this.indexEl, el('p', { className: 'mm-qb-empty', text: 'The party has learned nothing worth writing down. Give it a week.' }));
-      setChildren(this.entryEl, el('div', { className: 'mm-qb-blank' }, el('p', { text: 'Autonotes fill themselves as people talk.' })));
+      // Says what actually fills the page, and says it without naming the tab:
+      // the flap reads "Auto Notes" and this line read "Autonotes", which is
+      // the interface disagreeing with itself about a word in its own margin.
+      setChildren(this.entryEl, el('div', { className: 'mm-qb-blank' },
+        el('p', { text: 'The page writes itself as the party talks, reads and finishes things.' })));
       return;
     }
     const groups = new Map();
@@ -522,14 +360,18 @@ export class QuestPanel extends Panel {
   // ── data ──────────────────────────────────────────────────────────────────
 
   /**
-   * Live quest state where there is any, this file's chronicle where there is
-   * not. The two are merged rather than switched between: even with a fallback
-   * catalogue, a quest the live system has completed shows as completed.
+   * The party's own journal, and nothing but.
+   *
+   * The main line first and the side work after it, which is the order a player
+   * would put them in. Whatever the two systems hold is the whole of the answer,
+   * including when they hold nothing — see the note at the head of this file for
+   * what used to happen instead. A build with neither system (the design
+   * harness) gets four empty pages, which is the truth about a book nobody has
+   * written in yet.
    */
   _journal() {
     const sys = this.ctx?.get('quests');
-    const live = this._liveEntries(sys);
-    const source = live.length ? live : this._chronicle(sys);
+    const source = [...this._campaignEntries(), ...this._liveEntries(sys)];
     const completed = source.filter((q) => q.complete);
     return {
       active: source.filter((q) => !q.complete),
@@ -539,8 +381,51 @@ export class QuestPanel extends Panel {
     };
   }
 
+  /**
+   * The main line, in the book's own shape.
+   *
+   * Two catalogues describe this world: `Quests.js`, which this book has always
+   * read, and `Campaign.js`, whose eighty stages are the spine the acts turn
+   * on. `CampaignSystem` wraps `QuestSystem.journal()` to fold its stages in —
+   * its own comment says why, "so one screen shows both kinds of quest" — and
+   * that screen is this one, which does not call `journal()`: it builds its
+   * entries out of `active` and `completed` because it wants the objective list
+   * and the prose, which `journal()` does not carry for a side quest. So the
+   * wrap has been folding the spine into a call nobody here makes, and the book
+   * has never once shown the main quest. Until the chronicle came out, the
+   * fiction hid it — the missing main line was replaced on the page by a
+   * hand-written one.
+   *
+   * The campaign's own `journal()` does carry both halves, so it is asked
+   * directly and its entries are mapped to the shape the pages render. A
+   * stage's reward names one item where a quest names a list, which is the only
+   * field that has to be reconciled.
+   */
+  _campaignEntries() {
+    const camp = this.ctx?.get('campaign');
+    let entries = [];
+    try { entries = camp?.journal?.() ?? []; } catch { entries = []; }
+    return entries.map((e) => ({
+      id: e.id,
+      name: e.name,
+      kind: 'main',
+      chapter: e.act,
+      giver: prettyName(e.giver),
+      place: prettyName(e.place),
+      summary: e.summary,
+      stages: (e.journal ?? []).filter(Boolean),
+      objectives: e.objectives ?? [],
+      rewards: {
+        xp: e.rewards?.xp ?? 0,
+        gold: e.rewards?.gold ?? 0,
+        items: e.rewards?.item ? [e.rewards.item] : [],
+      },
+      complete: !!e.done,
+    }));
+  }
+
   _liveEntries(sys) {
-    if (!sys || !this._catalogueIsCaerwen()) return [];
+    if (!sys) return [];
     const out = [];
     const seen = new Set();
     const add = (id, state) => {
@@ -570,35 +455,58 @@ export class QuestPanel extends Panel {
     return out;
   }
 
-  /** True when the quest catalogue is set in this kingdom rather than another. */
-  _catalogueIsCaerwen() {
-    if (this._canon !== undefined) return this._canon;
-    const defs = Object.values(QUESTS ?? {});
-    if (!defs.length) return (this._canon = false);
-    const here = defs.filter((d) => {
-      const where = `${d.location ?? ''} ${d.turnIn ?? ''}`.toLowerCase();
-      return CANON_PLACES.some((p) => where.includes(p));
-    });
-    this._canon = here.length >= defs.length * 0.4;
-    return this._canon;
-  }
-
-  /** The fallback book, with whatever live completion state applies to it. */
-  _chronicle(sys) {
-    const done = sys?.completed ?? new Set();
-    return CHRONICLE.map((q) => ({ ...q, complete: q.complete || done.has?.(q.id) }));
-  }
-
   /**
-   * Autonotes: what the party has been told, rather than what it has been
-   * asked to do. A quest system that keeps its own notes owns this outright;
-   * otherwise the book shows the standing notes plus the deeds recorded so far.
+   * Autonotes: what the party has learned, rather than what it has been asked
+   * to do.
+   *
+   * This tab had a ground, four tabs above it and a hard-coded list of ten
+   * sentences underneath — rumours nobody had heard, lore nobody had been told,
+   * a ford the party had never been shown. It read as the game's memory and was
+   * a decoration, identical on a fresh boot and forty hours in.
+   *
+   * MM6's autonotes are the things you learn by doing, so these come from the
+   * three registers that record doing, in the order a page should read them:
+   *
+   * the party's own notebook first — `QuestSystem.notes`, written as people are
+   * met and (once `dialogue:heard` is emitted, see `QuestSystem.init`) as talk
+   * is heard; then the Verast Line, where a clause appears only once the party
+   * has stood at that stone, which is what `PropSystem`'s register remembers
+   * and `obeliskInscription` withholds until it does; then the main road, where
+   * every stage of the campaign the party has closed leaves the line the
+   * catalogue authored about what was found.
+   *
+   * Everything here is state that already survives a save. Nothing is invented,
+   * and an empty page means an empty notebook.
    */
   _notes(sys) {
-    const live = Array.isArray(sys?.notes) ? sys.notes : Array.isArray(sys?.autonotes) ? sys.autonotes : null;
-    return live
-      ? live.map((n) => (typeof n === 'string' ? { group: 'Noted', text: n } : n))
-      : [...AUTONOTES];
+    const out = [];
+    const seen = new Set();
+    const add = (group, text) => {
+      const line = String(text ?? '').trim();
+      if (!line || seen.has(line)) return;
+      seen.add(line);
+      out.push({ group: group || 'Noted', text: line });
+    };
+
+    // `notes` and only `notes`. This used to try `autonotes` as well, which is
+    // the kind of plausible second guess that hides a misspelling for ever: one
+    // field, one owner, and an empty page if it is empty.
+    for (const n of Array.isArray(sys?.notes) ? sys.notes : []) {
+      if (typeof n === 'string') add('Noted', n);
+      else add(n?.group, n?.text);
+    }
+
+    const read = this.ctx?.get('props')?.obeliskProgress?.read ?? [];
+    if (read.length) {
+      for (const clause of obeliskInscription(read)) {
+        if (!clause.text) continue;   // a stone the party has not reached
+        add('The Verast Line', `Clause ${roman(clause.clause)}, ${clause.region}. ${quoted(clause.text)}`);
+      }
+    }
+
+    for (const n of this.ctx?.get('campaign')?.notes?.() ?? []) add(n?.group, n?.text);
+
+    return out;
   }
 
   /**
@@ -610,7 +518,12 @@ export class QuestPanel extends Panel {
   _awards(sys, completed) {
     const out = [];
     const seen = new Set();
-    const add = (text) => {
+    // An award is a sentence, and `addAward` only ever records one — but the
+    // save file has carried `{ id, name }` objects from an older shape, and
+    // `String({})` on a parchment page reads "[object Object]". The character
+    // sheet already takes either; so does this now.
+    const add = (award) => {
+      const text = typeof award === 'string' ? award : (award?.text ?? award?.name ?? '');
       const s = String(text ?? '').trim();
       if (!s || seen.has(s)) return;
       seen.add(s);
@@ -625,12 +538,26 @@ export class QuestPanel extends Panel {
 
   // ── capture ───────────────────────────────────────────────────────────────
 
+  /**
+   * The review screens, with a party that has actually played behind them.
+   *
+   * Three of these four pages are pages about history, and a session that has
+   * just booted has none — which is what the deleted chronicle was really for,
+   * and why it survived so long: it made the screenshots look full. The book no
+   * longer invents anything, so the shots have to do the honest version of the
+   * same job and put real work through the real systems first. `complete()` on
+   * either system is the scripted turn-in both of them already offer, so what
+   * the camera sees is a journal the game itself wrote, rewards and all.
+   *
+   * Capture-only. Nothing here runs unless `CaptureSystem` asked for a shot.
+   */
   _registerShots() {
     const cap = this.ctx?.get('capture');
     if (!cap?.registerShot) return;
     const shot = (name, filter, description) => cap.registerShot(name, {
       description,
       apply: () => {
+        this._playForShot();
         this.filter = filter;
         this.selected[filter] = 0;
         this.ui.openPanel('quests');
@@ -638,10 +565,32 @@ export class QuestPanel extends Panel {
     });
     shot('ui-quests-done', 'completed', 'The quest book on its Completed tab: finished work, grouped by '
       + 'whoever set it, with the full entry on the right-hand page.');
-    shot('ui-quests-notes', 'notes', 'The quest book on its Autonotes tab: rumours, lore and places the '
-      + 'party has been told about, in two columns of parchment.');
+    shot('ui-quests-notes', 'notes', 'The quest book on its Autonotes tab: what the party has learned by '
+      + 'doing — people met, clauses read off the Verast Line, and what closing a stage of the main line '
+      + 'turned up — in two columns of parchment.');
     shot('ui-quests-awards', 'awards', 'The quest book on its Awards tab: what the party has been formally '
       + 'credited with, and every job it has settled, in two columns of parchment.');
+  }
+
+  /** A few hours of play, run through the real turn-ins, once per session. */
+  _playForShot() {
+    if (this._played) return;
+    this._played = true;
+    const ctx = this.ctx;
+    const quests = ctx?.get('quests');
+    const campaign = ctx?.get('campaign');
+    // The opening errand and whatever it unlocked: started, then settled.
+    for (const id of ['main_01_a_small_errand', 'main_02_the_singing_cave']) {
+      quests?.start?.(ctx, id);
+      quests?.complete?.(id);
+    }
+    // Six stages of the spine, each one leaving the line the catalogue wrote
+    // about what was found there. `complete` opens whatever comes next, so the
+    // list has to be re-read every time rather than snapshotted.
+    for (let i = 0; i < 6; i++) {
+      const next = campaign?.open?.[0];
+      if (!next || !campaign.complete(next.id)) break;
+    }
   }
 }
 
@@ -666,6 +615,39 @@ function rewardChip(label, value) {
 
 function rule(label) {
   return el('div', { className: 'mm-qb-rule' }, el('span', { text: label }));
+}
+
+/**
+ * A line the party read off a stone, set as something read: curly marks around
+ * it and curly apostrophes inside it (STYLE.md §7).
+ *
+ * `attribute()` makes the wrapping, and with a null speaker it makes exactly
+ * the quotation this wants. The apostrophe pass is the half it does not do —
+ * `curly()`, which does, is parked in `guild.js` where no other panel file can
+ * reach it, and STYLE.md's "Not mine to fix" §7 already says both helpers
+ * belong in `widgets.js`. Until they are there this is the local hand of it,
+ * and it is one regular expression rather than a second opinion about quotes.
+ *
+ * The rule is "an apostrophe after a letter", not `guild.js`'s "between two
+ * letters", because the Verast Line's twelfth clause reads `the giants' road`
+ * and a possessive with nothing after it is still an apostrophe. Nothing that
+ * reaches here carries a real single quotation mark — the wrapping marks are
+ * `attribute()`'s job — so there is nothing else for it to catch.
+ */
+function quoted(text) {
+  return attribute(null, String(text ?? '').replace(/(\w)'/g, '$1’'));
+}
+
+/**
+ * The number cut on the stone. Eighteen of them, so the small table is the
+ * whole of the problem and a general algorithm would be showing off.
+ */
+const ROMAN = [
+  '', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX',
+  'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII',
+];
+function roman(n) {
+  return ROMAN[n] ?? String(n);
 }
 
 /** Ids arrive as `npc_wat_fletcher` or `town_millhaven`; people read names. */
