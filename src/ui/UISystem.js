@@ -47,6 +47,65 @@ const GRID_ROWS = 9;
 
 const MAGIC_IDS = new Set(MAGIC_SCHOOL_IDS ?? []);
 
+/**
+ * The tallest stack of native pixels any one screen puts between the top of
+ * the window and the bottom of it, measured rather than added up: the
+ * backpack, where 128u of bar, 307.5u of strip-and-`Arrange` and 31.2u of oval
+ * row have to share `height`. See `_applyScale` for the sweep this came off.
+ */
+const PACK_STACK = 466.7;
+
+/**
+ * As large as a mouse-driven window is ever allowed to force the frame. Above
+ * 442 px of window `height/480` is bigger anyway, so this only shapes the band
+ * between the backpack's ceiling and that crossover — its job is to keep `u`
+ * monotonic in height, not to be a target.
+ */
+const UI_SCALE_FLOOR = 0.92;
+
+/**
+ * What a timed potion is a quantity *of* — the potion table's answer to the
+ * spell book's `affects`.
+ *
+ * `Character.refresh()` reads exactly three keys off a buff — `statBonus`,
+ * `acBonus`, `resistBonus` — and ignores everything else, which is how seven
+ * resistance spells came to be sound and light (see the note in `refresh`).
+ * A potion carries a bare `power`, so something has to say which of the three
+ * it lands in; this is that statement, and putting it in one table rather than
+ * a switch is what stops the next effect being added without one.
+ *
+ * `mag` is a fallback and only a fallback. Four bottles ship `power: 0` —
+ * Haste, Shielding, Water Breathing, Preservation — so the magnitude the
+ * table hands them is the interface's guess, not a designer's number, and the
+ * moment `Items.js` gives those four a power the guess stops being used. The
+ * two with no bonus key at all are flags rather than quantities: nothing reads
+ * them yet, but they are on the buff list, so they show on the sheet, they
+ * expire with everything else, and whoever gives them teeth has a seam to
+ * read rather than a potion to invent.
+ */
+const POTION_BUFFS = {
+  'stone-skin': { key: 'acBonus', mag: 10, note: 'the skin turns to stone' },
+  shield: { key: 'acBonus', mag: 5, note: 'a shield closes over' },
+  bless: { key: 'statBonus', stat: 'accuracy', mag: 10, note: 'a blessing settles' },
+  heroism: { key: 'statBonus', stat: 'might', mag: 10, note: 'heroism takes hold' },
+  haste: { key: 'statBonus', stat: 'speed', mag: 5, note: 'the blood quickens' },
+  'water-breathing': { key: null, mag: 0, note: 'the water loses its grip' },
+  preservation: { key: null, mag: 0, note: 'a preservation settles' },
+  'boost-stat': { key: 'statBonus', stat: null, mag: 15, note: null },
+};
+
+/**
+ * What Divine Restoration will not lift.
+ *
+ * "Strips every condition short of death" is the bottle's own claim, and the
+ * condition table's own notes name the three it cannot touch: `dead` and
+ * `eradicated` want Resurrection or a temple, and `stoned` wants Stone to
+ * Flesh. A potion that quietly raised the dead would make the temple's
+ * resurrection fee — and the whole of the spirit school above level 7 —
+ * pointless.
+ */
+const BEYOND_RESTORATION = new Set(['dead', 'eradicated', 'stoned']);
+
 export class UISystem extends System {
   static id = 'ui';
   static order = 320;
@@ -247,23 +306,42 @@ export class UISystem extends System {
    * character sheet is drawn for. A floor cannot help a device; it can only
    * push the frame off it.
    *
-   * ── and the floor cannot be raised either, which is the surprise ──────────
+   * ── the floor is not a constant, because the backpack is the ceiling ──────
    *
-   * The obvious move on the 932 × 430 target is the other way: `height/480` is
-   * 0.8958 there, the floor lifts it to 0.9, and MM6 paints nothing below
-   * native y = 459, so there look to be 21 native pixels of blank marble to
-   * spend. There are not. The panel body is `height − 128u`, so every extra
-   * pixel of `u` comes straight out of it, and the tightest screen is the
-   * backpack: `Arrange` clears the row of five ovals underneath it by
-   * **0.30 px** at u = 0.9, and by −0.72 px at u = 0.9021. Sweeping `u` in
-   * 0.002 steps puts the ceiling at 0.9006 — six ten-thousandths above the
-   * floor we already have.
+   * This comment used to say the floor could not be raised at all, and quoted
+   * 0.9006 as the ceiling — six ten-thousandths above the flat 0.9. That was
+   * true when it was written and is not true now: the number came entirely
+   * from the backpack's `Arrange` control clearing the oval row beneath it by
+   * 0.30 px, and `inventory.css` has since lifted `.mm-inv-strip` from 304u to
+   * 296u and trimmed it from 13u to 12u. Re-swept on the shipped build at
+   * 932 × 430 in steps of 0.0002:
    *
-   * So the frame is *already* at its limit on this glass and there is nothing
-   * to win; `height/480` it is, which restores 2.3 px of that clearance and
-   * keeps every phone whole. (`inventory.css` giving `Arrange` 6u of air would
-   * hand the whole interface about 2% — that is where to go looking if the
-   * touch targets ever need to be bigger than this.)
+   *   | `--u`  | gap under `Arrange` |
+   *   | ------ | ------------------- |
+   *   | 0.8958 |  12.14 px           |
+   *   | 0.9000 |  10.17 px  (was 0.30) |
+   *   | 0.9186 |   1.47 px           |
+   *   | 0.9218 |   0.02 px — the ceiling |
+   *   | 0.9220 |  −0.09 px — collides |
+   *
+   * The sweep is a straight line, and the line is the whole rule: the gap is
+   * `height − 466.7·u`. Under the strip sit 307.5u of control and 31.2u of
+   * oval; over the panel body sits the 128u bar. Nothing else in the suite
+   * binds before that sum does.
+   *
+   * So the floor becomes what the glass can hold rather than a constant —
+   * `min(0.92, (height − 1)/466.7)`. The −1 buys a pixel of clearance so a
+   * font metric or a device-pixel rounding cannot push the control through the
+   * oval; the 0.92 cap keeps `u` monotonic in height, since `height/480`
+   * overtakes it at 442 px and a shorter window must never draw *larger* than
+   * a taller one.
+   *
+   * Two things come of it. On the 932 × 430 target `u` goes 0.9 → 0.9186, so
+   * every touch target and every glyph in the game is 2.07 % bigger. And the
+   * old flat floor turns out to have been broken below 420 px of window —
+   * `Arrange` sat 19.8 px through the oval row at a 400 px-tall desktop window
+   * and 20 px through it at 360 — where the clamp now keeps 1.4 px of air at
+   * every height it applies to.
    */
   _applyScale(width, height) {
     if (!this.root) return;
@@ -277,7 +355,7 @@ export class UISystem extends System {
     // The sidebar is 172 native px and the bar 128: cap both as a share of the
     // window so an extreme aspect ratio still leaves a usable 3-D view.
     u = Math.min(u, (width * 0.30) / 172);
-    if (!coarse) u = Math.max(u, 0.9);
+    if (!coarse) u = Math.max(u, Math.min(UI_SCALE_FLOOR, (height - 1) / PACK_STACK));
     this.root.style.setProperty('--u', `${u.toFixed(4)}px`);
     this.root.style.setProperty('--ui-scale', (u / 1.875).toFixed(3));
   }
@@ -883,19 +961,179 @@ export class UISystem extends System {
     if (!c || !entry) return false;
     const item = entry.item;
     if (item.category === 'potion') {
-      const heal = item.effect === 'heal' ? item.power || 10 : 0;
-      const sp = item.effect === 'restore-sp' ? item.power || 10 : 0;
-      c.hp = Math.min(c.hpMax ?? c.maxHP ?? Infinity, (c.hp ?? 0) + heal);
-      c.sp = Math.min(c.spMax ?? c.maxSP ?? Infinity, (c.sp ?? 0) + sp);
+      // Nothing in a bottle reaches a corpse — the whole of the temple's
+      // resurrection fee rests on that, and Divine Restoration says so itself.
+      if (c.isDead) {
+        this.toast(`${c.name} is beyond a bottle.`, 'warn');
+        return false;
+      }
+      const out = this._drinkPotion(c, item);
+      if (!out.consumed) {
+        this.toast(`${c.name} ${out.note}.`, 'warn');
+        return false;
+      }
       const i = c.inventory.indexOf(entry);
       if (i >= 0) c.inventory.splice(i, 1);
-      this.log(`${c.name} drinks the ${item.name}.`, 'good');
+      this.log(`${c.name} drinks the ${item.name} — ${out.note}.`, out.kind);
     } else {
       this.log(`${c.name} examines the ${item.name}.`, 'info');
     }
     this._syncParty(true);
     this.panels.get('inventory')?.refresh?.();
     return true;
+  }
+
+  /**
+   * Resolve one bottle against one character.
+   *
+   * This existed as two lines — `heal` and `restore-sp` — against a table of
+   * thirty-six potions carrying twenty-four distinct effects, so thirty-four
+   * bottles were flavour text and a splice. Every cure, the whole layer-2/3/4
+   * ladder the alchemy recipes climb towards, and both stat ladders drank the
+   * same as a Bottle of Water. The two that worked were the two the ladder
+   * starts from, which is exactly why nobody noticed.
+   *
+   * Three shapes, and each is read off the data rather than switched on the
+   * id, so a potion added to `Items.js` works here without an edit:
+   *
+   *   - a cure names the conditions it lifts in its own `cures` array;
+   *   - a timed effect names a duration and a power, and `POTION_BUFFS` says
+   *     which of the three keys `Character.refresh()` reads that power lands
+   *     in — the same statement `affects` makes for a spell;
+   *   - a permanent effect writes the sheet and never expires.
+   *
+   * The buff goes on `char.buffs` in exactly the shape `SpellSystem._castAura`
+   * builds, keyed by the potion id, so a second Grey Potion replaces the first
+   * rather than stacking with it, `Character.tick` expires it for free, and the
+   * sheet reads it without a second code path. And `refresh()` is called after
+   * every write: a bonus that is never recomputed is a number nothing reads,
+   * which is the bug this whole method is the other half of.
+   *
+   * Returns `{ note, kind, consumed }`. A refusal keeps the bottle — a potion
+   * with nothing to act on is wasted, but a potion with nothing it *could* act
+   * on is a misclick, and MM6 does not charge for those.
+   */
+  _drinkPotion(c, item) {
+    const power = item.power ?? 0;
+    const effect = item.effect ?? 'none';
+    const hpMax = c.hpMax ?? c.maxHP ?? Infinity;
+    const spMax = c.spMax ?? c.maxSP ?? Infinity;
+
+    if (effect === 'none') return { note: 'and it is only water', kind: 'info', consumed: true };
+
+    if (effect === 'heal' || effect === 'divine-cure') {
+      const before = c.hp ?? 0;
+      c.hp = Math.min(hpMax, before + (effect === 'divine-cure' ? Infinity : power || 10));
+      const closed = Math.round(c.hp - before);
+      // Zero hit points is unconscious, not dead, and the condition table says
+      // in as many words that any healing puts the character back into play.
+      const woke = c.hp > 0 && c.removeCondition?.('unconscious');
+      if (!closed && !woke) return { note: 'and there was nothing left to close', kind: 'info', consumed: true };
+      return {
+        note: `${closed} hit points close${woke ? ' and the eyes open' : ''}`,
+        kind: 'good',
+        consumed: true,
+      };
+    }
+
+    if (effect === 'restore-sp' || effect === 'divine-power') {
+      const before = c.sp ?? 0;
+      c.sp = Math.min(spMax, before + (effect === 'divine-power' ? Infinity : power || 10));
+      const back = Math.round(c.sp - before);
+      if (!back) return { note: 'and nothing stirs', kind: 'info', consumed: true };
+      return { note: `${back} spell points return`, kind: 'magic', consumed: true };
+    }
+
+    if (effect === 'divine-restoration' || (item.cures?.length ?? 0) > 0) {
+      const wanted = effect === 'divine-restoration'
+        ? (c.conditions ?? []).filter((id) => !BEYOND_RESTORATION.has(id))
+        : item.cures ?? [];
+      let lifted = 0;
+      // Copied first: `removeCondition` splices the array this may be iterating.
+      for (const id of [...wanted]) if (c.removeCondition?.(id)) lifted++;
+      if (!lifted) return { note: 'and finds nothing to lift', kind: 'info', consumed: true };
+      return {
+        note: `${lifted} affliction${lifted > 1 ? 's lift' : ' lifts'}`,
+        kind: 'good',
+        consumed: true,
+      };
+    }
+
+    const spec = POTION_BUFFS[effect];
+    if (spec) {
+      const stat = spec.stat ?? item.attr ?? null;
+      if (spec.key === 'statBonus' && !stat) {
+        // The seven boost potions were byte-identical until `attr` landed, so
+        // this is the one field that tells them apart. Say so rather than
+        // handing out a buff with an empty bonus, which is the silent form.
+        console.warn(`[ui] potion "${item.id}" boosts a stat but names none`);
+        return { note: 'holds a mixture nobody can name', kind: 'warn', consumed: false };
+      }
+      const mag = power || spec.mag;
+      const buff = {
+        spellId: item.id,
+        expires: (this.ctx?.state?.worldTime ?? 0) + (item.duration || 3600),
+        power: mag,
+      };
+      if (spec.key === 'acBonus') buff.acBonus = mag;
+      else if (spec.key === 'statBonus') buff.statBonus = { [stat]: mag };
+      else buff.utility = effect;
+      if (!Array.isArray(c.buffs)) c.buffs = [];
+      const dup = c.buffs.findIndex((b) => b.spellId === item.id);
+      if (dup >= 0) c.buffs.splice(dup, 1);
+      c.buffs.push(buff);
+      c.refresh?.();
+      const hours = Math.max(1, Math.round((item.duration || 3600) / 3600));
+      const what = spec.note ?? `${stat} rises by ${mag}`;
+      return { note: `${what} for ${hours} hour${hours > 1 ? 's' : ''}`, kind: 'buff', consumed: true };
+    }
+
+    if (effect === 'permanent-stat') {
+      const attr = item.attr;
+      if (!attr) {
+        console.warn(`[ui] potion "${item.id}" raises a stat permanently but names none`);
+        return { note: 'holds a mixture nobody can name', kind: 'warn', consumed: false };
+      }
+      if (!c.stats) c.stats = {};
+      c.stats[attr] = (c.stats[attr] ?? 0) + (power || 1);
+      c.refresh?.();
+      return { note: `${attr} rises by ${power || 1}, and stays risen`, kind: 'buff', consumed: true };
+    }
+
+    if (effect === 'rejuvenate') {
+      // Sixteen is where a character can start, so it is where the bottle
+      // stops: an eleven-year-old adventurer is a bug, not a reward.
+      const before = c.age ?? 20;
+      c.age = Math.max(16, before - (power || 5));
+      c.refresh?.();
+      const shed = before - c.age;
+      if (!shed) return { note: 'and there are no years left to shed', kind: 'info', consumed: true };
+      return { note: `${shed} year${shed > 1 ? 's' : ''} fall away`, kind: 'buff', consumed: true };
+    }
+
+    if (effect === 'harden-item') {
+      // "One bottle, one item, no second chances" — so it wants something worn
+      // to land on, and a broken piece before an intact one, since that is the
+      // only state `Character.refresh()` already reads off an item.
+      const worn = Object.values(c.equipment ?? {}).filter(Boolean);
+      const target = worn.find((it) => it.broken) ?? worn.find((it) => !it.hardened);
+      if (!target) {
+        return {
+          note: worn.length ? 'wears nothing left to harden' : 'wears nothing to harden',
+          kind: 'warn',
+          consumed: false,
+        };
+      }
+      target.broken = false;
+      target.hardened = true;
+      c.refresh?.();
+      return { note: `the ${target.name} will not break again`, kind: 'buff', consumed: true };
+    }
+
+    // An effect the table grew and this method did not. Loud, because the
+    // silent version of this branch is what left thirty-four bottles inert.
+    console.warn(`[ui] potion "${item.id}" has unhandled effect "${effect}"`);
+    return { note: 'holds something nobody here knows how to drink', kind: 'warn', consumed: false };
   }
 
   /** Move an item into an equipment slot, swapping whatever was there. */

@@ -435,7 +435,16 @@ export class SpellSystem extends System {
     const magnitude = spell.magnitude ? spell.magnitude(power.skill, power.mastery) : 0;
     const duration = spell.duration ? spell.duration(power.skill, power.mastery) : 3600;
     const eq = char.equipment ?? {};
-    const weapon = eq.mainHand ?? eq.weapon ?? eq.offHand ?? null;
+    // `EQUIP_SLOTS` in `data/Items.js` spells these `mainhand` and `offhand`,
+    // lower case throughout, and there has never been a slot called `weapon`.
+    // Reading `mainHand` found nothing on any character in any case, so Fire
+    // Aura and Vampiric Weapon refused with `holds no weapon to enchant` —
+    // which reads like a rule rather than a typo, and so survived a round of
+    // review. Enchant Item only looked right because its fallback scans the
+    // whole rack and `mainhand` happens to be the first slot in it.
+    // The off hand is a shield as often as a blade; only a weapon takes a rider.
+    const offhand = eq.offhand?.category === 'weapon' ? eq.offhand : null;
+    const weapon = eq.mainhand ?? offhand;
 
     if (spell.utility === 'recharge') {
       const wand = Object.values(eq).find((it) => it && Number.isFinite(it.charges));
@@ -1098,16 +1107,64 @@ export class SpellSystem extends System {
     return true;
   }
 
+  /**
+   * What a save has to carry out of this system.
+   *
+   * `partyEffects` is the whole standing-magic layer and it was missing here,
+   * which cost two things a player would notice and one they would not.
+   * `fixedUpdate` is the only reader: it runs the `affects.regen` tick every
+   * six seconds and it is the only thing that ever lifts `isWaterWalking` and
+   * `isFlying` again. With the map empty after a load, Regeneration stopped
+   * healing *while the character sheet still listed it* — the per-character
+   * `buffs` array is saved, so the interface went on describing a spell that
+   * had no machinery left behind it — and Fly's flag, restored from the player
+   * record, had nothing holding it: the party flew until they quit.
+   *
+   * Only the spell's **id** goes out. The book is data, regenerated identically
+   * from `data/Spells.js`, and the live entry carries scaling *functions* that
+   * would not survive `JSON.stringify` in any case.
+   */
   toJSON() {
     return {
       visitedTowns: [...this.visitedTowns],
       beacons: this.beacons.map((b) => ({ ...b })),
+      partyEffects: [...this.partyEffects].map(([id, eff]) => ({
+        id, expires: eff.expires, magnitude: eff.magnitude, next: eff.next ?? 0,
+      })),
     };
   }
 
   fromJSON(state) {
     this.visitedTowns = new Set(state?.visitedTowns ?? []);
     this.beacons = (state?.beacons ?? []).map((b) => ({ ...b }));
+
+    // Loading over a running game replaces the standing magic rather than
+    // adding to it — a second load must not leave the first one's auras behind.
+    this.partyEffects.clear();
+    for (const e of state?.partyEffects ?? []) {
+      const spell = getSpell(e?.id);
+      if (!spell) continue;   // a save from a build whose book had one more spell
+      this.partyEffects.set(spell.id, {
+        spell,
+        // A non-finite expiry means permanent, exactly as `SaveSystem`
+        // `_settleBuffs` reads it. The transport already protects the honest
+        // case — `encodeSpecials` wraps `Infinity` on the way out so it does
+        // not arrive as `null`, which is how the party's permanent buffs used
+        // to die one frame after every load — so this is only the belt to that
+        // brace, for a save written before the wrapper existed.
+        expires: Number.isFinite(e.expires) ? e.expires : Infinity,
+        magnitude: e.magnitude ?? 0,
+        next: e.next ?? 0,
+      });
+    }
+
+    // Deliberately nothing else. The buff each aura hung on the characters is
+    // in their own `buffs` array and comes back with them; re-deriving it here
+    // is how the temple's blessing came to count twice on every load. The
+    // `isFlying`/`isWaterWalking` flags likewise belong to the player record,
+    // restored just after this. An aura that is already over is left in the map
+    // for `fixedUpdate` to expire on the next tick, so it lifts its flag and
+    // logs that it faded through the one path that does that.
   }
 
   dispose() {

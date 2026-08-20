@@ -49,6 +49,15 @@ export class CampaignSystem extends System {
     };
     this._ctx = null;
     this._unpatch = [];
+    /**
+     * Where the party is standing, in the three ids a stage's `where` names.
+     *
+     * Not part of `this.state` and deliberately not saved: it is the world's
+     * answer, not the campaign's, and the world re-announces it on load.
+     */
+    this._where = { region: null, town: null, dungeon: null };
+    /** Last whole hour of world time this system was credited for. */
+    this._lastHour = null;
     /** Dungeon display name → id: DungeonSystem announces arrivals by name. */
     this._dungeonByName = new Map();
     /** Boss id/name → dungeon id, so a boss kill can close a `clear`. */
@@ -83,25 +92,44 @@ export class CampaignSystem extends System {
       // A dungeon is "cleared" when the thing at the bottom of it stops moving.
       const owner = this._bossOwner.get(id) ?? this._bossOwner.get(key);
       if (owner) this._progress('clear', owner);
+      this._creditPlace();
     });
-    on('loot:picked', ({ item } = {}) => this._progress('collect', item?.baseId ?? item?.id));
+    on('loot:picked', ({ item } = {}) => {
+      this._progress('collect', item?.baseId ?? item?.id);
+      this._creditPlace();
+    });
     on('player:enteredRegion', ({ region } = {}) => {
       this._progress('reach', region);
       // Dungeons announce themselves by display name, not by id.
       const dun = this._dungeonByName.get(String(region).toLowerCase());
       if (dun) this._progress('reach', dun);
+      this._arrived(dun ? { dungeon: dun } : { region });
     });
-    on('player:enteredTown', ({ town } = {}) => this._progress('reach', town));
-    on('travel:arrived', ({ to } = {}) => this._progress('reach', to));
+    on('player:enteredTown', ({ town } = {}) => {
+      this._progress('reach', town);
+      this._arrived({ town });
+    });
+    on('travel:arrived', ({ to } = {}) => {
+      this._progress('reach', to);
+      this._arrived(this._classify(to));
+    });
     on('npc:dialogue', ({ npc } = {}) => {
       const id = npc?.defId ?? npc?.id;
       this._progress('talk', id);
       this._progress('deliver', id);
+      this._creditPlace();
     });
+    // A rite is cast, not spoken: setting nine keys in the rim wards and
+    // standing the Quiet Hall's office over a barrow both look like a spell
+    // going off from out here, and nothing else the world says fits them.
+    on('spell:cast', () => this._creditPlace());
     // Standing in a shopfront is the closest thing to "spoke to the keeper"
     // the world layer currently offers, so a giver's venue counts as a visit.
     on('venue:entered', ({ venue } = {}) => this._venueVisited(venue?.id));
-    on('dungeon:cleared', ({ dungeon } = {}) => this._progress('clear', dungeon));
+    on('dungeon:cleared', ({ dungeon } = {}) => {
+      this._progress('clear', dungeon);
+      this._arrived({ dungeon });
+    });
     // Anything scripted — a rite held, a night survived, a door opened.
     on('campaign:flag', ({ flag } = {}) => this.raiseFlag(flag));
     on('campaign:tick', ({ target } = {}) => this.tick(target));
@@ -206,11 +234,14 @@ export class CampaignSystem extends System {
    * closed, a novice walked out. Separate from `raiseFlag` because a flag is
    * raised once and several stages want counting — three watches on the moor
    * road, nineteen barrows on the Netherby ridge.
+   *
+   * `QuestSystem.tick` is the same call with the same signature, so a caller
+   * that has one of the two systems in hand does not have to know which.
    */
-  tick(target) {
-    if (!target) return;
-    this._progress('survive', target);
-    this._progress('flag', target);
+  tick(target, n = 1) {
+    if (!target || n <= 0) return;
+    this._progress('survive', target, n);
+    this._progress('flag', target, n);
   }
 
   /** Force a stage closed. Used by scripted turn-ins and by the debug console. */
@@ -281,15 +312,15 @@ export class CampaignSystem extends System {
    * name in another, and a main quest that silently fails to advance is far
    * worse than one that advances a beat early.
    */
-  _progress(type, what) {
-    if (!what) return;
+  _progress(type, what, by = 1) {
+    if (!what || by <= 0) return;
     for (const id of [...this.state.open]) {
       const stage = getStage(id);
       const obj = stage?.objective;
       if (!obj || obj.type !== type) continue;
       if (obj.target && obj.target !== what) continue;
 
-      const n = (this.state.counters[id] ?? 0) + 1;
+      const n = (this.state.counters[id] ?? 0) + by;
       this.state.counters[id] = n;
 
       if (n >= obj.count) {
@@ -300,6 +331,89 @@ export class CampaignSystem extends System {
         });
       }
     }
+  }
+
+  // ── the flag layer ───────────────────────────────────────────────────────
+  //
+  // `flag` and `survive` are the two objective types with no world event of
+  // their own, and for a long time that meant exactly what it sounds like: the
+  // bus carried `campaign:flag` and `campaign:tick`, nothing in the game ever
+  // emitted either, and the spine stalled on act one's fifth stage —
+  // `a1_lights_off_the_point`, waiting on a flag no code could raise. The
+  // catalogue was never wrong; the caller simply did not exist.
+  //
+  // Rather than ask nine other systems to learn what a campaign flag is, the
+  // flag layer watches the world instead. Every stage already says WHERE its
+  // work happens, in `where`. So: work done where the stage says, counts. A
+  // kill, a pickup, a conversation, a spell, an arrival, an hour of world time
+  // — any of them, while the party stands in the named region, town or
+  // dungeon, is one unit against that stage's flag.
+  //
+  // It is deliberately loose, for the same reason `_progress` matches on type
+  // and target only: a main quest that advances a beat early is a blemish, and
+  // a main quest that cannot advance at all is not a game. What it is not is
+  // free — the party still has to get to the point at Millhaven, still has to
+  // sit the twenty-four hours of the Steady Hand's vigil, still has to work
+  // the Netherby ridge nineteen times over.
+
+  /** Note an arrival, then credit it: getting there is itself work done. */
+  _arrived(where) {
+    if (where?.region) { this._where.region = where.region; this._where.dungeon = null; }
+    if (where?.town) this._where.town = where.town;
+    if (where?.dungeon) this._where.dungeon = where.dungeon;
+    this._creditPlace();
+  }
+
+  /**
+   * Which of the three kinds of place an id names.
+   *
+   * `travel:arrived` says only `to`, and the network carries both towns and
+   * trailheads, so the id has to be read rather than asked about.
+   */
+  _classify(id) {
+    if (!id) return null;
+    const dun = this._dungeonByName.get(String(id).toLowerCase());
+    if (dun) return { dungeon: dun };
+    if (String(id).startsWith('dun_')) return { dungeon: id };
+    if (String(id).startsWith('town_')) return { town: id };
+    return { region: id };
+  }
+
+  /** Is the party standing where this stage's `where` says the work is? */
+  _atPlace(where) {
+    if (!where) return false;
+    return (!!where.region && where.region === this._where.region)
+      || (!!where.town && where.town === this._where.town)
+      || (!!where.dungeon && where.dungeon === this._where.dungeon);
+  }
+
+  /** Credit `n` units of work to every open flag stage set where we stand. */
+  _creditPlace(n = 1) {
+    if (n <= 0) return;
+    for (const id of [...this.state.open]) {
+      const stage = getStage(id);
+      const obj = stage?.objective;
+      if (!obj || (obj.type !== 'flag' && obj.type !== 'survive')) continue;
+      if (!this._atPlace(stage.where)) continue;
+      this.tick(obj.target, n);
+    }
+  }
+
+  /**
+   * A vigil, a fast and a watch are all measured in hours, and hours only move
+   * when the party rests or travels — so this samples the clock rather than
+   * counting frames. Two divisions and a compare per frame, and nothing else
+   * happens until the hour actually turns.
+   */
+  update(dt, ctx) {
+    const hour = Math.floor(((ctx ?? this._ctx)?.state?.worldTime ?? 0) / 3600);
+    if (this._lastHour === null) { this._lastHour = hour; return; }
+    if (hour === this._lastHour) return;
+    // A loaded save can move the clock by any amount; a week is more than the
+    // longest vigil in the catalogue and stops one from paying for the rest.
+    const elapsed = Math.min(Math.max(0, hour - this._lastHour), 168);
+    this._lastHour = hour;
+    this._creditPlace(elapsed);
   }
 
   /** A `talk`/`deliver` objective whose giver keeps this shop is satisfied. */
@@ -322,8 +436,11 @@ export class CampaignSystem extends System {
     delete this.state.counters[stageId];
 
     this._grant(stage);
-    for (const flag of stage.sets) {
-      if (!this.state.flags.includes(flag)) this.state.flags.push(flag);
+    // A `flag` objective's target IS a flag — the boats counted, the wards
+    // opened — so record it, or `hasFlag` denies something the party did.
+    const raised = stage.objective.type === 'flag' ? [stage.objective.target] : [];
+    for (const flag of [...raised, ...stage.sets]) {
+      if (flag && !this.state.flags.includes(flag)) this.state.flags.push(flag);
     }
 
     const ctx = this._ctx;
@@ -377,11 +494,20 @@ export class CampaignSystem extends System {
 
   /** Open every stage of the current act whose prerequisites are now met. */
   _refresh() {
+    const opened = [];
     for (const stage of availableStages(this.state.act, this.state.done)) {
       if (this.state.open.includes(stage.id)) continue;
       this.state.open.push(stage.id);
+      opened.push(stage);
       this._ctx?.events.emit('quest:updated', { questId: stage.id, state: 'started', act: stage.act });
       this._ctx?.events.emit('ui:log', { text: `Main quest: ${stage.title}`, kind: 'quest' });
+    }
+    // A flag raised before the stage that wants it opened is still raised, and
+    // asking the player to go and do it a second time reads as a bug. Replay
+    // what is already standing, once, against whatever just opened.
+    for (const stage of opened) {
+      const obj = stage.objective;
+      if (obj.type === 'flag' && this.state.flags.includes(obj.target)) this.tick(obj.target);
     }
   }
 
