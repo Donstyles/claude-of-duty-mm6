@@ -76,6 +76,18 @@ export function behaviourFor(def) {
 
 const MAX_ACTIVE = { low: 24, medium: 40, high: 70, ultra: 100 };
 const SIM_RADIUS = 220;       // metres — beyond this a monster is frozen
+/**
+ * How far above or below the party a creature can stand and still be on the
+ * party's floor.
+ *
+ * `DungeonSystem` pitches its floors a ceiling and a slab apart — 6.0 m under
+ * the tightest recipe, 7.4 under the loosest — and `player.position` is the
+ * party's feet, so a creature on the same floor is within half a metre of them
+ * even standing in a flooded room, and the nearest one on any other floor is
+ * five and a half away. Half the tightest pitch sits in the middle of that gap
+ * with room for a jump.
+ */
+const FLOOR_BAND = 3.2;
 const DESPAWN_RADIUS = 520;
 /** A camp wakes up at this distance and is torn down again past despawn range. */
 const CAMP_RADIUS = 420;
@@ -92,6 +104,8 @@ export class MonsterSystem extends System {
     /** @type {object[]} live monster instances */
     this.monsters = [];
     this._prototypes = new Map();
+    /** The interior whose population was last marked; see `_markDen`. */
+    this._den = null;
     this._ready = false;
   }
 
@@ -366,6 +380,41 @@ export class MonsterSystem extends System {
 
   // ── behaviour ────────────────────────────────────────────────────────────
 
+  /**
+   * Which interior the party is standing in, and which creatures are its own.
+   *
+   * A dungeon's population outlives the visit — nothing tears it down on the
+   * way out — and every dungeon is built at the same address under the world,
+   * eight floors deep at most and 184 metres across at most. So they stack
+   * through one another at `BASE_Y`, and by the sixth interior a plain distance
+   * test finds nine hundred creatures in six dungeons the party is no longer
+   * in. `indoorY` cannot tell them apart either: every dungeon's first floor is
+   * at the same height. Only the dungeon knows which creatures it spawned, so
+   * ask it, once, whenever the party changes interiors.
+   */
+  _markDen(ctx) {
+    const dungeon = ctx.get('dungeon');
+    const here = dungeon?.current ?? null;
+    if (here === this._den) return here;
+    this._den = here;
+    for (const m of dungeon?.built?.get(here)?.spawned ?? []) m.den = here;
+    return here;
+  }
+
+  /**
+   * Is this creature somewhere the party could walk into it this second?
+   *
+   * Outdoors that is only a question of distance, and `SIM_RADIUS` answers it.
+   * Indoors the radius answers nothing: a whole dungeon fits inside the sphere
+   * several times over. What matters there is the interior the party is in and
+   * the floor they are standing on — a creature three floors down is behind
+   * three slabs and cannot be seen, shot or walked into.
+   */
+  _atHand(m, den, groundY) {
+    if (!Number.isFinite(m.indoorY)) return true;
+    return m.den === den && Math.abs(m.indoorY - groundY) <= FLOOR_BAND;
+  }
+
   fixedUpdate(dt, ctx) {
     const player = ctx.get('player');
     const terrain = ctx.get('terrain');
@@ -374,6 +423,7 @@ export class MonsterSystem extends System {
     const eye = player.position;
     const combat = ctx.get('combat');
     const turnBased = combat?.mode === 'turnbased';
+    const den = this._markDen(ctx);
 
     // Encounters stream in and out with the party. Cheap enough to run every
     // tick — it is a distance test per camp, a few hundred in the whole world —
@@ -392,6 +442,14 @@ export class MonsterSystem extends System {
       if (distSq > SIM_RADIUS * SIM_RADIUS) continue;
       // In turn-based mode monsters act only when the combat system says so.
       if (turnBased && !combat?.isMonsterTurn?.(m)) continue;
+      // Indoors that radius freezes nothing: the whole dungeon is inside it,
+      // and so is every other dungeon the party has walked through. Only the
+      // party's own floor of the interior they are in gets thought about. The
+      // rest keep their hit points, their place and their state and carry on
+      // from there when the party comes down the stair. Turn-based is exempt
+      // because the initiative order reaches 45 metres, which is through the
+      // slab, and a combatant that is never stepped never yields its turn.
+      if (!turnBased && !this._atHand(m, den, eye.y)) continue;
 
       const dist = Math.sqrt(distSq);
       m.stateTimer -= dt;
@@ -542,8 +600,13 @@ export class MonsterSystem extends System {
         { home: new THREE.Vector2(m.pos.x, m.pos.z), leash: 20, camp: m.camp },
       );
       if (!spawned) continue;
-      // Summons belong to the floor their master stands on, not the terrain.
-      if (Number.isFinite(m.indoorY)) { spawned.indoorY = m.indoorY; spawned.pos.y = m.indoorY; }
+      // Summons belong to the floor their master stands on, not the terrain —
+      // and to its dungeon, or they would be born asleep.
+      if (Number.isFinite(m.indoorY)) {
+        spawned.indoorY = m.indoorY;
+        spawned.pos.y = m.indoorY;
+        spawned.den = m.den;
+      }
       spawned.state = STATE.CHASE;
       m.camp?.spawned?.push(spawned);
       ctx.get('particles')?.burst?.('magic-fire', spawned.pos.clone().setY(spawned.pos.y + 1), 18);
@@ -650,8 +713,15 @@ export class MonsterSystem extends System {
   update(dt, ctx) {
     const t = ctx.state.elapsed;
     const cam = ctx.camera.position;
+    const den = this._markDen(ctx);
+    // The camera is at eye height and bobs; the floor test wants the feet.
+    const groundY = ctx.get('player')?.position.y ?? cam.y;
     for (const m of this.monsters) {
       if (!m.alive) continue;
+      // Same cut as the AI, for the same reason — and `animateRig` is a pure
+      // function of world time, so a rig that was skipped for an hour is in
+      // the right pose on the frame the party opens its door.
+      if (!this._atHand(m, den, groundY)) continue;
       if (m.pos.distanceToSquared(cam) > SIM_RADIUS * SIM_RADIUS) continue;
       const speed = Math.hypot(m.vel.x, m.vel.z);
       animateRig(m.built, t + m.hoverPhase, speed, m.state);
