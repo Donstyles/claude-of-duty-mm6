@@ -497,6 +497,11 @@ export class InventoryPanel extends Panel {
    * instead of doing that.
    */
   _giveTo(index, held) {
+    // The bar's own click handler turns the page to that character, which would
+    // end the carry under the result. A full hand spends the press here instead,
+    // exactly as MM6 does — the portraits stop switching while you hold
+    // something and start taking it instead.
+    this._swallowClick();
     if (index !== held.owner) {
       this._say('Nothing crosses between packs.');
       return;
@@ -505,9 +510,6 @@ export class InventoryPanel extends Panel {
       this._say(`${this._name(held.item)} is worn, not carried.`);
       return;
     }
-    // The bar's own click handler would change character out from under the
-    // result; the press has been spent here.
-    this._swallowClick();
     this._act(() => this.ui.useItem(index, held.entry));
     this._endCarry();
     this.refresh();

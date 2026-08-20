@@ -128,6 +128,39 @@
 [data-panel="character"] .mm-skill.is-untaught > * { color: #9d968c; }
 [data-panel="character"] .mm-skill.is-untaught .mm-skill-rank { color: #86807a; font-size: calc(var(--u) * 10); }
 
+/* ── the skill row is the one control on this screen a thumb cannot hit ─────
+   STYLE.md §13 lists it by name — `character.css` `.mm-skill` rows 11.9px tall
+   and clickable, "that is how a skill point is spent" — and this is that entry
+   answered rather than restated.
+
+   Why the pseudo-element cannot do it. Every other small control in the game
+   grows an empty `::after` into dead chrome beside it. Skill rows have none:
+   they are stacked edge to edge with no gap, so a box reaching for 44px would
+   overlap three neighbours in each direction, which is precisely the failure
+   §13 opens by warning about — a box that swallows the control above it is
+   worse than a small box.
+
+   So the pitch is the only lever, and the pitch is bounded by the column.
+   Measured on the knight at 932x430 (`--u` 0.8958, column 240px = 268u): the
+   left column is 9 rows under two heads and the right is 16, which is the one
+   that binds.
+
+     pitch   row px   right column   against 268u
+      13u     11.6         236u      fits  (shipped, and unhittable)
+      21u     18.8         364u      101u over — the last five rows scroll
+      49u     43.9         812u      5 of 18 lines visible
+
+   44px needs 49u a row, and at 49u you have to scroll to discover that a
+   second category exists — a list you cannot read is not a list you can tap.
+   21u takes the 62% that is free and stops. The type is untouched at 11u, so
+   this opens the leading and moves no letter, and the block already scrolls
+   (`.mm-block-scroll`), so nothing is clipped: measured after, 18.81px with
+   the left column still whole and 91px of the right below the fold.
+   **18.8px is the ceiling, and the reason is the column, not an oversight.** */
+@media (pointer: coarse) {
+  [data-panel="character"] .mm-sheet.is-skills .mm-skill { line-height: calc(var(--u) * 21); }
+}
+
 /* ── awards ────────────────────────────────────────────────────────────────
    Award lines are prose and wrap; a small deep-gold lozenge marks each one. */
 

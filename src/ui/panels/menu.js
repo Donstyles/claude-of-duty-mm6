@@ -159,13 +159,19 @@ export class MenuPanel extends Panel {
 
   _root() {
     const save = this.ctx?.get('save');
+    // MM6 lays the plaques out two across and three down, and the reading order
+    // is by row: Resume / Controls, New / Load, Save / Quit. Ours keeps that
+    // left column and both of those right-hand neighbours; Options is the one
+    // plaque the original does not have, so it takes the slot Quit vacates, and
+    // Quit — the only irreversible thing on the page — gets the full width
+    // beneath, which is also where the eye already goes for it.
     const items = [
       ['Resume Game', () => this.ui.closePanel()],
-      ['New Game', () => this._go('newgame')],
-      ['Save Game', () => this._go('save'), !save && 'No save system in this build'],
-      ['Load Game', () => this._go('load'), !save && 'No save system in this build'],
-      ['Options', () => this._go('options')],
       ['Controls', () => this._go('controls')],
+      ['New Game', () => this._go('newgame')],
+      ['Load Game', () => this._go('load'), !save && 'No save system in this build'],
+      ['Save Game', () => this._go('save'), !save && 'No save system in this build'],
+      ['Options', () => this._go('options')],
       ['Quit', () => this._go('quit'), null, 'is-quit'],
     ];
     const grid = el('div', { className: 'mm-menu-grid' });

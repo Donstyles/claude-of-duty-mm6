@@ -191,6 +191,15 @@ export class CharacterPanel extends Panel {
   }
 
   /**
+   * The skills page borrows the one message strip to answer the cursor, and a
+   * borrowed channel is given back: leaving the sheet with `You need 2 more
+   * Skill Points` still under the party is the strip lying about the play view.
+   */
+  onClose() {
+    this._say('');
+  }
+
+  /**
    * MM6 leaves the party bar live under every full-screen panel, so the sheet
    * must change character without closing: the digits pick a member outright,
    * the arrows step along the line, and clicking a portrait already works.
@@ -214,6 +223,11 @@ export class CharacterPanel extends Panel {
     // never fires mouseleave: drop the plaque or it hangs there describing a
     // line that no longer exists.
     tooltip.hide();
+    // Same argument one channel over: the strip is only the skills page's to
+    // write, so stepping off that page hands it back. A refresh *on* the page —
+    // which is what a spent point causes — leaves it alone, because the line it
+    // would wipe is the confirmation `spendSkillPoint` just logged.
+    if (this.page !== 'skills' && this._strip) this._say('');
     this.sheet.classList.toggle('is-skills', this.page === 'skills');
     this.sheet.classList.toggle('is-awards', this.page === 'awards');
 
@@ -638,6 +652,13 @@ export class CharacterPanel extends Panel {
    * costs in points. The whole row turns red under the cursor — MM6's only
    * feedback on this page, and the reason the cost sits in the row rather than
    * behind a hover.
+   *
+   * The other half of that feedback is the message strip. In MM6 the strip
+   * answers the cursor, not the click: hold it over a skill you cannot afford
+   * and the bar under the party reads `You need 2 more Skill Points to advance
+   * here` (Screenshot 23, and the German 144812 with four). Ours only spoke
+   * when the row was clicked, so the page kept the shortfall to itself until
+   * you had already tried.
    */
   _skillRow(c, id, held, points) {
     const def = SKILLS[id];
@@ -653,8 +674,36 @@ export class CharacterPanel extends Panel {
       el('span', { className: 'mm-skill-level', text: held ? String(held.level) : '—' }),
       el('span', { className: 'mm-skill-cost', text: held ? String(cost) : '—' }));
     tooltip.attach(row, () => this._skillTip(c, id, held, cap, points));
+    row.addEventListener('mouseenter', () => this._say(this._nag(c, id, held, cost, points)));
+    row.addEventListener('mouseleave', () => this._say(''));
     if (held) row.addEventListener('click', () => this._spend(c, id, cost, points));
     return row;
+  }
+
+  /**
+   * What the strip says about the row under the cursor. Affordable rows say
+   * what the click will buy, unaffordable ones say how far short you are, and
+   * an untaught skill names the teacher — one line at a time, because there is
+   * one strip.
+   */
+  _nag(c, id, held, cost, points) {
+    const name = SKILLS[id]?.name ?? titleCase(id);
+    if (!held) return `${name} must be taught before it can be practised.`;
+    if (points < cost) {
+      const short = cost - points;
+      return `You need ${short} more Skill Point${short === 1 ? '' : 's'} to advance here.`;
+    }
+    return `${name} to level ${held.level + 1} for ${cost} Skill Point${cost === 1 ? '' : 's'}.`;
+  }
+
+  /**
+   * The one text channel, written directly rather than through the log: a
+   * hover is not an event worth remembering, and pushing every one of them
+   * onto the log would flush the last thing that actually happened.
+   */
+  _say(text) {
+    this._strip = text;
+    this.ui.hud?.setMessage?.(text);
   }
 
   /** MM6's tariff: a skill costs its own next level in points. */

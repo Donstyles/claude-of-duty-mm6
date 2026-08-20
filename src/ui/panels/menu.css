@@ -92,6 +92,12 @@
   padding: calc(var(--u) * 3) calc(var(--u) * 20);
 }
 .mm-panel[data-panel='menu'][data-page]:not([data-page='root']) .mm-menu-logo-sub { display: none; }
+/* A working sheet spends its height on the work. The root page keeps the air. */
+.mm-panel[data-panel='menu'][data-page]:not([data-page='root']) .mm-menu {
+  padding-top: calc(var(--u) * 4);
+  gap: calc(var(--u) * 4);
+}
+.mm-panel[data-panel='menu'][data-page]:not([data-page='root']) .mm-menu-page { gap: calc(var(--u) * 4); }
 .mm-panel[data-panel='menu'] .mm-menu-logo-sub {
   font-size: calc(var(--u) * 11);
   letter-spacing: 0.30em;
@@ -143,8 +149,9 @@
  * complaints standing. Spanning both columns closes the hole, squares the block
  * off, and — because it is now the only full-width plaque — gives Quit a
  * position that reads as deliberate rather than left over. */
-.mm-panel[data-panel='menu'] .mm-menu-item.is-quit { grid-column: 1 / -1; }
-.mm-panel[data-panel='menu'] .mm-menu-item.is-quit { color: #ff5a44; }
+/* The one irreversible plaque, red in the original and given the whole width
+   here because it is the only item without a partner on its row. */
+.mm-panel[data-panel='menu'] .mm-menu-item.is-quit { grid-column: 1 / -1; color: #ff5a44; }
 .mm-panel[data-panel='menu'] .mm-menu-item.is-quit:hover { color: #ff7a62; }
 .mm-panel[data-panel='menu'] .mm-menu-item small {
   font-size: calc(var(--u) * 9);
@@ -276,26 +283,41 @@
   overflow-y: auto;
   padding-right: calc(var(--u) * 4);
 }
+/* The thumb is a brass fitting like the sliders', not a browser scrollbar: a
+   list that can scroll has to look like it can, and the pale translucent bar
+   this used to draw was invisible against the wall. */
 .mm-panel[data-panel='menu'] .mm-opt-list::-webkit-scrollbar { width: calc(var(--u) * 5); }
-.mm-panel[data-panel='menu'] .mm-opt-list::-webkit-scrollbar-thumb { background: rgba(140, 122, 74, 0.5); }
+.mm-panel[data-panel='menu'] .mm-opt-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #ebe2a7 0 18%, #c3b37a 45%, #a98e57 70%, #7a6031);
+  box-shadow: 0 0 0 1px #302410;
+}
 
-/* Eight settings have to fit on one screen without a scrollbar, so a row is a
-   name, a one-line gloss under it, the control and its reading — nothing else. */
+/* Ten settings have to fit on one screen, so a row is a name, a one-line gloss
+   under it, the control and its reading — nothing else, and no padding.
+ *
+ * The arithmetic, because it is the whole reason these numbers are what they
+ * are. `--u` is height-bound on every shipping viewport, so the list gets the
+ * same 229u whatever the width: 480u of screen, less the architrave, the title,
+ * the note, the foot row and the frame. Ten rows into 229u is 22.9u a row, and
+ * a row is the taller of its two halves — the label stack (11u × 1.1 name plus
+ * 7.5u × 1.05 gloss = 20.0u) or the control (16u). It was 28.7u measured, from
+ * 2u of padding and 1.2 leading on both lines, and that put Graphics and the
+ * tier plate below the fold with nothing on screen saying so. */
 .mm-panel[data-panel='menu'] .mm-opt-row {
   display: grid;
   grid-template-columns: 1fr calc(var(--u) * 140) calc(var(--u) * 40);
   align-items: center;
   gap: calc(var(--u) * 8);
-  padding: calc(var(--u) * 1) calc(var(--u) * 6);
+  padding: 0 calc(var(--u) * 6);
   border-bottom: 1px solid rgba(120, 104, 62, 0.22);
 }
 .mm-panel[data-panel='menu'] .mm-opt-label { min-width: 0; }
-.mm-panel[data-panel='menu'] .mm-opt-label span { font-size: calc(var(--u) * 11); line-height: 1.2; color: #ffd773; }
+.mm-panel[data-panel='menu'] .mm-opt-label span { font-size: calc(var(--u) * 11); line-height: 1.1; color: #ffd773; }
 .mm-panel[data-panel='menu'] .mm-opt-label small {
   display: block;
-  font-size: calc(var(--u) * 8);
+  font-size: calc(var(--u) * 7.5);
   font-style: italic;
-  line-height: 1.2;
+  line-height: 1.05;
   color: #a5966f;
   white-space: nowrap;
   overflow: hidden;
@@ -337,7 +359,7 @@
 .mm-panel[data-panel='menu'] .mm-opt-toggle,
 .mm-panel[data-panel='menu'] .mm-opt-choice {
   min-width: calc(var(--u) * 40);
-  height: calc(var(--u) * 18);
+  height: calc(var(--u) * 16);
   padding: 0 calc(var(--u) * 8);
   display: grid;
   place-items: center;
