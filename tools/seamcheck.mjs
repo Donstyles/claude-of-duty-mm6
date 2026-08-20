@@ -180,9 +180,24 @@ const NEVER_A_FIELD = new Set([
 const ALLOWED_MISSING = new Map([
   ['Items.js:icon', 'falls back to `base.category`, which is the correct icon for '
     + 'every item that does not override it — the override is the exception, not the field'],
-  ['Items.js:gridW', 'a one-cell footprint is the pack default; only the few large '
-    + 'items declare a size, and 1 is right for the rest'],
+  // These two were excused with the words "only the few large items declare a
+  // size, and 1 is right for the rest". THERE ARE NO LARGE ITEMS. All 334 are
+  // 1x1 — written by the person who built this gate to catch exactly that kind
+  // of assumption, on the same afternoon, into the gate itself.
+  //
+  // The entry stays, because `?? 1` genuinely is the right read for a pack
+  // where nothing has a footprint. But it now says the true thing, which is
+  // that the field is aspirational: MM6's inventory is a bin-packing puzzle
+  // where a two-hander occupies a tall block and a shield a square, the packer
+  // in `PartySystem` already places rectangles correctly, and no item has ever
+  // asked it to. Tracked, and this line comes out when the data is real.
+  ['Items.js:gridW', 'read as `?? 1`, and correct today ONLY because no item in the '
+    + 'catalogue declares a footprint — the pack is 334 identical squares. A gap, '
+    + 'not a design; see the inventory footprint task'],
   ['Items.js:gridH', 'as gridW'],
+  ['Travel.js:waitNoun', 'timetable prose the board composes from `verb`; both are '
+    + 'authored together and one is currently enough'],
+  ['Travel.js:noneToday', 'as waitNoun'],
 ]);
 
 /**
