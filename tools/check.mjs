@@ -46,6 +46,17 @@
  *               spells it `healPerHP`, and every temple charges a flat thirty.
  *               They fail silently, because the reader has a plausible
  *               fallback — which is exactly what hides them.
+ *   tier        every browser-driving tool here booted `?quality=low`, and the
+ *               game ships `high` on a phone and `ultra` on a desktop, so the
+ *               tier the player gets was the one tier nothing ever ran. Above
+ *               `low` the material library puts its detail textures in a
+ *               material's `userData`; those came out of the forge, which
+ *               leaves a render target on a texture's `userData`; a render
+ *               target refers back to its own texture; and `Material.copy`
+ *               deep-copies `userData` through `JSON.stringify`, which throws
+ *               on a cycle. Every water and every lava dungeon in the
+ *               catalogue — nineteen of fifty-five — threw on entry at the
+ *               shipping tier, and all nine other gates were green.
  *
  * Note what `content` and `seam` each do NOT do. `content` checks that ids
  * RESOLVE: that a quest naming an NPC names one who exists. It never checks
@@ -86,6 +97,8 @@ const GATES = [
     why: 'the app still installs, and still fills a phone edge to edge' },
   { name: 'spells', slow: true, cmd: 'node', args: ['tools/spelltest.mjs'],
     why: 'the travel spells move the party, and relight the world on the way out' },
+  { name: 'tier', slow: true, cmd: 'node', args: ['tools/tiertest.mjs'],
+    why: 'the game boots clean at the tier it ships at, and hazard dungeons build there' },
 ];
 
 function run(gate) {
