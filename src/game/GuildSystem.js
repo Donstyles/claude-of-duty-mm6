@@ -38,6 +38,10 @@ import {
 import { SPELLS, spellsForSchool } from './data/Spells.js';
 import { getClass, skillCap } from './data/Classes.js';
 import { GUILDS as GUILD_ORDERS, VENUES, venuesOfKind } from './data/Venues.js';
+// Two catalogues, one counter. Venues.js knows which order keeps which door;
+// NPCs.js knows what *that* door charges — a fee, a spell markup, a level bar
+// and a study rate, authored per hall for all eighteen of them.
+import { GUILDS as GUILD_HALLS } from './data/NPCs.js';
 import { TOWNS } from './data/Regions.js';
 import {
   experienceForLevel, trainingCost, heldSkill, actionState, worstCondition,
@@ -416,6 +420,8 @@ export class GuildSystem extends System {
     const tier = tierOf(venue);
     const teaches = TIER_MASTERY[tier] ?? 'normal';
     const maxSpellLevel = order.school ? (TIER_SPELL_LEVEL[tier] ?? 4) : 0;
+    // This building's own terms, where NPCs.js wrote them down.
+    const hallData = GUILD_HALLS[venue?.id] ?? null;
     return {
       kind: 'guild',
       order,
@@ -430,8 +436,27 @@ export class GuildSystem extends System {
       maxSpellLevel,
       school: order.school,
       skills: order.skills,
-      fee: order.fee ?? 0,
+      /**
+       * What this hall asks to put your name in the roll.
+       *
+       * The order's `fee` is the subscription the institution sets; the hall's
+       * `membershipFee` is what this particular door in this particular town
+       * charges for it, and it is the one authored eighteen times. Reading only
+       * the order meant the village chapter house at Millhaven and the great
+       * hall at Emberhold both took 400 gold for the same Ember membership,
+       * when the second is authored at 8,000 — twenty times the price, and the
+       * difference between the two is most of what a guild in a capital *is*.
+       */
+      fee: hallData?.membershipFee ?? order.fee ?? 0,
+      /** Requirements this door adds on top of the order's own. */
+      requirements: hallData?.requirements ?? null,
+      /** Share of a caster's spell points a day's study here gives back. */
+      studyRecovery: hallData?.studyRecovery ?? 0,
       priceMult: tierPrice(tier),
+      // The shelf's markup is authored against how deep the shelf goes, which
+      // is not the same question as how good the building is: `priceMult` still
+      // prices instruction by tier.
+      spellMult: hallData?.spellPriceMult ?? tierPrice(tier),
       spellStock: order.school
         ? spellsForSchool(order.school).filter((s) => s.level <= maxSpellLevel).map((s) => s.id)
         : [],
@@ -564,11 +589,17 @@ export class GuildSystem extends System {
         cap ? `Open to a ${classNameOf(char)}` : `Closed to a ${classNameOf(char)}`);
     }
 
-    if (req.minLevel) {
+    // The order sets a floor for all its houses; a hall sets its own, and the
+    // higher of the two is the one you have to clear. Fourteen of the eighteen
+    // halls had no bar at all before this — the order's `join` is empty for
+    // every school but Light and Dark — so a level-1 party could be entered in
+    // the roll of the deepest hall in the kingdom on the day it was rolled up.
+    const minLevel = Math.max(req.minLevel ?? 0, hall.requirements?.minLevel ?? 0);
+    if (minLevel) {
       const level = char?.level ?? 1;
-      add(level >= req.minLevel,
-        `Level ${req.minLevel} or better — ${who} is level ${level}.`,
-        `Level ${req.minLevel} (you ${level})`);
+      add(level >= minLevel,
+        `Level ${minLevel} or better — ${who} is level ${level}.`,
+        `Level ${minLevel} (you ${level})`);
     }
 
     if (req.school && order.school) {
@@ -679,7 +710,7 @@ export class GuildSystem extends System {
   spellPrice(hall, spellId) {
     const s = SPELLS[spellId];
     if (!hall || !s) return 0;
-    return Math.round(60 * s.level * s.level * hall.priceMult);
+    return Math.round(60 * s.level * s.level * (hall.spellMult ?? hall.priceMult));
   }
 
   /**
@@ -756,6 +787,48 @@ export class GuildSystem extends System {
     return {
       ok: true,
       message: `${nameOf(char)} copies ${spell.name} for ${fmt(price)} gold.${tail}`,
+    };
+  }
+
+  /**
+   * A day in the hall's reading room.
+   *
+   * Every guild record carries `studyRecovery` — the share of a caster's spell
+   * points a day at the desks gives back — and it is the only thing membership
+   * buys that is not a purchase. A member may study once a day; the day is
+   * spent either way, which is what stops it being a free rest with extra
+   * steps. Nothing outside the guild screen should call this: the clock moves.
+   */
+  study(hall, chars) {
+    if (!hall) return { ok: false, message: 'There is no such guild.' };
+    if (!this.isMember(hall)) return { ok: false, message: `${hall.keeper} lets members at the desks. Nobody else.` };
+    const share = hall.studyRecovery ?? 0;
+    if (share <= 0) return { ok: false, message: `${hall.name} keeps no reading room.` };
+
+    const day = Math.floor((this.ctx?.state?.worldTime ?? 0) / 86400) + 1;
+    this._studied ??= new Map();
+    if (this._studied.get(hall.venueId) === day) {
+      return { ok: false, message: 'The desks are done with you for today.' };
+    }
+    this._studied.set(hall.venueId, day);
+
+    const roll = Array.isArray(chars) ? chars : [chars];
+    let total = 0;
+    for (const char of roll) {
+      if (!char) continue;
+      const max = spForLevel(char);
+      if (max <= 0) continue;
+      const before = char.sp ?? 0;
+      char.sp = Math.min(max, before + Math.round(max * share));
+      total += char.sp - before;
+    }
+    if (this.ctx?.state) this.ctx.state.worldTime += 8 * 3600;
+    return {
+      ok: true,
+      restored: total,
+      message: total
+        ? `A day at the desks. ${fmt(total)} spell points back, and the afternoon gone.`
+        : 'A day at the desks, and nobody in the party has a spell point to recover.',
     };
   }
 

@@ -282,6 +282,34 @@ export function wardsCondition(char, condId) {
   return hasBuff(char, 'body_protection_from_magic');
 }
 
+// ── Class traits ────────────────────────────────────────────────────────────
+
+const NO_TRAITS = deepFreeze({});
+
+/**
+ * The standing consequences a class drags around with it.
+ *
+ * Four classes at the black end of their lines carry one — a Black Knight is
+ * charged more in every shop, a Lich four times over at every temple — and the
+ * seven temples name those same four ids in `hostileTo`. The hostility was
+ * authored on both sides of the counter and priced on neither, so the only
+ * thing being a Lich cost you was the portrait. Classes without a bag get the
+ * one frozen empty object rather than a fresh one per call.
+ */
+export function classTraits(char) {
+  return getClass(char?.classId)?.traits ?? NO_TRAITS;
+}
+
+/**
+ * What this character's class does to a temple's bill — 1 for everyone the
+ * Order is not sworn against, 2 for a Villain, 4 for a Lich. Floored at 1:
+ * no trait is a discount, and a temple that paid you to leave would be a
+ * different game.
+ */
+export function templePriceMultiplier(char) {
+  return Math.max(1, classTraits(char).templePriceMultiplier ?? 1);
+}
+
 // ── Hit points and spell points ─────────────────────────────────────────────
 
 /**

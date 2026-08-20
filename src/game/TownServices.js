@@ -1,6 +1,8 @@
-import { getCondition } from './rules.js';
+import { getCondition, templePriceMultiplier } from './rules.js';
 import { getVenue, venuesInTown, venuesOfKind } from './data/Venues.js';
-import { HIRELING_PROFESSIONS, HIRELING_IDS as NPC_HIRELING_IDS } from './data/NPCs.js';
+import {
+  HIRELING_PROFESSIONS, HIRELING_IDS as NPC_HIRELING_IDS, TAVERNS, TEMPLES,
+} from './data/NPCs.js';
 
 /**
  * The three civic buildings a town has besides its shops: the counting house,
@@ -284,6 +286,8 @@ export class TownServices {
     /** Rumours already told, per tavern, so the barkeep does not repeat himself. */
     this._toldBags = new Map();
     this._lastTold = new Map();
+    /** venueId → { day, n }: how much of tonight's talk this keeper has spent. */
+    this._toldToday = new Map();
 
     /** The last day wages and interest were settled up to. */
     this._settledDay = this.day();
@@ -659,7 +663,7 @@ export class TownServices {
       feast,
       standing,
       text: `It is ${feast}. The doorkeeper looks the party over and does not stand aside.`,
-      remedy: 'The alms box is by the door, and the Order has a long memory for gifts.',
+      remedy: `The alms box is by the door, and ${this.godOf(venue)} has a long memory for gifts.`,
     };
   }
 
@@ -667,19 +671,39 @@ export class TownServices {
     return 0.35 + 0.18 * this.tierOf(venue);
   }
 
+  /**
+   * Whose house this is.
+   *
+   * Six of the seven belong to Aurenne and one — the drowned church on
+   * Fallowmere — to Sorrow-of-Waters, which is why the alms text cannot go on
+   * saying "the lamp is kindled" everywhere. Venues.js knows the building;
+   * only the temple record knows the god.
+   */
+  godOf(venue) {
+    return TEMPLES[venue?.id]?.god ?? 'Aurenne';
+  }
+
   /** Gold to lift one affliction from one member of the party. */
   curePrice(condId, member, venue) {
     const base = CURE_BASE[condId] ?? 20;
     const tier = 0.6 + 0.35 * this.tierOf(venue);
     const level = 1 + 0.09 * (levelOf(member) - 1);
-    return Math.max(1, Math.round(base * tier * level * this.priceMult(venue?.town)));
+    const spite = templePriceMultiplier(member);
+    return Math.max(1, Math.round(base * tier * level * spite * this.priceMult(venue?.town)));
   }
 
-  /** Gold to close one member's wounds. */
+  /**
+   * Gold to close one member's wounds.
+   *
+   * The class surcharge is per member and not per party, because that is what
+   * `hostileTo` means: the house will work on a Lich, at four times the price,
+   * and charge the paladin standing next to it the ordinary rate.
+   */
   woundPrice(member, venue) {
     const missing = Math.max(0, maxHpOf(member) - (member?.hp ?? 0));
     if (missing <= 0) return 0;
-    return Math.max(1, Math.round(missing * this.healPerHP(venue) * this.priceMult(venue?.town)));
+    const spite = templePriceMultiplier(member);
+    return Math.max(1, Math.round(missing * this.healPerHP(venue) * spite * this.priceMult(venue?.town)));
   }
 
   /** Everything the temple can do for the party right now, priced per member. */
@@ -811,6 +835,7 @@ export class TownServices {
     this.blessing = {
       templeId: venue?.id ?? null,
       house: venue?.name ?? 'the Order',
+      god: this.godOf(venue),
       tier: tier.id,
       power,
       resist: power * 2,
@@ -823,10 +848,13 @@ export class TownServices {
     this._applyBlessing();
 
     const feastNote = feast > 1 ? ` on ${this.holyDayName()}, and the house answers the louder for it` : '';
+    // Named, because one of the seven houses is not Aurenne's and the alms
+    // text used to kindle her lamp in a drowned church on Fallowmere.
     return {
       ok: true,
       price: tier.price,
-      text: `${tier.name} given at ${venue?.name ?? 'the temple'}${feastNote}. The lamp is kindled over the party for ${days} days.`,
+      text: `${tier.name} given at ${venue?.name ?? 'the temple'}${feastNote}. `
+        + `${this.blessing.god} lies over the party for ${days} days.`,
     };
   }
 
@@ -889,17 +917,34 @@ export class TownServices {
 
   // ── the tavern ───────────────────────────────────────────────────────────
 
+  /**
+   * The taproom's own record, where NPCs.js keeps one for this building.
+   *
+   * Ten taverns are authored with a board of prices and a hiring tier, and all
+   * ten agreed exactly with what this file was re-deriving from the venue's
+   * tier — which is the dangerous kind of agreement, since only one of the two
+   * gets edited when somebody reprices ale. The record wins; the tier stays as
+   * the fallback for a taproom nobody has written down yet.
+   */
+  tavernRecord(venue) {
+    return TAVERNS[venue?.id] ?? null;
+  }
+
   tavernState(venue) {
     this.settle();
     const tier = this.tierOf(venue);
-    const drinkPrice = Math.max(1, tier);
+    const board = this.tavernRecord(venue);
+    const drinkPrice = Math.max(1, board?.drinkPrice ?? tier);
     return {
-      foodPrice: 2 + tier,
+      foodPrice: board?.foodPrice ?? 2 + tier,
       food: this.food,
       foodCap: FOOD_CAP,
       drinkPrice,
       roundPrice: drinkPrice * Math.max(1, this.members.length),
-      roomPrice: 4 + 4 * tier,
+      // The keeper's greeting quotes the record's `roomPrice`, and this file
+      // was charging `4 + 4 * tier` against it — so a Millhaven innkeeper said
+      // "bed's 10" and took 12 off the party in the same breath.
+      roomPrice: board?.roomPrice ?? 4 + 4 * tier,
       gold: this.gold,
       keeper: venue?.keeper ?? 'the keeper',
       wages: this.retinue.reduce((a, h) => a + (h.wage ?? 0), 0),
@@ -1018,8 +1063,11 @@ export class TownServices {
     if (this._pools.has(key)) return this._pools.get(key);
 
     const rng = this.ctx?.rng?.fork?.(`hire:${key}`) ?? this.rng;
-    const eligible = HIRELING_IDS.filter((id) => HIRELINGS[id].minTier <= tier);
-    const count = Math.min(eligible.length, 3 + Math.floor(tier / 2));
+    // Which professions drink here is the taproom's business, not the
+    // building's: `hireTier` is what NPCs.js authored the pool against.
+    const hireTier = this.tavernRecord(venue)?.hireTier ?? tier;
+    const eligible = HIRELING_IDS.filter((id) => HIRELINGS[id].minTier <= hireTier);
+    const count = Math.min(eligible.length, 3 + Math.floor(hireTier / 2));
     const picked = [];
     const bag = [...eligible];
     const givens = [...GIVEN];
@@ -1194,10 +1242,28 @@ export class TownServices {
    * everything he knows before he starts again, and the bag is re-cut with the
    * last thing he said held back — the one repeat a shuffle would otherwise
    * let through.
+   *
+   * A keeper has a night's worth of talk in him and no more. `rumourCount` on
+   * the tavern record is how much; past it he keeps pouring and stops telling,
+   * and the rest of what he knows keeps until tomorrow. Without the cap the
+   * "And what else?" plaque emptied a thirty-two entry book in one sitting,
+   * which is why nobody ever came back to a barkeep twice.
    */
   rumour(venue) {
     const key = venue?.id ?? 'tavern';
     const town = venue?.town ?? this.townId();
+    const day = this.day();
+    const limit = Math.max(1, this.tavernRecord(venue)?.rumourCount ?? 3);
+    const spent = this._toldToday.get(key);
+    const said = spent?.day === day ? spent.n : 0;
+    if (said >= limit) {
+      return {
+        id: 'spent', kind: 'colour', spent: true,
+        text: 'That is everything worth the telling tonight. Come back when I have heard more.',
+        keeper: venue?.keeper ?? 'The keeper',
+      };
+    }
+    this._toldToday.set(key, { day, n: said + 1 });
     let bag = this._toldBags.get(key);
     const last = this._lastTold.get(key) ?? null;
     if (!bag?.length) {
