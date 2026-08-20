@@ -74,6 +74,33 @@ async function loadSystems(engine) {
   return missing;
 }
 
+/**
+ * Subsystems the game is not the game without.
+ *
+ * The guarded-import design above is deliberate and stays: a missing module
+ * degrades to "absent" instead of a white screen, which is what let a dozen
+ * agents write into this tree at once without any of them being able to break
+ * everyone else's boot. It is load-bearing for how this project is built.
+ *
+ * What it should never have done is call that a CLEAN boot. A `SyntaxError` in
+ * `DungeonSystem` was caught here, pushed onto `missing`, warned about, and the
+ * page went on to report `ready: true` with `error: null` — so the player got a
+ * world with no dungeons in it and nothing anywhere said so but the console.
+ * That was found by accident, while an agent was deliberately corrupting a
+ * chunk to test something else, which is the wrong way to find it.
+ *
+ * So the degradation is kept and the silence is not. A subsystem on this list
+ * failing is a fatal boot; anything else still degrades, but says so in the
+ * message log rather than whispering to a console nobody has open.
+ *
+ * Not the boot status line, which was the obvious place and is the wrong one:
+ * `setProgress(1, 'Ready.')` overwrites it a line later and the veil fades out
+ * over it a frame after that.
+ */
+const ESSENTIAL = new Set([
+  'TerrainSystem', 'PhysicsSystem', 'PlayerSystem', 'PartySystem', 'UISystem',
+]);
+
 async function main() {
   const canvas = document.getElementById('viewport');
   const params = new URLSearchParams(location.search);
@@ -150,6 +177,12 @@ async function main() {
     setProgress(0.05, 'Assembling the engine…');
     window.__GAME.missing = await loadSystems(engine);
 
+    const lost = window.__GAME.missing.filter((m) => ESSENTIAL.has(String(m).split(' ')[0]));
+    if (lost.length) {
+      // Fatal, and said out loud. A world with no terrain under it is not a
+      // degraded game, it is a bug wearing one.
+      throw new Error(`essential subsystem(s) failed to load: ${lost.join(', ')}`);
+    }
     await engine.init((frac, id) => {
       setProgress(0.1 + frac * 0.85, FLAVOUR[id] ?? `Preparing ${id}…`);
     });
@@ -159,6 +192,16 @@ async function main() {
 
     window.__GAME.ready = true;
     document.body.classList.add('game-ready');
+
+    // A degraded boot says so where the player will actually see it. The boot
+    // status line is the wrong place — `setProgress(1, 'Ready.')` overwrites it
+    // one line above, and the veil fades out over it a frame later.
+    if (window.__GAME.missing.length) {
+      engine.events?.emit('ui:log', {
+        text: `Running without ${window.__GAME.missing.join(', ')}. Some of the world is missing.`,
+        kind: 'warn',
+      });
+    }
     // Fade the boot veil out once the first real frame has been presented.
     requestAnimationFrame(() => requestAnimationFrame(() => {
       boot?.classList.add('boot-hidden');
