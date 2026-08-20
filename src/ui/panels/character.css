@@ -148,15 +148,36 @@
       21u     18.8         364u      101u over — the last five rows scroll
       49u     43.9         812u      5 of 18 lines visible
 
-   44px needs 49u a row, and at 49u you have to scroll to discover that a
-   second category exists — a list you cannot read is not a list you can tap.
-   21u takes the 62% that is free and stops. The type is untouched at 11u, so
-   this opens the leading and moves no letter, and the block already scrolls
-   (`.mm-block-scroll`), so nothing is clipped: measured after, 18.81px with
-   the left column still whole and 91px of the right below the fold.
-   **18.8px is the ceiling, and the reason is the column, not an oversight.** */
+   That was measured when the page listed all 24 skills a class may ever hold,
+   21 of them "Untaught". It now lists only what the character has learned, as
+   MM6 does, and the arithmetic is a different arithmetic:
+
+     a level-1 knight   5 rows total, 3 in the binding column
+     at 49u             147u against 268u — everything fits, nothing scrolls
+
+   So 44px is reachable for the character the reference actually shows. The
+   old note's objection — "at 49u you have to scroll to discover a second
+   category exists" — was right then and survives only for a FULLY-TAUGHT
+   character: a Villain can hold 18 skills in the armour+misc column, which at
+   49u shows about four at a time.
+
+   That objection is answered rather than overruled. The category heads are
+   sticky, so whichever rows you have scrolled to, the heading above them is
+   still on screen and a second category is never a surprise. Scrolling a list
+   whose rows you can hit beats reading a list you cannot.
+
+   The type stays at 11u, so this opens the leading and moves no letter. */
 @media (pointer: coarse) {
-  [data-panel="character"] .mm-sheet.is-skills .mm-skill { line-height: calc(var(--u) * 21); }
+  /* 49u x 0.8958 = 43.9px. */
+  [data-panel="character"] .mm-sheet.is-skills .mm-skill { line-height: calc(var(--u) * 49); }
+  [data-panel="character"] .mm-sheet.is-skills .mm-block-head {
+    position: sticky;
+    top: 0;
+    /* Opaque, or rows scroll through the heading and both become unreadable.
+       The block's own stone, not a new colour. */
+    background: var(--stone, #4a4744);
+    z-index: 1;
+  }
 }
 
 /* ── awards ────────────────────────────────────────────────────────────────
