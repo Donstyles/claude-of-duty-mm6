@@ -129,7 +129,8 @@ function stripProse(src) {
 
 const sources = [];
 for await (const f of glob(`${ROOT}/src/**/*.js`)) {
-  sources.push({ file: path.relative(ROOT, f), text: stripProse(readFileSync(f, 'utf8')) });
+  const raw = readFileSync(f, 'utf8');
+  sources.push({ file: path.relative(ROOT, f), text: stripProse(raw), raw });
 }
 
 /**
@@ -182,6 +183,39 @@ const ALLOWED_MISSING = new Map([
   ['Items.js:gridW', 'a one-cell footprint is the pack default; only the few large '
     + 'items declare a size, and 1 is right for the rest'],
   ['Items.js:gridH', 'as gridW'],
+]);
+
+/**
+ * Every source file that could read a catalogue, RAW rather than stripped.
+ *
+ * The first cut of the third pass searched the prose-stripped text the other
+ * two passes use, and reported `damageType` as unread on 98 item records. It
+ * is read — at `LootSystem.js:129`, inside
+ * `for (const k of ['dice', 'weaponType', 'skill', 'hands', 'damageType'])`.
+ * `stripProse` blanks string bodies, so every field named through a string
+ * literal had been erased before the search, and dynamic field access by name
+ * is an idiom this codebase uses freely.
+ *
+ * So this pass reads the raw text and accepts that a field mentioned only in a
+ * comment will look read. That is the safe direction: this gate is meant to
+ * find authored data nobody consumes, and a false negative costs a finding
+ * while a false positive costs the gate its credibility.
+ */
+const consumers = sources.filter((f) => !f.file.startsWith('src/game/data/')).map((f) => f.raw);
+
+/**
+ * Authored fields nothing reads, that are allowed to stay that way.
+ *
+ * The bar is the same as the other lists: an argument, not a shrug. "It is
+ * only data" is not an argument — `hitDie` on all 32 classes was only data,
+ * and it means class choice does not scale hit points.
+ */
+const UNREAD_OK = new Map([
+  ['Items.js:minBand', 'the floor of a band the roller expresses as its top; kept so a '
+    + 'record reads as a range rather than a bound'],
+  ['Travel.js:waitNoun', 'timetable prose the board composes from `verb`; both are '
+    + 'authored together and one is currently enough'],
+  ['Travel.js:noneToday', 'as waitNoun'],
 ]);
 
 let unknown = 0;
@@ -346,6 +380,68 @@ if (!unionBad.size) {
     unknown++;
     console.log(`     .${key.padEnd(20)} ${sites.length} site(s)   ${sites.slice(0, 3).join('  ')}`);
   }
+}
+
+/* ── Third pass: the other direction — data nothing reads ─────────────────
+ *
+ * The two passes above ask "does this field exist?". This asks the mirror
+ * question, "does anything read this field?", and it was named by the critic
+ * whose bug both other passes missed.
+ *
+ * `DialogueSystem._fromCatalogue` copied each topic as `{id, label, text}`.
+ * The record spells seven fields, so `requires`, `gives`, `service` and
+ * `promotes` were dropped at the copy — and the FIRST QUEST IN THE GAME
+ * printed its prose and started nothing. 0 of 214 topics could fire an effect.
+ * Neither pass above could see it: the record travels as a parameter, so there
+ * is no witnessed binding, and every field name it DID read was real.
+ *
+ * From this side it is obvious. A field that 214 records carry and no line in
+ * `src/` mentions is either dead content or a consumer that forgot it.
+ *
+ * Cheap, crude, and it does not care which: one regex per key over the whole
+ * of `src/` outside `game/data/`. It cannot tell a read from a mention in a
+ * comment, which makes it generous — a false NEGATIVE is possible and a false
+ * positive is nearly not. That is the right way round for a gate.
+ */
+const unreadRows = [];
+for (const cat of [...CATALOGUES, { file: 'Campaign.js', exports: [] }]) {
+  const mod = await import(D + cat.file);
+  const counts = new Map();
+  for (const [name, value] of Object.entries(mod)) {
+    if (name !== name.toUpperCase() || !value || typeof value !== 'object') continue;
+    for (const rec of Array.isArray(value) ? value : Object.values(value)) {
+      if (!rec || typeof rec !== 'object') continue;
+      for (const k of Object.keys(rec)) counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+  }
+  for (const [key, n] of counts) {
+    if (UNREAD_OK.has(`${cat.file}:${key}`)) { excused++; continue; }
+    if (consumers.some((t) => new RegExp(`[.'"\`]${key}\\b`).test(t))) continue;
+    unreadRows.push({ file: cat.file, key, n });
+  }
+}
+
+console.log('\n[seam] third pass — catalogue fields nothing in src/ reads');
+if (!unreadRows.length) {
+  console.log('  ok    every authored field is mentioned somewhere');
+} else {
+  for (const r of unreadRows.sort((a, b) => b.n - a.n)) {
+    console.log(`     ${r.file.padEnd(14)} .${r.key.padEnd(18)} on ${r.n} record(s)`);
+  }
+  // REPORT-ONLY, deliberately, and this should not stay that way.
+  //
+  // The pass found 22 authored fields nothing reads on its first run, which is
+  // a backlog rather than a regression — `hitDie` on all 32 classes, so class
+  // choice does not scale hit points; `membershipFee` on all 18 guilds, so
+  // nobody is ever charged to join; `castles` on 40 regions, which nothing
+  // builds. Failing the build on a backlog only teaches people to pass
+  // `--no-verify`.
+  //
+  // The ratchet is: wire them, and as each is consumed it leaves this list on
+  // its own. When the list is empty, delete this block and let it fail like
+  // the other two passes. Until then it prints every time so it cannot be
+  // quietly forgotten, and anything genuinely new stands out in a short list.
+  console.log(`\n  ${unreadRows.length} field(s) authored and unread — report-only, see the note in this file`);
 }
 
 console.log(`\n[seam] ${checked} reads checked, ${unknown} unknown key(s), ${excused} excused by name`);
