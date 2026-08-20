@@ -271,6 +271,83 @@ for (const cat of CATALOGUES) {
   }
 }
 
+/* ── Second pass: the union, for records that arrive as parameters ─────────
+ *
+ * The pass above only follows a variable it watched being bound, which is what
+ * keeps it quiet — and it has a hole, found the same afternoon it shipped by
+ * the critic whose file it failed to guard:
+ *
+ *   `LootSystem.dropFrom(def)` read `def.treasure`. No monster record has that
+ *   field; all 99 spell it `treasureTier`. So `tier` was 0 on every corpse,
+ *   the item branch never ran once, and NO MONSTER IN THE GAME HAD EVER
+ *   DROPPED AN ITEM. The gate was green throughout, because `def` is a
+ *   parameter and nothing in that file was watched being bound to a monster.
+ *
+ * Following parameters properly needs call-graph analysis. This does something
+ * cruder and, for this bug class, almost as good: for variables named the way
+ * this codebase names a catalogue record, check the key against the UNION of
+ * every key in every catalogue — 244 of them. That cannot tell a monster field
+ * from an item field, so it will not catch a monster read with a valid item
+ * key. What it catches is a field that exists in NO catalogue anywhere, which
+ * is what `treasure`, `healCost`, `costMult` and `objective` all were.
+ *
+ * Permissive by construction, so it may be run over parameter names without
+ * drowning the way the strict pass did.
+ */
+const UNION = new Set();
+for (const cat of CATALOGUES) {
+  const mod = await import(D + cat.file);
+  for (const [name, value] of Object.entries(mod)) {
+    if (name !== name.toUpperCase() || !value || typeof value !== 'object') continue;
+    for (const rec of Array.isArray(value) ? value : Object.values(value)) {
+      if (rec && typeof rec === 'object') for (const k of Object.keys(rec)) UNION.add(k);
+    }
+  }
+}
+
+/**
+ * Names this codebase gives a catalogue record it did not fetch itself.
+ *
+ * Started as def/base/rec/entry over every file and reported 81 — because
+ * `def` is also what `Ambience.js` calls a filter band, what `Music.js` calls a
+ * progression, and what `TouchInput.js` calls a glyph. Those are configuration
+ * objects with their own vocabularies and no relationship to any catalogue.
+ *
+ * Two cuts fix it, and both are principled rather than tuned: only `def` and
+ * `base`, and only in a file that actually imports a catalogue. A file that
+ * never imports `./data/` cannot be holding a catalogue record in the first
+ * place, so its `def` is somebody else's noun.
+ */
+const RECORD_PARAMS = ['def', 'base'];
+const assigned = addedFields(RECORD_PARAMS);
+const unionRead = new RegExp(`\\b(?:${RECORD_PARAMS.join('|')})\\d*\\s*\\??\\.\\s*([A-Za-z_$][\\w$]*)`, 'g');
+
+const unionBad = new Map();
+for (const { file, text } of sources) {
+  if (file.startsWith('src/game/data/')) continue;
+  if (!/from\s+['"][^'"]*data\/\w+\.js['"]/.test(text)) continue;   // holds no catalogue
+  for (const m of text.matchAll(unionRead)) {
+    const key = m[1];
+    checked++;
+    if (UNION.has(key) || assigned.has(key) || NEVER_A_FIELD.has(key)) continue;
+    if (ALLOWED_MISSING.has(`union:${key}`)) { excused++; continue; }
+    const line = text.slice(0, m.index).split('\n').length;
+    if (!unionBad.has(key)) unionBad.set(key, []);
+    unionBad.get(key).push(`${file}:${line}`);
+  }
+}
+
+console.log(`\n[seam] union pass — ${UNION.size} keys across every catalogue, `
+  + `checked against ${RECORD_PARAMS.join('/')}`);
+if (!unionBad.size) {
+  console.log('  ok    no read of a field that exists in no catalogue anywhere');
+} else {
+  for (const [key, sites] of [...unionBad].sort((a, b) => b[1].length - a[1].length)) {
+    unknown++;
+    console.log(`     .${key.padEnd(20)} ${sites.length} site(s)   ${sites.slice(0, 3).join('  ')}`);
+  }
+}
+
 console.log(`\n[seam] ${checked} reads checked, ${unknown} unknown key(s), ${excused} excused by name`);
 if (unknown && gate) {
   console.log('\nA key no record carries reads as `undefined` and the caller falls back to a');

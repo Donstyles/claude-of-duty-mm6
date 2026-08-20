@@ -72,6 +72,8 @@ const GATES = [
     why: 'no panel stylesheet can reach another screen (STYLE.md §11)' },
   { name: 'seam', slow: false, cmd: 'node', args: ['tools/seamcheck.mjs', '--gate'],
     why: 'every module agrees with the catalogues on what the fields are called' },
+  { name: 'events', slow: false, cmd: 'node', args: ['tools/eventcheck.mjs', '--gate'],
+    why: 'no event is emitted into an empty room' },
   { name: 'physics', slow: false, cmd: 'node',
     args: ['--import', './tools/null-css.register.mjs', 'tools/phystest.mjs'],
     why: 'the player cannot leave the world, and the colliders are not empty' },

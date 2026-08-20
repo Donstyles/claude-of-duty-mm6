@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { System } from '../core/Engine.js';
+import { TOWNS, townPosition } from './data/Regions.js';
 
 /**
  * The party's body and eyes.
@@ -29,6 +30,64 @@ const MOUSE_SENSITIVITY = 0.0022;
 const KEY_TURN_RATE = 2.4;      // radians/second on the arrow keys
 const PITCH_LIMIT = Math.PI / 2 - 0.02;
 
+/**
+ * The map is not the kingdom.
+ *
+ * Eleven towns and sixteen regions inside a four-kilometre square is a
+ * playfield, not a geography, and the world's own fiction says so out loud:
+ * the Ledger's timetables put Saltmarch two days' sail from Coldwater, which
+ * is four hundred kilometres of real sea drawn as 2.3 km of world. So Caerwen
+ * is rendered at roughly 1:100, and one metre under the party's boots is a
+ * hundred metres of kingdom. This constant is that ratio written down, and
+ * every hour the clock charges for walking comes out of it.
+ */
+const LEAGUE_SCALE = 100;
+
+/**
+ * What a loaded party makes over mixed country, all day, in kingdom km/h.
+ *
+ * Naismith's figure is five on the flat; four is that with packs, armour and
+ * ground that is not a road. Against the coach's own quotes — the board
+ * averages 12.8 hours per kilometre of world, which at 1:100 is eight km/h,
+ * a stagecoach with changes of horses — it puts the party at half the speed
+ * of the service they are being asked to buy. That is the entire argument for
+ * the fare.
+ */
+const FOOT_KMH = 4;
+
+/** In-game seconds bought by one metre of world crossed on foot. */
+const SECONDS_PER_METRE = (LEAGUE_SCALE * 3600) / (FOOT_KMH * 1000);
+
+/**
+ * The other ways of crossing ground, as multiples of the walking toll.
+ *
+ * A party swimming a channel in armour makes well under half walking pace and
+ * arrives with nothing dry, which is why the packet ship can charge what it
+ * charges. Flight is the reward it should be: faster per metre than a coach
+ * and beholden to no timetable, but paid for in spell points rather than gold.
+ */
+const SWIM_TOLL = 2.5;
+const FLY_TOLL = 0.35;
+
+/** Metres of net displacement between charges on the world clock. */
+const TRAVEL_STEP = 8;
+
+/** Beyond this from a town's centre, the party is out in the country. */
+const TOWN_RADIUS = 140;
+
+/**
+ * What crossing `metres` of world under your own power costs, in hours.
+ *
+ * Exported because the fare board has to be able to quote the alternative. A
+ * price is only a decision next to the price of not paying it, and the party
+ * standing at the coach stop is the one person in the kingdom who knows
+ * exactly how far it is to Duskorn.
+ */
+export function overlandHours(metres, mode = 'foot') {
+  const toll = mode === 'swim' ? SWIM_TOLL : mode === 'fly' ? FLY_TOLL : 1;
+  return (Math.max(0, metres) * SECONDS_PER_METRE * toll) / 3600;
+}
+
 export class PlayerSystem extends System {
   static id = 'player';
   static order = 120;
@@ -52,6 +111,11 @@ export class PlayerSystem extends System {
     this._bobPhase = 0;
     this._region = null;
     this._lastEmit = 0;
+    // Where the current journey is measured from, and when it started. -1 is
+    // "unset": the next step re-anchors rather than billing for a jump.
+    this._anchorX = 0;
+    this._anchorZ = 0;
+    this._anchorAt = -1;
   }
 
   async init(ctx) {
@@ -90,6 +154,10 @@ export class PlayerSystem extends System {
     this.velocity.set(0, 0, 0);
     if (yaw !== undefined) this.yaw = yaw;
     this._smoothY = y;
+    // A coach ride and a Town Portal have already charged whatever they charge.
+    // Without this the arrival would read as a two-kilometre march and bill the
+    // party a second time for the journey they just paid for.
+    this._anchorAt = -1;
   }
 
   /** The capture harness places the camera directly; adopt it as our state. */
@@ -99,6 +167,7 @@ export class PlayerSystem extends System {
     this.pitch = camera.rotation.x;
     this.velocity.set(0, 0, 0);
     this._smoothY = this.position.y;
+    this._anchorAt = -1;
     this._captureHeld = true;
   }
 
@@ -230,7 +299,83 @@ export class PlayerSystem extends System {
       this._bob *= 1 - Math.min(1, 8 * dt);
     }
 
+    this._chargeTravel(ctx);
     this._emitRegion(ctx);
+  }
+
+  /**
+   * Charge the world clock for ground actually crossed.
+   *
+   * MM6's stables mattered because the day went by while you walked, and this
+   * game's coach network was decoration without the same rule. Measured: the
+   * dearest fare on the board, Netherby to Duskorn at ninety gold, twenty-two
+   * hours, three rations and a one-in-three ambush, covered 961 metres of
+   * world — eighty-four seconds of running, free, and with the clock barely
+   * moving. Every one of the twenty-three legs was strictly dominated by
+   * walking, timetables, storms, act gating and all. A service nobody has a
+   * reason to buy is not a system, it is a screen.
+   *
+   * Net displacement, not path length, is what gets billed. A party circling a
+   * bandit for a minute has not travelled anywhere and should not lose half a
+   * day to the fight; a party holding forward for that minute has crossed the
+   * moor. Charges land every {@link TRAVEL_STEP} metres so the sky steps in
+   * twelve-minute increments rather than lurching a leg at a time.
+   *
+   * Towns and dungeons are exempt. Their metres are literal — a street is a
+   * street and a vault is a vault — and it is only the country between them
+   * that is drawn short.
+   */
+  _chargeTravel(ctx) {
+    if (this._anchorAt < 0) { this._reanchor(ctx); return; }
+
+    if (this._inTown(ctx) || ctx.get('dungeon')?.isInside?.(this.position)) {
+      this._reanchor(ctx);
+      return;
+    }
+
+    const moved = Math.hypot(this.position.x - this._anchorX, this.position.z - this._anchorZ);
+    if (moved < TRAVEL_STEP) return;
+
+    let toll = 1;
+    if (this.isFlying) toll = FLY_TOLL;
+    else if (this.isSwimming) toll = SWIM_TOLL;
+    const gain = moved * SECONDS_PER_METRE * toll;
+
+    // SkySystem drives the clock whenever nothing else did (ARCHITECTURE §2),
+    // so the hours it has already added since the anchor are hours we must not
+    // add twice — and a party barely making headway must never move the clock
+    // *slower* than one standing still watching the sun.
+    const scale = ctx.get('sky')?.timeScale ?? 45;
+    const ambient = Math.max(0, ctx.state.elapsed - this._anchorAt) * scale;
+    if (gain > ambient) ctx.state.worldTime += gain - ambient;
+    this._reanchor(ctx);
+  }
+
+  /**
+   * Inside a town's walls, where a metre is a metre.
+   *
+   * Two answers because there are two kinds of town. Millhaven is the one the
+   * world actually builds, so its streets are wherever the generator laid
+   * them; the other ten are anchors on the map the coach puts the party down
+   * at, and asking the built town about them would exempt Millhaven's
+   * coordinates from a party standing in Duskorn.
+   */
+  _inTown(ctx) {
+    const c = ctx.get('town')?.centre?.();
+    if (c && Math.hypot(this.position.x - c.x, this.position.z - c.z) < TOWN_RADIUS) return true;
+
+    const here = ctx.get('venue')?.town;
+    if (!here || !TOWNS[here]) return false;
+    const terrain = ctx.get('terrain');
+    const at = townPosition(TOWNS[here], terrain?.worldSize ?? undefined, terrain);
+    return !!at && Math.hypot(this.position.x - at[0], this.position.z - at[1]) < TOWN_RADIUS;
+  }
+
+  /** Start measuring the next stretch of road from here, now. */
+  _reanchor(ctx) {
+    this._anchorX = this.position.x;
+    this._anchorZ = this.position.z;
+    this._anchorAt = ctx.state.elapsed;
   }
 
   update(dt, ctx) {

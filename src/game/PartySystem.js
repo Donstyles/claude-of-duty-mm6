@@ -90,8 +90,18 @@ const STARTING_KIT = {
 /** Consumables every character carries, whatever they are. */
 const STARTING_PACK = ['potion_red', 'torch'];
 
-/** Real seconds of walking before the party consumes one unit of food. */
-const SECONDS_PER_FOOD = 60 * 30;
+/**
+ * In-game hours on one ration.
+ *
+ * Eight, because that is what `rest` bills and what the Ledger's fare board
+ * bills, and three rules for one appetite is two rules too many. Hunger used
+ * to run on the wall clock instead — one ration every thirty real minutes,
+ * which at the sky's own forty-five-times drift is a ration every twenty-two
+ * in-game hours. So the road was the one place in Caerwen where a day cost
+ * less food than a night in an inn, and the coach's ration bill was a tax on
+ * the only party paying it.
+ */
+const HOURS_PER_RATION = 8;
 
 export class PartySystem extends System {
   static id = 'party';
@@ -106,7 +116,10 @@ export class PartySystem extends System {
     this.food = 7;
     /** @type {object[]} up to two hirelings */
     this.hirelings = [];
-    this._foodTimer = 0;
+    /** World-clock seconds elapsed since the last ration was eaten. */
+    this._hungerSeconds = 0;
+    /** Last clock reading we billed against; null re-syncs without charging. */
+    this._lastWorldTime = null;
   }
 
   /**
@@ -221,6 +234,18 @@ export class PartySystem extends System {
   }
 
   /**
+   * Mark `hours` of world time as already paid for in rations.
+   *
+   * Rest and the coach bill their own food up front and then shove the clock
+   * forward in one lump. Without this the hunger clock would watch that lump go
+   * past and charge for it again, so a night's sleep would cost two rations and
+   * the twenty-six-hour run to Duskorn would cost seven.
+   */
+  skipHunger(hours) {
+    this._hungerSeconds -= Math.max(0, hours) * 3600;
+  }
+
+  /**
    * Rest for `hours`. Returns what happened, including whether it was
    * interrupted — resting in the wild is a gamble in MM6.
    */
@@ -233,11 +258,13 @@ export class PartySystem extends System {
     if (!safe && rng.chance(Math.min(0.6, hours * 0.035))) {
       this.food -= 1;
       ctx.state.worldTime += 3600;
+      this.skipHunger(1);
       return { ok: false, reason: 'interrupted', hours: 1 };
     }
 
     this.food -= foodCost;
     ctx.state.worldTime += hours * 3600;
+    this.skipHunger(hours);
 
     for (const m of this.members) {
       if (m.isDead) continue;
@@ -261,6 +288,7 @@ export class PartySystem extends System {
       gold: this.gold,
       food: this.food,
       hirelings: this.hirelings,
+      hunger: Math.round(this._hungerSeconds),
     };
   }
 
@@ -271,6 +299,10 @@ export class PartySystem extends System {
     this.gold = json.gold ?? 0;
     this.food = json.food ?? 0;
     this.hirelings = json.hirelings ?? [];
+    this._hungerSeconds = json.hunger ?? 0;
+    // The clock is about to jump to whatever the save says. That jump is not
+    // time the loaded party lived through, so re-sync rather than bill it.
+    this._lastWorldTime = null;
   }
 
   // ── simulation ───────────────────────────────────────────────────────────
@@ -281,12 +313,23 @@ export class PartySystem extends System {
 
     for (const m of this.members) m.tick(dt, worldTime);
 
-    // Hunger. Running out does not kill, it weakens — the MM6 punishment.
-    this._foodTimer += dt;
-    if (this._foodTimer >= SECONDS_PER_FOOD) {
-      this._foodTimer -= SECONDS_PER_FOOD;
-      if (this.food > 0) this.food -= 1;
-      else {
+    // Hunger runs on the world clock and nothing else, so a day is a day
+    // whether it went by asleep, on the coach, or holding forward across the
+    // moor. Running out does not kill, it weakens — the MM6 punishment.
+    this._lastWorldTime ??= worldTime;
+    this._hungerSeconds += Math.max(0, worldTime - this._lastWorldTime);
+    this._lastWorldTime = worldTime;
+    // A count, not a single tick: walking now moves the clock hours at a time
+    // and a long march has to be able to eat more than one ration for it. The
+    // accumulator is drained whole but the pack is billed at most a day and a
+    // half's worth in one frame, so a clock forced forward by a shot or a save
+    // cannot empty it between two rendered images.
+    const meals = Math.floor(this._hungerSeconds / (HOURS_PER_RATION * 3600));
+    if (meals > 0) {
+      this._hungerSeconds -= meals * HOURS_PER_RATION * 3600;
+      const eaten = Math.min(meals, 4, this.food);
+      this.food -= eaten;
+      if (eaten < Math.min(meals, 4)) {
         for (const m of this.members) if (!m.isDead) m.addCondition('weak');
         ctx.events.emit('ui:log', { text: 'The party is out of food.', kind: 'warn' });
       }

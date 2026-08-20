@@ -5,6 +5,7 @@ import {
 } from './data/Travel.js';
 import { TOWNS, townPosition } from './data/Regions.js';
 import { MONSTER_LIST } from './data/Monsters.js';
+import { overlandHours } from './PlayerSystem.js';
 
 /**
  * Riding the coach and taking the packet ship.
@@ -31,6 +32,16 @@ import { MONSTER_LIST } from './data/Monsters.js';
  * The clock is `ctx.state.worldTime`, in seconds, exactly as `PartySystem.rest`
  * advances it. Nothing here keeps its own notion of time — including the
  * timetables, which are read off that same clock.
+ *
+ * None of which mattered for as long as walking was free. Netherby to Duskorn
+ * is 961 metres of world: eighty-four seconds at a run, no fare, no rations,
+ * no ambush, and a clock that barely twitched. Measured against that, all
+ * twenty-three legs were dominated — the fares, the timetables, the storms and
+ * two acts of gating were an elaborate way of charging the player for standing
+ * still. `PlayerSystem` now bills the world clock for ground crossed at the
+ * kingdom's own 1:100 scale, `PartySystem` bills hunger off that same clock,
+ * and `walking()` below puts the resulting figure on the board next to the
+ * fare so the two can be read against each other.
  */
 export class TravelSystem extends System {
   static id = 'travel';
@@ -117,9 +128,41 @@ export class TravelSystem extends System {
         totalHours: Math.round(route.hours + wait),
         schedule: scheduleText(route),
         note: route.note,
+        walk: this.walking(route),
         blocked,
       };
     });
+  }
+
+  /**
+   * What the same leg costs the party that refuses to pay.
+   *
+   * Every fare on this board was strictly dominated by walking until the clock
+   * started running with the ground: ninety gold and twenty-two hours against
+   * a free eighty-four-second jog is not a decision, it is a screen nobody
+   * opens. So the offer carries the alternative — the hours the road actually
+   * costs on foot or in the water, and the rations that go with them — and the
+   * fare is asked to beat it out loud rather than in a design document.
+   *
+   * Distance is straight-line between the two town anchors and the walking
+   * figure is therefore the optimistic one. That is deliberate: the board
+   * should quote the alternative at its best, not at ours.
+   */
+  walking(route) {
+    const r = typeof route === 'string' ? getRoute(route) : route;
+    if (!r) return null;
+    const terrain = this.ctx?.get('terrain');
+    const a = townPosition(TOWNS[r.from], terrain?.worldSize ?? undefined, terrain);
+    const b = townPosition(TOWNS[r.to], terrain?.worldSize ?? undefined, terrain);
+    if (!a || !b) return null;
+    const metres = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    // A packet's course is water the whole way; a coach road is not.
+    const hours = overlandHours(metres, r.mode === 'ship' ? 'swim' : 'foot');
+    return {
+      metres: Math.round(metres),
+      hours: Math.round(hours),
+      rations: Math.max(1, Math.ceil(hours / 8)),
+    };
   }
 
   /**
@@ -189,6 +232,10 @@ export class TravelSystem extends System {
     // ambush rolls, so an encounter happens at the hour the party arrives —
     // a night arrival at Netherby should be a night fight.
     this.ctx.state.worldTime += (route.hours + delay) * 3600;
+    // The fare already bought the bread for these hours. `PartySystem` bills
+    // hunger off the same clock now, so without this the party would eat the
+    // journey twice: once at the ticket window and once as it went past.
+    party.skipHunger?.(route.hours + delay);
     if (storm) {
       // A storm eats what a storm eats, and the fare bought no more bread.
       const extra = Math.max(1, Math.ceil(storm.hours / 8));
@@ -320,8 +367,23 @@ export class TravelSystem extends System {
     const at = townPosition(town, terrain?.worldSize ?? undefined, terrain);
     this.ctx.get('venue')?.leave({ silent: true });
     if (at) {
+      // Move the party by calling the method, not by announcing an intention.
+      //
+      // This emitted `player:teleport` and nothing in the codebase listened for
+      // it — one grep, one hit, the emit itself. Every other teleport in the
+      // game calls the method directly: DungeonSystem on entry and exit,
+      // SpellSystem for Town Portal and the Beacon, SaveSystem on restore. So
+      // buying a seat charged the fare, advanced the clock, ate the rations,
+      // rolled the ambush, logged the arrival — and left the party standing
+      // exactly where it had been. Travel, the whole feature, moved nobody.
+      //
+      // The event still goes out afterwards, because it is a reasonable thing
+      // to announce; it simply must not BE the mechanism. `tools/eventcheck.mjs`
+      // now fails the build on an emit nothing hears, which is what found this.
+      const y = (terrain?.heightAt?.(at[0], at[1]) ?? 0) + 0.1;
+      this.ctx.get('player')?.teleport?.(at[0], y, at[1], 0);
       this.ctx.events.emit('player:teleport', {
-        x: at[0], z: at[1], town: townId, reason: 'travel',
+        x: at[0], y, z: at[1], town: townId, reason: 'travel',
       });
     }
     this.ctx.events.emit('player:enteredTown', { town: townId, via: route.mode });
