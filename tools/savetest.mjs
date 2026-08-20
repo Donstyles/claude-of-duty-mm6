@@ -13,6 +13,7 @@
  */
 
 import { registerHooks } from 'node:module';
+import { readdirSync, readFileSync } from 'node:fs';
 
 // Vite resolves `import './x.css'` to nothing at runtime; Node refuses to load
 // it at all, and the input layer imports one. Stub the extension out.
@@ -37,6 +38,8 @@ const { TownServices } = await import('../src/game/TownServices.js');
 const { ShopSystem, SHOPS } = await import('../src/game/ShopSystem.js');
 const { LootSystem } = await import('../src/game/LootSystem.js');
 const { Character } = await import('../src/game/Character.js');
+const { SpellSystem } = await import('../src/game/SpellSystem.js');
+const { getSpell } = await import('../src/game/data/Spells.js');
 const { CAMPAIGN_STAGE_IDS } = await import('../src/game/data/Campaign.js');
 const STAGE_IDS = CAMPAIGN_STAGE_IDS;
 
@@ -60,6 +63,8 @@ async function makeCtx() {
     // `LootSystem` hangs its pickups off the scene graph; nothing here draws,
     // so a graph that accepts and forgets is enough.
     scene: { add() {}, remove() {} },
+    // SpellSystem's fixedUpdate dereferences ctx.input unguarded.
+    input: { actionPressed: () => false },
     get: (id) => systems.get(id) ?? null,
   };
   const add = (sys) => { systems.set(sys.constructor.id, sys); return sys; };
@@ -73,6 +78,8 @@ async function makeCtx() {
   add(new VenueSystem());
   const shop = add(new ShopSystem());
   const loot = add(new LootSystem());
+  const spells = add(new SpellSystem());
+  await spells.init?.(ctx);
   const save = add(new SaveSystem());
 
   // The three that need more than a constructor to be usable.
@@ -185,6 +192,16 @@ function play(ctx) {
   player.teleport(412.5, 18.25, -903.75, 2.1);
   player.pitch = -0.14;
   player.isWaterWalking = true;
+  // Two legs already ridden. `TravelSystem` persists only the history — fares
+  // and gating are derived — and the harness never had one, so the field was
+  // serialised and never compared. Pushed directly rather than by calling
+  // `depart()`, which would charge fares and roll ambushes this test is not
+  // about.
+  ctx.get('travel')?.history.push(
+    { route: { id: 'coach_millhaven_thornwick' }, from: 'town_millhaven', to: 'town_thornwick', at: 86400 * 4 },
+    { route: { id: 'ship_millhaven_saltmarch' }, from: 'town_millhaven', to: 'town_saltmarch', at: 86400 * 9 },
+  );
+  castStandingMagic(ctx);
   return ctx;
 }
 
@@ -221,6 +238,75 @@ const dropState = (ctx) => ctx.get('loot').drops.map((d) => ({
   pos: [d.pos.x, d.pos.y, d.pos.z].map((n) => Math.round(n * 1000) / 1000),
 }));
 
+
+/**
+ * Standing magic, which is the half of the spell layer that is NOT on the
+ * character sheet.
+ *
+ * `SpellSystem.toJSON` wrote only `visitedTowns` and `beacons` and dropped
+ * `partyEffects` entirely, so a regen aura stopped ticking after a load while
+ * the sheet still listed Regeneration — the UI kept telling the truth about a
+ * buff the engine had forgotten. Water Walk and Fly were worse: their expiry
+ * clears `player.isWaterWalking` / `isFlying`, so with the map empty nothing
+ * ever lifted them and the party flew forever.
+ *
+ * The character's own `buffs` array was always saved, which is exactly why
+ * this hid: every visible symptom said the buff was fine.
+ */
+function castStandingMagic(ctx) {
+  const spells = ctx.get('spells');
+  if (!spells) return;
+  const party = ctx.get('party');
+  spells.visitedTowns = new Set(['millhaven', 'ferrin-coll']);
+  const power = { skill: 8, mastery: 'expert' };
+  for (const id of ['body_regeneration', 'water_water_walk']) {
+    const def = getSpell(id);
+    if (def) spells._castAura?.(ctx, party.members[1], def, power);
+  }
+  spells.beacons.push({
+    x: 410, y: 18, z: -900, yaw: 2.1, label: 'the Ashpit Workings',
+    setAt: 86400 * 10, expires: 86400 * 13,
+  });
+}
+
+
+/**
+ * How much of the save does this harness actually compare?
+ *
+ * "28 field groups" was a number its author chose, and the number that mattered
+ * was the one nobody had computed: `SpellSystem` defines `toJSON`, is a
+ * registered system, and was absent from this file entirely — which is how
+ * `partyEffects` went unserialised without a red test. A hand-written list
+ * cannot report its own omissions.
+ *
+ * So this scans the tree for every class that defines `toJSON`, and prints
+ * coverage against what the harness actually snapshotted. It reads `src/world`
+ * as well as `src/game`, because `TownSystem` lives there and a `src/game`-only
+ * scan would still miss one. A class with no `static id` is nested — `Character`
+ * under `party`, `TownServices` under `services` — and is reached through its
+ * owner rather than registered, so it is counted separately rather than
+ * reported as a hole.
+ */
+function reportCoverage(snap) {
+  const DIRS = ['src/game', 'src/world'];
+  const registered = [];
+  let nested = 0;
+  for (const dir of DIRS) {
+    for (const f of readdirSync(dir).filter((n) => n.endsWith('.js'))) {
+      const src = readFileSync(`${dir}/${f}`, 'utf8');
+      if (!/^\s{2}toJSON\s*\(/m.test(src)) continue;
+      const id = src.match(/static id = '([^']+)'/)?.[1] ?? null;
+      if (id) registered.push(id); else nested++;
+    }
+  }
+  const keys = Object.keys(snap);
+  const seen = registered.filter((id) => keys.some((k) => k.startsWith(`${id}.`)));
+  const missing = registered.filter((id) => !seen.includes(id));
+  console.log(`coverage: ${seen.length}/${registered.length} registered toJSON systems compared`
+    + `${nested ? `, plus ${nested} nested via their owner` : ''}`);
+  if (missing.length) console.log(`  NOT COMPARED: ${missing.join(', ')}`);
+}
+
 /** Everything a player would notice going missing, in one comparable shape. */
 function snapshot(ctx) {
   const party = ctx.get('party');
@@ -228,6 +314,16 @@ function snapshot(ctx) {
   const campaign = ctx.get('campaign');
   const player = ctx.get('player');
   return {
+    'travel.history': (ctx.get('travel')?.history ?? [])
+      .map((j) => ({ route: j.route?.id ?? j.route, from: j.from, to: j.to, at: j.at })),
+    'spells.visitedTowns': [...(ctx.get('spells')?.visitedTowns ?? [])].sort(),
+    'spells.beacons': ctx.get('spells')?.beacons ?? [],
+    // Only id/expiry/magnitude — a live entry holds scaling FUNCTIONS, which
+    // `JSON.stringify` drops silently, so comparing the whole object would
+    // compare two different shapes and pass for the wrong reason.
+    'spells.partyEffects': [...(ctx.get('spells')?.partyEffects ?? [])]
+      .map(([id, e]) => ({ id, expires: e.expires, magnitude: e.magnitude }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
     'world.time': ctx.state.worldTime,
     'party.gold': party.gold,
     'party.food': party.food,
@@ -328,6 +424,7 @@ console.log(`the cart came once on day ${Math.floor(after.state.worldTime / 8640
 console.log(`seed recorded in the file: ${json.seed} (the running world's is ${after.state.seed} — restore warns)`);
 console.log(`slot label: ${JSON.stringify(before.get('save').list?.() ? json.meta : null)}`);
 console.log(`save is ${JSON.stringify(json).length} bytes over ${Object.keys(json.systems).length} systems`);
+reportCoverage(a);
 // A round trip that carried nothing would also be "clean", so say what it
 // carried: two picked-over shelves, two things on the grass, two emptied chests.
 {
