@@ -599,3 +599,64 @@ on a shared resource without checking who else was holding it:
 
 The fan-out produced no conflicts between agents all round. Every collision was
 the coordinator's.
+
+---
+
+## Round 14 — the menus, against the user's own screenshots
+
+The requirement, restated by the user with emphasis after several rounds of
+systems work: *"Full menu and sub Menu functionality like in mm6 and Like the
+provided Screenshots."* Six agents, one menu family each, each told to open the
+21 PNGs in `reference/mm6/` with the Read tool and audit **functionality first,
+appearance second** — because functionality is what was emphasised.
+
+### What the screenshots settled
+
+Three structures were read directly off the reference rather than from memory,
+and they are the calibration everything else was measured against:
+
+- **The shop** (`Screenshot (28)`, The Knife Shoppe): vertical wood-plank
+  sidebar; keeper's portrait framed; name in **blue italic**; the submenu as a
+  centred stack of white italic serif — Buy / Sell / Identify / Repair /
+  Special — with *Special* alone in `#E7CF21`; one gold exit oval.
+- **The skills page** (`Screenshot (22)`): title left, "Skill Points" right;
+  two engraved columns, Weapons/Magic and Armor/Misc, gold italic heads with
+  "Level" right-aligned; white rows with **the selected skill in red**; five
+  gold ovals; a full-body paperdoll in a dungeon niche.
+- **The inn** (`Screenshot (27)`): MM6 **bakes the price into the label** —
+  "Rent Room for 3 gold", "Fill Packs to 6 days for 2 gold" — wrapping to two
+  lines to do it, with priced entries gold and unpriced ones white. A bare verb
+  is used only when the entry opens a board.
+
+### Found
+
+| screen | finding |
+|---|---|
+| shop | every shopkeeper's reply was **destroyed one frame after it was written** — `_quiet` set by `_trade()`, read by nothing |
+| shop | the stock wall used **65% of the board**; `WALL.w` frozen at MM6's 432px against our 668 native |
+| spell book | the plaque was **unreachable on touch** — `mouseenter` starts the timer, `mousedown` kills it, an iOS tap fires both |
+| quest book | the **Awards tab did not exist**; MM6 has four pages, we had three |
+| quest book | stale meta chips printed a quest giver under a page saying nothing was finished — **visible in our own capture** |
+| inventory | an item released over dead granite **stuck to the cursor forever** |
+| inventory | no **portrait drop**, which `Screenshot (20)`'s own card text specifies |
+| rest | **"Dawn" advanced the calendar a full day** while the button read "6:00 am" |
+| services | the barkeep filed his own "that is everything" notice as gossip |
+
+### What matches, recorded so nobody "fixes" it toward an instinct
+
+MM6's paperdoll has **no boxed slots** — the sword and shield are composited
+onto the painted knight, which is what ours does. Its stock wall has **no price
+labels**; "Select the Item to Buy" lives in the message strip. Its spellbook
+page measures **smoother** than ours, so adding tooth would walk away from the
+reference. Each of those is an obvious-sounding improvement in the wrong
+direction.
+
+### The evidence problem
+
+The 52-screen capture taken for this round is **mixed** and was not used for any
+verdict above: `dist/` was rewritten at 16:51:52 mid-run, splitting it into 34
+screens from one tree and the rest from another. See "A false alarm is not a
+harmless alarm" above for the chain — it starts with a gate of mine that
+reported FAIL when it had merely been waiting. The findings here come from the
+reference, from the code, and from screens within a single tree; the contact
+sheet has to be re-shot before it means anything.
