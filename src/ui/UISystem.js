@@ -23,7 +23,7 @@ import { tooltip } from './widgets.js';
 
 import { getClass } from '../game/data/Classes.js';
 import { SKILLS, ATTRIBUTES, MASTERY, MASTERY_ORDER, MAGIC_SCHOOL_IDS, masteryRank } from '../game/data/Skills.js';
-import { spellsForSchool } from '../game/data/Spells.js';
+import { spellsForSchool, getSpell } from '../game/data/Spells.js';
 import { ITEMS, getItem, itemPower } from '../game/data/Items.js';
 import { QUESTS } from '../game/data/Quests.js';
 import { NPCS, SHOPS } from '../game/data/NPCs.js';
@@ -918,9 +918,24 @@ export class UISystem extends System {
     return known;
   }
 
+  /**
+   * Ready a spell on the star oval. Stores the ID; the HUD prettifies to show it.
+   *
+   * Two faults, both silent. It wrote to `this._chars[index]` — the SAMPLE
+   * party the panel keeps for its own preview — rather than to the live
+   * Character, so against a real party the write went into a copy and
+   * `party.members[i].quickSpell` stayed null. And it stored `prettyId(...)`,
+   * the DISPLAY STRING "Detect Life", where `HUD._castQuick` then looked up
+   * `getSpell("Detect Life")` and got `undefined`.
+   *
+   * A display string is not an identifier. Storing one because it reads nicely
+   * in a log line is how the readied spell became uncastable, and it is the
+   * same mistake as every other seam bug this round: a value written in one
+   * vocabulary and read in another.
+   */
   setQuickSpell(index, spellId) {
-    const c = this._chars[index];
-    if (c) c.quickSpell = prettyId(spellId);
+    const c = this._target(index) ?? this._chars[index];
+    if (c) c.quickSpell = spellId;
     this.log(`Quick spell set to ${prettyId(spellId)}.`, 'good');
     this._syncParty(true);
   }
@@ -933,21 +948,50 @@ export class UISystem extends System {
     return this.equipItem(index, drag, wanted);
   }
 
+  /**
+   * Cast from a panel. The failure path used to be worse than a failure.
+   *
+   * `SpellSystem.cast` is `(ctx, casterIndex, spellId, targetRef)`. This called
+   * `spells.cast(index, spellId, null)` — passing a NUMBER as the context — so
+   * every call threw inside `safe()` and returned false. What happened next is
+   * the part worth reading twice: on failure it docked FOUR SPELL POINTS from
+   * the sample party, then logged "casts X" and toasted "X cast." regardless.
+   *
+   * So the spell never fired, the player was told it had, and they were
+   * charged a made-up price for it. A FAKE SUCCESS IS WORSE THAN AN ERROR: an
+   * error gets reported and fixed, while this reads as working software and
+   * quietly makes the game lie about its own state.
+   *
+   * Now: real arity, real return value honoured, and nothing invented. If the
+   * cast is refused the panel says so and the purse is untouched — SpellSystem
+   * owns the SP, because SpellSystem is what knows the cost.
+   */
   castSpell(index, spellId) {
     const spells = this.ctx?.get('spells');
     const vm = this._vm[index];
-    const ok = safe(() => spells?.cast?.(index, spellId, null), false);
+    const ok = safe(() => spells?.cast?.(this.ctx, index, spellId, null), false);
     if (!ok) {
-      const c = this._chars[index];
-      if (c) c.sp = Math.max(0, (c.sp ?? 0) - 4);
-      this._syncParty(true);
+      this.toast(`${vm?.name ?? 'The caster'} cannot cast that.`, 'warn');
+      return false;
     }
-    this.log(`${vm?.name ?? 'The caster'} casts ${prettyId(spellId)}.`, 'magic');
-    this.toast(`${prettyId(spellId)} cast.`, 'magic');
+    // SpellSystem writes its own "casts X" line through `ui:log`; a second one
+    // here put two entries in the strip for one cast, one of them unprettified.
     this.closePanel();
     return true;
   }
 
+  /**
+   * The C key. Throws the readied spell, or the cheapest one they know.
+   *
+   * This used to cast `${school.id}_1` — `fire_1`, `water_1`. THERE IS NO SUCH
+   * SPELL. Ids in this game read `fire_torch_light`; the pattern being built
+   * here never matched one in the catalogue, so the key could not fire
+   * anything, and `castSpell`'s fake-success path meant it still announced a
+   * cast and docked four points for it.
+   *
+   * `knownSpells()` is the list the spellbook itself draws from, so the key and
+   * the book can no longer disagree about what a character can do.
+   */
   quickCast() {
     const vm = this.active();
     if (!vm) return;
@@ -955,12 +999,22 @@ export class UISystem extends System {
       this.toast(`${vm.name} knows no magic.`, 'warn');
       return;
     }
-    const school = vm.skills.find((s) => ['fire', 'air', 'water', 'earth', 'spirit', 'mind', 'body', 'light', 'dark'].includes(s.id));
-    if (!school) {
+    // What the player readied on the star wins; they chose it.
+    const readied = this._target(vm.index)?.quickSpell ?? this._chars[vm.index]?.quickSpell;
+    if (readied && getSpell(readied)) { this.castSpell(vm.index, readied); return; }
+
+    const known = this.knownSpells(vm);
+    if (!known.length) {
       this.toast(`${vm.name} has no school to draw on.`, 'warn');
       return;
     }
-    this.castSpell(vm.index, `${school.id}_1`);
+    // Cheapest first, so a panic press does not spend a grandmaster's best.
+    const pick = known
+      .map((id) => getSpell(id))
+      .filter(Boolean)
+      .sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0];
+    if (!pick) { this.toast(`${vm.name} has no school to draw on.`, 'warn'); return; }
+    this.castSpell(vm.index, pick.id);
   }
 
   useItem(index, entry) {
