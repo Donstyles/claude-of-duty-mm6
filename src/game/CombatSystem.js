@@ -632,9 +632,12 @@ export class CombatSystem extends System {
 
   _stepProjectiles(dt, ctx) {
     const player = ctx.get('player');
+    const physics = ctx.get('physics');
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       const step = PROJECTILE_SPEED * dt;
+      const was = p.was ?? (p.was = p.mesh.position.clone());
+      was.copy(p.mesh.position);
       p.travelled += step;
       p.mesh.position.addScaledVector(p.dir, step);
 
@@ -646,8 +649,17 @@ export class CombatSystem extends System {
       const ground = terrain?.heightAt?.(p.mesh.position.x, p.mesh.position.z) ?? -Infinity;
       const buried = p.mesh.position.y < ground;
 
-      if (arrived || buried) {
-        if (arrived && !buried) this._impact(ctx, p, player);
+      // Walls stop arrows. This frame's segment is put to the physics BVH, the
+      // same primitive the AI uses to decide it can see you, so a bolt that
+      // would have crossed a town wall or a dungeon partition dies against it
+      // and resolves nothing. Both directions: the party could shoot through
+      // buildings, and so could every archer and spellcaster in the bestiary,
+      // which is the version a player notices first.
+      const blocked = !buried && physics?.lineOfSight
+        && !physics.lineOfSight(was, p.mesh.position);
+
+      if (arrived || buried || blocked) {
+        if (arrived && !buried && !blocked) this._impact(ctx, p, player);
         this._group.remove(p.mesh);
         p.mesh.geometry.dispose();
         p.mesh.material.dispose();
