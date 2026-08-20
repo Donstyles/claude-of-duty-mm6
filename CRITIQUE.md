@@ -559,3 +559,43 @@ than as passed. Of eight claims it examined: 4 confirmed, 3 refuted, 2
 unverified, and it named a bug in a system nobody had asked it about
 (`SpellSystem.toJSON` drops `partyEffects`, so Water Walk and Fly never expire
 across a load).
+
+### A false alarm is not a harmless alarm
+
+Worth recording as a mechanism, because it cost a 52-screen capture and the
+first link in the chain was a fix that was otherwise correct.
+
+1. `check.mjs`'s build gate was made to take the capture lock, so that "did my
+   change compile?" would queue behind a running capture instead of rewriting
+   `dist/` underneath it. Correct, and it fixed a real contamination path.
+2. On timing out behind a long capture it printed **FAIL** — because
+   "could not acquire the lock" had not been separated from "the tree is red".
+3. An agent saw `build FAIL 809.5s`, reasonably set out to diagnose it, and ran
+   `npx vite build` **directly** — outside the wrapper whose entire purpose is
+   to prevent that.
+4. `dist/` was rewritten at 16:51:52, mid-capture. 34 screens came from the old
+   tree and the rest from the new one. A contact sheet built from both halves
+   compares two builds and calls the difference craft.
+
+**The false alarm did not merely get ignored. It provoked someone to route
+around the safety that was raising it.** That is the part that generalises: a
+gate that cries wolf does not fail safe, it fails by teaching people to bypass
+it — and the bypass lands on exactly the thing the gate was protecting.
+
+`flock -E 75` now reports BLOCKED, excluded from the pass count, with "That is
+not a pass. Re-run when the machine is quiet." The diagnosis that led to the
+bypass no longer presents itself.
+
+Two smaller ones from the same night, both mine, both the same shape — acting
+on a shared resource without checking who else was holding it:
+
+- Committing under a live agent twice: once stashing a file an agent was
+  mid-edit in, so the pop conflicted against work that had moved on; once
+  sweeping three temporary `detail: true` test flags into a commit as though
+  somebody had chosen them.
+- `pkill -f "flock -w 900"` matched the shell running the command that
+  contained that string, and killed it mid-commit. Match on something the
+  killer itself does not say.
+
+The fan-out produced no conflicts between agents all round. Every collision was
+the coordinator's.
