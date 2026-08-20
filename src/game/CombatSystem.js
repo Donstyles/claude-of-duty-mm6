@@ -166,7 +166,18 @@ export class CombatSystem extends System {
       return false;
     }
 
-    char.recovery = recoveryTime(char, useBow ? bow : weapon) / 60;
+    // `.seconds`, not `/ 60`. `recoveryTime` returns `{ frames, seconds }`,
+    // and dividing the OBJECT by 60 gave NaN — which then poisoned the whole
+    // recovery economy silently, because `Character.tick` guards
+    // `if (this.recovery > 0)` and `canAct` tests `this.recovery <= 0`, and
+    // BOTH COMPARISONS ARE FALSE FOR NaN. So one melee swing set recovery to
+    // NaN, nothing ever decremented it, and that character could not attack
+    // again for the rest of the session. Casting was unaffected — SpellSystem
+    // writes a real number — so the failure read as "melee feels weak" rather
+    // than as a bug.
+    //
+    // `.seconds` is already `frames / FRAMES_PER_SECOND`; do not divide again.
+    char.recovery = recoveryTime(char, useBow ? bow : weapon).seconds;
 
     if (useBow) {
       this._launchProjectile(ctx, char, i, target, bow);

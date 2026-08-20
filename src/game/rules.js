@@ -648,7 +648,12 @@ export function recoveryTime(char, weapon = null) {
   frames -= statBonus(effectiveStat(char, 'speed'));
   if (w?.skill) frames += charSkillEffect(char, w.skill).recovery ?? 0;
   frames += char?.bonuses?.recovery ?? 0;
-  if ((char?.buffs ?? []).includes('hasted')) frames *= 0.5;
+  // Buffs are objects, not strings. `includes('hasted')` tested an array of
+  // `{ spellId, expires, power }` for a bare string and was never once true,
+  // so the halving below — which works, and is measurable the moment the test
+  // passes — has never fired in the shipped game. `findBuff` is the reader
+  // every other buff in this file goes through.
+  if (findBuff(char, 'fire_haste')) frames *= 0.5;
 
   const mod = conditionModifiers(char);
   frames = Math.max(MIN_RECOVERY_FRAMES, Math.round(frames * mod.recoveryScale));
