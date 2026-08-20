@@ -76,6 +76,26 @@ export class TextureForge {
     this._cache = new Map();
     /** @type {Set<THREE.WebGLRenderTarget>} */
     this._targets = new Set();
+    /**
+     * Which target each baked texture came out of, for `release`.
+     *
+     * Off to the side rather than on `tex.userData.renderTarget`, where it
+     * used to live. A render target refers back to its own texture, so that
+     * field closed a cycle — and `Material.copy` deep-copies `userData`
+     * through `JSON.stringify`, which throws on a cycle. Any material holding
+     * a forge texture in its own `userData` was therefore un-clonable, which
+     * above the `low` tier is every material the library patches for detail.
+     * A map on the side is the same lookup with none of that: it is not a
+     * property of the texture, so nothing serialising a texture can reach it.
+     *
+     * Weak is safe here rather than merely tidy. `_targets` holds every live
+     * target, and a target holds its own texture, so an entry cannot be
+     * collected out from under a texture the forge still owns; it becomes
+     * collectable only once `release` or `dispose` has let the target go,
+     * which is exactly when it stops meaning anything.
+     * @type {WeakMap<THREE.Texture, THREE.WebGLRenderTarget>}
+     */
+    this._targetOf = new WeakMap();
     this._disposed = false;
     this.bakedTexels = 0;
     this.bakeCount = 0;
@@ -181,7 +201,7 @@ export class TextureForge {
     tex.wrapT = wrap;
     tex.anisotropy = anisotropy;
     tex.needsUpdate = false;
-    tex.userData.renderTarget = rt;
+    this._targetOf.set(tex, rt);
     if (key) this._cache.set(key, tex);
 
     this.bakeCount++;
@@ -361,9 +381,12 @@ export class TextureForge {
 
   /** Free a single baked texture and its render target. */
   release(texture) {
-    const rt = texture?.userData?.renderTarget;
+    // `WeakMap.get` answers undefined for a non-object key, so a null texture
+    // needs no guard of its own.
+    const rt = this._targetOf.get(texture);
     if (rt && this._targets.has(rt)) {
       this._targets.delete(rt);
+      this._targetOf.delete(texture);
       rt.dispose();
     }
     for (const [k, v] of this._cache) if (v === texture) this._cache.delete(k);

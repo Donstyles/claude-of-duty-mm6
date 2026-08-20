@@ -1472,7 +1472,7 @@ const ARCHITECTURE = {
 
 const METAL = {
   'iron': {
-    group: 'metal', hero: true,
+    group: 'metal', hero: true, detail: true,
     normalStrength: 0.022, ao: { radius: 0.02, amplitude: 0.4 },
     metalness: 1.0,
     glsl: /* glsl */ `
@@ -1937,7 +1937,7 @@ const ORGANIC = {
   },
 
   'cloth': {
-    group: 'organic', hero: true,
+    group: 'organic', hero: true, detail: true,
     normalStrength: 0.03, ao: { radius: 0.018, amplitude: 0.5 },
     physical: { sheen: 0.5, sheenRoughness: 0.85 },
     glsl: /* glsl */ `
@@ -1969,7 +1969,7 @@ const ORGANIC = {
   },
 
   'leather': {
-    group: 'organic', hero: true,
+    group: 'organic', hero: true, detail: true,
     normalStrength: 0.035, ao: { radius: 0.018, amplitude: 0.55 },
     glsl: /* glsl */ `
       vec3 mStruct(vec2 uv) {
