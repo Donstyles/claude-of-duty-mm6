@@ -53,6 +53,10 @@ function idsOf(mod, names) {
 
 const DUNGEONS = idsOf(dungeons, ['DUNGEONS', 'DUNGEON_IDS']);
 const NPCS = idsOf(npcs, ['NPCS', 'NPC_IDS']);
+/** Dungeon bosses are killable targets too, and carry their own ids. */
+const BOSSES = new Set(
+  Object.values(dungeons.DUNGEONS ?? {}).map((d) => d?.boss?.id).filter(Boolean),
+);
 const VENUES = idsOf(venues, ['VENUES', 'VENUE_IDS']);
 const TOWNS = idsOf(regions, ['TOWNS']);
 const REGIONS = idsOf(regions, ['REGIONS']);
@@ -168,15 +172,49 @@ for (const q of QUESTS) {
   if (where.region && !REGIONS.has(where.region)) err(at, `where.region "${where.region}" does not exist`);
   if (q.giver?.venue && !VENUES.has(q.giver.venue)) err(at, `giver.venue "${q.giver.venue}" does not exist`);
   if (q.giver?.id && !NPCS.has(q.giver.id)) err(at, `giver.id "${q.giver.id}" is not an NPC`);
-  if (typeof q.objective?.target === 'string' && q.objective.target.startsWith('npc_')
-      && !NPCS.has(q.objective.target)) err(at, `objective.target "${q.objective.target}" is not an NPC`);
-  if (q.reward?.item && !ITEMS.has(q.reward.item)) err(at, `reward.item "${q.reward.item}" does not exist`);
+  for (const r of q.rewards?.items ?? []) {
+    if (!ITEMS.has(r)) err(at, `rewards.items "${r}" does not exist`);
+  }
 
-  const t = q.objective?.target;
-  if (typeof t === 'string') {
-    if (t.startsWith('dun_') && !DUNGEONS.has(t)) err(at, `objective.target "${t}" is not a dungeon`);
-    if (t.startsWith('item_') && !ITEMS.has(t)) err(at, `objective.target "${t}" is not an item`);
-    if (t.startsWith('mon_') && !MONSTERS.has(t)) err(at, `objective.target "${t}" is not a monster`);
+  /*
+   * `objectives`, plural — and this block read `q.objective`, singular.
+   *
+   * NOT ONE of the 91 quests carries a singular `objective`; all 91 carry an
+   * `objectives` ARRAY, 207 entries between them. So every check in here was
+   * reading `undefined?.target`, taking the `typeof t === 'string'` branch
+   * never, and passing everything. All 207 objectives have been completely
+   * unvalidated: the dungeon check, the NPC check and the item check alike.
+   *
+   * That is how seven quests shipped asking the player to collect an item that
+   * is nobody's reward and nobody's drop, and seven more asking for items with
+   * no catalogue record at all. The gate reported 0 errors throughout, because
+   * it was inspecting a field that does not exist.
+   *
+   * Two lessons are already written into this file's history and this is the
+   * third: a check keyed to the wrong NAME is indistinguishable from no check,
+   * and it is worse than none, because it reads as coverage.
+   */
+  for (const o of q.objectives ?? []) {
+    const t = o?.target;
+    if (typeof t !== 'string') continue;
+    const where = `${at} objective ${o.id ?? o.type}`;
+    if (o.type === 'collect' && !ITEMS.has(t)) {
+      err(where, `collect target "${t}" is not an item — nothing can ever pick it up`);
+    }
+    if (t.startsWith('dun_') && !DUNGEONS.has(t)) err(where, `target "${t}" is not a dungeon`);
+    if (t.startsWith('npc_') && !NPCS.has(t)) err(where, `target "${t}" is not an NPC`);
+    if (t.startsWith('town_') && !TOWNS.has(t)) err(where, `target "${t}" is not a town`);
+    // A `kill` target is a monster id with no prefix of its own, so it is
+    // checked by its verb rather than by its spelling — but it may equally be
+    // a DUNGEON BOSS id, and those are `boss_*` with their own name and a
+    // `base` monster behind them. The first cut of this check accepted only
+    // monsters and immediately accused `boss_the_cistern_choir`, which is the
+    // real, existing boss of `dun_verhal_cisterns`. A gate's first false
+    // positive is the moment it starts being ignored, so it is written down
+    // here rather than quietly widened.
+    if (o.type === 'kill' && !MONSTERS.has(t) && !BOSSES.has(t)) {
+      err(where, `kill target "${t}" is neither a monster nor a dungeon boss`);
+    }
   }
 }
 

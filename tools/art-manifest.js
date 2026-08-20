@@ -286,6 +286,14 @@ const ITEM_POSE = {
 const PER_ITEM = new Set([
   'weapon', 'armour', 'shield', 'helm', 'gauntlets', 'boots', 'belt',
   'cloak', 'amulet', 'ring', 'gem', 'reagent', 'misc', 'artifact',
+  // `wand` was missing here and nowhere else: ITEM_POSE has posed it "held
+  // vertically, tip upward" all along, and the aspect rule below already gives
+  // it a 9:16 frame like a weapon. One word absent from one set, and ALL
+  // SIXTEEN WANDS IN THE GAME fell through to the square procedural glyph —
+  // which covers a third of a 1x3 inventory box, so they read as a smudge in
+  // a tall rectangle. The two lines that would have made them look right were
+  // already written.
+  'wand',
 ]);
 
 /** One plate for a whole family, varied in code rather than in credits. */
