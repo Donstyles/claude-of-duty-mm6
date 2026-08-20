@@ -458,3 +458,104 @@ the code's.
 - **An adversarial verifier is worth a builder.** Fourteen fixes with numbers
   attached are fourteen claims, and claims written into commit messages become
   the project's memory whether or not they are true.
+
+---
+
+## Round 13 — the verifier, and what it cost us to believe ourselves
+
+Round 12 ended with fourteen fixes, each with numbers attached, written into
+commit messages and into the section above. Round 13 sent eight more critics at
+what round 12 left open, and one of them was pointed at round 12 itself with a
+single instruction: **refute this**.
+
+It refuted the headline.
+
+### The claim that was false
+
+> "0 of 73 quests could ever complete → 73 of 73."
+> "CampaignSystem is correctly wired against Campaign.js, so the 80-stage spine
+> worked and the 73 quests beside it were decoration."
+
+Both written by me, in `3c0cf97`. Driven with only the events the world
+actually emits, **the 80-stage main campaign stalls at 5 of 80** — act one,
+blocked on `a1_lights_off_the_point [flag:a1_boats_counted]`. Called by hand,
+`cs.tick()` reaches 80/80. The data was always fine. The caller does not exist:
+`quest:flag`, `campaign:flag` and `campaign:tick` have listeners and **no
+emitters anywhere in `src/`**. 23 of 91 quests and 19 of 80 stages carry a
+non-optional `flag` or `survive` objective.
+
+Compounding it, `QuestSystem.setFlag()` is idempotent and advances by one, so a
+`survive` objective with `count > 1` could never be satisfied even if something
+did raise the flag — four promotion quests permanently stuck.
+
+**The lesson is not "check your work".** It is that a claim with a number
+attached reads as verified whether or not anybody verified it, and once it is
+in a commit message it becomes the project's memory. Fourteen fixes produced
+fourteen claims and nobody had audited any of them until an agent was paid to
+be hostile.
+
+### The twelfth name-mismatch, and the gate that finally sees it
+
+`DialogueSystem._fromCatalogue` copied every topic as `{id, label, text}`. The
+record spells **seven** fields, so `requires`, `gives`, `service` and
+`promotes` were dropped at the copy, silently, because `text` survived and
+`choose()` had something plausible to do with it — print it.
+
+```
+speaker: Wat Fletcher  →  choose('own:work')
+  said: "Sheep going missing off the high field…"
+  quests started: 0        events emitted: 0
+```
+
+That is `main_01_a_small_errand`, **the first quest in the game**, taking a turn
+and starting nothing. 0 of 214 topics could fire an effect.
+
+Both gates written a day earlier were blind to it, and the reason generalises:
+the record travels as a **parameter**, so `seamcheck` never witnessed a
+binding, and every field name it *did* read was real. `lint-content` checks
+that `t.gives` **resolves**, never that anything **reads** it.
+
+So the third pass asks the mirror question — *what data does nothing read?* —
+and its first run found 22 authored fields no line in `src/` mentions:
+`hitDie` on all 32 classes, so class choice does not scale hit points;
+`membershipFee` on all 18 guilds; `castles` on 40 regions; `sounds` on 198
+monsters; `repeatable` on 182 quests.
+
+### The twenty-hour question, answered
+
+`tools/floortime.mjs` boots the real engine, builds all 24 campaign dungeons,
+and simulates combat against the shipped `rules.js` and `Character.js` — real
+recovery frames, real to-hit, real dice, real resistance. Wall-clock is never
+used as play time, because 10–15 fps here is SwiftShader, not the player.
+
+```
+52 campaign floors · 376 rooms · 46.6 km of floor · 458 monsters · 93 095 HP
+per floor   3.6 min low   6.8 nominal   12.8 high
+campaign                  ~9–11 h all-in
+```
+
+**The 20-hour requirement is missed by about half.** No component dominates —
+dwell 17.8%, fight 17.7%, chests 17.0%, secrets 15.9%, walk 13.2%, doors 12.5%.
+The floors are simply small; an average floor is **72 seconds of swinging**.
+
+### Two more worth keeping
+
+- **Forty levels of training made a knight worse at connecting.** Skill costs
+  are triangular against a flat 2 points a level, so attack grows as √level
+  while bestiary AC grows linearly 3 → 78. Party hit chance *fell* 45% → 32%
+  across the campaign, and the theoretical ceiling — every point in two skills,
+  200 Accuracy, a blessed great sword — measured **37%, below the level-1
+  floor**. One missing linear term, the character's own level, which is MM6's
+  attack rating. Now 47–52% end to end.
+- **`eradicated` was unreachable in the entire game.** The condition is
+  defined, priced at 1000 gold by every temple, and drawn an icon for.
+  `Character.damage` floored HP at `-maxHP`, one rung short of it.
+
+### The standing rule this round earned
+
+**Every claim gets an adversary.** Not a second opinion — an agent instructed to
+default to REFUTED and to report what it could not check as unverified rather
+than as passed. Of eight claims it examined: 4 confirmed, 3 refuted, 2
+unverified, and it named a bug in a system nobody had asked it about
+(`SpellSystem.toJSON` drops `partyEffects`, so Water Walk and Fly never expire
+across a load).
