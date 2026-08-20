@@ -9,6 +9,11 @@
  * place is *for*. `holds` exists because a dungeon nobody can describe in one
  * sentence is a corridor with monsters in it, and fifty of those is not a game.
  *
+ * It does not follow that the *shape* can be left to the seed, which is what
+ * this file used to do. See the `CHARACTER` table below: layout, hazard,
+ * secrets and reward are authored per dungeon, because a generator reseeded
+ * fifty-five times is one dungeon and the player works that out by the fourth.
+ *
  * Names follow CANON.md §1. Imperial cuttings take Old Cindric (Ossra, Malveth,
  * Verhal, Duskorn); anything dug or drowned by the people who came after takes
  * plain Common compounds. A Common name over a Cindric floor is the setting in
@@ -671,6 +676,103 @@ dungeon({
   role: 'campaign',
   holds: 'One room at the bottom of everything, built round a single seat, with the charts still lit and the coast on them belonging to no sea in Caerwen.',
 });
+
+// ── Character ───────────────────────────────────────────────────────────────
+
+/**
+ * The four knobs that stop fifty-five dungeons being one dungeon.
+ *
+ * A theme is a *look*, and looks were all the catalogue used to author: three
+ * layout grammars carried the whole set, so thirty-four of the fifty-five were
+ * the same scatter of rectangles in different stone and a player reads that by
+ * about the fourth one. These are the fields that make a floor plan an opinion.
+ *
+ *   layout   which shape the digging took — `DUNGEON_LAYOUTS`. A drift with
+ *            workings off it (`spine`) and a circuit round a vault (`ring`) are
+ *            not the same building even in identical brick.
+ *   hazard   'water' or 'lava': the generator sinks the floor of some rooms and
+ *            the party wades. Half the `holds` lines below are about liquid and
+ *            none of it used to be in the geometry.
+ *   secrets  vaults carved behind a wall face, reached through a leaf of the
+ *            same stone and found only on a Perception check.
+ *   reward   the one thing in this dungeon that is only in this dungeon:
+ *            `[item id, the name it carries]`, and `hidden` to put it in the
+ *            vault instead of on the boss's dais. `item` is a real catalogue id
+ *            so the prize equips, sells and enchants like anything else — the
+ *            name is what makes it a reason to come.
+ */
+export const DUNGEON_LAYOUTS = Object.freeze([
+  'sprawl', 'warren', 'halls', 'spine', 'ring', 'cavern', 'chasm', 'grid',
+]);
+
+const CHARACTER = {
+  dun_hobbs_adit: { layout: 'spine', hazard: 'water', secrets: 1, reward: ['mace_club', "Hobb's Pick"] },
+  dun_old_watch: { layout: 'cavern', secrets: 1, reward: ['dagger_dagger', "The Watch-King's Tooth"] },
+  dun_the_weeping_stair: { layout: 'chasm', hazard: 'water', secrets: 1, reward: ['staff_staff', "Halm's Tally-Staff"] },
+  dun_wolf_den: { layout: 'cavern', reward: ['leather_armour', 'The Grey Pelt'] },
+  dun_the_orchard_vault: { layout: 'ring', secrets: 1, reward: ['chain_ring', "The Steward's Coat", true] },
+  dun_crown_undercroft: { layout: 'warren', secrets: 2, reward: ['art_assessor', 'Assessor', true] },
+  dun_hollow_stockade: { layout: 'halls', reward: ['sword_broad', "Yarrow's Warrant-Blade"] },
+  dun_wenlow_manor: { layout: 'sprawl', secrets: 1, reward: ['plate_plate', 'The Last Wenlow'] },
+  dun_the_undercut: { layout: 'chasm', hazard: 'water', secrets: 1, reward: ['art_quernstone', 'Quernstone'] },
+  dun_the_drowned_counting_house: { layout: 'ring', hazard: 'water', secrets: 1, reward: ['leather_studded', "Ruck's Channel Coat"] },
+  dun_sea_cloister: { layout: 'spine', hazard: 'water', secrets: 1, reward: ['mace_mace', 'The Cloister Bell-Hammer'] },
+  dun_the_bell_wreck: { layout: 'warren', hazard: 'water', secrets: 1, reward: ['axe_war', 'Slack Water'] },
+  dun_ashpit_workings: { layout: 'spine', secrets: 1, reward: ['spear_trident', 'The Peat-Iron Spear'] },
+  dun_imperial_conduit: { layout: 'ring', hazard: 'water', secrets: 1, reward: ['chain_chain', "The Drainwalker's Mail"] },
+  dun_the_standing_nine: { layout: 'ring', secrets: 2, reward: ['art_standing_ring', 'The Standing Ring'] },
+  dun_hessas_cut: { layout: 'chasm', hazard: 'water', secrets: 1, reward: ['bow_long', "Hessa's Long Reach", true] },
+  dun_the_eel_stair: { layout: 'cavern', hazard: 'water', secrets: 1, reward: ['spear_pike', 'The Eel-Gaff'] },
+  dun_the_green_chapter: { layout: 'ring', secrets: 1, reward: ['art_alderquiet', 'Alderquiet'] },
+  dun_thornhallow_deep: { layout: 'cavern', secrets: 1, reward: ['staff_long', 'The Thornhallow Rod'] },
+  dun_greenheart: { layout: 'chasm', secrets: 1, reward: ['art_cindrast_yew', 'Cindrast Yew'] },
+  dun_the_drowned_chapel: { layout: 'spine', hazard: 'water', secrets: 1, reward: ['mace_mace', 'The Unsnuffed Lamp'] },
+  dun_the_wreck: { layout: 'warren', hazard: 'water', secrets: 1, reward: ['leather_hardened', 'Bilgehide'] },
+  dun_reedmarrow: { layout: 'cavern', hazard: 'water', secrets: 1, reward: ['dagger_stiletto', 'Marrow-Needle'] },
+  dun_the_whale_road: { layout: 'spine', hazard: 'water', secrets: 1, reward: ['axe_war', 'The Flensing Axe'] },
+  dun_hollowfrost_keep: { layout: 'halls', secrets: 2, reward: ['plate_field', 'Hollowfrost Plate'] },
+  dun_the_old_grange: { layout: 'warren', secrets: 1, reward: ['chain_splint', "The Widow's Splint"] },
+  dun_ansel_farmstead: { layout: 'warren', secrets: 1, reward: ['mace_war_hammer', 'The Service Bell'] },
+  dun_the_empty_church: { layout: 'spine', secrets: 2, reward: ['art_recant', 'Recant', true] },
+  dun_the_unlisted_door: { layout: 'warren', secrets: 2, reward: ['art_small_hours', 'The Small Hours', true] },
+  dun_the_ninth_barrow: { layout: 'ring', secrets: 1, reward: ['sword_sabre', "The Ninth Sleeper's Sword"] },
+  dun_the_opened_barrows: { layout: 'warren', secrets: 2, reward: ['chain_scale', "The Chorister's Scale"] },
+  dun_the_split_hall: { layout: 'halls', secrets: 1, reward: ['spear_pike', 'The Half-Hall Pike'] },
+  dun_windward_pits: { layout: 'chasm', secrets: 1, reward: ['bow_composite', "The Pit-Singer's Bow"] },
+  dun_hall_beneath: { layout: 'halls', secrets: 2, reward: ['axe_executioner', 'Thane-Cleaver'] },
+  dun_the_wind_stair: { layout: 'spine', secrets: 1, reward: ['staff_rune', "The Gale-Warden's Stave"] },
+  dun_the_blue_throat: { layout: 'chasm', hazard: 'water', secrets: 1, reward: ['plate_gothic', "The Glacier's Keeping"] },
+  dun_the_blighted_holt: { layout: 'cavern', secrets: 1, reward: ['leather_elven', "The Holt King's Hide"] },
+  dun_the_hanging_yard: { layout: 'ring', hazard: 'water', secrets: 1, reward: ['sword_bastard', 'The Long Register'] },
+  dun_the_confessors_pit: { layout: 'warren', secrets: 2, reward: ['art_null_band', 'The Null Band', true] },
+  dun_choir_hall: { layout: 'spine', secrets: 1, reward: ['staff_rune', 'The Tuning Rod'] },
+  dun_the_broken_post: { layout: 'halls', reward: ['chain_scale', 'The Loopholed Coat'] },
+  dun_ossran_vaults: { layout: 'ring', secrets: 2, reward: ['art_ossran_pendant', 'The Ossran Pendant', true] },
+  dun_the_duskorn_undercity: { layout: 'warren', secrets: 2, reward: ['plate_full', "The Lamplighter's Plate", true] },
+  dun_undercaldera: { layout: 'chasm', hazard: 'lava', secrets: 2, reward: ['axe_great', 'The Third Gallery'] },
+  dun_the_caldera_stair: { layout: 'spine', hazard: 'lava', secrets: 1, reward: ['mace_war_hammer', "Skell's Bright Hammer"] },
+  dun_slagfall: { layout: 'chasm', hazard: 'lava', secrets: 1, reward: ['sword_great', 'Slagfall'] },
+  dun_the_needle_road: { layout: 'chasm', secrets: 1, reward: ['bow_great', 'The Third Needle'] },
+  dun_malveth_hold: { layout: 'halls', secrets: 2, reward: ['art_magpie', 'Magpie', true] },
+  dun_the_buried_province: { layout: 'ring', secrets: 2, reward: ['plate_full', "The Prefect's Plate", true] },
+  dun_verhal_cisterns: { layout: 'ring', hazard: 'water', secrets: 1, reward: ['staff_elder', 'The Hymn in the Tank', true] },
+  dun_the_rim_camp: { layout: 'halls', secrets: 1, reward: ['chain_elven', "The Quartermaster's Coat"] },
+  dun_the_wound: { layout: 'chasm', secrets: 2, reward: ['dagger_main_gauche', 'The Tear'] },
+  dun_ossra_first_descent: { layout: 'grid', secrets: 1, reward: ['blaster_blaster', 'Doorwarden'] },
+  dun_the_long_gallery: { layout: 'grid', secrets: 2, reward: ['blaster_rifle', 'Nine Voices', true] },
+  dun_the_pilots_chamber: { layout: 'grid', secrets: 1, reward: ['plate_noble', 'Pilotskin'] },
+};
+
+for (const [id, c] of Object.entries(CHARACTER)) {
+  const d = dungeons[id];
+  // A character line for a dungeon that has been renamed out from under it is
+  // a typo, not a crash: the generator's defaults still build the place.
+  if (!d) continue;
+  d.layout = c.layout;
+  d.hazard = c.hazard ?? null;
+  d.secrets = c.secrets ?? 0;
+  d.reward = Object.freeze({ item: c.reward[0], name: c.reward[1], hidden: !!c.reward[2] });
+}
 
 // ── Entrances ───────────────────────────────────────────────────────────────
 

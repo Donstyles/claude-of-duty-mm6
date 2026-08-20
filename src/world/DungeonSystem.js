@@ -103,6 +103,51 @@ const THEMES = {
   'vessel': { recipe: 'vessel', kit: ['berth', 'crate'] },
 };
 
+/**
+ * Floor plans, which are a different axis from themes and have to be.
+ *
+ * A theme says what the stone is. A layout says what shape the digging took,
+ * and until this pass there were only three of those — so thirty-four of the
+ * fifty-five interiors were the same rejection-sampled scatter of rectangles
+ * with different wallpaper, and a player reads that by about the fourth one.
+ * Eight layouts against twenty-two themes is what stops that: the same crypt
+ * masonry is a different place depending on whether it was laid out as a
+ * sprawl, a warren of cells, four big halls, one axial gallery or a ring
+ * round a vault.
+ *
+ *   rooms   how many chambers to aim for, before depth thins them
+ *   room    chamber size in cells (radius, for the two cave grammars)
+ *   loops   extra corridors closed after the spanning walk; 0 is a pure tree
+ *   grammar which builder draws it — see `_plan`
+ */
+const LAYOUTS = {
+  sprawl: { grammar: 'rooms', rooms: [8, 10], room: [3, 6], loops: 1 },
+  warren: { grammar: 'rooms', rooms: [13, 16], room: [2, 4], loops: 3 },
+  halls: { grammar: 'rooms', rooms: [5, 7], room: [5, 9], loops: 1 },
+  spine: { grammar: 'spine', rooms: [8, 11], room: [3, 6], loops: 0 },
+  ring: { grammar: 'ring', rooms: [7, 9], room: [3, 5], loops: 0 },
+  cavern: { grammar: 'cave', rooms: [8, 11], room: [2.2, 4.2], loops: 0 },
+  chasm: { grammar: 'cave', rooms: [4, 5], room: [3.6, 6.4], loops: 0 },
+  grid: { grammar: 'grid', rooms: [8, 12], room: [3, 5], loops: 0 },
+};
+
+/** Which layout a theme falls back to when the catalogue does not say. */
+const LAYOUT_FOR_GRAMMAR = { rooms: 'sprawl', cave: 'cavern', grid: 'grid' };
+
+/**
+ * Standing water and standing fire.
+ *
+ * Half the catalogue's one-line pitches are about liquid — a strongroom that
+ * floods at every tide, a meltwater shaft, a forge cut into a live vent — and
+ * none of it was in the geometry. A hazard sinks the floor of the rooms it
+ * takes by `depth` and lays a sheet over them, so the party wades. Lava also
+ * lights the room it is in, which is the cheapest good light in the build.
+ */
+const HAZARDS = {
+  water: { depth: 0.5, sheet: 0.22, colour: 0x2a4a50, glow: 0, opacity: 0.72 },
+  lava: { depth: 0.42, sheet: 0.2, colour: 0xff5a18, glow: 14, opacity: 1 },
+};
+
 /** Simultaneous point lights. Torch anchors are unlimited; the pool is not. */
 const LIGHT_POOL = { low: 7, medium: 9, high: 12, ultra: 16 };
 
@@ -482,9 +527,14 @@ export class DungeonSystem extends System {
       web: new Batch(this._webMaterial()),
       ember: new Batch(this._emberMaterial(def.light.torch)),
     };
+    // The hazard sheet is built into its own batch and added to the group
+    // *after* the collider is taken, so the party wades through standing water
+    // rather than walking on top of it.
+    const haz = HAZARDS[def.hazard];
+    const hazard = haz ? new Batch(this._hazardMaterial(def.hazard, haz)) : null;
 
     const state = {
-      def, look, rng, batches, group,
+      def, look, rng, batches, group, hazard, haz,
       torches: [], stairs: [], doors: [], chests: [], spawned: [], floors: [],
     };
 
@@ -493,6 +543,11 @@ export class DungeonSystem extends System {
       previous = this._plan(state, f, floors, previous);
       state.floors.push(previous);
     }
+    // A prize can only be hidden if a vault actually got carved — the carve
+    // fails on a floor with no room far enough from the rock — so the flag is
+    // resolved once, here, rather than being assumed by the dresser.
+    state.rewardHidden = !!def.reward?.hidden
+      && state.floors.some((p) => p.rooms.some((r) => r.vault));
     // The shell waits until every floor's stair carving is known, so a shaft
     // can suppress the slab above it and the ceiling below it.
     for (const plan of state.floors) this._shell(state, plan);
@@ -508,6 +563,9 @@ export class DungeonSystem extends System {
     this._populate(ctx, state);
 
     ctx.get('physics')?.addCollider?.(group, { type: 'mesh', static: true });
+
+    const sheet = hazard?.build(false);
+    if (sheet) { sheet.name = 'dungeon-hazard'; group.add(sheet); }
 
     const first = state.floors[0];
     const [sx, sz] = cellToWorld(first.entry.cx, first.entry.cy, first.size);
@@ -541,20 +599,34 @@ export class DungeonSystem extends System {
     const { rng, look, def } = state;
     const depth = total > 1 ? index / (total - 1) : 0;
     const size = 22 + Math.round(depth * 8) + (def.level > 24 ? 4 : 0);
-    const rooms = Math.max(4, Math.round(9 - depth * 3 + rng.int(0, 2)));
+    // The act-five recipe is a lattice whatever the catalogue says; everything
+    // else takes the authored layout, or its grammar's default if there is none.
+    const L = LAYOUTS[look.grammar === 'grid' ? 'grid'
+      : def.layout && LAYOUTS[def.layout] ? def.layout : LAYOUT_FOR_GRAMMAR[look.grammar]]
+      ?? LAYOUTS.sprawl;
+    // Chambers thin out with depth in every layout, but a warren stays a warren.
+    const rooms = Math.max(3, Math.round(
+      rng.int(L.rooms[0], L.rooms[1]) * (1 - depth * 0.28),
+    ));
 
-    const plan = look.grammar === 'cave'
-      ? this._layoutCave(rng, size, rooms, depth)
-      : look.grammar === 'grid'
+    const plan = L.grammar === 'cave'
+      ? this._layoutCave(rng, size, rooms, depth, L)
+      : L.grammar === 'grid'
         ? this._layoutGrid(rng, size)
-        : this._layoutRooms(rng, size, rooms, depth);
+        : L.grammar === 'spine'
+          ? this._layoutSpine(rng, size, rooms, L)
+          : L.grammar === 'ring'
+            ? this._layoutRing(rng, size, rooms, L)
+            : this._layoutRooms(rng, size, rooms, depth, L);
 
+    plan.style = def.layout ?? LAYOUT_FOR_GRAMMAR[look.grammar];
     plan.index = index;
     plan.depth = depth;
     plan.height = look.height + (look.grammar === 'grid' ? 0 : depth * 0.5);
     plan.y = BASE_Y - index * (look.height + FLOOR_GAP);
     plan.noFloor = new Set();
     plan.noCeil = new Set();
+    plan.sunk = new Set();
     plan.torchDensity = Math.max(0.15, def.light.density * (1 - depth * 0.3));
 
     // The thing at the bottom holds the largest room on the deepest floor.
@@ -563,14 +635,25 @@ export class DungeonSystem extends System {
       plan.bossRoom.boss = true;
     }
 
+    // A vault is a room with no way in that anybody has drawn on a plan: it is
+    // carved behind a wall face and reached through a leaf of the same stone.
+    // The party gets one clue — a seam — and only if somebody is looking.
+    for (let n = 0; n < (def.secrets ?? 0); n++) this._carveVault(rng, plan);
+    // Keyed off the recipe rather than off the catalogue string, so a hazard
+    // the builder has no recipe for sinks nothing instead of cutting a hole.
+    if (HAZARDS[def.hazard]) this._flood(state, plan);
+
     if (previous) this._carveStair(state, previous, plan);
 
     // Entry: on the top floor, the room nearest a corner, so the first view is
     // down the dungeon rather than across it. Lower down, wherever the stair
     // lands — which only exists once the shaft above has been carved.
+    // Never a vault: a party that spawned inside a sealed room would have to
+    // find its own way out through a wall it cannot see.
+    const open = plan.rooms.filter((r) => !r.vault);
     plan.entry = previous
-      ? plan.rooms.find((r) => r.landing) ?? plan.rooms[0]
-      : plan.rooms.slice().sort((a, b) => (a.cx + a.cy) - (b.cx + b.cy))[0];
+      ? plan.rooms.find((r) => r.landing) ?? open[0]
+      : open.slice().sort((a, b) => (a.cx + a.cy) - (b.cx + b.cy))[0];
     return plan;
   }
 
@@ -580,12 +663,12 @@ export class DungeonSystem extends System {
    * a separate pass. One extra edge closes a loop, because a pure tree is all
    * backtracking.
    */
-  _layoutRooms(rng, S, count, depth) {
+  _layoutRooms(rng, S, count, depth, L = LAYOUTS.sprawl) {
     const grid = Array.from({ length: S }, () => new Uint8Array(S));
     const tag = Array.from({ length: S }, () => new Uint8Array(S));
     const rooms = [];
-    const lo = 3 + Math.round(depth * 2);
-    const hi = 6 + Math.round(depth * 3);
+    const lo = L.room[0] + Math.round(depth * 2);
+    const hi = L.room[1] + Math.round(depth * 3);
 
     for (let attempt = 0; attempt < count * 16 && rooms.length < count; attempt++) {
       const w = rng.int(lo, hi);
@@ -605,6 +688,27 @@ export class DungeonSystem extends System {
       });
     }
 
+    // Big rooms on a small board lose most of their throws to the clash test,
+    // and a floor with two chambers on it is not a floor. Try again smaller
+    // rather than shipping the failure.
+    for (let shrink = 2; rooms.length < 3 && shrink <= 4; shrink += 2) {
+      for (let attempt = 0; attempt < count * 16 && rooms.length < count; attempt++) {
+        const w = rng.int(Math.max(2, lo - shrink), Math.max(3, hi - shrink));
+        const h = rng.int(Math.max(2, lo - shrink), Math.max(3, hi - shrink));
+        const x = rng.int(1, S - w - 2);
+        const y = rng.int(1, S - h - 2);
+        if (rooms.some((r) => x - 2 < r.x + r.w + 1 && x + w + 2 > r.x - 1
+          && y - 2 < r.y + r.h + 1 && y + h + 2 > r.y - 1)) continue;
+        for (let j = y; j < y + h; j++) {
+          for (let i = x; i < x + w; i++) { grid[j][i] = 1; tag[j][i] = 1; }
+        }
+        rooms.push({
+          x, y, w, h, cx: x + (w >> 1), cy: y + (h >> 1),
+          kind: w * h >= 30 ? 'hall' : w * h >= 16 ? 'chamber' : 'cell',
+        });
+      }
+    }
+
     const link = (a, b) => {
       if (rng.chance(0.5)) {
         carveH(grid, tag, a.cx, b.cx, a.cy, S);
@@ -615,9 +719,195 @@ export class DungeonSystem extends System {
       }
     };
     for (let i = 1; i < rooms.length; i++) link(rooms[i - 1], rooms[i]);
-    if (rooms.length > 3) link(rooms[0], rooms[rooms.length - 1]);
+    // Loops. A pure tree is all backtracking; a warren wants three of them, so
+    // that losing your bearings is the point rather than an inconvenience.
+    for (let n = 0; n < L.loops && rooms.length > 3; n++) {
+      link(rooms[rng.int(0, rooms.length - 1)], rooms[rng.int(0, rooms.length - 1)]);
+    }
 
     return { grid, tag, rooms, size: S, grammar: 'rooms' };
+  }
+
+  /**
+   * One gallery, and everything hung off it.
+   *
+   * A hall the full length of the floor with chambers alternating left and
+   * right down its sides, each on a short stub. It is the plan of an imperial
+   * basilica and of a mine's main drift alike, and it reads from the doorway:
+   * the party can see the whole dungeon down one axis and still has to open
+   * every side room to clear it.
+   */
+  _layoutSpine(rng, S, count, L) {
+    const grid = Array.from({ length: S }, () => new Uint8Array(S));
+    const tag = Array.from({ length: S }, () => new Uint8Array(S));
+    const rooms = [];
+    const axis = rng.chance(0.5) ? 'x' : 'z';
+    const mid = (S >> 1) + rng.int(-1, 1);
+    // Two cells wide, because a processional way that is one corridor wide is
+    // just a corridor.
+    for (let k = 2; k < S - 2; k++) {
+      for (const m of [mid, mid + 1]) {
+        if (axis === 'x') { grid[m][k] = 1; tag[m][k] = 2; } else { grid[k][m] = 1; tag[k][m] = 2; }
+      }
+    }
+
+    let cursor = 3;
+    for (let n = 0; n < count && cursor < S - 5; n++) {
+      const w = rng.int(L.room[0], L.room[1]);
+      const h = rng.int(L.room[0], L.room[1]);
+      const side = n % 2 ? 1 : -1;
+      // Along the spine, then out from it by the stub plus the room's own depth.
+      const along = cursor;
+      const off = side > 0 ? mid + 2 + 2 : mid - 1 - 2 - (axis === 'x' ? h : w);
+      const x = axis === 'x' ? along : off;
+      const y = axis === 'x' ? off : along;
+      if (x < 1 || y < 1 || x + w >= S - 1 || y + h >= S - 1) { cursor += 3; continue; }
+      for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) { grid[j][i] = 1; tag[j][i] = 1; }
+      const room = {
+        x, y, w, h, cx: x + (w >> 1), cy: y + (h >> 1),
+        kind: w * h >= 30 ? 'hall' : w * h >= 16 ? 'chamber' : 'cell',
+      };
+      rooms.push(room);
+      // The stub back to the gallery.
+      if (axis === 'x') carveV(grid, tag, room.cy, side > 0 ? mid + 1 : mid, room.cx, S);
+      else carveH(grid, tag, room.cx, side > 0 ? mid + 1 : mid, room.cy, S);
+      cursor += (axis === 'x' ? w : h) + rng.int(1, 3);
+    }
+    if (!rooms.length) {
+      const k = mid;
+      rooms.push({ x: k - 1, y: 2, w: 2, h: 3, cx: k, cy: 3, kind: 'cell' });
+    }
+    return { grid, tag, rooms, size: S, grammar: 'rooms', axis };
+  }
+
+  /**
+   * A circuit, and something in the middle of it.
+   *
+   * A closed corridor ring with chambers on the outside and one room at the
+   * centre reached by a single stub — which is a plan nobody digs by accident,
+   * and the party works that out about the time it finishes its first lap.
+   */
+  _layoutRing(rng, S, count, L) {
+    const grid = Array.from({ length: S }, () => new Uint8Array(S));
+    const tag = Array.from({ length: S }, () => new Uint8Array(S));
+    const rooms = [];
+    // Far enough in that there is a band outside the circuit to hang chambers
+    // off: at inset 4 every room on the near sides fell off the board and the
+    // ring came out as a corridor with two rooms on it.
+    const inset = 6 + rng.int(0, 2);
+    const a = inset, b = S - 1 - inset;
+    for (let k = a; k <= b; k++) {
+      for (const [i, j] of [[k, a], [k, b], [a, k], [b, k]]) { grid[j][i] = 1; tag[j][i] = 2; }
+    }
+
+    const mx = (a + b) >> 1;
+    const vw = rng.int(L.room[0] + 1, L.room[1] + 2);
+    const vault = { x: mx - (vw >> 1), y: mx - (vw >> 1), w: vw, h: vw, cx: mx, cy: mx, kind: 'hall' };
+    for (let j = vault.y; j < vault.y + vault.h; j++) {
+      for (let i = vault.x; i < vault.x + vault.w; i++) {
+        if (i < 1 || j < 1 || i >= S - 1 || j >= S - 1) continue;
+        grid[j][i] = 1; tag[j][i] = 1;
+      }
+    }
+    carveV(grid, tag, a, vault.y, mx, S);
+    rooms.push(vault);
+
+    // Chambers outside the ring, spaced round it.
+    const slots = Math.max(1, count - 1);
+    for (let n = 0; n < slots; n++) {
+      const t = n / slots;
+      // Walk the perimeter as one parameter, so the chambers spread evenly.
+      const side = Math.floor(t * 4) % 4;
+      const u = a + Math.round(((t * 4) % 1) * (b - a));
+      // A chamber can only be as deep as the band it stands in.
+      const room2 = side === 0 || side === 3 ? a - 3 : S - 4 - b;
+      let w = rng.int(L.room[0], L.room[1]);
+      let h = rng.int(L.room[0], L.room[1]);
+      if (side % 2 === 0) h = Math.max(2, Math.min(h, room2));
+      else w = Math.max(2, Math.min(w, room2));
+      let x, y;
+      if (side === 0) { x = u - (w >> 1); y = a - 2 - h; } else if (side === 1) { x = b + 2; y = u - (h >> 1); } else if (side === 2) { x = u - (w >> 1); y = b + 2; } else { x = a - 2 - w; y = u - (h >> 1); }
+      if (x < 1 || y < 1 || x + w >= S - 1 || y + h >= S - 1) continue;
+      if (rooms.some((r) => x - 1 < r.x + r.w + 1 && x + w + 1 > r.x - 1 && y - 1 < r.y + r.h + 1 && y + h + 1 > r.y - 1)) continue;
+      for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) { grid[j][i] = 1; tag[j][i] = 1; }
+      const room = {
+        x, y, w, h, cx: x + (w >> 1), cy: y + (h >> 1),
+        kind: w * h >= 30 ? 'hall' : w * h >= 16 ? 'chamber' : 'cell',
+      };
+      rooms.push(room);
+      if (side === 0) carveV(grid, tag, room.cy, a, room.cx, S);
+      else if (side === 2) carveV(grid, tag, room.cy, b, room.cx, S);
+      else if (side === 1) carveH(grid, tag, room.cx, b, room.cy, S);
+      else carveH(grid, tag, room.cx, a, room.cy, S);
+    }
+    return { grid, tag, rooms, size: S, grammar: 'rooms', ring: { a, b } };
+  }
+
+  /**
+   * A room behind a wall. Carved two cells clear of an existing chamber, with
+   * the cell between them opened and remembered as the place a secret leaf has
+   * to stand.
+   */
+  _carveVault(rng, plan) {
+    const S = plan.size;
+    for (const room of rng.shuffle(plan.rooms.slice())) {
+      if (room.landing || room.vault) continue;
+      for (const [di, dj] of rng.shuffle(SIDES.slice())) {
+        // The wall cell the leaf fills, then a 3×3 behind it. Walked outward
+        // from the room's centre rather than derived from its width: an
+        // even-sided room's centre is off by one and a cave "room" is a blob
+        // whose bounding box is mostly rock, and either mistake seals nine
+        // cells behind stone with no way in at all.
+        if (!plan.grid[room.cy]?.[room.cx]) continue;
+        let si = room.cx, sj = room.cy;
+        while (plan.grid[sj + dj]?.[si + di]) { si += di; sj += dj; }
+        const gi = si + di, gj = sj + dj;
+        const cx = gi + di * 2, cy = gj + dj * 2;
+        if (cx < 3 || cy < 3 || cx >= S - 3 || cy >= S - 3) continue;
+        let clear = true;
+        for (let j = cy - 2; j <= cy + 2 && clear; j++) {
+          for (let i = cx - 2; i <= cx + 2; i++) if (plan.grid[j]?.[i]) { clear = false; break; }
+        }
+        if (!clear || plan.grid[gj]?.[gi]) continue;
+        for (let j = cy - 1; j <= cy + 1; j++) {
+          for (let i = cx - 1; i <= cx + 1; i++) { plan.grid[j][i] = 1; plan.tag[j][i] = 1; }
+        }
+        plan.grid[gj][gi] = 1; plan.tag[gj][gi] = 2;
+        const mid = gi + di, midj = gj + dj;
+        plan.grid[midj][mid] = 1; plan.tag[midj][mid] = 2;
+        const vault = {
+          x: cx - 1, y: cy - 1, w: 3, h: 3, cx, cy, kind: 'chamber', vault: true,
+          door: { i: gi, j: gj, di, dj },
+        };
+        plan.rooms.push(vault);
+        return vault;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Standing water or standing fire in the low rooms of a floor.
+   *
+   * The cells are only marked here; `_shell` drops their slab and lays the
+   * sheet, because that is where the floor is actually cut.
+   */
+  _flood(state, plan) {
+    const { rng, def } = state;
+    const pool = plan.rooms.filter((r) => !r.vault && !r.landing);
+    if (!pool.length) return;
+    // Deeper floors are wetter: water finds the bottom of anything.
+    const take = Math.max(1, Math.round(pool.length * (def.hazard === 'lava' ? 0.22 : 0.3) * (0.6 + plan.depth)));
+    for (const room of rng.shuffle(pool.slice()).slice(0, take)) {
+      // Leave a dry margin, so a flooded chamber has a shore rather than being
+      // a bath with walls.
+      for (let j = room.y + 1; j < room.y + room.h - 1; j++) {
+        for (let i = room.x + 1; i < room.x + room.w - 1; i++) {
+          if (plan.grid[j]?.[i]) plan.sunk.add(key(i, j));
+        }
+      }
+      room.flooded = true;
+    }
   }
 
   /**
@@ -627,13 +917,13 @@ export class DungeonSystem extends System {
    * different builder — and the jitter that makes it look cut rather than laid
    * is applied to the faces in `_shell`.
    */
-  _layoutCave(rng, S, count, depth) {
+  _layoutCave(rng, S, count, depth, L = LAYOUTS.cavern) {
     const grid = Array.from({ length: S }, () => new Uint8Array(S));
     const tag = Array.from({ length: S }, () => new Uint8Array(S));
     const rooms = [];
 
     for (let n = 0; n < count; n++) {
-      const r = rng.range(2.2, 4.2 + depth * 1.2);
+      const r = rng.range(L.room[0], L.room[1] + depth * 1.2);
       const pad = Math.ceil(r) + 1;
       const cx = rng.int(pad, S - pad - 1);
       const cy = rng.int(pad, S - pad - 1);
@@ -743,7 +1033,9 @@ export class DungeonSystem extends System {
   _carveStair(state, upper, lower) {
     const { rng } = state;
     const S = Math.min(upper.size, lower.size);
-    const from = upper.rooms.find((r) => !r.boss && !r.landing) ?? upper.rooms[0];
+    // Not out of a vault either — a stair into a sealed room is a way in that
+    // does not need the secret found, which is the same as no secret.
+    const from = upper.rooms.find((r) => !r.boss && !r.landing && !r.vault) ?? upper.rooms[0];
 
     let run = null;
     for (const [di, dj] of rng.shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
@@ -852,13 +1144,16 @@ export class DungeonSystem extends System {
         const ex0 = x0 - over(-1, 0), ex1 = x1 + over(1, 0);
         const ez0 = z0 - over(0, -1), ez1 = z1 + over(0, 1);
 
+        const sunk = plan.sunk.has(k) ? state.haz.depth : 0;
         if (!shaft) {
           if (lattice && plan.tag[j][i] === 2) this._channelFloor(batches, x0, z0, y0);
           else {
+            const fy = y0 - sunk;
             batches.floor.quad(
-              [ex0, y0, ez0], [ex0, y0, ez1], [ex1, y0, ez1], [ex1, y0, ez0],
+              [ex0, fy, ez0], [ex0, fy, ez1], [ex1, fy, ez1], [ex1, fy, ez0],
               uvXZ(ex0, ez0), uvXZ(ex0, ez1), uvXZ(ex1, ez1), uvXZ(ex1, ez0),
             );
+            if (sunk) this._hazardCell(state, plan, i, j, x0, z0, y0);
           }
         }
         if (!plan.noCeil.has(k)) {
@@ -872,8 +1167,9 @@ export class DungeonSystem extends System {
         if (plan.noCeil.has(k)) continue;
 
         // A wall goes wherever this cell borders rock; in a shaft its foot
-        // drops through the rock to the floor below.
-        const foot = shaft ? y0 - drop : y0;
+        // drops through the rock to the floor below, and in a flooded cell it
+        // has to reach down to the sunken slab or the pool leaks into the rock.
+        const foot = shaft ? y0 - drop : y0 - sunk;
         for (const [di, dj] of SIDES) {
           const ni = i + di, nj = j + dj;
           const solid = ni < 0 || nj < 0 || ni >= size || nj >= size || !grid[nj][ni];
@@ -970,6 +1266,37 @@ export class DungeonSystem extends System {
       [0, 0], [CELL / UV_WALL, 0], [CELL / UV_WALL, 0.06], [0, 0.06]);
     batches.trim.quad([b, d, z0], [b, d, z1], [b, y, z1], [b, y, z0],
       [0, 0], [CELL / UV_WALL, 0], [CELL / UV_WALL, 0.06], [0, 0.06]);
+  }
+
+  /**
+   * One flooded cell: the sheet over it, and the lip where the sunken slab
+   * meets the dry floor next door. Without the lip a pool is a hole in the
+   * floor with the rock showing through the side of it.
+   */
+  _hazardCell(state, plan, i, j, x0, z0, y0) {
+    const { batches, hazard, haz } = state;
+    if (!hazard) return;
+    const x1 = x0 + CELL, z1 = z0 + CELL;
+    const sy = y0 - haz.depth + haz.sheet;
+    hazard.quad(
+      [x0, sy, z0], [x0, sy, z1], [x1, sy, z1], [x1, sy, z0],
+      uvXZ(x0, z0), uvXZ(x0, z1), uvXZ(x1, z1), uvXZ(x1, z0),
+    );
+    for (const [di, dj] of SIDES) {
+      const ni = i + di, nj = j + dj;
+      if (!plan.grid[nj]?.[ni] || plan.sunk.has(key(ni, nj))) continue;
+      const lx0 = di > 0 ? x1 : x0, lz0 = dj > 0 ? z1 : z0;
+      const lx1 = di ? lx0 : x1, lz1 = dj ? lz0 : z1;
+      batches.trim.quad(
+        [lx0, y0 - haz.depth, lz0], [lx1, y0 - haz.depth, lz1], [lx1, y0, lz1], [lx0, y0, lz0],
+        [0, 0], [CELL / UV_WALL, 0], [CELL / UV_WALL, 0.2], [0, 0.2],
+      );
+    }
+    // Fire lights the room it is in. Water does not, and a pool that glowed
+    // would be the single most obviously wrong thing in the build.
+    if (haz.glow && (i + j) % 3 === 0) {
+      state.torches.push({ x: (x0 + x1) / 2, y: sy + 0.4, z: (z0 + z1) / 2, steady: false, base: haz.glow, phase: (i * 7 + j * 13) % 6, color: haz.colour });
+    }
   }
 
   /** Timber joists across the ceiling — the roof of `screenshot-26`. */
@@ -1158,6 +1485,18 @@ export class DungeonSystem extends System {
           wx + rng.range(-1.2, 1.2), plan.y, wz + rng.range(-1.2, 1.2), rng);
       }
       if (room.boss) this._dressBossRoom(state, plan, room);
+      // The one thing in the dungeon that is only in this dungeon. It sits on
+      // the dais with the boss standing over it, or — where the catalogue puts
+      // it behind a wall instead — in the vault, which is the better trade: a
+      // party that finds the seam gets the prize without the fight.
+      if (def.reward && (room.vault ? state.rewardHidden : room.boss && !state.rewardHidden)) {
+        const [px, pz] = cellToWorld(room.cx, room.cy, plan.size);
+        state.chests.push({
+          x: px + (room.boss ? 1.9 : 0), y: plan.y + (room.boss ? 0.6 : 0), z: pz,
+          yaw: rng.range(0, Math.PI * 2), open: false,
+          locked: true, trap: def.trapLevel, prize: def.reward,
+        });
+      }
       // A chest is worth finding, so at most one a room and never one in the
       // room the party arrives in.
       if (room !== plan.entry && rng.chance(0.32)) {
@@ -1211,7 +1550,19 @@ export class DungeonSystem extends System {
   /** Doorways: framed openings where a corridor meets a room. */
   _thresholds(state, plan) {
     const { rng, def } = state;
+    // Vault leaves first: stone in a stone wall, no frame, no furniture, and
+    // nothing at all to see until somebody notices the seam.
     for (const room of plan.rooms) {
+      if (!room.vault) continue;
+      const [wx, wz] = cellToWorld(room.door.i, room.door.j, plan.size);
+      state.doors.push({
+        x: wx, y: plan.y, z: wz, di: room.door.di, dj: room.door.dj,
+        height: plan.height, boss: false, locked: false, trap: 0,
+        slides: true, secret: true, found: false, open: 0, target: 0, closeAt: 0,
+      });
+    }
+    for (const room of plan.rooms) {
+      if (room.vault) continue;
       // Nobody hangs an oak door in a sea cave — except on the one chamber
       // somebody wanted shut, which is exactly why that door reads as a warning.
       if (plan.grammar === 'cave' && !room.boss) continue;
@@ -1563,23 +1914,28 @@ export class DungeonSystem extends System {
     const one = new THREE.Vector3(1, 1, 1);
 
     for (const door of state.doors) {
-      const h = Math.min(door.height - 0.5, 3.3);
-      const w = door.boss ? CELL - 0.4 : CELL - 1.0;
+      // A secret leaf is the wall: full cell width, full height, the same
+      // stone, and no frame round it. Anything narrower reads as a door from
+      // across the room and the whole point is gone.
+      const h = door.secret ? door.height : Math.min(door.height - 0.5, 3.3);
+      const w = door.secret ? CELL : door.boss ? CELL - 0.4 : CELL - 1.0;
       const yaw = door.di ? Math.PI / 2 : 0;
       // Along the wall the door fills; the normal is the direction it faces.
       const ax = Math.cos(yaw), az = -Math.sin(yaw);
       q.setFromEuler(new THREE.Euler(0, yaw, 0));
 
-      const jamb = new THREE.BoxGeometry(0.36, h + 0.35, 0.6);
-      const lintel = new THREE.BoxGeometry(w + 0.9, 0.44, 0.66);
-      for (const s of [-1, 1]) {
-        const o = (w / 2 + 0.18) * s;
-        m.compose(new THREE.Vector3(door.x + ax * o, door.y + (h + 0.35) / 2, door.z + az * o), q, one);
-        batches.trim.geom(jamb, m, 0.8);
+      if (!door.secret) {
+        const jamb = new THREE.BoxGeometry(0.36, h + 0.35, 0.6);
+        const lintel = new THREE.BoxGeometry(w + 0.9, 0.44, 0.66);
+        for (const s of [-1, 1]) {
+          const o = (w / 2 + 0.18) * s;
+          m.compose(new THREE.Vector3(door.x + ax * o, door.y + (h + 0.35) / 2, door.z + az * o), q, one);
+          batches.trim.geom(jamb, m, 0.8);
+        }
+        m.compose(new THREE.Vector3(door.x, door.y + h + 0.4, door.z), q, one);
+        batches.trim.geom(lintel, m, 0.8);
+        jamb.dispose(); lintel.dispose();
       }
-      m.compose(new THREE.Vector3(door.x, door.y + h + 0.4, door.z), q, one);
-      batches.trim.geom(lintel, m, 0.8);
-      jamb.dispose(); lintel.dispose();
 
       door.parts = [];
       const leaves = door.slides || door.boss ? 2 : 1;
@@ -1599,7 +1955,10 @@ export class DungeonSystem extends System {
         // Closed, the leaf's centre sits half its own width in from the hinge —
         // or, for a slider, half its width off the opening's centre line.
         const homeX = door.slides ? side * lw / 2 : -side * lw / 2;
-        const leaf = new THREE.Mesh(new THREE.BoxGeometry(lw - 0.04, h, 0.16), leafMat);
+        const leaf = new THREE.Mesh(
+          new THREE.BoxGeometry(door.secret ? lw : lw - 0.04, h, door.secret ? 0.5 : 0.16),
+          door.secret ? batches.wall.material : leafMat,
+        );
         leaf.position.set(homeX, h / 2, 0);
         leaf.castShadow = true;
         leaf.receiveShadow = true;
@@ -1786,6 +2145,13 @@ export class DungeonSystem extends System {
     for (const door of built.doors) {
       const near = (door.x - p.x) ** 2 + (door.z - p.z) ** 2 < 20
         && Math.abs(door.y - p.y) < 4;
+      // An unfound seam is wall. It cannot be opened, walked through or
+      // interacted with; the only thing that happens near it is that somebody
+      // in the party might look at it properly.
+      if (door.secret && !door.found) {
+        if (near) this._notice(ctx, door);
+        continue;
+      }
       if (near) {
         if (door.locked) { if (pressed) this._pick(ctx, door); }
         else if (!door.target) {
@@ -1826,11 +2192,23 @@ export class DungeonSystem extends System {
       chest.locked = false;
       chest.lid.rotation.x = -1.35;
       const loot = ctx.get('loot');
+      const where = new THREE.Vector3(chest.x, chest.y + 0.7, chest.z);
       const tier = this.currentDef?.treasureTier ?? 1;
       for (const item of loot?.rollTreasure?.(level + tier * 2) ?? []) {
-        loot.dropItem?.(ctx, item, new THREE.Vector3(chest.x, chest.y + 0.7, chest.z));
+        loot.dropItem?.(ctx, item, where);
       }
-      ctx.events.emit('ui:log', { text: 'The chest opens.', kind: 'good' });
+      // The prize. `item` is a real catalogue id so it equips and sells like
+      // anything else; the name is the dungeon's own, because the reason to
+      // walk into the Ashpit Workings should be a thing that is only there.
+      const prize = chest.prize ? loot?.makeItem?.(chest.prize.item) : null;
+      if (prize) {
+        prize.name = chest.prize.name;
+        prize.unique = this.currentDef?.id ?? true;
+        loot.dropItem?.(ctx, prize, where);
+        ctx.events.emit('ui:log', { text: `${chest.prize.name}. Nothing else in Caerwen is quite like it.`, kind: 'good' });
+      } else {
+        ctx.events.emit('ui:log', { text: 'The chest opens.', kind: 'good' });
+      }
       return;
     }
   }
@@ -1849,6 +2227,37 @@ export class DungeonSystem extends System {
     door.locked = false;
     door.target = 1;
     ctx.events.emit('ui:log', { text: 'The lock turns.', kind: 'good' });
+  }
+
+  /**
+   * The Perception check that turns a wall back into a door.
+   *
+   * Rolled on a timer rather than per frame — standing in front of a vault for
+   * ten seconds should find it, brushing past it at a run mostly should not —
+   * and against the same curve as Disarm Trap, so a party with nobody trained
+   * still gets there eventually. MM6 never let a secret be permanently missed
+   * and neither does this.
+   */
+  _notice(ctx, door) {
+    const t = ctx.state.elapsed;
+    if (t < (door.nextRoll ?? 0)) return;
+    door.nextRoll = t + 0.75;
+    const party = ctx.get('party');
+    let best = 0;
+    for (const c of party?.members ?? []) {
+      const s = c.skill?.('perception');
+      if (!s) continue;
+      const mult = { normal: 1, expert: 1.5, master: 2, grandmaster: 3 }[s.mastery] ?? 1;
+      best = Math.max(best, s.level * mult);
+    }
+    const level = this.currentDef?.trapLevel ?? 1;
+    const chance = Math.max(0.04, Math.min(0.6, (best + 2) / (best + level * 3 + 14)));
+    if ((this.rollRng?.next() ?? 1) >= chance) return;
+    door.found = true;
+    door.target = 1;
+    door.closeAt = t + 9;
+    ctx.events.emit('ui:log', { text: 'A seam in the stone, where no seam should be.', kind: 'good' });
+    ctx.get('audio')?.play?.('ui-discover');
   }
 
   /**
@@ -1890,6 +2299,37 @@ export class DungeonSystem extends System {
     mat.name = 'mat:cobweb';
     this._web = mat;
     this._owned.push(mat);
+    return mat;
+  }
+
+  /**
+   * The surface of a pool. Water is the library's own liquid at three-quarters
+   * alpha, so a sunken floor is visible through it and the party can see how
+   * deep it is wading; lava is opaque and emissive, because the one thing it
+   * must never look like is water with a red tint.
+   */
+  _hazardMaterial(kind, haz) {
+    this._pools ??= new Map();
+    let mat = this._pools.get(kind);
+    if (!mat) {
+      // Both come off catalogue textures rather than being flat colours: a
+      // crust for the lava, a wet mottle under the water. ARCHITECTURE §6.
+      mat = this.lib.get(kind === 'lava' ? 'rubble' : 'mud', { repeat: 1.6 }).clone();
+      mat.color = new THREE.Color(haz.colour);
+      mat.roughness = kind === 'lava' ? 0.72 : 0.16;
+      mat.metalness = 0;
+      if (kind === 'lava') {
+        mat.emissive = new THREE.Color(haz.colour);
+        mat.emissiveIntensity = 1.5;
+      } else {
+        mat.transparent = true;
+        mat.opacity = haz.opacity;
+        mat.depthWrite = false;
+      }
+      mat.name = `mat:dungeon-${kind}`;
+      this._pools.set(kind, mat);
+      this._owned.push(mat);
+    }
     return mat;
   }
 
