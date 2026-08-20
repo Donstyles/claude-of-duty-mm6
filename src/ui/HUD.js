@@ -22,11 +22,47 @@
 
 import * as THREE from 'three';
 import { el, tooltip, tipMarkup, fmt, ellipsis, nu } from './widgets.js';
+import { RNG } from '../core/RNG.js';
 import { icon } from './Icons.js';
 
 const MAX_LOG_LINES = 60;
 const MAX_FLOATERS = 32;
 const LOG_KINDS = new Set(['info', 'combat', 'loot', 'magic', 'quest', 'warn', 'good']);
+
+/** The calendar the temple and the counting house already keep time by. */
+const DAYS_PER_MONTH = 28;
+
+/**
+ * How a condition shows on the face.
+ *
+ * MM6 paints a second portrait for every affliction — green for poison, eyes
+ * shut for unconscious, a skull for dead — and a HUD whose four faces never
+ * change is the single largest reason ours read as a mock-up rather than the
+ * game. There is no second painting here, so the face is *graded* instead: the
+ * filter is applied to the portrait alone, so the stone torus around it and the
+ * tubes beside it are untouched.
+ *
+ * Keyed by condition id from `rules.js`, worst first — `worstCondition` order.
+ */
+const CONDITION_FACE = {
+  eradicated: 'grayscale(1) brightness(0.32) contrast(1.3)',
+  stoned: 'grayscale(1) brightness(0.72) contrast(0.85)',
+  dead: 'grayscale(1) brightness(0.42) contrast(1.25)',
+  unconscious: 'grayscale(0.85) brightness(0.55)',
+  paralyzed: 'grayscale(0.6) brightness(0.7) contrast(1.15)',
+  diseased_deadly: 'sepia(0.9) saturate(1.4) hue-rotate(-18deg) brightness(0.72)',
+  diseased_severe: 'sepia(0.7) saturate(1.25) hue-rotate(-18deg) brightness(0.82)',
+  diseased_weak: 'sepia(0.45) saturate(1.1) hue-rotate(-14deg) brightness(0.9)',
+  poisoned_deadly: 'sepia(0.95) saturate(2.2) hue-rotate(48deg) brightness(0.78)',
+  poisoned_severe: 'sepia(0.8) saturate(1.9) hue-rotate(48deg) brightness(0.86)',
+  poisoned_weak: 'sepia(0.55) saturate(1.5) hue-rotate(48deg) brightness(0.94)',
+  insane: 'sepia(0.5) saturate(1.6) hue-rotate(230deg) brightness(0.9)',
+  drunk: 'saturate(1.35) brightness(1.06) contrast(0.9)',
+  afraid: 'grayscale(0.4) brightness(0.86) contrast(1.1)',
+  asleep: 'grayscale(0.55) brightness(0.7)',
+  weak: 'grayscale(0.35) brightness(0.86)',
+  cursed: 'sepia(0.4) saturate(1.3) hue-rotate(255deg) brightness(0.8)',
+};
 
 /** MM6's automap palette, sampled from the real bitmaps. */
 const MAP_COLOURS = {
@@ -139,21 +175,38 @@ export class HUD {
     this.plaqueEl = el('div', { className: 'mm-plaque' },
       el('span', { className: 'mm-plaque-text', text: '' }));
     this.plaqueText = this.plaqueEl.firstChild;
+    // MM6 leaves this plaque blank until somebody is hired, and a party that
+    // has to open a book to find out whether the sun is up is a party that will
+    // sleep through the night it needed. The hireling's name still wins.
+    tooltip.attach(this.plaqueEl, () => tipMarkup({
+      title: this._hireling(0)?.name ?? 'The hour',
+      lines: [
+        { k: 'Time', v: this._clockText() },
+        { k: 'Date', v: this._dateText() },
+      ],
+      flavour: 'Shops keep daylight hours; the roads do not.',
+    }));
 
-    const spine = (index, panel, name, key) => {
+    const spine = (index, panel, name, key, tip = null) => {
       const b = el('button', {
         className: 'mm-spine', type: 'button', dataset: { index: String(index), panel },
         'aria-label': name,
       });
       b.addEventListener('click', () => this.ui.togglePanel(panel));
-      tooltip.attach(b, () => tipMarkup({ title: name, subtitle: key }));
+      tooltip.attach(b, tip ?? (() => tipMarkup({ title: name, subtitle: key })));
       return b;
     };
     this.shelfEl = el('div', { className: 'mm-shelf' },
       spine(0, 'quests', 'Current Quests', 'Q'),
       spine(1, 'quests', 'Auto Notes', 'N'),
       spine(2, 'map', 'Maps', 'M'),
-      spine(3, 'quests', 'Calendar', 'C'));
+      // The Calendar spine is where MM6 keeps the date, so it answers it here
+      // rather than making the player open a book to learn the hour.
+      spine(3, 'quests', 'Calendar', 'C', () => tipMarkup({
+        title: 'Calendar',
+        lines: [{ k: 'Time', v: this._clockText() }, { k: 'Date', v: this._dateText() }],
+        footer: 'C',
+      })));
 
     this.foodEl = el('b', { className: 'mm-count', text: '0' });
     this.goldEl = el('b', { className: 'mm-count', text: '0' });
@@ -167,18 +220,25 @@ export class HUD {
       lines: [{ k: 'Food', v: fmt(this.ui.food) }, { k: 'Gold', v: fmt(this.ui.gold) }],
     }));
 
-    const oval = (glyph, name, key, onClick) => {
+    const oval = (glyph, name, key, onClick, tip = null) => {
       const src = this.textures?.tallOval(glyph);
       const b = el('button', {
         className: 'mm-oval is-tall', type: 'button', 'aria-label': name,
         style: { backgroundImage: src ? `url("${src}")` : undefined },
       });
       b.addEventListener('click', onClick);
-      tooltip.attach(b, () => tipMarkup({ title: name, subtitle: key }));
+      tooltip.attach(b, tip ?? (() => tipMarkup({ title: name, subtitle: key })));
       return b;
     };
     this.ovalsEl = el('div', { className: 'mm-ovals' },
-      oval('star', 'Cast Spell', 'C', () => this.ui.openPanel('spellbook')),
+      oval('star', 'Cast Spell', 'C', () => this._castQuick(), () => tipMarkup({
+        title: 'Cast Spell',
+        subtitle: this._quickSpell() ?? 'No quick spell set',
+        flavour: this._quickSpell()
+          ? 'Casts it at once. Set a different one from the spellbook.'
+          : 'Opens the spellbook until a quick spell is set on the character sheet.',
+        footer: 'C',
+      })),
       oval('tent', 'Rest', 'R', () => this.ui.openPanel('rest')),
       oval('scroll2', 'Quick Reference', 'Z', () => this.ui.openPanel('character')),
       oval('floppy', 'Game Menu', 'Esc', () => this.ui.openPanel('menu')));
@@ -194,6 +254,33 @@ export class HUD {
 
     this.sidebarEl = el('div', { className: 'mm-sidebar' }, this.sideField);
     return this.sidebarEl;
+  }
+
+  /** The active character's quick spell, if they have set one. */
+  _quickSpell() {
+    const party = this.ctx?.get('party');
+    const index = party?.activeIndex ?? 0;
+    const spell = party?.members?.[index]?.quickSpell ?? this.party[index]?.quickSpell ?? null;
+    return spell && spell !== 'None' ? spell : null;
+  }
+
+  /**
+   * MM6's star oval casts the quick spell rather than opening the book — that
+   * is the whole point of setting one, and it is the difference between one tap
+   * and four. With none set it opens the book, which is where you set it.
+   */
+  _castQuick() {
+    const spell = this._quickSpell();
+    const party = this.ctx?.get('party');
+    const spells = this.ctx?.get('spells');
+    if (spell && spells?.cast) {
+      // A refusal — no spell points, a caster who cannot act, a spell the book
+      // does not know — is already stated in the message strip by `cast`, so it
+      // does not also throw a book at the player.
+      spells.cast(this.ctx, party?.activeIndex ?? 0, spell);
+      return;
+    }
+    this.ui.openPanel('spellbook');
   }
 
   _hireling(i) {
@@ -321,6 +408,18 @@ export class HUD {
         h.gem.dataset.state = severity;
       }
 
+      // The face itself carries the condition. The worst one wins, and death
+      // wins over everything — a character at zero hit points with no condition
+      // recorded is still a body on the floor.
+      const worst = worstConditionId(c, dead);
+      if (h.condition !== worst) {
+        h.condition = worst;
+        h.portrait.style.filter = CONDITION_FACE[worst] ?? '';
+        // Written where any stylesheet can reach it, so the treatment can move
+        // from a filter to painted art without this file changing again.
+        h.root.dataset.condition = worst ?? 'good';
+      }
+
       if (h.lastHp !== null && c.hp < h.lastHp - 0.01) this.flashDamage(i);
       h.lastHp = c.hp;
     }
@@ -352,9 +451,37 @@ export class HUD {
     this._mapDirty = true;
   }
 
-  /** The blank recessed plaque under the hireling panes doubles as a nameplate. */
+  /**
+   * The blank recessed plaque under the hireling panes doubles as a nameplate,
+   * and carries the hour when nobody is hired — the one figure a party checks
+   * constantly and could otherwise only get by opening a book.
+   */
   setPlaque(text) {
-    if (this.plaqueText) this.plaqueText.textContent = ellipsis(text ?? '', 22);
+    this._plaqueName = text ?? '';
+    if (this.plaqueText) {
+      this.plaqueText.textContent = this._plaqueName
+        ? ellipsis(this._plaqueName, 22)
+        : `${this._clockText()} · Day ${this._dayNumber()}`;
+    }
+  }
+
+  /** In-world seconds, as MM6 states them: `9:12 am`. */
+  _clockText() {
+    const t = this.ctx?.state?.worldTime ?? 0;
+    const mins = Math.floor((t / 60) % 1440);
+    const h24 = Math.floor(mins / 60);
+    const h = h24 % 12 === 0 ? 12 : h24 % 12;
+    return `${h}:${String(mins % 60).padStart(2, '0')} ${h24 < 12 ? 'am' : 'pm'}`;
+  }
+
+  _dayNumber() {
+    return Math.floor((this.ctx?.state?.worldTime ?? 0) / 86400) + 1;
+  }
+
+  /** Day and month, on the 28-day calendar the temple and the bank keep. */
+  _dateText() {
+    const day = this._dayNumber();
+    return `Day ${((day - 1) % DAYS_PER_MONTH) + 1} · Month ${Math.floor((day - 1) / DAYS_PER_MONTH) + 1}`;
   }
 
   setTurnBased(active, order = [], current = 0) {
@@ -378,8 +505,10 @@ export class HUD {
   }
 
   setReticleHint(text) {
-    // Hover names go through the one message strip, exactly like the game.
-    if (text) this.log(text, 'info');
+    // Hover names go through the one message strip, exactly like the game —
+    // but as a sentence. STYLE.md §5 gives the strip one grammar and `tree` is
+    // not a sentence; it was the only line in the interface still breaking it.
+    if (text) this.log(seeLine(text), 'info');
   }
 
   // ── messages ──────────────────────────────────────────────────────────────
@@ -445,7 +574,8 @@ export class HUD {
       screen: screen ? { x: screen.x, y: screen.y } : null,
       age: 0,
       life: life ?? (crit ? 1.6 : 1.2),
-      drift: (Math.random() - 0.5) * 20,
+      // Every draw in this game comes off a seeded stream, this one included.
+      drift: (this._fxRng ??= this.ctx?.rng?.fork?.('hud-float') ?? new RNG(7)).range(-10, 10),
     };
     if (!entry.world && !entry.screen) {
       entry.screen = { x: window.innerWidth * 0.4, y: window.innerHeight * 0.4 };
@@ -460,6 +590,14 @@ export class HUD {
     const yaw = ctx?.camera?.rotation?.y ?? 0;
     this._yaw += (yaw - this._yaw) * Math.min(1, dt * 12);
     this._drawCompass();
+
+    // The plaque carries the clock while it is otherwise blank, so it has to
+    // move — once a second is enough for a minute hand.
+    this._clockTick = (this._clockTick ?? 0) + dt;
+    if (this._clockTick > 1) {
+      this._clockTick = 0;
+      if (!this._plaqueName) this.setPlaque('');
+    }
 
     this._mapTick = (this._mapTick ?? 0) + dt;
     if (this._mapDirty || this._mapTick > 0.4) {
@@ -702,6 +840,43 @@ export class HUD {
     this._floats.length = 0;
     this.el?.remove();
   }
+}
+
+/**
+ * What the pointer is over, as a sentence (STYLE.md §5).
+ *
+ * The caller passes a bare name — `tree`, `Wat Fletcher`, `an iron door`.
+ * A proper name takes no article; a common noun takes one unless it already
+ * brought its own; anything already punctuated is a sentence and is left alone.
+ */
+function seeLine(text) {
+  const s = String(text).trim();
+  if (!s) return '';
+  if (/[.!?…”’"]$/.test(s)) return s;
+  if (/^(a|an|the|some|your|his|her|their)\s/i.test(s)) return `You see ${s}.`;
+  if (/^[A-Z]/.test(s)) return `You see ${s}.`;
+  return `You see ${/^[aeiou]/i.test(s) ? 'an' : 'a'} ${s}.`;
+}
+
+/**
+ * The condition that should be showing on a face.
+ *
+ * The view model hands over condition objects with a `severity` from
+ * `rules.js`, and higher is worse; a character on zero hit points who carries
+ * no condition at all is still shown as fallen, because that is what the tubes
+ * beside them already say.
+ */
+function worstConditionId(c, dead) {
+  let worst = null;
+  let rank = -1;
+  for (const x of c.conditions ?? []) {
+    const id = typeof x === 'string' ? x : x?.id;
+    if (!id) continue;
+    const sev = typeof x === 'string' ? 0 : (x.severity ?? 0);
+    if (sev > rank || worst === null) { worst = id; rank = sev; }
+  }
+  if (dead && !CONDITION_FACE[worst]) worst = 'unconscious';
+  return worst;
 }
 
 export { MAP_COLOURS };

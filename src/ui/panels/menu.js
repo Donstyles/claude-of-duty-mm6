@@ -40,7 +40,22 @@ const DEFAULTS = {
   drawDistance: 2400,
   turnMode: 'smooth',
   difficulty: 'even',
+  quality: 'ultra',
 };
+
+/**
+ * The graphics tier, which is a real thing in this engine: materials, prop
+ * density, the light pool, particle counts and the post chain are all sized
+ * from `ctx.config.quality` **when a system builds**. Nothing re-reads it, so
+ * moving it mid-game changes nothing until the world is built again — which is
+ * why this control writes the choice, offers to save, and reloads.
+ */
+const TIERS = [
+  { id: 'low', label: 'Low', note: 'Flat materials, few lights, no post. For a phone or a laptop on battery.' },
+  { id: 'medium', label: 'Medium', note: 'Half the props and a shorter draw. The shape of the world, cheaply.' },
+  { id: 'high', label: 'High', note: 'Everything but the most expensive lighting. The tier a phone starts on.' },
+  { id: 'ultra', label: 'Ultra', note: 'Full material library, four shadow cascades, the whole post chain.' },
+];
 
 const DIFFICULTIES = [
   { id: 'gentle', label: 'Gentle', note: 'The road is kind. Camps are rarely disturbed.' },
@@ -85,6 +100,10 @@ export class MenuPanel extends Panel {
       fov: this.ctx?.config?.fov ?? DEFAULTS.fov,
       drawDistance: this.ctx?.config?.far ?? DEFAULTS.drawDistance,
       ...(stored ?? {}),
+      // The tier the world was actually built at wins over the stored one:
+      // `?quality=` on the URL and the phone's own default both bypass this
+      // screen, and a control that disagrees with the world is worse than none.
+      quality: this.ctx?.config?.quality ?? DEFAULTS.quality,
     };
     this._meta = loadJSON(SLOT_META_KEY, {});
     this._stopped = false;
@@ -200,7 +219,9 @@ export class MenuPanel extends Panel {
           { k: 'Party', v: partyText(row) },
           { k: 'Level', v: String(row.level ?? 1) },
           { k: 'Day', v: String(row.day ?? 1) },
-          { k: 'Gold', v: meta?.gold !== undefined ? fmt(meta.gold) : '—' },
+          { k: 'Gold', v: (row.gold ?? meta?.gold) !== undefined && (row.gold ?? meta?.gold) !== null ? fmt(row.gold ?? meta.gold) : '—' },
+          { k: 'Act', v: row.stages ? `${row.act ?? 1} · ${row.stages.done}/${row.stages.total} stages` : String(row.act ?? 1) },
+          { k: 'Played', v: playedText(row.playtime) ?? '—' },
           { k: 'Written', v: whenText(row.savedAt) },
         ],
         flavour: mode === 'save'
@@ -291,6 +312,9 @@ export class MenuPanel extends Panel {
       ], 'By steps turns the arrow keys into eighths of a circle, one press at a time.'),
       this._choice('Difficulty', 'difficulty', DIFFICULTIES,
         DIFFICULTIES.find((d) => d.id === this.settings.difficulty)?.note ?? ''),
+      this._choice('Graphics', 'quality', TIERS,
+        TIERS.find((t) => t.id === this.settings.quality)?.note ?? ''),
+      this._tierRow(),
     ];
 
     const reset = el('button', { className: 'mm-menu-plaque', type: 'button', text: 'Restore defaults' });
@@ -306,6 +330,52 @@ export class MenuPanel extends Panel {
       el('div', { className: 'mm-opt-list' }, ...rows),
       this._backRow(reset),
     ];
+  }
+
+  /**
+   * The tier's own row, because it is the one option this screen cannot simply
+   * apply. It says which tier the world is standing in, and rebuilds at the
+   * chosen one — writing the quick save first, since a reload is a reload.
+   */
+  _tierRow() {
+    const live = this.ctx?.config?.quality ?? 'ultra';
+    const chosen = this.settings.quality;
+    const same = chosen === live;
+    const b = el('button', {
+      className: `mm-opt-choice${same ? '' : ' is-on'}`, type: 'button',
+      text: same ? `Built at ${labelOf(live)}` : `Rebuild at ${labelOf(chosen)}`,
+    });
+    b.disabled = same;
+    b.addEventListener('click', () => this._rebuildAt(chosen));
+    tooltip.attach(b, () => tipMarkup({
+      title: 'Rebuild the world',
+      subtitle: `Now at ${labelOf(live)}`,
+      flavour: 'The quick save is written first, and is waiting on the load page when the game comes back.',
+    }));
+    return el('div', { className: 'mm-opt-row' },
+      el('div', { className: 'mm-opt-label' },
+        el('span', { text: 'Apply the tier' }),
+        el('small', {
+          text: same
+            ? 'The world is already built at this tier.'
+            : 'Materials, lights and props are chosen while the world is built, so this one needs a restart.',
+        })),
+      el('div', { className: 'mm-opt-wide' }, b));
+  }
+
+  _rebuildAt(tier) {
+    this.ctx?.events?.emit('ui:save', { slot: 'quick' });
+    this.ui.toast('Quick save written. Rebuilding the world…', 'info');
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('quality', tier);
+      window.location.assign(url.toString());
+    } catch (err) {
+      // A sandboxed frame can refuse navigation; the setting still stands for
+      // the next boot, so say what happened rather than fail silently.
+      console.error('[menu] could not reload:', err);
+      this.ui.toast('Reload the page to build the world at this tier.', 'warn');
+    }
   }
 
   _slider(label, key, min, max, step, format, note) {
@@ -357,6 +427,9 @@ export class MenuPanel extends Panel {
         b.classList.add('is-on');
         if (c.note) noteEl.textContent = c.note;
         this.applySettings();
+        // The graphics tier is the one choice with a second control below it
+        // reading the same value, so it is the one that redraws the page.
+        if (key === 'quality') this.refresh();
       });
       row.appendChild(b);
     }
@@ -552,11 +625,28 @@ function partyText(row) {
   return `${ellipsis(names.join(', '), 42)} · level ${row.level ?? 1}`;
 }
 
+/**
+ * Where and when, from the save file's own label — `meta` is the old
+ * side-channel and is read only for slots written before the label existed.
+ */
 function placeText(row, meta) {
-  const place = meta?.place ?? 'Place unrecorded';
-  const hour = meta?.hour;
-  const clock = hour === undefined ? '' : ` · ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')}`;
+  const place = row?.place ?? meta?.place ?? 'Place unrecorded';
+  const hour = row?.hour ?? meta?.hour;
+  const clock = hour === undefined ? ''
+    : ` · ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')}`;
   return `${place} · day ${row?.day ?? 1}${clock}`;
+}
+
+function labelOf(tier) {
+  return TIERS.find((t) => t.id === tier)?.label ?? tier;
+}
+
+/** Hours and minutes at the wheel, the way a save list states them. */
+function playedText(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 60) return null;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h ? `${h} h ${String(m).padStart(2, '0')} m played` : `${m} min played`;
 }
 
 function whenText(iso) {

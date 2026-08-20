@@ -357,6 +357,15 @@
   text-shadow: none;
 }
 
+/* The tier's apply plate, once the world is already built at the chosen tier:
+   the plate stays — this is where the tier in force is stated — but it reads
+   as a label rather than a control, and the cursor says so. */
+.mm-panel[data-panel='menu'] .mm-opt-choice:disabled {
+  color: #a5966f;
+  cursor: default;
+}
+.mm-panel[data-panel='menu'] .mm-opt-choice:disabled:hover { color: #a5966f; }
+
 /* ── controls ─────────────────────────────────────────────────────────────── */
 
 .mm-panel[data-panel='menu'] .mm-ctrl-list {
