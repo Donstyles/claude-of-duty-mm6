@@ -13,9 +13,11 @@
  *
  *   `DungeonSystem._hazardMaterial` clones a catalogue material.
  *   `Material.copy` deep-copies `userData` through `JSON.stringify`. Above
- *   `low`, `TextureForge.bake` leaves the render target on the texture's
+ *   `low`, `TextureForge.bake` LEFT the render target on the texture's
  *   `userData` — and a `WebGLRenderTarget` refers back to its own texture, so
- *   that is a cycle, and `JSON.stringify` throws on a cycle. Every water and
+ *   that was a cycle, and `JSON.stringify` throws on a cycle. (Past tense as of
+ *   the WeakMap in `TextureForge`; this gate is what proved the fix, and what
+ *   would catch the next tier-only fault, which is why it is still here.) Every water and
  *   every lava dungeon in the catalogue — nineteen of fifty-five — threw on
  *   entry at `high` and at `ultra`, and every gate in `check.mjs` was green,
  *   because every gate in `check.mjs` was looking at `low`.

@@ -50,11 +50,13 @@
  *               game ships `high` on a phone and `ultra` on a desktop, so the
  *               tier the player gets was the one tier nothing ever ran. Above
  *               `low` the material library puts its detail textures in a
- *               material's `userData`; those came out of the forge, which
- *               leaves a render target on a texture's `userData`; a render
+ *               material's `userData`; those came out of the forge, which USED
+ *               TO LEAVE a render target on a texture's `userData`; a render
  *               target refers back to its own texture; and `Material.copy`
  *               deep-copies `userData` through `JSON.stringify`, which throws
- *               on a cycle. Every water and every lava dungeon in the
+ *               on a cycle. (The forge holds its targets in a WeakMap now, so
+ *               the cycle is gone at source — but the gate stays, because what
+ *               it really guards is the tier, not that one bug.) Every water and every lava dungeon in the
  *               catalogue — nineteen of fifty-five — threw on entry at the
  *               shipping tier, and all nine other gates were green.
  *
