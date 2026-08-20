@@ -1,6 +1,10 @@
 import { System } from '../core/Engine.js';
-import { TRAVEL_MODES, ROUTES, getRoute, routesFrom, otherEnd } from './data/Travel.js';
+import {
+  TRAVEL_MODES, ROUTES, getRoute, routesFrom, otherEnd,
+  waitHours, scheduleText,
+} from './data/Travel.js';
 import { TOWNS, townPosition } from './data/Regions.js';
+import { MONSTER_LIST } from './data/Monsters.js';
 
 /**
  * Riding the coach and taking the packet ship.
@@ -11,8 +15,22 @@ import { TOWNS, townPosition } from './data/Regions.js';
  * rolled here and handed to the monster system, so the encounter happens in
  * the world the party actually arrives in.
  *
+ * That last clause used to be a lie. `travel:ambushed` was emitted and nothing
+ * in the game listened: the party paid ninety gold for the Duskorn road, got a
+ * toast reading "Ambushed", and stepped down into an empty street. A danger
+ * rating that only ever prints a word is decoration. It now spawns the thing
+ * that stopped the coach, on the road short of the gate, banded to the leg's
+ * own danger — so the twenty-two hour run to a dead city is a decision with
+ * teeth in it and the eight-hour hop across the flats is not.
+ *
+ * Weather is the ship's version and is deliberately *not* a fight. A packet
+ * blown off the reach costs days and rations and gives the party nothing to
+ * hit, which is exactly what makes the two services feel different in the hand
+ * rather than only on the price list.
+ *
  * The clock is `ctx.state.worldTime`, in seconds, exactly as `PartySystem.rest`
- * advances it. Nothing here keeps its own notion of time.
+ * advances it. Nothing here keeps its own notion of time — including the
+ * timetables, which are read off that same clock.
  */
 export class TravelSystem extends System {
   static id = 'travel';
@@ -69,11 +87,17 @@ export class TravelSystem extends System {
     const gold = party?.gold ?? 0;
     const food = party?.food ?? 0;
 
+    const now = this.ctx?.state?.worldTime ?? 0;
+
     return routesFrom(townId, mode).map((route) => {
       const spec = TRAVEL_MODES[route.mode];
       const dest = TOWNS[otherEnd(route, townId)] ?? null;
       const fare = this.fare(route);
-      const rations = this.rations(route);
+      // Waiting is travelling: a party that sits six days in Greywater for the
+      // weekly coach has spent those days, so the board quotes the wait beside
+      // the fare and the ration count covers both halves of the journey.
+      const wait = this.modeUnlocked(route.mode) ? waitHours(route, now) : 0;
+      const rations = this.rations(route, wait);
 
       let blocked = null;
       if (!this.modeUnlocked(route.mode)) blocked = spec.lockedText;
@@ -89,6 +113,9 @@ export class TravelSystem extends System {
         fare,
         rations,
         hours: route.hours,
+        wait,
+        totalHours: Math.round(route.hours + wait),
+        schedule: scheduleText(route),
         note: route.note,
         blocked,
       };
@@ -112,10 +139,16 @@ export class TravelSystem extends System {
     return Math.max(1, Math.round(r.fare * (1 - discount)));
   }
 
-  /** Rations eaten on the road: one per eight hours, rounded up, minimum one. */
-  rations(route) {
+  /**
+   * Rations eaten on the road: one per eight hours, rounded up, minimum one.
+   *
+   * `extraHours` covers the days spent waiting for a weekly service and the
+   * days a storm adds, because a party does not stop eating because the coach
+   * has not come yet.
+   */
+  rations(route, extraHours = 0) {
     const r = typeof route === 'string' ? getRoute(route) : route;
-    return r ? Math.max(1, Math.ceil(r.hours / 8)) : 0;
+    return r ? Math.max(1, Math.ceil((r.hours + extraHours) / 8)) : 0;
   }
 
   _bestMerchant() {
@@ -149,36 +182,55 @@ export class TravelSystem extends System {
     party.gold -= offer.fare;
     party.food -= offer.rations;
 
+    // Sit out the timetable first, then ride. Both halves are the same clock.
+    const storm = this._rollStorm(route);
+    const delay = offer.wait + (storm?.hours ?? 0);
     // The road is where the day goes. Advance the world clock before the
     // ambush rolls, so an encounter happens at the hour the party arrives —
     // a night arrival at Netherby should be a night fight.
-    this.ctx.state.worldTime += route.hours * 3600;
+    this.ctx.state.worldTime += (route.hours + delay) * 3600;
+    if (storm) {
+      // A storm eats what a storm eats, and the fare bought no more bread.
+      const extra = Math.max(1, Math.ceil(storm.hours / 8));
+      party.food = Math.max(0, party.food - extra);
+      storm.rations = extra;
+    }
 
     const destId = otherEnd(route, here);
     const ambush = this._rollAmbush(route);
+    const hours = Math.round(route.hours + delay);
 
-    this.journey = { route, from: here, to: destId, ambush, at: this.ctx.state.worldTime };
+    this.journey = { route, from: here, to: destId, ambush, storm, at: this.ctx.state.worldTime };
     this.history.push(this.journey);
 
     this._arrive(destId, route);
+    if (ambush) ambush.monsters = this._spawnAmbush(route, destId, ambush.level);
 
     this.ctx.events.emit('travel:arrived', {
-      route, from: here, to: destId, hours: route.hours, fare: offer.fare, ambush,
+      route, from: here, to: destId, hours, wait: offer.wait, fare: offer.fare, ambush, storm,
     });
 
+    if (storm) {
+      this.ctx.events.emit('ui:log', {
+        text: `Weather off the reach. ${storm.hours} hours lost and ${storm.rations} rations with them.`,
+        kind: 'warn',
+      });
+    }
     if (ambush) {
-      this.ctx.events.emit('travel:ambushed', { route, at: destId, level: ambush.level });
+      this.ctx.events.emit('travel:ambushed', {
+        route, at: destId, level: ambush.level, count: ambush.monsters?.length ?? 0,
+      });
       this.ctx.events.emit('ui:log', {
         text: `The ${TRAVEL_MODES[route.mode].label.toLowerCase()} is stopped short of ${TOWNS[destId]?.name ?? 'the town'}.`,
         kind: 'warn',
       });
     } else {
       this.ctx.events.emit('ui:log', {
-        text: `${route.hours} hours later, the party steps down at ${TOWNS[destId]?.name ?? 'the town'}.`,
+        text: `${hours} hours later, the party steps down at ${TOWNS[destId]?.name ?? 'the town'}.`,
         kind: 'info',
       });
     }
-    return { ok: true, to: destId, ambush };
+    return { ok: true, to: destId, ambush, storm, hours };
   }
 
   /**
@@ -190,9 +242,71 @@ export class TravelSystem extends System {
    */
   _rollAmbush(route) {
     const spec = TRAVEL_MODES[route.mode];
-    const chance = Math.min(0.55, spec.ambushBase * (route.danger / 3) * (route.hours / 12));
+    // The cap came down from 0.55 the day the ambush started spawning things.
+    // A coin-flip fight on every Duskorn run was survivable as a toast and is a
+    // tollbooth as an encounter; one in three is a decision the player makes
+    // about the road, which is what the number is for.
+    const chance = Math.min(0.35, spec.ambushBase * (route.danger / 3) * (route.hours / 12));
     if (!this.rng.chance(chance)) return null;
     return { level: Math.max(1, Math.round(route.danger * 3 + this.rng.range(-2, 3))) };
+  }
+
+  /**
+   * Weather, which is the packet's version of the same tax and costs no blood.
+   *
+   * Only the long open-water legs really carry it: a storm on the twelve-hour
+   * coastal tide is a wet afternoon, and a storm on the two-day run north is
+   * three more days at sea.
+   */
+  _rollStorm(route) {
+    const base = TRAVEL_MODES[route.mode]?.stormBase ?? 0;
+    if (!base) return null;
+    if (!this.rng.chance(Math.min(0.4, base * (route.hours / 24)))) return null;
+    return { hours: Math.round(route.hours * this.rng.range(0.35, 0.9)) };
+  }
+
+  /**
+   * Put the ambush in the world.
+   *
+   * On the road short of the gate, not in the street: the party arrives, turns
+   * round, and the thing that stopped the coach is between them and where they
+   * came from. Types are drawn from whatever sits in a band around the leg's
+   * danger, so the flats road turns up wolves and the Duskorn run turns up what
+   * lives at Duskorn.
+   */
+  _spawnAmbush(route, destId, level) {
+    const monsters = this.ctx.get('monsters');
+    if (!monsters?.spawn) return [];
+    const terrain = this.ctx.get('terrain');
+    const at = townPosition(TOWNS[destId], terrain?.worldSize ?? undefined, terrain);
+    if (!at) return [];
+
+    // A band, not an exact match: an exact level makes every ambush on a leg
+    // the same fight, and MM6's roadside packs were always mixed.
+    const band = MONSTER_LIST.filter((m) => !m.flags?.boss
+      && m.level >= level - 3 && m.level <= level + 1);
+    const pool = band.length ? band : MONSTER_LIST.filter((m) => !m.flags?.boss && m.level <= level + 1);
+    if (!pool.length) return [];
+
+    // Three to five, scaled down as the individuals get nastier — a pack of
+    // five ghasts is not an ambush, it is a wipe.
+    const count = level >= 14 ? this.rng.int(2, 3) : this.rng.int(3, 5);
+    // Face the road: the party is teleported to the town anchor looking in an
+    // arbitrary direction, so the pack is arced rather than ringed and the
+    // player is not surrounded before the screen has finished fading.
+    const facing = this.rng.range(0, Math.PI * 2);
+    const spawned = [];
+    for (let i = 0; i < count; i++) {
+      const type = this.rng.pick(pool);
+      const a = facing + (i / count - 0.5) * 1.1;
+      const r = this.rng.range(20, 32);
+      const x = at[0] + Math.sin(a) * r;
+      const z = at[1] + Math.cos(a) * r;
+      if (terrain?.isWater?.(x, z)) continue;
+      const m = monsters.spawn(this.ctx, type.id, x, z, { leash: 40 });
+      if (m) spawned.push(m);
+    }
+    return spawned;
   }
 
   /** Put the party down at the destination and tell everyone who cares. */

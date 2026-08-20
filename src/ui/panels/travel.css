@@ -54,13 +54,20 @@
   flex-direction: column;
 }
 
+/* Row pitch is the touch budget (STYLE §13). The slate is capped at 62% of a
+   430px panel — about 266px — and the board has to hold five or six departures
+   from a hub like Saltmarch, so 44px of row is not on the table: 6 × 44 = 264
+   against 246px of usable board once the slate's own padding is out. 40px is
+   the pitch and 40px is the ceiling, taken as height on the row rather than as
+   a box around the fare button, because the whole row is the target. */
 .mm-travel-row {
   display: grid;
   color: #dce6e8;
-  grid-template-columns: 30px 1fr auto 68px;
+  grid-template-columns: 26px 1fr auto 72px;
   align-items: center;
   gap: 10px;
-  padding: 7px 6px;
+  min-height: 40px;
+  padding: 5px 6px;
   /* A scored line, not a border box: this is a slate, not a list of cards. */
   border-bottom: 1px solid rgba(0, 0, 0, 0.28);
   box-shadow: 0 1px 0 rgba(255, 236, 190, 0.06);
@@ -87,13 +94,27 @@
   text-shadow: none;
 }
 
+/* The timetable line: chalked in the same hand as the destination but smaller,
+   because on a real departures board the days run under the place name. It is
+   warmer than the driver's patter under it so the eye can pick the schedule out
+   of the row without reading the sentence. */
+.mm-travel-when {
+  font-size: 11px;
+  line-height: 1.25;
+  color: #cbb98d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .mm-travel-note {
   font-size: 11px;
-  line-height: 1.35;
+  line-height: 1.3;
   color: #9fb0b4;
-  /* Two lines of driver's patter, then cut — the board has a width. */
+  /* One line of driver's patter, then cut — the schedule took the second, and
+     the full note is a tooltip away. */
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -110,8 +131,12 @@
 
 .mm-travel-rations { color: #92a3a7; font-size: 11px; }
 
+/* 72 × 30 against the 40px row, which is the whole of the height the pitch
+   leaves after the scored line. Width is where the win was, as it was on the
+   venue action lists: the fare is a small word and the plaque under it is not. */
 .mm-travel-go {
-  min-width: 62px;
+  min-width: 72px;
+  min-height: 30px;
   padding: 5px 8px;
   font-size: 13px;
 }

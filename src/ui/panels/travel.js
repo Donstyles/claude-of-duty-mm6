@@ -5,7 +5,7 @@ import { el, setChildren, tooltip, tipMarkup, engraved, labelRow, fmt } from '..
 // string to `el()` as a child makes it a text node — the whole of the markup
 // printed itself down the side of the screen.
 import { iconEl } from '../Icons.js';
-import { TRAVEL_MODES } from '../../game/data/Travel.js';
+import { TRAVEL_MODES, WEEKDAYS, weekdayOf } from '../../game/data/Travel.js';
 import { TOWNS } from '../../game/data/Regions.js';
 
 /**
@@ -59,11 +59,15 @@ export class TravelPanel extends Panel {
     const here = travel?.town ?? null;
     const town = here ? TOWNS[here] : null;
 
+    // The board is a timetable, so it has to say which day it is being read
+    // on — "Fallowday" on the slate is what makes "Watchday · Quietday" in a
+    // row mean six days of waiting rather than a decorative noun.
+    const today = WEEKDAYS[weekdayOf(this.ctx?.state?.worldTime ?? 0)];
     setChildren(this.headEl,
       el('h2', { className: 'mm-engraved', text: this.venueName() }),
       el('div', { className: 'mm-travel-sub', text: town
-        ? `${spec.label} departures from ${town.name}`
-        : `${spec.label} departures` }));
+        ? `${spec.label} departures from ${town.name} · ${today}`
+        : `${spec.label} departures · ${today}` }));
 
     const offers = travel?.offers(here, this.mode) ?? [];
 
@@ -108,27 +112,42 @@ export class TravelPanel extends Panel {
       el('div', { className: 'mm-travel-sign' }, iconEl(this.mode === 'ship' ? 'compass' : 'boot', { size: 22 })),
       el('div', { className: 'mm-travel-where' },
         el('div', { className: 'mm-travel-dest mm-engraved', text: dest?.name ?? offer.destinationId }),
+        el('div', { className: 'mm-travel-when', text: this._when(offer) }),
         el('div', { className: 'mm-travel-note', text: offer.blocked || offer.note })),
       el('div', { className: 'mm-travel-cost' },
-        el('div', { text: `${offer.hours} hrs` }),
+        el('div', { text: `${offer.totalHours ?? offer.hours} hrs` }),
         el('div', { className: 'mm-travel-rations', text: `${offer.rations} rations` })),
       go);
+
+    const lines = [
+      { k: 'Fare', v: `${offer.fare} gold` },
+      { k: 'Runs', v: offer.schedule ?? 'Daily' },
+    ];
+    // A wait only earns a line when there is one; a row that always printed
+    // "Waits 0 hours" would train the eye to stop reading the block.
+    if (offer.wait > 0) lines.push({ k: 'Waiting here', v: hoursWord(offer.wait) });
+    lines.push(
+      { k: 'On the road', v: `${offer.hours} hours` },
+      { k: 'Rations', v: String(offer.rations) },
+      { k: 'Risk', v: RISK_WORD[Math.min(4, Math.floor(offer.route.danger / 2.5))] });
 
     tooltip.attach(row, () => tipMarkup({
       title: dest?.name ?? 'Elsewhere',
       subtitle: TRAVEL_MODES[offer.mode].label,
-      lines: [
-        { k: 'Fare', v: `${offer.fare} gold` },
-        { k: 'On the road', v: `${offer.hours} hours` },
-        { k: 'Rations', v: String(offer.rations) },
-        { k: 'Risk', v: RISK_WORD[Math.min(4, Math.floor(offer.route.danger / 2.5))] },
-      ],
+      lines,
       flavour: offer.note,
       footer: offer.blocked || undefined,
       kind: offer.blocked ? 'warn' : '',
     }));
 
     return row;
+  }
+
+  /** The timetable line: when it runs, and what that costs standing here. */
+  _when(offer) {
+    const schedule = offer.schedule ?? 'Daily';
+    if (!(offer.wait > 0.05)) return `${schedule} · boarding now`;
+    return `${schedule} · ${hoursWord(offer.wait)} to wait`;
   }
 
   _depart(offer) {
@@ -144,8 +163,12 @@ export class TravelPanel extends Panel {
     // is no longer standing in, so it closes rather than refreshing into a lie.
     this.ui.closePanel();
     const name = TOWNS[res.to]?.name ?? 'your destination';
-    this.ui.toast(res.ambush ? `Ambushed on the way to ${name}.` : `Arrived at ${name}.`,
-      res.ambush ? 'warn' : 'good');
+    // The ambush toast has to say what is happening *now* — the party is in
+    // the world with monsters on the road behind them, and "Ambushed" past
+    // tense reads as something that already resolved off-screen.
+    if (res.ambush) this.ui.toast(`Stopped short of ${name}. They are on the road.`, 'warn');
+    else if (res.storm) this.ui.toast(`Blown off the reach. ${name} at last, ${res.hours} hours out.`, 'warn');
+    else this.ui.toast(`Arrived at ${name}.`, 'good');
   }
 
   onKey(e) {
@@ -156,3 +179,11 @@ export class TravelPanel extends Panel {
 
 /** Five bands, because "danger: 7" means nothing to a player. */
 const RISK_WORD = ['Quiet', 'Watched', 'Chancy', 'Bad', 'Suicidal'];
+
+/** "3 hrs", "2 days" — nobody counts a six-day wait in hours. */
+function hoursWord(hours) {
+  const h = Math.round(hours);
+  if (h < 24) return `${Math.max(1, h)} hrs`;
+  const d = Math.round(h / 24);
+  return `${d} day${d === 1 ? '' : 's'}`;
+}

@@ -266,7 +266,15 @@ export function chartHover(panel, at) {
   return null;
 }
 
-/** The Ledger's two networks, drawn leg by leg exactly as they are sold. */
+/**
+ * The Ledger's two networks, drawn leg by leg exactly as they are sold.
+ *
+ * Weight carries the timetable. A trunk service that runs daily is drawn as a
+ * road; a weekly contract run is drawn as a track. That is the one thing a
+ * player planning three legs ahead actually needs off the chart — the long way
+ * round is often the fast way when the short leg only leaves on Marketday —
+ * and it costs a line-width lookup rather than another legend key.
+ */
 function drawNetwork(panel, g, towns, toX, toZ) {
   const routes = panel.ctx?.get('travel')?.network?.() ?? [];
   const at = (id) => towns.find((t) => t.id === id);
@@ -277,14 +285,19 @@ function drawNetwork(panel, g, towns, toX, toZ) {
       const b = at(r.to);
       if (!a || !b) continue;
       const known = panel._seenTowns.has(a.id) || panel._seenTowns.has(b.id);
+      // 7 for a daily service down to 1 for a weekly one; a leg with no
+      // timetable of its own runs on the mode's, which is the trunk.
+      const runs = r.days ? r.days.length : 7;
+      const weight = 0.55 + (runs / 7) * 0.45;
       g.save();
       if (mode === 'ship') {
-        g.setLineDash([7, 5]);
+        g.setLineDash(runs >= 7 ? [7, 5] : [3, 5]);
         g.strokeStyle = known ? 'rgba(30,58,96,0.85)' : 'rgba(30,58,96,0.35)';
-        g.lineWidth = 1.6;
+        g.lineWidth = 1.6 * weight;
       } else {
+        g.setLineDash(runs >= 4 ? [] : [9, 5]);
         g.strokeStyle = known ? 'rgba(82,40,8,0.9)' : 'rgba(82,40,8,0.4)';
-        g.lineWidth = 2.4;
+        g.lineWidth = 2.4 * weight;
       }
       // A road bends; a straight line between two dots reads as a diagram.
       const mx = (a.x + b.x) / 2 + (b.z - a.z) * 0.07;
@@ -452,7 +465,12 @@ function townLine(panel, t) {
   const ship = legs.filter((r) => r.mode === 'ship').length;
   const services = [coach ? `${coach} coach` : null, ship ? `${ship} packet` : null]
     .filter(Boolean).join(' · ');
-  return services ? `${t.name} — ${services}` : t.name;
+  if (!services) return `${t.name} — nothing calls here`;
+  // Where the last road out only runs one day a week, say so: that is the
+  // difference between a town on the network and a town at the end of it.
+  const weekly = legs.filter((r) => r.days && r.days.length <= 2).length;
+  const tail = weekly === legs.length ? ' · all by timetable' : '';
+  return `${t.name} — ${services}${tail}`;
 }
 
 // ── geometry ────────────────────────────────────────────────────────────────
