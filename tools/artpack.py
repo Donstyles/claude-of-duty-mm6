@@ -345,7 +345,17 @@ if __name__ == '__main__':
     # opaque framed paintings rather than matted cut-outs, so they take the
     # flat treatment; pack_spells skips them by prefix for the same reason.
     c = pack_flat('spells', 448, only='cover_')
+    # The four screens that had no art at all — title, menu, kingdom chart and
+    # the rest screen's seasons. Full-bleed 16:9 paintings drawn behind a
+    # panel, so they take the same flat treatment as the interiors and want
+    # more width than any of them: a backdrop is the one image in this project
+    # that is looked at across the whole screen rather than inside a box.
+    n = pack_flat('scenes', 1600)
+    # Class heraldry. Small, and drawn beside a painted portrait on the
+    # creation screen, which is what made the five hard-coded canvas shapes it
+    # replaces so hard to look at.
+    e = pack_flat('emblems', 192)
     print(f'[artpack] {p} portraits, {s} spell plates, {c} school covers, '
-          f'{i} interiors, {f} figures, {t} item sprites')
+          f'{i} interiors, {f} figures, {t} item sprites, {n} scenes, {e} emblems')
     for name, cover in suspect:
         print(f'  ?  {name}: matte kept {cover:.0%} of the frame - check it')

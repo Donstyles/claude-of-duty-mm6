@@ -108,6 +108,48 @@ try {
       + ` (was ${wasWorst.toFixed(0)} m)`
       + (miss.length ? `  — ${miss.length} unreachable, e.g. drop at y=${miss[0].dropY.toFixed(1)} on a floor at ${miss[0].floorY.toFixed(1)}` : ''));
   }
+
+  // ── and does an emptied chest stay emptied? ──────────────────────────────
+  //
+  // A dungeon is regenerated from its seed on load, and a regenerated chest is
+  // a full chest. Within one session it never showed, because `built` is
+  // cached — but saving on a dungeon floor and loading again refilled every
+  // chest on it, prize chest included. Unlimited gold and unlimited copies of
+  // the one unique reward each dungeon has. This drops the cache, which is
+  // exactly what a reload does.
+  console.log('');
+  const refill = await page.evaluate((ids) => {
+    const ctx = window.__GAME.ctx;
+    const dun = ctx.get('dungeon');
+    const loot = ctx.get('loot');
+    const out = [];
+    for (const id of ids) {
+      if (!dun.enter(ctx, id)) continue;
+      const first = dun.built.get(id);
+      const total = first.chests.length;
+      if (!total) continue;
+      // Empty them all the way the game does, through the loot system's own
+      // register rather than by setting a flag.
+      for (const c of first.chests) loot.markContainerOpened(c.key);
+      // Now throw the dungeon away and walk back in, which is a reload.
+      dun.exit?.(ctx);
+      dun.group.remove(first.group);
+      dun.built.delete(id);
+      dun.enter(ctx, id);
+      const again = dun.built.get(id);
+      const full = again.chests.filter((c) => !c.open).length;
+      const keyed = again.chests.filter((c) => c.key).length;
+      out.push({ id, total, full, keyed });
+    }
+    return out;
+  }, ids.slice(0, 8));
+
+  for (const r of refill) {
+    const okRow = r.full === 0 && r.keyed === r.total;
+    if (!okRow) bad++;
+    console.log(`  ${okRow ? 'ok  ' : 'FAIL'} ${r.id.padEnd(28)} ${r.total} chests emptied, `
+      + `${r.full} full again after a rebuild, ${r.keyed}/${r.total} keyed`);
+  }
 } finally {
   await browser.close();
   try { process.kill(-server.pid); } catch { /* already gone */ }

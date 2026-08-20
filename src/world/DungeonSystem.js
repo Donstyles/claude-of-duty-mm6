@@ -2124,11 +2124,31 @@ export class DungeonSystem extends System {
     }
   }
 
+  /**
+   * Build the chests, and remember which of them the party already emptied.
+   *
+   * `LootSystem.containerOpened`/`markContainerOpened` have existed for this
+   * exact purpose since the save round-trip was written, and nothing ever
+   * called them. Within one session it did not show: `built` is cached, so a
+   * chest the party opened stayed open. But a dungeon is regenerated from its
+   * seed on load, and a regenerated chest is a full chest — so saving on a
+   * dungeon floor and loading again refilled every chest on it, prize chest
+   * included. That is not a bug the player reports; it is a bug the player
+   * uses, and it makes gold and the game's one unique reward per dungeon
+   * unlimited.
+   *
+   * The key is `${dungeonId}:${index}`, which is what `containerOpened`'s own
+   * docstring proposes: the furniture is generated in a fixed order from a
+   * fixed seed, so the index is stable across a rebuild.
+   */
   _buildChests(state) {
     const { group } = state;
     const wood = this.lib.get('wood-plank', { repeat: 1.6 });
     const iron = this.lib.get('rusted-iron', { repeat: 1.4 });
+    const loot = this._ctx?.get?.('loot');
+    let index = 0;
     for (const chest of state.chests) {
+      chest.key = `${state.def?.id ?? '?'}:${index++}`;
       const g = new THREE.Group();
       g.position.set(chest.x, chest.y, chest.z);
       g.rotation.y = chest.yaw;
@@ -2161,6 +2181,16 @@ export class DungeonSystem extends System {
       group.add(g);
       chest.group = g;
       chest.lid = lid;
+
+      // Emptied on a previous visit, or before the save this load came from.
+      // The lock and the trap go with the contents: a chest you have already
+      // rifled does not re-lock itself, and its needle does not come back.
+      if (loot?.containerOpened?.(chest.key)) {
+        chest.open = true;
+        chest.locked = false;
+        chest.trap = 0;
+        lid.rotation.x = -1.35;
+      }
     }
   }
 
@@ -2363,6 +2393,9 @@ export class DungeonSystem extends System {
       chest.locked = false;
       chest.lid.rotation.x = -1.35;
       const loot = ctx.get('loot');
+      // Before the contents are paid out, so a crash mid-payout cannot leave a
+      // chest that is open and still full.
+      loot?.markContainerOpened?.(chest.key);
       const where = new THREE.Vector3(chest.x, chest.y + 0.7, chest.z);
       const tier = this.currentDef?.treasureTier ?? 1;
       /**
