@@ -98,7 +98,23 @@ for (const s of STAGE_LIST) {
   if (typeof t === 'string') {
     if (t.startsWith('dun_') && !DUNGEONS.has(t)) err(at, `objective.target "${t}" is not a dungeon`);
     if (t.startsWith('npc_') && !NPCS.has(t)) err(at, `objective.target "${t}" is not an NPC`);
-    if (t.startsWith('item_') && !ITEMS.has(t)) err(at, `objective.target "${t}" is not an item`);
+    // Every `collect` target, whatever it is called — not just `item_*`.
+    //
+    // This read `t.startsWith('item_')`, and NOT ONE OF THE 334 ITEMS IN THIS
+    // GAME USES THAT PREFIX. They are `sword_`, `potion_`, `scroll_`, `qi_`,
+    // `art_` and twenty more. So the single check written to catch "this
+    // objective wants an item that does not exist" was keyed to a prefix the
+    // codebase has never used, and it reported 0 errors while EIGHTEEN collect
+    // objectives — including eleven of the main campaign's — pointed at items
+    // that were never authored. The main quest stalled at stage 2 of 80 and
+    // this gate was green for all of it.
+    //
+    // A `collect` objective can only ever be satisfied by `loot:picked`, whose
+    // payload carries a catalogue `baseId`. So the target must be in ITEMS,
+    // full stop, and the prefix is not the codebase's business.
+    if (s.objective?.type === 'collect' && !ITEMS.has(t)) {
+      err(at, `collect target "${t}" is not an item — nothing can ever pick it up`);
+    }
     if (t.startsWith('mon_') && !MONSTERS.has(t)) err(at, `objective.target "${t}" is not a monster`);
     if (t.startsWith('town_') && !TOWNS.has(t)) err(at, `objective.target "${t}" is not a town`);
   }
