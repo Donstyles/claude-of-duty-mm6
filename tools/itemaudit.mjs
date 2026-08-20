@@ -7,20 +7,38 @@
  *   node --import ./tools/null-css.register.mjs tools/itemaudit.mjs
  */
 
-import {
+import { registerHooks } from 'node:module';
+
+// Stub `import './x.css'` out. Vite resolves it to nothing at runtime; Node
+// refuses to load it at all, and this file now reaches a module that imports
+// one. Inline rather than `node --import ./tools/null-css.register.mjs`,
+// because an audit that only runs when you remember a flag is an audit that
+// stops being run.
+registerHooks({
+  load(url, context, next) {
+    if (url.endsWith('.css')) return { format: 'module', shortCircuit: true, source: 'export default {};' };
+    return next(url, context);
+  },
+});
+
+// Dynamic, and that is not style. A static `import` is hoisted above the
+// `registerHooks` call above it, so the stub would be installed only after the
+// very module it exists to stub had already thrown. `tools/savetest.mjs` does
+// the same for the same reason.
+const {
   ITEMS, ITEM_IDS, WEAPONS, ARMOURS, POTIONS, REAGENTS, SCROLLS, WANDS,
   GEMS, QUEST_ITEMS, MISC_ITEMS, ARTIFACTS, PREFIXES, SUFFIXES,
   TREASURE_TABLES, EQUIP_SLOTS, ITEM_CATEGORIES, tablePool, artifactsForTable,
   enchantmentsFor, getItem,
-} from '../src/game/data/Items.js';
-import { QUESTS } from '../src/game/data/Quests.js';
-import { DUNGEONS } from '../src/game/data/Dungeons.js';
-import { SHOP_TYPES, SHOPS, ShopSystem } from '../src/game/ShopSystem.js';
-import { LootSystem } from '../src/game/LootSystem.js';
-import { Character } from '../src/game/Character.js';
-import { RNG } from '../src/core/RNG.js';
-import { merchantPrice, armourClassFor, effectiveStat, damageBonusFor } from '../src/game/rules.js';
-import { ITEM_PLATES, ITEM_PLATE_ASPECT } from '../src/ui/itemPlates.js';
+} = await import('../src/game/data/Items.js');
+const { QUESTS } = await import('../src/game/data/Quests.js');
+const { DUNGEONS } = await import('../src/game/data/Dungeons.js');
+const { SHOP_TYPES, SHOPS, ShopSystem } = await import('../src/game/ShopSystem.js');
+const { LootSystem } = await import('../src/game/LootSystem.js');
+const { Character } = await import('../src/game/Character.js');
+const { RNG } = await import('../src/core/RNG.js');
+const { merchantPrice, armourClassFor, effectiveStat, damageBonusFor } = await import('../src/game/rules.js');
+const { ITEM_PLATES, ITEM_PLATE_ASPECT } = await import('../src/ui/itemPlates.js');
 
 const out = [];
 const say = (s = '') => { out.push(s); console.log(s); };

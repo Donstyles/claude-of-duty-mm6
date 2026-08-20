@@ -34,6 +34,12 @@ import {
   ITEMS, ITEM_IDS, WEAPONS, ARMOURS, POTIONS, SCROLLS, WANDS, ARTIFACTS,
   PREFIXES, SUFFIXES, TREASURE_TABLES, treasureTableFor,
 } from './data/Items.js';
+// `validateData` only. Two catalogues describe the work this world hands out —
+// `Quests.js` and the campaign's eighty stages — and one describes its doors,
+// and the validator could see neither, so every reference into them read as a
+// dangling id. See the note on `validateData` itself.
+import { CAMPAIGN_STAGE_IDS } from './data/Campaign.js';
+import { VENUES } from './data/Venues.js';
 import {
   MONSTERS, MONSTER_IDS, MONSTER_FAMILIES, BODY_PLANS, RESIST_CHANNELS, IMMUNE,
 } from './data/Monsters.js';
@@ -808,6 +814,10 @@ export function canTrainSkill(classId, skillId, mastery) {
  */
 export function validateData() {
   const problems = [];
+  const CAMPAIGN_STAGES = new Set(CAMPAIGN_STAGE_IDS);
+  const DUNGEON_BOSSES = new Set(
+    Object.values(DUNGEONS).map((d) => d.boss?.id).filter(Boolean),
+  );
   const bad = (msg) => problems.push(msg);
   const has = (table, id) => Object.prototype.hasOwnProperty.call(table, id);
 
@@ -1046,7 +1056,14 @@ export function validateData() {
   const npcRefs = npcReferencedIds();
   for (const id of npcRefs.items) if (!has(ITEMS, id)) bad(`a shop stocks unknown item "${id}"`);
   for (const id of npcRefs.spells) if (!has(SPELLS, id)) bad(`a guild teaches unknown spell "${id}"`);
-  for (const id of npcRefs.quests) if (!has(QUESTS, id)) bad(`an NPC offers unknown quest "${id}"`);
+  // A quest an NPC gives is either a side quest or a stage of the spine, and
+  // this only knew about the first, so every one of the campaign's eighty
+  // stages read as a dangling id — 33 of the validator's findings at once,
+  // every one of them wrong. A tool that cries wolf 33 times is a tool nobody
+  // reads the 34th time.
+  for (const id of npcRefs.quests) {
+    if (!has(QUESTS, id) && !CAMPAIGN_STAGES.has(id)) bad(`an NPC offers unknown quest "${id}"`);
+  }
   for (const id of NPC_IDS) {
     const n = NPCS[id];
     if (n.town && !has(TOWNS, n.town)) bad(`NPC "${id}" is in unknown town "${n.town}"`);
@@ -1054,7 +1071,12 @@ export function validateData() {
     for (const t of n.dialogue.topics) {
       if (t.promotes && !has(CLASSES, t.promotes)) bad(`NPC "${id}" promotes to unknown class "${t.promotes}"`);
       if (t.service) {
-        const found = has(SHOPS, t.service) || has(TEMPLES, t.service) || has(GUILDS, t.service)
+        // `VENUES` is the whole list of doors; the six tables below are the
+        // subsets that carry a counter. A coach stop and a jetty are neither,
+        // so a driver offering a seat on his own coach was reported as
+        // offering a service that does not exist.
+        const found = has(VENUES, t.service)
+          || has(SHOPS, t.service) || has(TEMPLES, t.service) || has(GUILDS, t.service)
           || has(TAVERNS, t.service) || has(TRAINING_HALLS, t.service) || has(BANKS, t.service);
         if (!found) bad(`NPC "${id}" offers unknown service "${t.service}"`);
       }
@@ -1097,7 +1119,13 @@ export function validateData() {
   const qRefs = questReferencedIds();
   for (const id of qRefs.npcs) if (!has(NPCS, id)) bad(`quest script references unknown NPC "${id}"`);
   for (const id of qRefs.items) if (!has(ITEMS, id)) bad(`quest script references unknown item "${id}"`);
-  for (const id of qRefs.monsters) if (!has(MONSTERS, id)) bad(`quest script references unknown monster "${id}"`);
+  // A `kill` target may name a dungeon's own boss rather than a bestiary
+  // family — `boss_the_cistern_choir` is a real creature that stands at the
+  // bottom of a real dungeon, and it is not in `Monsters.js` because
+  // `Dungeons.js` is where it lives.
+  for (const id of qRefs.monsters) {
+    if (!has(MONSTERS, id) && !DUNGEON_BOSSES.has(id)) bad(`quest script references unknown monster "${id}"`);
+  }
   for (const id of qRefs.classes) if (!has(CLASSES, id)) bad(`quest script promotes to unknown class "${id}"`);
   for (const id of qRefs.places) {
     if (!has(REGIONS, id) && !has(DUNGEONS, id) && !has(TOWNS, id)) {

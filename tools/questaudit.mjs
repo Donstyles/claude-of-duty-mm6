@@ -19,6 +19,20 @@
  * Run: node --import ./tools/null-css.register.mjs tools/questaudit.mjs
  */
 
+import { registerHooks } from 'node:module';
+
+// Stub `import './x.css'` out. Vite resolves it to nothing at runtime; Node
+// refuses to load it at all, and this file now reaches a module that imports
+// one. Inline rather than `node --import ./tools/null-css.register.mjs`,
+// because an audit that only runs when you remember a flag is an audit that
+// stops being run.
+registerHooks({
+  load(url, context, next) {
+    if (url.endsWith('.css')) return { format: 'module', shortCircuit: true, source: 'export default {};' };
+    return next(url, context);
+  },
+});
+
 import { execSync } from 'node:child_process';
 
 const { EventBus } = await import('../src/core/EventBus.js');
