@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { System } from '../core/Engine.js';
-import { SPELLS, getSpell, canCast, spellCost } from './data/Spells.js';
+import { SPELLS, getSpell, canCast, spellCost, DURATION_MULT } from './data/Spells.js';
 import { damageRoll, applyResistance, heldSkill } from './rules.js';
 import { masteryRank } from './data/Skills.js';
 import { TOWNS, townPosition } from './data/Regions.js';
@@ -15,10 +15,47 @@ import { TOWNS, townPosition } from './data/Regions.js';
  *
  * Delivery kinds map onto how the effect travels: `projectile` flies and can
  * miss, `beam` lands instantly along a line, `aura` attaches to the party,
- * `burst`/`rain` land at a point, `self` resolves immediately.
+ * `burst`/`rain`/`placed` land at a point, `cone` sweeps a wedge in front of
+ * the caster, `view` catches everything the party can see, and `instant`
+ * resolves where it is aimed. Every kind the data uses has a case; a delivery
+ * with no case is a spell that costs points and does nothing, which is how a
+ * third of the book came to be decorative.
  */
 
 const SPELL_SPEED = 34;
+
+/** Half-angle of a cone in radians — a wedge, not a spray. */
+const CONE_HALF_ANGLE = Math.PI / 5;
+
+/**
+ * What a hostile condition does to a creature while it holds.
+ *
+ * MonsterSystem has no status layer of its own and does not need one: it reads
+ * `speed`, `state` and `attackCooldown` off the instance every frame, so a
+ * condition is a set of overrides applied here each tick and lifted on expiry.
+ * `secondsPerSkill` is the MM6 shape — control lands briefly at low skill and
+ * lasts long enough to matter at high.
+ */
+const MONSTER_STATUS = Object.freeze({
+  stunned:   { base: 1.2, perSkill: 0.25, freeze: true,  log: 'reels' },
+  paralyzed: { base: 3,   perSkill: 1.2,  freeze: true,  log: 'is pinned in place' },
+  slowed:    { base: 8,   perSkill: 2.4,  speedScale: 0.45, log: 'slows to a crawl' },
+  shrunk:    { base: 10,  perSkill: 3,    speedScale: 0.7, damageScale: 0.5, log: 'shrinks' },
+  afraid:    { base: 5,   perSkill: 1.6,  flee: true,    log: 'breaks and runs' },
+  insane:    { base: 8,   perSkill: 2,    turncoat: true, log: 'loses its wits' },
+  berserk:   { base: 10,  perSkill: 2.5,  turncoat: true, log: 'turns on its own' },
+  charmed:   { base: 12,  perSkill: 3,    turncoat: true, log: 'takes the party\'s side' },
+  enslaved:  { base: 30,  perSkill: 12,   turncoat: true, log: 'is bound to the party' },
+  poisoned:  { base: 12,  perSkill: 3,    dps: 1.2,      log: 'is poisoned' },
+});
+
+/**
+ * Conditions a mindless thing cannot feel. A skeleton does not panic and a
+ * swarm cannot be talked round, which is why Mind magic is the school that
+ * fails hardest against the undead — that asymmetry is the whole reason a
+ * party carries two casters.
+ */
+const NEEDS_A_MIND = new Set(['charmed', 'insane', 'berserk', 'afraid']);
 
 export class SpellSystem extends System {
   static id = 'spells';
@@ -34,6 +71,10 @@ export class SpellSystem extends System {
     this.visitedTowns = new Set();
     /** Anchors set by Vellory's Beacon. Count and life scale with mastery. */
     this.beacons = [];
+    /** Runes waiting on the ground for something to walk over them. */
+    this.runes = [];
+    /** Hostile conditions hung on monsters: monster -> { rule, expires, … }. */
+    this._status = new Map();
   }
 
   async init(ctx) {
@@ -104,15 +145,37 @@ export class SpellSystem extends System {
     ctx.get('audio')?.playSfx?.(spell.vfx?.sound ?? 'spell-generic');
 
     const power = { skill: sk.level, mastery: sk.mastery };
+
+    // A spell is routed by what it *does* before how it travels. Town Portal is
+    // `instant` in the book and a change of place in the world; routing on
+    // delivery alone is what left it, and eleven others, priced and inert.
+    if (spell.utility && this._castUtility(ctx, char, spell, power, targetRef)) return true;
+
     switch (spell.delivery) {
       case 'projectile': this._castProjectile(ctx, char, spell, power, targetRef); break;
       case 'beam': this._castBeam(ctx, char, spell, power, targetRef); break;
       case 'burst':
       case 'rain': this._castArea(ctx, char, spell, power, targetRef); break;
+      case 'placed': this._castRune(ctx, char, spell, power, targetRef); break;
+      case 'cone': this._castCone(ctx, char, spell, power); break;
+      case 'view': this._castView(ctx, char, spell, power); break;
+      case 'enchant': this._castEnchant(ctx, char, spell, power); break;
+      case 'summon': this._castSummon(ctx, char, spell, power); break;
       case 'aura': this._castAura(ctx, char, spell, power); break;
-      default: this._resolveOnTargets(ctx, char, spell, power, this._defaultTargets(ctx, spell, targetRef));
+      default:
+        // `instant`: a party-facing enchantment is an aura that happens to have
+        // no travel time; everything else resolves on whatever it is aimed at.
+        if (this._isPartyBuff(spell)) this._castAura(ctx, char, spell, power);
+        else this._resolveOnTargets(ctx, char, spell, power, this._defaultTargets(ctx, spell, targetRef));
     }
     return true;
+  }
+
+  /** A spell that hangs on the party rather than landing on something. */
+  _isPartyBuff(spell) {
+    if (spell.damage) return false;
+    if (!spell.duration && !spell.magnitude) return false;
+    return spell.target === 'party' || spell.target === 'self' || spell.target === 'single-ally';
   }
 
   // ── delivery ─────────────────────────────────────────────────────────────
@@ -201,35 +264,365 @@ export class SpellSystem extends System {
 
     this.partyEffects.set(spell.id, { spell, expires, magnitude });
 
+    // `affects` is the data's statement of what `magnitude` is a quantity *of*.
+    // Without it a buff was a log line: `Character.refresh()` reads `statBonus`
+    // and `acBonus` off every buff and nothing in the book ever set either, so
+    // Stone Skin and Bless were, mechanically, the same spell as no spell.
+    const bonus = this._bonusFrom(spell, magnitude);
     const party = ctx.get('party');
     for (const m of party?.members ?? []) {
       if (m.isDead) continue;
-      m.buffs.push({
-        spellId: spell.id, expires, power: magnitude,
-        statBonus: spell.statBonus ?? undefined,
-        acBonus: spell.acBonus ?? undefined,
-      });
+      // One casting replaces the last rather than stacking with it, which is
+      // what stops a patient party walking in with nine copies of Bless.
+      const dup = m.buffs.findIndex((b) => b.spellId === spell.id);
+      if (dup >= 0) m.buffs.splice(dup, 1);
+      m.buffs.push({ spellId: spell.id, expires, power: magnitude, ...bonus });
       m.refresh();
     }
 
-    // Utility spells hand control to another system.
+    // Utility spells that are flags on another system rather than numbers.
     if (spell.utility === 'water-walk') ctx.get('player').isWaterWalking = true;
     if (spell.utility === 'fly') ctx.get('player').isFlying = true;
-    // The two travel spells move the party rather than buffing it, so they take
-    // over here instead of falling through to the "settles over the party" line.
-    if (spell.utility === 'town-portal') { this.townPortal(ctx, power); return; }
-    if (spell.utility === 'beacon') { this.beacon(ctx, power); return; }
 
     ctx.get('particles')?.burst?.('magic-holy', ctx.get('player').eye(), 22, {
       color: spell.vfx?.color,
     });
-    ctx.events.emit('ui:log', { text: `${spell.name} settles over the party.`, kind: 'buff' });
+    const note = bonus.statBonus
+      ? ` (${Object.entries(bonus.statBonus).map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${k}`).join(', ')})`
+      : bonus.acBonus ? ` (+${bonus.acBonus} armour class)`
+      : bonus.resistBonus ? ` (+${Object.values(bonus.resistBonus)[0]} resistance)` : '';
+    ctx.events.emit('ui:log', {
+      text: `${spell.name} settles over the party${note}.`, kind: 'buff',
+    });
+  }
+
+  /** Turn a spell's `affects` descriptor and rolled magnitude into buff fields. */
+  _bonusFrom(spell, magnitude) {
+    const a = spell.affects;
+    if (!a || !magnitude) return {};
+    if (a.ac) return { acBonus: magnitude };
+    if (a.resist) {
+      const out = {};
+      for (const chan of [].concat(a.resist)) out[chan] = magnitude;
+      return { resistBonus: out };
+    }
+    if (a.stats) {
+      const out = {};
+      for (const s of [].concat(a.stats)) out[s] = magnitude;
+      return { statBonus: out };
+    }
+    return {};
+  }
+
+  // ── the other six deliveries ─────────────────────────────────────────────
+
+  /**
+   * A wedge in front of the caster — Poison Spray, Sparks, Iron Hail.
+   *
+   * Cones do not travel and cannot be dodged sideways; they catch everything
+   * inside the wedge at once, which is what makes them the answer to a corridor
+   * and useless in the open.
+   */
+  _castCone(ctx, char, spell, power) {
+    const player = ctx.get('player');
+    const from = player.eye();
+    const dir = this._lookDir(player);
+    const range = spell.range || 24;
+
+    ctx.get('particles')?.burst?.(this._particleFor(spell),
+      from.clone().addScaledVector(dir, 2), 30, {
+        color: spell.vfx?.color, secondaryColor: spell.vfx?.secondaryColor,
+        scale: 1.4, spread: range * 0.25,
+      });
+
+    const caught = [];
+    for (const m of ctx.get('monsters')?.monsters ?? []) {
+      if (!m.alive) continue;
+      const to = m.pos.clone().setY(m.pos.y + (m.def.height ?? 1.6) * 0.5).sub(from);
+      const dist = to.length();
+      if (dist > range) continue;
+      if (Math.acos(Math.min(1, to.normalize().dot(dir))) > CONE_HALF_ANGLE) continue;
+      caught.push(m);
+    }
+    this._resolveOnTargets(ctx, char, spell, power, caught);
+  }
+
+  /**
+   * Everything the party can see — Turn Undead, Mass Fear, Inferno, Armageddon.
+   *
+   * `target: 'world'` is the region, not the view: Armageddon comes down on
+   * everything loaded and, per its own note, on the party as well.
+   */
+  _castView(ctx, char, spell, power) {
+    const player = ctx.get('player');
+    const from = player.eye();
+    const dir = this._lookDir(player);
+    const worldwide = spell.target === 'world';
+    const radius = spell.radius || 40;
+
+    const caught = [];
+    for (const m of ctx.get('monsters')?.monsters ?? []) {
+      if (!m.alive) continue;
+      const to = m.pos.clone().sub(from);
+      if (to.length() > radius) continue;
+      // "In sight" is a generous half-hemisphere, not a raycast: MM6 never
+      // asked for line of sight either, and a pillar should not eat a level
+      // eleven casting.
+      if (!worldwide && to.normalize().dot(dir) < 0) continue;
+      caught.push(m);
+    }
+
+    ctx.get('particles')?.burst?.(this._particleFor(spell), from.clone().addScaledVector(dir, 6),
+      44, { color: spell.vfx?.color, secondaryColor: spell.vfx?.secondaryColor, scale: 2.2, spread: 8 });
+    this._resolveOnTargets(ctx, char, spell, power, caught);
+
+    // Dispel Magic strips the board, the party included — that is the warning
+    // in its own description and it has to be true or the spell is a freebie.
+    if (spell.utility === 'dispel') this._dispel(ctx, caught);
+
+    if (worldwide && spell.damage) {
+      const spec = spell.damage(power.skill, power.mastery);
+      const share = Math.max(1, Math.round((spec.avg || spec.bonus || 1) * 0.5));
+      ctx.get('party')?.members?.forEach((m, i) => {
+        if (!m?.isDead) ctx.get('party')?.damage?.(i, share, spec.type);
+      });
+      ctx.events.emit('ui:log', {
+        text: `The sky comes down; the party takes ${share} apiece.`, kind: 'warn',
+      });
+    }
+    if (!caught.length && !worldwide) {
+      ctx.events.emit('ui:log', { text: `${spell.name} finds nothing to catch.`, kind: 'info' });
+    }
+  }
+
+  /**
+   * A rune laid on the ground that keeps until something walks over it.
+   *
+   * Fire Spike and Toxic Cloud are the two the book has, and both are worth
+   * casting *before* the fight rather than during it — which is the only
+   * reason a placed spell exists as a separate kind.
+   */
+  _castRune(ctx, char, spell, power) {
+    const player = ctx.get('player');
+    const terrain = ctx.get('terrain');
+    const at = player.position.clone().addScaledVector(this._lookDir(player).setY(0).normalize(), 3.5);
+    at.y = terrain?.heightAt?.(at.x, at.z) ?? at.y;
+
+    const count = 1 + masteryRank(power.mastery ?? 'normal') - 1;
+    this.runes.push({
+      spell, power, char,
+      pos: at, radius: spell.radius || 4,
+      charges: count,
+      expires: ctx.state.worldTime + 600,
+      pulse: 0,
+    });
+    ctx.get('particles')?.burst?.(this._particleFor(spell), at.clone().setY(at.y + 0.3), 18, {
+      color: spell.vfx?.color, scale: 0.8,
+    });
+    ctx.events.emit('ui:log', {
+      text: `${spell.name} is set in the ground${count > 1 ? ` (${count} charges)` : ''}.`,
+      kind: 'spell',
+    });
+  }
+
+  /**
+   * Item magic — Fire Aura, Vampiric Weapon, Recharge, Enchant Item.
+   *
+   * All four write onto the active character's equipment, because that is where
+   * `Character.refresh()` looks: an enchantment nobody can read is a log line.
+   */
+  _castEnchant(ctx, char, spell, power) {
+    const magnitude = spell.magnitude ? spell.magnitude(power.skill, power.mastery) : 0;
+    const duration = spell.duration ? spell.duration(power.skill, power.mastery) : 3600;
+    const eq = char.equipment ?? {};
+    const weapon = eq.mainHand ?? eq.weapon ?? eq.offHand ?? null;
+
+    if (spell.utility === 'recharge') {
+      const wand = Object.values(eq).find((it) => it && Number.isFinite(it.charges));
+      if (!wand) {
+        ctx.events.emit('ui:log', { text: 'Nothing held will take the charge.', kind: 'warn' });
+        return;
+      }
+      const before = wand.charges;
+      wand.charges = Math.min(wand.maxCharges ?? (before + magnitude), before + Math.max(1, magnitude));
+      ctx.events.emit('ui:log', {
+        text: `${wand.name ?? 'The wand'} takes ${wand.charges - before} charges.`, kind: 'buff',
+      });
+      return;
+    }
+
+    if (spell.utility === 'enchant') {
+      const item = weapon ?? Object.values(eq).find(Boolean);
+      if (!item) {
+        ctx.events.emit('ui:log', { text: 'There is nothing equipped to bind it into.', kind: 'warn' });
+        return;
+      }
+      item.damageBonus = (item.damageBonus ?? 0) + Math.max(1, magnitude);
+      item.attackBonus = (item.attackBonus ?? 0) + Math.max(1, magnitude);
+      char.refresh?.();
+      ctx.events.emit('ui:log', {
+        text: `${item.name ?? 'The item'} takes a permanent enchantment.`, kind: 'buff',
+      });
+      return;
+    }
+
+    // Fire Aura and Vampiric Weapon: a timed rider on the blade the caster
+    // holds, carried on the buff list so it expires with everything else.
+    if (!weapon) {
+      ctx.events.emit('ui:log', { text: `${char.name} holds no weapon to enchant.`, kind: 'warn' });
+      return;
+    }
+    const expires = ctx.state.worldTime + duration;
+    const dup = char.buffs.findIndex((b) => b.spellId === spell.id);
+    if (dup >= 0) char.buffs.splice(dup, 1);
+    char.buffs.push({
+      spellId: spell.id, expires, power: magnitude,
+      weaponRider: spell.affects?.rider ?? 'damage',
+      riderType: spell.affects?.type ?? 'magic',
+    });
+    char.refresh?.();
+    ctx.get('particles')?.burst?.(this._particleFor(spell), ctx.get('player').eye(), 16, {
+      color: spell.vfx?.color,
+    });
+    ctx.events.emit('ui:log', {
+      text: `${weapon.name ?? 'The blade'} takes on ${spell.name.toLowerCase()}.`, kind: 'buff',
+    });
+  }
+
+  /**
+   * Summoning — Reanimate and Summon Elemental.
+   *
+   * The summoned thing is a real monster from the catalogue with the party's
+   * side flag set, so `MonsterSystem` animates and moves it for free and the
+   * turncoat tick below already knows how to make it fight.
+   */
+  _castSummon(ctx, char, spell, power) {
+    const monsters = ctx.get('monsters');
+    const player = ctx.get('player');
+    if (!monsters?.spawn) {
+      ctx.events.emit('ui:log', { text: `${spell.name} finds nothing to raise.`, kind: 'warn' });
+      return;
+    }
+    const rank = masteryRank(power.mastery ?? 'normal');
+    const count = Math.max(1, Math.min(3, rank - 1));
+    const duration = spell.duration ? spell.duration(power.skill, power.mastery) : 600;
+    const kinds = spell.utility === 'summon' && spell.tags?.includes('undead')
+      ? ['skeleton', 'zombie'] : ['air_elemental', 'earth_elemental', 'goblin'];
+
+    let raised = 0;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2;
+      const at = player.position.clone().add(
+        new THREE.Vector3(Math.cos(a) * 2.4, 0, Math.sin(a) * 2.4),
+      );
+      let m = null;
+      for (const kind of kinds) {
+        try { m = monsters.spawn(ctx, kind, at.x, at.z); } catch { m = null; }
+        if (m) break;
+      }
+      if (!m) continue;
+      raised++;
+      // Summons are permanent turncoats for their lifespan: same machinery as
+      // Charm, so a summon and a charmed ogre behave identically in a fight.
+      this._status.set(m, {
+        id: 'summoned', rule: MONSTER_STATUS.charmed,
+        expires: ctx.state.worldTime + duration, power: power.skill,
+        speed0: m.speed, aggro0: m.aggro, summoned: true, next: 0,
+      });
+      ctx.get('particles')?.burst?.(this._particleFor(spell), m.pos.clone().setY(m.pos.y + 1), 20, {
+        color: spell.vfx?.color,
+      });
+    }
+    ctx.events.emit('ui:log', {
+      text: raised ? `${spell.name}: ${raised} answer${raised > 1 ? '' : 's'} the call.`
+                   : `${spell.name} fails to take hold.`,
+      kind: raised ? 'spell' : 'warn',
+    });
+  }
+
+  /**
+   * Utility spells that are an action rather than an enchantment.
+   *
+   * Returns true when the spell is fully handled here. The flag utilities —
+   * light, water walk, fly, and the two seeing spells — deliberately return
+   * false so they still settle on the party as ordinary timed effects.
+   */
+  _castUtility(ctx, char, spell, power, targetRef) {
+    switch (spell.utility) {
+      case 'town-portal': this.townPortal(ctx, power); return true;
+      case 'beacon': this.beacon(ctx, power); return true;
+
+      case 'jump': {
+        // A shove of air under the boots. The player owns movement, so this is
+        // a request, not a teleport — and it is capped so a grandmaster does
+        // not launch the party through a dungeon ceiling.
+        const player = ctx.get('player');
+        const lift = Math.min(9, 3 + (spell.magnitude?.(power.skill, power.mastery) ?? 0) * 0.4);
+        if (player) {
+          if (typeof player.impulse === 'function') player.impulse(0, lift, 0);
+          else if (player.velocity) player.velocity.y = Math.max(player.velocity.y, lift);
+          else player.teleport?.(player.position.x, player.position.y + lift * 0.4, player.position.z, player.yaw);
+        }
+        ctx.get('particles')?.burst?.('sparkle', ctx.get('player')?.eye?.(), 14, { color: spell.vfx?.color });
+        ctx.events.emit('ui:log', { text: 'The ground drops away.', kind: 'spell' });
+        return true;
+      }
+
+      case 'telekinesis': {
+        const reach = spell.magnitude?.(power.skill, power.mastery) ?? 10;
+        const grabbed = ctx.get('props')?.openNearest?.(ctx, ctx.get('player')?.position, reach)
+          ?? ctx.get('loot')?.pullNearest?.(ctx, ctx.get('player')?.position, reach);
+        ctx.events.emit('ui:log', {
+          text: grabbed ? 'An unseen hand works the latch.'
+                        : `Nothing within ${Math.round(reach)} paces will move.`,
+          kind: grabbed ? 'spell' : 'warn',
+        });
+        return true;
+      }
+
+      case 'dispel': return false;   // resolved by `_castView`, which knows the targets
+
+      case 'recharge':
+      case 'enchant': this._castEnchant(ctx, char, spell, power); return true;
+
+      case 'summon': this._castSummon(ctx, char, spell, power); return true;
+
+      // light / reveal / detect-life / water-walk / fly are timed party states.
+      default: return false;
+    }
+  }
+
+  /** Strip timed magic from the party and from everything caught in the blast. */
+  _dispel(ctx, monsters) {
+    let stripped = 0;
+    for (const m of monsters) {
+      const st = this._status.get(m);
+      if (st && !st.summoned) { this._clearStatus(m); stripped++; }
+    }
+    for (const m of ctx.get('party')?.members ?? []) {
+      stripped += m.buffs?.length ?? 0;
+      if (m.buffs?.length) { m.buffs.length = 0; m.refresh?.(); }
+    }
+    this.partyEffects.clear();
+    const player = ctx.get('player');
+    if (player) { player.isFlying = false; player.isWaterWalking = false; }
+    ctx.events.emit('ui:log', {
+      text: stripped ? `Dispel Magic strips ${stripped} enchantment${stripped > 1 ? 's' : ''} from the board.`
+                     : 'Dispel Magic finds nothing to strip.',
+      kind: 'info',
+    });
   }
 
   // ── resolution ───────────────────────────────────────────────────────────
 
   _resolveOnTargets(ctx, char, spell, power, targets) {
     const party = ctx.get('party');
+
+    // A control spell lands its condition whether or not it also does damage:
+    // Poison Spray does both, Paralyze does only the second.
+    if (spell.condition && MONSTER_STATUS[spell.condition]) {
+      for (const t of targets) this._afflict(ctx, t, spell, power);
+    }
 
     if (spell.damage) {
       const spec = spell.damage(power.skill, power.mastery);
@@ -266,11 +659,174 @@ export class SpellSystem extends System {
 
     if (spell.cures) {
       const targetsToCure = spell.target === 'party' ? party?.members ?? [] : [party?.active];
+      let lifted = 0;
       for (const m of targetsToCure) {
         if (!m) continue;
-        for (const cond of spell.cures) m.removeCondition(cond);
+        for (const cond of spell.cures) if (m.removeCondition(cond)) lifted++;
       }
       ctx.get('particles')?.burst?.('heal', ctx.get('player').eye(), 16);
+      // A cure that says nothing reads as a dud spell, which is how a player
+      // learns not to prepare it. Say what happened either way.
+      ctx.events.emit('ui:log', {
+        text: lifted ? `${spell.name} lifts ${lifted} affliction${lifted > 1 ? 's' : ''}.`
+                     : `${spell.name} finds nothing to lift.`,
+        kind: lifted ? 'heal' : 'info',
+      });
+    }
+  }
+
+  /* ── control magic ───────────────────────────────────────────────────────
+   *
+   * Eleven spells in the book carried a `condition` and nothing read it, so
+   * Paralyze, Charm, Slow, Enslave and the rest were an animation. They resolve
+   * here instead, against a resistance roll: control that always lands trivialises
+   * every boss in the game, and control that never lands is the state we were in.
+   */
+
+  /** Hang a condition on a creature, if it will take it. */
+  _afflict(ctx, m, spell, power) {
+    if (!m?.alive) return false;
+    const rule = MONSTER_STATUS[spell.condition];
+    if (!rule) return false;
+
+    const undeadOnly = spell.tags?.includes('undead');
+    if (undeadOnly && !m.def?.flags?.undead) {
+      ctx.events.emit('ui:log', {
+        text: `The ${m.def.name} is not dead enough for ${spell.name}.`, kind: 'warn',
+      });
+      return false;
+    }
+    if (NEEDS_A_MIND.has(spell.condition) && (m.def?.flags?.mindless || m.def?.flags?.undead)) {
+      ctx.events.emit('ui:log', { text: `The ${m.def.name} has no mind to reach.`, kind: 'warn' });
+      return false;
+    }
+
+    // Bosses and high-tier creatures shrug off control far more often, and the
+    // caster's skill is the only thing that argues back.
+    const resist = (m.def?.resists?.[spell.school] ?? 0) + (m.def?.flags?.boss ? 60 : 0)
+                 + (m.def?.level ?? 1) * 2;
+    const odds = Math.max(0.1, Math.min(0.95, (30 + power.skill * 5) / (30 + power.skill * 5 + resist)));
+    if (this.rng.next() > odds) {
+      ctx.events.emit('ui:log', { text: `The ${m.def.name} shrugs off ${spell.name}.`, kind: 'info' });
+      return false;
+    }
+
+    const seconds = (rule.base + rule.perSkill * power.skill) * (DURATION_MULT[power.mastery] ?? 1);
+    const prev = this._status.get(m);
+    this._status.set(m, {
+      id: spell.condition, rule,
+      expires: ctx.state.worldTime + seconds,
+      power: power.skill,
+      speed0: prev?.speed0 ?? m.speed,
+      aggro0: prev?.aggro0 ?? m.aggro,
+      next: 0,
+    });
+    ctx.get('particles')?.burst?.(this._particleFor(spell), m.pos.clone().setY(m.pos.y + 1), 12, {
+      color: spell.vfx?.color,
+    });
+    ctx.events.emit('ui:log', {
+      text: `The ${m.def.name} ${rule.log} (${Math.round(seconds)}s).`, kind: 'spell',
+    });
+    return true;
+  }
+
+  /** Lift a condition and put the creature back the way it was found. */
+  _clearStatus(m) {
+    const st = this._status.get(m);
+    if (!st) return;
+    if (Number.isFinite(st.speed0)) m.speed = st.speed0;
+    if (Number.isFinite(st.aggro0)) m.aggro = st.aggro0;
+    this._status.delete(m);
+  }
+
+  /**
+   * Apply every live condition for one step.
+   *
+   * MonsterSystem re-reads `speed`, `state` and `attackCooldown` off the
+   * instance every frame, so overriding them here is enough to freeze, slow,
+   * rout or turn a creature without touching a file this system does not own.
+   */
+  _tickStatus(dt, ctx) {
+    if (!this._status.size) return;
+    const now = ctx.state.worldTime;
+    const monsters = ctx.get('monsters');
+
+    for (const [m, st] of this._status) {
+      if (!m.alive || now >= st.expires) {
+        if (st.summoned && m.alive) monsters?.kill?.(ctx, m);
+        else if (m.alive) {
+          ctx.events.emit('ui:log', { text: `The ${m.def.name} comes back to itself.`, kind: 'info' });
+        }
+        this._clearStatus(m);
+        continue;
+      }
+      const r = st.rule;
+      if (r.freeze) {
+        m.state = 'idle';
+        m.vel.set(0, 0, 0);
+        m.attackCooldown = Math.max(m.attackCooldown ?? 0, 0.5);
+      }
+      if (r.speedScale) m.speed = st.speed0 * r.speedScale;
+      if (r.damageScale) m.damageScale = r.damageScale;
+      if (r.flee) { m.state = 'flee'; m.stateTimer = 1; }
+      if (r.dps) {
+        st.next -= dt;
+        if (st.next <= 0) {
+          st.next = 1;
+          monsters?.damage?.(ctx, m, Math.max(1, Math.round(r.dps * (1 + st.power * 0.2))), 'body');
+        }
+      }
+      if (r.turncoat) {
+        // It stops seeing the party, and looks for its own kind instead. This
+        // is the whole point of Charm: one ogre becomes the party's front rank.
+        m.aggro = 0;
+        st.next -= dt;
+        if (st.next <= 0) {
+          st.next = 1.4;
+          let victim = null, best = 14 * 14;
+          for (const o of monsters?.monsters ?? []) {
+            if (o === m || !o.alive || this._status.get(o)?.rule?.turncoat) continue;
+            const d = o.pos.distanceToSquared(m.pos);
+            if (d < best) { best = d; victim = o; }
+          }
+          if (victim) {
+            const [n, sides, bonus] = m.def?.attack?.damage ?? [1, 4, 0];
+            let hit = bonus ?? 0;
+            for (let i = 0; i < n; i++) hit += 1 + Math.floor(this.rng.next() * sides);
+            m.pos.lerp(victim.pos, Math.min(0.4, 1.6 * dt));
+            m.state = 'attack';
+            monsters?.damage?.(ctx, victim, hit, m.def?.attack?.type ?? 'physical');
+          } else {
+            m.state = 'idle';
+          }
+        }
+      }
+    }
+  }
+
+  /** Runes on the ground: something walks over them, or they lapse. */
+  _tickRunes(dt, ctx) {
+    if (!this.runes.length) return;
+    const now = ctx.state.worldTime;
+    const monsters = ctx.get('monsters');
+    for (let i = this.runes.length - 1; i >= 0; i--) {
+      const r = this.runes[i];
+      if (now >= r.expires || r.charges <= 0) { this.runes.splice(i, 1); continue; }
+      r.pulse -= dt;
+      if (r.pulse <= 0) {
+        r.pulse = 0.9;
+        ctx.get('particles')?.burst?.(this._particleFor(r.spell), r.pos.clone().setY(r.pos.y + 0.15),
+          4, { color: r.spell.vfx?.color, scale: 0.4 });
+      }
+      const caught = [];
+      for (const m of monsters?.monsters ?? []) {
+        if (m.alive && m.pos.distanceTo(r.pos) <= r.radius) caught.push(m);
+      }
+      if (!caught.length) continue;
+      r.charges--;
+      ctx.get('particles')?.burst?.(this._particleFor(r.spell), r.pos.clone().setY(r.pos.y + 0.5),
+        24, { color: r.spell.vfx?.color, scale: 1.3, spread: r.radius * 0.5 });
+      this._resolveOnTargets(ctx, r.char, r.spell, r.power, caught);
     }
   }
 
@@ -313,13 +869,39 @@ export class SpellSystem extends System {
     return best;
   }
 
+  /**
+   * Who an `instant` spell lands on.
+   *
+   * This used to answer "nobody" for every target type but `single-enemy`,
+   * which is why every area and point spell delivered instantly was a free
+   * light show. Area and point fall back to a sphere around what is aimed at.
+   */
   _defaultTargets(ctx, spell, targetRef) {
     if (targetRef) return [targetRef];
-    if (spell.target === 'single-enemy') {
-      const m = this._aimedMonster(ctx, ctx.get('player'), ctx.get('monsters'), spell.range ?? 60);
-      return m ? [m] : [];
+    const player = ctx.get('player');
+    const monsters = ctx.get('monsters');
+    const range = spell.range || 60;
+
+    switch (spell.target) {
+      case 'single-enemy': {
+        const m = this._aimedMonster(ctx, player, monsters, range);
+        if (!m) ctx.events.emit('ui:log', { text: `${spell.name} finds no target.`, kind: 'warn' });
+        return m ? [m] : [];
+      }
+      case 'area':
+      case 'point':
+      case 'world': {
+        const centre = this._aimedMonster(ctx, player, monsters, range)?.pos
+          ?? player.eye().addScaledVector(this._lookDir(player), Math.min(range, 20));
+        const radius = spell.radius || 8;
+        const out = [];
+        for (const m of monsters?.monsters ?? []) {
+          if (m.alive && m.pos.distanceTo(centre) <= radius) out.push(m);
+        }
+        return out;
+      }
+      default: return [];   // self / party / single-ally are resolved by effect
     }
-    return [];
   }
 
   // ── frame ────────────────────────────────────────────────────────────────
@@ -375,8 +957,21 @@ export class SpellSystem extends System {
       }
     }
 
-    // Expire party effects.
+    this._tickStatus(dt, ctx);
+    this._tickRunes(dt, ctx);
+
+    // Expire party effects, and run the ones that do something every second
+    // rather than once at the moment of casting.
     for (const [id, eff] of this.partyEffects) {
+      if (eff.spell.affects?.regen && ctx.state.worldTime < eff.expires) {
+        eff.next = (eff.next ?? 0) - dt;
+        if (eff.next <= 0) {
+          eff.next = 6;   // a tick every six seconds: slow, but it never stops
+          for (const m of ctx.get('party')?.members ?? []) {
+            if (!m.isDead) m.heal(Math.max(1, eff.magnitude));
+          }
+        }
+      }
       if (ctx.state.worldTime < eff.expires) continue;
       this.partyEffects.delete(id);
       if (eff.spell.utility === 'water-walk') ctx.get('player').isWaterWalking = false;
@@ -521,6 +1116,10 @@ export class SpellSystem extends System {
       p.mesh.material.dispose();
     }
     this.inFlight.length = 0;
+    this.runes.length = 0;
+    // Conditions restore what they overrode, so a torn-down spell system never
+    // leaves a permanently slowed monster behind in a reloaded world.
+    for (const m of [...this._status.keys()]) this._clearStatus(m);
     this._group?.parent?.remove(this._group);
   }
 }
