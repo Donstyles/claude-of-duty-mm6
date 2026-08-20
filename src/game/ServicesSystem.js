@@ -1,5 +1,6 @@
 import { System } from '../core/Engine.js';
 import { TownServices } from './TownServices.js';
+import { GuildSystem } from './GuildSystem.js';
 
 /**
  * One town-services model for the whole game.
@@ -30,7 +31,15 @@ export class ServicesSystem extends System {
 
   async init(ctx) {
     this.ctx = ctx;
-    this.model = new TownServices(ctx);
+    this.model = TownServices.shared(ctx);
+
+    // The guild roll is the other piece of town business the party carries out
+    // of the building, and `GuildSystem` builds itself on first use — which is
+    // the first time a hall is opened. A save restored before that happened
+    // found nothing registered under `guilds` and dropped every membership on
+    // the floor without a word. Bringing it up here costs an empty Map and
+    // means the roll is present to be restored into.
+    GuildSystem.attach(ctx);
 
     // Wages and interest settle on the clock, and the clock only moves in
     // jumps: resting, riding a coach, taking a ship. Catching up at each of

@@ -173,12 +173,16 @@
    the guild hall states its terms the same way. */
 .mm-train-account {
   flex: none;
-  margin-top: calc(var(--u) * 12);
+  /* 8u, not 12u. See the arithmetic over `.mm-train-options` — the sidebar is
+     352u and the stack above the actions was overdrawn against it. */
+  margin-top: calc(var(--u) * 8);
   padding: calc(var(--u) * 3) 0;
 }
 .mm-train-account .mm-row {
   padding: 0 calc(var(--u) * 6);
-  line-height: calc(var(--u) * 15);
+  /* 14u on a 12u face, which is what the yard's own subtitle and role line
+     run at. The row was 15u; the unit came back to the actions below. */
+  line-height: calc(var(--u) * 14);
   font-size: calc(var(--u) * 12);
 }
 /* A label names data, so it is dim — quieter than the figure beside it (§2). */
@@ -192,17 +196,36 @@
 }
 
 /* STYLE.md §8: fixed gap inside the list, larger gap around it, slack centred
-   rather than dumped between the rows or at the foot. */
+   rather than dumped between the rows or at the foot.
+
+   STYLE.md §13 logged this as a real bug rather than a touch one: `The Muster
+   Roll` overlapped the exit oval by 1.8px at every scale, desktop included.
+   The cause is `justify-content: center` on a list taller than its box — the
+   overflow spills evenly out of both ends, and the lower half landed on the
+   brass. Nothing was clipping it; there simply was not room. The arithmetic,
+   in native units against a 352u sidebar:
+
+     6 pad · 6+74 portrait · 8+17 name · 15 role · 8+92 account  = 226u
+     content box ends at 352 − 38 (the pad that reserves the oval) = 314u
+     so the actions have 88u, of which 8u is their own top margin  = 80u
+     three actions at 19u with two 8u gaps                         = 73u
+
+   leaving 7u — 13px at desktop scale — of daylight over the oval. The units
+   were taken from the blocks above rather than out of the gap, because the
+   gap cannot go below 8u: ui.panels.css grows each action's touch target 4u
+   above and 4u below on a coarse pointer, and a gap under 8u would have two
+   neighbouring boxes overlapping and stealing each other's taps. Anything
+   added to this list has to be paid for out of the same 88u. */
 .mm-train-options {
   flex: 1 1 auto;
   min-height: 0;
   overflow: visible;
-  margin-top: calc(var(--u) * 12);
+  margin-top: calc(var(--u) * 8);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(var(--u) * 9);
+  gap: calc(var(--u) * 8);
 }
 .mm-train-option {
   flex: none;

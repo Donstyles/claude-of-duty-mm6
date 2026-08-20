@@ -739,13 +739,25 @@ export class ShopSystem extends System {
     return clamp(statBonus(trader?.stats?.personality ?? 12) * 0.02, -0.06, 0.22);
   }
 
+  /**
+   * A hired Merchant, Trader or Banker haggling on the party's behalf.
+   *
+   * MM6 sells this as a hireling and it is one of the few whose value a player
+   * can watch on the counter, so it eases the spread from the same end
+   * Personality does — never the base value, so the floor is still par.
+   */
+  _retinueDiscount() {
+    const bag = this.ctx?.get('services')?.model?.retinueEffect?.();
+    return clamp(bag?.buyDiscount ?? 0, 0, 0.35);
+  }
+
   /** What the shop is asking against what it will pay, as fractions of value. */
   spread(shop, trader = this.trader()) {
     const def = shop ?? { markup: 2, sellback: 0.35, attitude: 1 };
     const m = trader.skills.merchant ?? { level: 0, mastery: MASTERY.NORMAL };
     const buy = merchantPrice(1000, m, true, { markup: def.markup * (def.attitude ?? 1), sellback: def.sellback }) / 1000;
     const sell = merchantPrice(1000, m, false, { markup: def.markup, sellback: def.sellback }) / 1000;
-    const charm = this._charm(trader);
+    const charm = clamp(this._charm(trader) + this._retinueDiscount(), -0.06, 0.5);
     return {
       buy: 1 + (buy - 1) * (1 - charm),
       sell: sell + (1 - sell) * charm,

@@ -76,13 +76,6 @@ export class ServicesPanel extends Panel {
     this.amount = 100;
     this.rumour = null;
 
-    // Built here rather than on first open so the retinue is paid for every
-    // night the party spends in the field, not only the ones it spends in town.
-    this.model = new TownServices(this.ui.ctx, {
-      purse: this.ui,
-      members: () => this.ui.members().map((vm) => vm.source ?? vm),
-    });
-
     // The three rooms are fetched by `Panel` the instant a screen opens, and a
     // door you walk through should not show a grey rectangle while the plate
     // decodes. Warming them here costs three cached images and removes the
@@ -99,6 +92,28 @@ export class ServicesPanel extends Panel {
     }
 
     this._registerShots();
+  }
+
+  /**
+   * The town-services model — `ServicesSystem`'s, not a second one.
+   *
+   * This screen used to build its own, which gave the party two bank balances:
+   * coin lodged here went into a copy the save file never collects, so a
+   * deposit lasted exactly until the reload. Fetched on first use rather than
+   * in the constructor because panels are made before the systems they read,
+   * and lent the interface's purse and roster for a tree that has no party
+   * system — a capture run, a test harness.
+   */
+  get model() {
+    if (this._model) return this._model;
+    this._model = TownServices.shared(this.ui.ctx, {
+      purse: this.ui,
+      members: () => this.ui.members().map((vm) => vm.source ?? vm),
+    });
+    // Only a model this screen had to build itself is this screen's to tear
+    // down; the system's outlives every panel.
+    this._ownsModel = this._model !== this.ui.ctx?.get?.('services')?.model;
+    return this._model;
   }
 
   /** Hold a decoded copy of a plate so the first frame that needs it has it. */
@@ -269,6 +284,7 @@ export class ServicesPanel extends Panel {
       labelRow('On deposit', `${fmt(s.balance)} gold`, { tone: 'mm-t-gold' }),
       labelRow('In the purse', `${fmt(s.carried)} gold`),
       labelRow('Interest', `${s.ratePercent}% each week`),
+      s.away ? labelRow('Paid by', s.payingBranch, { tone: 'mm-t-dim' }) : null,
       labelRow('A full week pays', `${fmt(s.weekly)} gold`),
       labelRow('Credited next', s.balance > 0 ? `in ${s.daysToCredit} day${s.daysToCredit === 1 ? '' : 's'}` : 'nothing on deposit'),
       labelRow('Last credited', s.lastInterest
@@ -639,7 +655,8 @@ export class ServicesPanel extends Panel {
   }
 
   dispose() {
-    this.model?.dispose();
+    if (this._ownsModel) this._model?.dispose();
+    this._model = null;
     super.dispose();
   }
 
@@ -929,9 +946,22 @@ function effectLines(effect = {}) {
   if (effect.hp) push('Hit points', `+${effect.hp}`);
   if (effect.spellCostReduction) push('Every spell', `${Math.round(effect.spellCostReduction * 100)}% cheaper`);
   if (effect.travelTime) push('Travel', `${Math.round(-effect.travelTime * 100)}% shorter`);
+  if (effect.seaTravelTime) push('By sea', `${Math.round(-effect.seaTravelTime * 100)}% shorter`);
   if (effect.mapReveal) push('Map', `${effect.mapReveal} m surveyed as you walk`);
+  // The rest of the forty-three professions' vocabulary. A wage with no line
+  // under it reads as a wage for nothing, which is how a player learns to
+  // hire nobody.
+  if (effect.buyDiscount) push('At any counter', `${Math.round(effect.buyDiscount * 100)}% off the asking price`);
+  if (effect.interestPerWeek) push('On deposit', `+${(effect.interestPerWeek * 100).toFixed(1)}% each week`);
+  if (effect.carryBonus) push('Carriage', `+${effect.carryBonus} lb between you`);
+  if (effect.goldFound) push('Every haul', `+${Math.round(effect.goldFound * 100)}% gold`);
+  if (effect.xpBonus) push('Every kill', `+${Math.round(effect.xpBonus * 100)}% experience`);
+  if (effect.stealthBonus) push('Unseen', `+${effect.stealthBonus} to going unnoticed`);
+  if (effect.repairSkill) push('Repairs', `+${effect.repairSkill} degrees of the trade`);
+  if (effect.forecast) push('Weather', 'Read a day ahead, and read right');
   for (const [k, v] of Object.entries(effect.stats ?? {})) push(k.replace(/^\w/, (c) => c.toUpperCase()), `+${v}`);
   for (const [k, v] of Object.entries(effect.skills ?? {})) push(`${k.replace(/^\w/, (c) => c.toUpperCase())} magic`, `+${v} degrees`);
+  for (const [k, v] of Object.entries(effect.resists ?? {})) push(`${k.replace(/^\w/, (c) => c.toUpperCase())} resistance`, `+${v}`);
   return lines;
 }
 

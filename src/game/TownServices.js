@@ -1,5 +1,6 @@
 import { getCondition } from './rules.js';
 import { getVenue, venuesInTown, venuesOfKind } from './data/Venues.js';
+import { HIRELING_PROFESSIONS, HIRELING_IDS as NPC_HIRELING_IDS } from './data/NPCs.js';
 
 /**
  * The three civic buildings a town has besides its shops: the counting house,
@@ -80,83 +81,52 @@ const DONATION_TIERS = Object.freeze([
 /**
  * The professions loitering in taverns, with what they actually do.
  *
- * `effect` is a flat bag read in exactly two places: `_applyRetinue` folds the
- * combat and casting entries into each character's bonuses, and `_restBonus`
- * spends the camp entries at every rest. Anything added here that neither of
- * those reads is decoration, and there is none.
+ * The roster itself is `data/NPCs.js`'s — forty-three trades from a Fool at
+ * fifteen gold a day to a Spellmaster at three hundred — and this file used to
+ * keep a hand-written fourteen beside it that nothing else knew about. Two
+ * rosters is one roster too many: the tavern hired from the short list while
+ * the world data described the long one, so twenty-nine professions the
+ * campaign had written existed nowhere a player could meet them.
+ *
+ * What is added here is the shape the retinue is spent in. Two vocabularies
+ * had grown up either side of the seam, so they are reconciled on the way
+ * through — `fee` is a daily `wage`, `minTownTier` is the `minTier` a taproom
+ * must reach, and the two spellings of spell-point regen and of a caster's
+ * discount become one each. `effect` is a flat bag read in exactly four
+ * places: `_applyRetinue` folds the combat and casting entries into each
+ * character's bonuses, `_restBonus` spends the camp entries at every rest,
+ * `interestRate` lets a Banker argue with the counting house, and
+ * `ShopSystem.spread` lets a Trader argue with the counter. Everything else
+ * in the bag is read by the system that owns it — travel time by the coach,
+ * carriage by the pack — and reaches them through `retinueEffect()`.
  */
-export const HIRELINGS = Object.freeze({
-  cook: {
-    id: 'cook', name: 'Cook', wage: 6, minTier: 1,
-    effect: { foodPerRest: 1 },
-    desc: 'Turns two days of rations into three, and nobody asks how.',
-  },
-  porter: {
-    id: 'porter', name: 'Porter', wage: 8, minTier: 1,
-    effect: { hp: 4, foodPerRest: 1 },
-    desc: 'Carries the packs, pitches the camp, and the party wakes less bruised for it.',
-  },
-  guide: {
-    id: 'guide', name: 'Guide', wage: 10, minTier: 1,
-    effect: { travelTime: -0.25, mapReveal: 40 },
-    desc: 'Knows the imperial roads and which of them still go anywhere. A quarter off any journey.',
-  },
-  physicker: {
-    id: 'physicker', name: 'Physicker', wage: 14, minTier: 1,
-    effect: { healPerHour: 2 },
-    desc: 'Two hit points an hour to everyone who sleeps, and an opinion about your diet.',
-  },
-  shieldbearer: {
-    id: 'shieldbearer', name: 'Shieldbearer', wage: 16, minTier: 2,
-    effect: { ac: 4 },
-    desc: 'Walks on the open side and puts a boarded shield between the party and the weather.',
-  },
-  drillmaster: {
-    id: 'drillmaster', name: 'Drillmaster', wage: 22, minTier: 2,
-    effect: { attack: 3, damage: 2 },
-    desc: 'Sword Chapter pensioner. Drills the party at every camp, whatever the party thinks of it.',
-  },
-  acolyte: {
-    id: 'acolyte', name: 'Acolyte', wage: 24, minTier: 2,
-    effect: { skills: { spirit: 2 }, curesConditions: true },
-    desc: 'Of the Kindled Lamp. Two degrees of Spirit to every caster, and draws poison overnight.',
-  },
-  reader: {
-    id: 'reader', name: 'Reader of Skies', wage: 26, minTier: 2,
-    effect: { stats: { luck: 8 } },
-    desc: 'Reads the weather off the stars and the party off the weather. Eight points of Luck.',
-  },
-  quartermaster: {
-    id: 'quartermaster', name: 'Quartermaster', wage: 30, minTier: 3,
-    effect: { foodPerRest: 3, hp: 6 },
-    desc: 'Runs the baggage properly for the first time in your career. Three rations back per camp.',
-  },
-  surgeon: {
-    id: 'surgeon', name: 'Surgeon', wage: 38, minTier: 3,
-    effect: { healPerHour: 5, curesConditions: true },
-    desc: 'Sets bones, closes wounds, and will not be hurried. Five hit points an hour, and clears fever.',
-  },
-  adept: {
-    id: 'adept', name: 'Guild Adept', wage: 44, minTier: 3,
-    effect: { spellCostReduction: 0.15, spPerHour: 2 },
-    desc: 'Licensed by the Ninefold Concord. Every spell costs a seventh less, and the sleep is restful.',
-  },
-  banneret: {
-    id: 'banneret', name: 'Banneret', wage: 52, minTier: 4,
-    effect: { attack: 5, damage: 4, ac: 3, stats: { personality: 4 } },
-    desc: 'A knight of the Sword Chapter between commissions. Expensive, and worth it in a shield wall.',
-  },
-  wardensmith: {
-    id: 'wardensmith', name: 'Warden Smith', wage: 58, minTier: 4,
-    effect: { attack: 3, ac: 5, hp: 10 },
-    desc: 'Emberhold-trained. Keeps every edge true and every rivet where the smith left it.',
-  },
-  mystic: {
-    id: 'mystic', name: 'Mystic', wage: 70, minTier: 5,
-    effect: { spPerHour: 5, skills: { spirit: 2, mind: 2 }, stats: { intellect: 4 } },
-    desc: 'Of the Quiet Hall, and disinclined to say more than that. Five spell points an hour, waking or not.',
-  },
-});
+const ALIAS = Object.freeze({ spRegenPerHour: 'spPerHour', spellDiscount: 'spellCostReduction' });
+
+function normaliseEffect(effect = {}) {
+  const out = {};
+  for (const [k, v] of Object.entries(effect)) {
+    const key = ALIAS[k] ?? k;
+    // A profession carrying both spellings of one effect keeps the larger.
+    out[key] = typeof v === 'number' && typeof out[key] === 'number' ? Math.max(out[key], v) : v;
+  }
+  return out;
+}
+
+const hirelings = {};
+for (const id of NPC_HIRELING_IDS) {
+  const p = HIRELING_PROFESSIONS[id];
+  if (!p) continue;
+  hirelings[id] = Object.freeze({
+    id,
+    name: p.name,
+    wage: p.fee,
+    minTier: p.minTownTier ?? 1,
+    effect: Object.freeze(normaliseEffect(p.effect)),
+    desc: p.desc,
+  });
+}
+
+export const HIRELINGS = Object.freeze(hirelings);
 
 export const HIRELING_IDS = Object.freeze(Object.keys(HIRELINGS));
 
@@ -259,6 +229,26 @@ function healTo(m, hp) {
 
 export class TownServices {
   /**
+   * The one model the whole game shares.
+   *
+   * The balance, the standing and the blessing are instance fields, not party
+   * fields, so a second instance is a second bank: coin lodged at the screen's
+   * copy never reached the copy `ServicesSystem` registers, and that is the
+   * copy the save file collects. Deposits therefore survived until the reload
+   * and no further, and both copies answered `party:rested`, so the retinue
+   * cooked breakfast twice.
+   *
+   * `opts` are the fallbacks a caller can supply for a tree with no party
+   * system — an interface stand-in party, a test harness. They are adopted by
+   * whichever instance is already in charge rather than forcing a new one.
+   */
+  static shared(ctx, opts = {}) {
+    const held = ctx?.get?.('services')?.model;
+    if (held) return held.adopt(opts);
+    return new TownServices(ctx, opts);
+  }
+
+  /**
    * @param {object} ctx  the engine context
    * @param {{purse?: object, members?: () => object[]}} [opts]
    *   `purse` is an object with a writable `gold` field, used only when no
@@ -305,6 +295,17 @@ export class TownServices {
     // on any question, so a party that never rests still pays its people.
     this._onRested = ({ hours } = {}) => this._afterRest(hours ?? 8);
     this.ctx?.events?.on?.('party:rested', this._onRested);
+  }
+
+  /**
+   * Take on a caller's fallback purse and roster without disturbing one
+   * already held. First caller wins, because the live party always outranks a
+   * stand-in and the system that owns the save is constructed first.
+   */
+  adopt({ purse, members } = {}) {
+    this._purse ??= purse ?? null;
+    this._membersFn ??= members ?? null;
+    return this;
   }
 
   dispose() {
@@ -531,17 +532,31 @@ export class TownServices {
 
   // ── the counting house ───────────────────────────────────────────────────
 
-  /** Weekly rate. The capital's branch pays best; a flats counting house least. */
+  /**
+   * Weekly rate. The capital's branch pays best; a flats counting house least,
+   * and a Banker on the party's books argues the counter up by whatever the
+   * profession is worth — which is the only reason to pay one two hundred gold
+   * a day and the whole point of hiring inside the town's own economy.
+   */
   interestRate(venue) {
-    return 0.005 * this.tierOf(venue);
+    return 0.005 * this.tierOf(venue) + (this.retinueEffect().interestPerWeek ?? 0);
   }
 
   bankState(venue) {
     this.settle();
     const acct = this.account;
-    const rate = this.interestRate(venue);
+    // Interest is paid by the branch the money is lodged at, not by whichever
+    // door the party happens to be leaning on — `_settleInterest` reckons it
+    // that way, so the counter has to quote it that way. A Saltmarch account
+    // read at Thornwick used to show 2.0% and pay 2.5%, which is a screen
+    // lying about the one number the building exists to state.
+    const home = (acct.balance > 0 && acct.branch && getVenue(acct.branch)) || venue;
+    const rate = this.interestRate(home);
     const nextDay = acct.balance > 0 ? acct.creditedDay + DAYS_PER_WEEK : this.day() + DAYS_PER_WEEK;
     return {
+      /** The branch that pays, and whether this is that branch's counter. */
+      payingBranch: home?.name ?? venue?.name ?? 'The Ledger',
+      away: !!(home && venue && home.id !== venue.id),
       balance: acct.balance,
       carried: this.gold,
       rate,
@@ -1050,7 +1065,7 @@ export class TownServices {
       paidDay: this.day(),
       paid: person.wage,
       hiredAt: venue?.name ?? null,
-      portraitSpec: { key: person.name, classId: PORTRAIT_CLASS[person.id] ?? 'ranger' },
+      portraitSpec: { key: person.name, classId: PORTRAIT_CLASS[person.id] ?? PORTRAIT_FALLBACK },
     });
     this._applyRetinue();
     return { ok: true, price: person.wage, text: `${person.name}, ${person.profession.toLowerCase()}, takes ${person.wage} gold a day and their share of the walking.` };
@@ -1076,28 +1091,38 @@ export class TownServices {
     this.ctx?.events?.emit?.('ui:log', { text, kind: 'info' });
   }
 
-  /** Everything the retinue contributes, merged. */
+  /**
+   * Everything the retinue contributes, merged.
+   *
+   * Every key the forty-three professions can carry is summed here, including
+   * the ones this file does not itself spend — the coach reads `travelTime`,
+   * the pack reads `carryBonus`, the loot table reads `goldFound` — because a
+   * bag that silently drops what it does not personally understand is how a
+   * Pathfinder ends up costing eighty gold a day for nothing.
+   */
   retinueEffect() {
     const bag = {
       hp: 0, ac: 0, attack: 0, damage: 0, foodPerRest: 0, healPerHour: 0,
-      spPerHour: 0, spellCostReduction: 0, travelTime: 0, mapReveal: 0,
-      curesConditions: false, stats: {}, skills: {},
+      spPerHour: 0, spellCostReduction: 0, travelTime: 0, seaTravelTime: 0,
+      mapReveal: 0, carryBonus: 0, goldFound: 0, xpBonus: 0, stealthBonus: 0,
+      repairSkill: 0, buyDiscount: 0, interestPerWeek: 0,
+      curesConditions: false, forecast: false, stats: {}, skills: {}, resists: {},
     };
+    // Summed where two of a trade stack (two Cooks are two rations) and taken
+    // at the better of the two where they do not (two maps are one map).
+    const SUM = ['hp', 'ac', 'attack', 'damage', 'foodPerRest', 'healPerHour',
+      'spPerHour', 'spellCostReduction', 'travelTime', 'seaTravelTime',
+      'carryBonus', 'goldFound', 'xpBonus', 'stealthBonus', 'repairSkill',
+      'buyDiscount', 'interestPerWeek'];
     for (const hand of this.retinue) {
       const e = hand?.effect ?? HIRELINGS[hand?.id]?.effect ?? {};
-      bag.hp += e.hp ?? 0;
-      bag.ac += e.ac ?? 0;
-      bag.attack += e.attack ?? 0;
-      bag.damage += e.damage ?? 0;
-      bag.foodPerRest += e.foodPerRest ?? 0;
-      bag.healPerHour += e.healPerHour ?? 0;
-      bag.spPerHour += e.spPerHour ?? 0;
-      bag.spellCostReduction += e.spellCostReduction ?? 0;
-      bag.travelTime += e.travelTime ?? 0;
+      for (const k of SUM) bag[k] += e[k] ?? 0;
       bag.mapReveal = Math.max(bag.mapReveal, e.mapReveal ?? 0);
       bag.curesConditions ||= !!e.curesConditions;
+      bag.forecast ||= !!e.forecast;
       for (const [k, v] of Object.entries(e.stats ?? {})) bag.stats[k] = (bag.stats[k] ?? 0) + v;
       for (const [k, v] of Object.entries(e.skills ?? {})) bag.skills[k] = (bag.skills[k] ?? 0) + v;
+      for (const [k, v] of Object.entries(e.resists ?? {})) bag.resists[k] = (bag.resists[k] ?? 0) + v;
     }
     return bag;
   }
@@ -1235,12 +1260,28 @@ export class TownServices {
   }
 }
 
-/** Which painted head stands in for a profession in the sidebar panes. */
+/**
+ * Which painted head stands in for a profession in the sidebar panes.
+ *
+ * Forty-three trades against six plates, so this groups by the shape of the
+ * work rather than naming every one: anybody who fights takes the knight,
+ * anybody who reads takes the sorcerer, anybody who mends takes the cleric.
+ * `ranger` is the fallback because it is the plate that reads as somebody who
+ * walks for a living, which most of a retinue does.
+ */
 const PORTRAIT_CLASS = Object.freeze({
-  cook: 'ranger', porter: 'knight', guide: 'ranger', physicker: 'cleric',
-  shieldbearer: 'knight', drillmaster: 'knight', acolyte: 'cleric',
-  reader: 'sorcerer', quartermaster: 'ranger', surgeon: 'cleric',
-  adept: 'sorcerer', banneret: 'paladin', wardensmith: 'knight', mystic: 'sorcerer',
+  smith: 'knight', squire: 'knight', horseman: 'knight', armsmaster_hire: 'knight',
+  monk_hire: 'knight', pirate: 'knight', instructor: 'knight', gate_master: 'knight',
+  healer: 'cleric', acolyte: 'cleric', expert_healer: 'cleric', master_healer: 'cleric',
+  prelate: 'cleric', alchemist_hire: 'cleric',
+  scholar: 'sorcerer', astrologer: 'sorcerer', psychic: 'sorcerer', enchanter: 'sorcerer',
+  windmaster: 'sorcerer', watermaster: 'sorcerer', mystic: 'sorcerer', spellmaster: 'sorcerer',
+  teacher: 'sorcerer', mentor: 'sorcerer', cartographer: 'sorcerer', navigator: 'sorcerer',
+  diplomat: 'paladin', merchant_hire: 'paladin', trader: 'paladin', banker: 'paladin',
+  burglar: 'rogue', gypsy: 'rogue', fool: 'rogue', piper: 'rogue',
 });
+
+/** The plate a trade with no entry of its own gets. */
+const PORTRAIT_FALLBACK = 'ranger';
 
 export default TownServices;
