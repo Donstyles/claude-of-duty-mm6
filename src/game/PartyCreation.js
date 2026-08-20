@@ -99,13 +99,25 @@ export function statBase(classId, attr) {
 /**
  * The faces, in the order the arrows step through them.
  *
- * `plate` is a class id only because that is the key `UITextures.portrait`
- * takes; the face itself is independent of the profession chosen, exactly as
- * MM6's are — a Sorcerer may wear the soldier's face and often should.
+ * `plate` names a portrait role, which `UITextures.PLATE_ROLE` resolves; the
+ * face itself is independent of the profession chosen, exactly as MM6's are —
+ * a Sorcerer may wear the soldier's face and often should.
  *
  * Each face carries its own given names, so the portrait genuinely drives the
  * suggestion: the harbour face is named out of the ports, the temple face out
  * of the Order.
+ *
+ * There were seven of these against MM6's twenty-odd, on the screen a player
+ * stares at for five minutes before the game has started. Seven was not a
+ * design decision, it was the number of plates that happened to exist, and the
+ * proof is that the two `elder` plates were on disk and committed and no entry
+ * here pointed at them — they could not be chosen by anybody, ever. All
+ * twenty-five plates in the set are now reachable from this screen, which is
+ * the property to hold on to: if a face is painted, somebody can wear it.
+ *
+ * The original seven keep their order and their indices. `Character` stores
+ * the face as an index, so appending is safe and reordering would silently
+ * repaint every party in every existing save.
  */
 export const FACES = Object.freeze([
   {
@@ -139,9 +151,99 @@ export const FACES = Object.freeze([
     female: ['Linnet', 'Sorrel', 'Ffion', 'Hazel', 'Nerys'],
   },
   {
-    id: 'harbour', plate: 'thief', label: 'Harbour',
+    id: 'harbour', plate: 'rogue', label: 'Harbour',
     male: ['Tolm', 'Jenn', 'Sparrow', 'Rell', 'Crake'],
     female: ['Kestrel', 'Pella', 'Dilwen', 'Sabra', 'Nim'],
+  },
+  {
+    id: 'elder', plate: 'elder', label: 'Elder',
+    male: ['Gethin', 'Mabon', 'Uther', 'Caradoc', 'Owain'],
+    female: ['Ffraid', 'Modron', 'Rhian', 'Enid', 'Gwenn'],
+  },
+  {
+    id: 'watch', plate: 'guard', label: 'Watch',
+    male: ['Bryce', 'Hollen', 'Tarrant', 'Dunnet', 'Ostry'],
+    female: ['Marda', 'Aveline', 'Isca', 'Sedwyn', 'Braith'],
+  },
+  {
+    id: 'forge', plate: 'smith', label: 'Forge',
+    male: ['Ordric', 'Hobb', 'Vulk', 'Tamm', 'Grennan'],
+    female: ['Ostrid', 'Halla', 'Torva', 'Ingrith', 'Sigrun'],
+  },
+  {
+    id: 'wayfarer', plate: 'ranger', label: 'Wayfarer',
+    male: ['Corbin', 'Ferrin', 'Loch', 'Renwick', 'Aldous'],
+    female: ['Merryn', 'Talla', 'Brynn', 'Oona', 'Sian'],
+  },
+  {
+    id: 'apothecary', plate: 'alchemist', label: 'Apothecary',
+    male: ['Ossian', 'Camrose', 'Thane', 'Petran', 'Wystan'],
+    female: ['Rue', 'Calla', 'Selwen', 'Bethan', 'Delphine'],
+  },
+  {
+    id: 'scholar', plate: 'scholar', label: 'Scholar',
+    male: ['Ambrose', 'Tolliver', 'Peverel', 'Crandon', 'Hollis'],
+    female: ['Beatrix', 'Constance', 'Ilse', 'Marwen', 'Prudence'],
+  },
+  {
+    id: 'clerk', plate: 'official', label: 'Clerk',
+    male: ['Silas', 'Bardolf', 'Ostwin', 'Merrick', 'Codd'],
+    female: ['Anneth', 'Josselin', 'Wilda', 'Serah', 'Cassia'],
+  },
+  {
+    id: 'highborn', plate: 'noble', label: 'Highborn',
+    male: ['Auberon', 'Rowland', 'Everard', 'Lisle', 'Damory'],
+    female: ['Rosalind', 'Adela', 'Genevra', 'Melisent', 'Aurelie'],
+  },
+  {
+    id: 'crown', plate: 'royal', label: 'Crown',
+    male: ['Aldric', 'Corvan', 'Theron', 'Osric', 'Malen'],
+    female: ['Ysolde', 'Elowen', 'Seraphine', 'Alienor', 'Maren'],
+  },
+  {
+    id: 'cloister', plate: 'monk', label: 'Cloister',
+    male: ['Anselm', 'Bede', 'Cuthwin', 'Ferrand', 'Ives'],
+    female: ['Clemence', 'Hildy', 'Perpetua', 'Odile', 'Sisel'],
+  },
+  {
+    id: 'anointed', plate: 'priest', label: 'Anointed',
+    male: ['Absalon', 'Barnabas', 'Eldred', 'Simeon', 'Tobias'],
+    female: ['Damaris', 'Salome', 'Honora', 'Miriam', 'Thecla'],
+  },
+  {
+    id: 'farsighted', plate: 'seer', label: 'Farsighted',
+    male: ['Blaise', 'Merrow', 'Vale', 'Oram', 'Sennick'],
+    female: ['Sybil', 'Morvenna', 'Dree', 'Nevis', 'Oriel'],
+  },
+  {
+    id: 'blackwork', plate: 'necromancer', label: 'Blackwork',
+    male: ['Vardan', 'Malachi', 'Corvus', 'Thanek', 'Rhodri'],
+    female: ['Nyssa', 'Carrow', 'Vespera', 'Morgaine', 'Ilka'],
+  },
+  {
+    id: 'hooded', plate: 'cultist', label: 'Hooded',
+    male: ['Ossyn', 'Grell', 'Vey', 'Halloc', 'Suden'],
+    female: ['Nemine', 'Ravel', 'Ushra', 'Beulah', 'Sable'],
+  },
+  {
+    id: 'quayside', plate: 'townsfolk_a', label: 'Quayside',
+    male: ['Wat', 'Cob', 'Jem', 'Ruck', 'Gam'],
+    female: ['Nell', 'Aud', 'Onna', 'Sib', 'Gerda'],
+  },
+  {
+    id: 'millgate', plate: 'townsfolk_b', label: 'Millgate',
+    male: ['Colm', 'Sedge', 'Bly', 'Anse', 'Mabb'],
+    female: ['Hedda', 'Meris', 'Wend', 'Ida', 'Nane'],
+  },
+  {
+    id: 'fieldhand', plate: 'townsfolk_c', label: 'Fieldhand',
+    male: ['Orim', 'Kar', 'Vell', 'Dain', 'Sef'],
+    female: ['Elin', 'Hessa', 'Bett', 'Lune', 'Sarra'],
+  },
+  {
+    id: 'hearth', plate: 'townsfolk_d', label: 'Hearth',
+    male: ['Perrin', 'Cade', 'Tam', 'Hob', 'Osk'],
+    female: ['Merrigan', 'Tamsin', 'Bryd', 'Winna', 'Cesse'],
   },
 ]);
 
@@ -254,10 +356,17 @@ const KEY_STATS = Object.freeze({
   thief: ['speed', 'accuracy', 'luck', 'intellect'],
 });
 
-/** The face a profession turns up wearing when nobody has chosen one. */
+/**
+ * The face a profession turns up wearing when nobody has chosen one.
+ *
+ * A default, not a rule — every profession can wear every face. The Ranger and
+ * the Monk borrowed the Scout and the Devout because there was no wayfarer and
+ * no cloister plate; there is now, so the nine base classes open on nine
+ * different faces and a rolled party stops looking related.
+ */
 const FACE_FOR_CLASS = Object.freeze({
   knight: 'soldier', paladin: 'sworn', archer: 'scout', cleric: 'devout',
-  sorcerer: 'adept', druid: 'greenwarden', ranger: 'scout', monk: 'devout',
+  sorcerer: 'adept', druid: 'greenwarden', ranger: 'wayfarer', monk: 'cloister',
   thief: 'harbour',
 });
 

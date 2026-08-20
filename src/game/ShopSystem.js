@@ -18,7 +18,7 @@
  */
 
 import { System } from '../core/Engine.js';
-import { RNG } from '../core/RNG.js';
+import { RNG, hashSeed } from '../core/RNG.js';
 import {
   ITEM_IDS, ITEMS, getItem, itemPower, itemDisplayName, enchantedValue,
   enchantmentsFor, PREFIXES, SUFFIXES,
@@ -114,6 +114,39 @@ function keeperSex(name) {
   return h % 2 ? 'f' : 'm';
 }
 
+/**
+ * The faces a counter of each kind can have behind it.
+ *
+ * `SHOP_TYPES.look` names one plate per trade, and there are thirty-one shops
+ * across five trades, so eleven general stores were eleven copies of the same
+ * storekeep and seven forges were seven copies of the same man. The type still
+ * decides *what sort* of person keeps the shop — nobody but a smith stands at
+ * a weapon counter — but which of the plausible faces this particular counter
+ * has is a hash of the keeper's name, so it is fixed for the campaign and
+ * differs from the next town's.
+ *
+ * `townsfolk` in the general store's list is worth four of the others, because
+ * `UITextures` spreads it over four plates by the same key; a storekeep is
+ * exactly the sort of person who should not look like anybody in particular.
+ */
+const KEEPER_FACES = freeze({
+  weaponsmith: ['smith', 'knight', 'guard'],
+  armourer: ['smith', 'paladin', 'knight'],
+  magicshop: ['sorcerer', 'scholar', 'necromancer'],
+  alchemist: ['alchemist', 'druid', 'seer'],
+  generalstore: ['townsfolk', 'official', 'rogue'],
+});
+
+/** Which face this counter keeps: the one it is given, or one of its trade's. */
+function keeperFace(venue, type) {
+  // A venue that names its own is believed outright; nothing in `Venues.js`
+  // does today, but a keeper who has to look a particular way — because a quest
+  // says so — must be able to say so without a second table.
+  if (venue?.portrait) return venue.portrait;
+  const pool = KEEPER_FACES[venue?.kind] ?? [type.look];
+  return pool[hashSeed(`shop-face:${venue?.keeper ?? venue?.id ?? type.id}`) % pool.length];
+}
+
 const shops = {};
 for (const id of VENUE_IDS) {
   const v = VENUES[id];
@@ -133,7 +166,7 @@ for (const id of VENUE_IDS) {
      */
     salvage: v.town === 'town_duskorn',
     /** What the keeper looks like behind the counter. */
-    portrait: { key: v.keeper ?? id, classId: t.look, gender: keeperSex(v.keeper) },
+    portrait: { key: v.keeper ?? id, classId: keeperFace(v, t), gender: keeperSex(v.keeper) },
     markup: t.markup, sellback: t.sellback, restockDays: t.restockDays,
     /**
      * How many pieces hang on the wall. MM6 boards are sparse on purpose —

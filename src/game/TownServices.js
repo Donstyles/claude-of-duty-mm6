@@ -1,3 +1,4 @@
+import { hashSeed } from '../core/RNG.js';
 import { getCondition, templePriceMultiplier } from './rules.js';
 import { getVenue, venuesInTown, venuesOfKind } from './data/Venues.js';
 import {
@@ -1113,7 +1114,11 @@ export class TownServices {
       paidDay: this.day(),
       paid: person.wage,
       hiredAt: venue?.name ?? null,
-      portraitSpec: { key: person.name, classId: PORTRAIT_CLASS[person.id] ?? PORTRAIT_FALLBACK },
+      portraitSpec: {
+        key: person.name,
+        classId: PORTRAIT_CLASS[person.id] ?? PORTRAIT_FALLBACK,
+        gender: hirelingSex(person.name),
+      },
     });
     this._applyRetinue();
     return { ok: true, price: person.wage, text: `${person.name}, ${person.profession.toLowerCase()}, takes ${person.wage} gold a day and their share of the walking.` };
@@ -1343,25 +1348,63 @@ export class TownServices {
 /**
  * Which painted head stands in for a profession in the sidebar panes.
  *
- * Forty-three trades against six plates, so this groups by the shape of the
- * work rather than naming every one: anybody who fights takes the knight,
- * anybody who reads takes the sorcerer, anybody who mends takes the cleric.
- * `ranger` is the fallback because it is the plate that reads as somebody who
- * walks for a living, which most of a retinue does.
+ * This used to group forty-three trades onto six plates — anybody who fights
+ * took the knight, anybody who read took the sorcerer — because six plates was
+ * all there were. It is not a grouping any more: there is a face for the smith,
+ * the guard, the scholar, the fortune-teller and the ordinary hand, so every
+ * profession names the one that was painted for it. Nine of the forty-three
+ * had no entry at all and fell to `ranger`, which was not a plate either and
+ * became the mercenary along with everything else.
+ *
+ * The plain hands — the porter, the sailor, the cook — take `townsfolk`, which
+ * is four faces rather than one and is spread by a hash of the person's name
+ * inside `UITextures`. Two porters hired in two different towns are therefore
+ * two different men, which is the whole point of hiring one.
  */
 const PORTRAIT_CLASS = Object.freeze({
-  smith: 'knight', squire: 'knight', horseman: 'knight', armsmaster_hire: 'knight',
-  monk_hire: 'knight', pirate: 'knight', instructor: 'knight', gate_master: 'knight',
-  healer: 'cleric', acolyte: 'cleric', expert_healer: 'cleric', master_healer: 'cleric',
-  prelate: 'cleric', alchemist_hire: 'cleric',
-  scholar: 'sorcerer', astrologer: 'sorcerer', psychic: 'sorcerer', enchanter: 'sorcerer',
-  windmaster: 'sorcerer', watermaster: 'sorcerer', mystic: 'sorcerer', spellmaster: 'sorcerer',
-  teacher: 'sorcerer', mentor: 'sorcerer', cartographer: 'sorcerer', navigator: 'sorcerer',
-  diplomat: 'paladin', merchant_hire: 'paladin', trader: 'paladin', banker: 'paladin',
-  burglar: 'rogue', gypsy: 'rogue', fool: 'rogue', piper: 'rogue',
+  squire: 'knight', horseman: 'knight',
+  smith: 'smith',
+  armsmaster_hire: 'guard', gate_master: 'guard',
+  healer: 'cleric', expert_healer: 'cleric', master_healer: 'cleric',
+  acolyte: 'priest', prelate: 'priest',
+  monk_hire: 'monk',
+  alchemist_hire: 'alchemist',
+  scholar: 'scholar', cartographer: 'scholar', teacher: 'scholar',
+  mentor: 'scholar', instructor: 'scholar',
+  windmaster: 'sorcerer', watermaster: 'sorcerer', enchanter: 'sorcerer',
+  spellmaster: 'sorcerer',
+  gypsy: 'seer', astrologer: 'seer', psychic: 'seer',
+  mystic: 'elder',
+  quartermaster: 'official', merchant_hire: 'official', trader: 'official',
+  banker: 'official', navigator: 'official',
+  diplomat: 'noble',
+  guide: 'ranger', tracker: 'ranger', explorer: 'ranger', pathfinder: 'ranger',
+  fool: 'rogue', pirate: 'rogue', burglar: 'rogue',
+  porter: 'townsfolk', sailor: 'townsfolk', cook: 'townsfolk',
+  chef: 'townsfolk', piper: 'townsfolk',
 });
 
-/** The plate a trade with no entry of its own gets. */
-const PORTRAIT_FALLBACK = 'ranger';
+/**
+ * The plate a trade with no entry of its own gets.
+ *
+ * `townsfolk` rather than a named role, because the honest answer for a trade
+ * nobody has thought about yet is "a person", and that one word spreads over
+ * four faces instead of stacking a new profession onto an existing pile.
+ */
+const PORTRAIT_FALLBACK = 'townsfolk';
+
+/**
+ * Which plate's sex a hired hand takes.
+ *
+ * The retinue's names are drawn from `GIVEN` above and carry no sex with them,
+ * and the spec built at the counter used to carry no `gender` field at all —
+ * so every one of the forty-three hirelings drew a male plate and half the
+ * portrait set was unreachable from a tavern. A hash of the name rather than a
+ * roll, for the same reason as everywhere else here: the face has to survive a
+ * save, and the same hand must be the same person tomorrow.
+ */
+function hirelingSex(name) {
+  return hashSeed(`hire-sex:${name ?? ''}`) % 2 ? 'f' : 'm';
+}
 
 export default TownServices;

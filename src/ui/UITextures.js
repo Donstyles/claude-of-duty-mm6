@@ -4179,6 +4179,40 @@ export class UITextures {
     return [...PORTRAIT_PLATES.available].filter((n) => n.startsWith(want)).sort();
   }
 
+  /**
+   * The plate stem a spec resolves to — `m-knight`, `f-townsfolk_c`, or null.
+   *
+   * Static, and returning the bare name rather than a URL, because the thing
+   * that has to be checkable about the portrait set is its *spread*, and a
+   * spread cannot be measured through `document.baseURI`. `tools/facetest.mjs`
+   * runs every NPC, keeper, guild master and hireling in the game through this
+   * in plain Node and counts the result; that count is the only reason anybody
+   * knew forty-nine of sixty-eight catalogue NPCs shared one face.
+   */
+  static portraitPlateName(spec = {}) {
+    return PORTRAIT_PLATES.name(spec);
+  }
+
+  /**
+   * Every plate a role word is allowed to produce for a sex, or null when no
+   * table anywhere recognises the word.
+   *
+   * The null is the useful half. A word nothing knows is the exact shape of
+   * the bug this set of tables was rewritten to kill — `ranger` written by one
+   * file and unheard of in the next — and it is invisible from the outside,
+   * because an unrecognised word still resolves to a perfectly good face. This
+   * lets `tools/facetest.mjs` tell "the chain lost this word" apart from "the
+   * plate for this word has not been painted yet", which look identical in a
+   * distribution and want opposite responses.
+   */
+  static portraitRolePlates(word, sex = 'm') {
+    const role = PLATE_ROLE[word];
+    if (!role) return null;
+    const s = sex === 'f' ? 'f' : 'm';
+    return (PLATE_VARIANTS[role] ?? [role])
+      .map((stem) => (s === 'f' && FEMALE_PLATE_NAME[stem] ? `f-${FEMALE_PLATE_NAME[stem]}` : `${s}-${stem}`));
+  }
+
   /** The painted gravestone that replaces a dead character's portrait. */
   tombstonePlate() {
     return PORTRAIT_PLATES.has('tombstone')
@@ -4821,6 +4855,102 @@ const FIGURE_LOOK = {
  * Flat one-temperature skin is what makes a face look like plastic.
  */
 /**
+ * Every word anything in this game uses for "what sort of person is this",
+ * mapped onto the plate that was painted for it.
+ *
+ * The table is wide on purpose, and the reason is worth stating because the
+ * shape of the bug it fixes recurs. Faces were resolved through a chain of
+ * maps — `NPCs.js` writes a `portrait` word, `UISystem`'s `NPC_LOOK` turns it
+ * into a class id, and this table turned that class id into a plate — and each
+ * link in the chain had its own quiet default. `NPC_LOOK` knew eight of the
+ * twenty-two words the catalogue actually writes and sent the other fourteen
+ * to `ranger`; no class here was called `ranger`, so they landed on `rogue`.
+ * Chased end to end, forty-nine of sixty-eight catalogue NPCs were the same
+ * scarred mercenary: the necromancer, the seer, the royal, both cultists, the
+ * monk, the elder, the druid and all twenty-four townsfolk. Nothing threw and
+ * nothing looked broken, which is why it stood for so long.
+ *
+ * So there is one table, it holds every vocabulary at once — the nine base
+ * classes and their promotions, the catalogue's own words, and the trades the
+ * shops and taverns name — and an unrecognised word falls to `townsfolk`,
+ * which spreads across four faces rather than piling onto a ninth copy of one.
+ */
+const PLATE_ROLE = {
+  // The promotion ladder. A character's face is chosen at creation and never
+  // changes, so these only matter for stand-in parties and for anything that
+  // hands a bare class id straight to a portrait.
+  knight: 'knight', cavalier: 'knight', champion: 'knight', black_knight: 'knight',
+  paladin: 'paladin', crusader: 'paladin', hero: 'paladin', villain: 'paladin',
+  archer: 'archer', battle_mage: 'archer', warrior_mage: 'archer', master_archer: 'archer',
+  cleric: 'cleric', priest_of_light: 'priest', priest_of_dark: 'priest',
+  sorcerer: 'sorcerer', wizard: 'sorcerer', archmage: 'sorcerer',
+  // A lich is a necromancer who finished the work, and there is now a plate
+  // that says so; before this it shared the sorcerer's face.
+  lich: 'necromancer',
+  druid: 'druid', great_druid: 'druid', arch_druid: 'druid',
+  ranger: 'ranger', hunter: 'ranger', ranger_lord: 'ranger',
+  monk: 'monk', initiate: 'monk', master: 'monk',
+  thief: 'rogue', rogue: 'rogue', spy: 'rogue',
+
+  // The catalogue's twenty-two words. `priest` is both a promoted cleric and a
+  // temple priest; one plate serves both, which is why it is not spelled twice.
+  townsfolk: 'townsfolk', commoner: 'townsfolk', peasant: 'townsfolk',
+  // Named individually by anything that has already chosen — party creation
+  // offers the four as four separate faces, and a face a player picked must
+  // not then be re-picked by a hash.
+  townsfolk_a: 'townsfolk_a', townsfolk_b: 'townsfolk_b',
+  townsfolk_c: 'townsfolk_c', townsfolk_d: 'townsfolk_d',
+  scholar: 'scholar', sage: 'scholar', archivist: 'scholar',
+  mage: 'sorcerer', magister: 'sorcerer', adept: 'sorcerer',
+  necromancer: 'necromancer', seer: 'seer', cultist: 'cultist', priest: 'priest',
+  alchemist: 'alchemist', apothecary: 'alchemist', herbalist: 'alchemist',
+  smith: 'smith', forgemaster: 'smith', armourer: 'smith',
+  guard: 'guard', soldier: 'guard', serjeant: 'guard', sergeant: 'guard',
+  official: 'official', clerk: 'official', factor: 'official', banker: 'official',
+  merchant: 'official', trader: 'official', harbourmaster: 'official',
+  royal: 'royal', queen: 'royal', king: 'royal', prince: 'royal',
+  noble: 'noble', lady: 'noble', lord: 'noble',
+  elder: 'elder', crone: 'elder',
+};
+
+/** The word an unrecognised sitter gets. A stranger is somebody off the street. */
+const DEFAULT_PLATE_ROLE = 'townsfolk';
+
+/**
+ * Roles painted more than once, so that a crowd is a crowd.
+ *
+ * Twenty-four of the catalogue's sixty-eight are simply `townsfolk`, and one
+ * face for all of them is the single most visible symptom of the old chain.
+ * Which of the four a person gets is a hash of their id, never a roll: the
+ * same townsman must have the same face every time a screen opens, across a
+ * save and a reload and forever, or the world stops being a place.
+ */
+const PLATE_VARIANTS = {
+  townsfolk: ['townsfolk_a', 'townsfolk_b', 'townsfolk_c', 'townsfolk_d'],
+};
+
+/**
+ * Where a role goes when its own plate is not on disk.
+ *
+ * The art lands in batches, and a plate declared here but not yet packed would
+ * otherwise resolve to a URL that 404s — a CSS background that silently paints
+ * nothing, which is precisely the failure mode this file's `artUrl` comment
+ * warns about. Each step names the nearest face in spirit rather than a single
+ * catch-all, so a half-generated set degrades to a sensible portrait instead of
+ * back to the mercenary everybody was already wearing.
+ */
+const PLATE_NEAR = {
+  townsfolk_a: 'rogue', townsfolk_b: 'rogue', townsfolk_c: 'rogue', townsfolk_d: 'rogue',
+  guard: 'knight', smith: 'knight', royal: 'noble', noble: 'paladin',
+  official: 'scholar', scholar: 'sorcerer', necromancer: 'sorcerer',
+  alchemist: 'druid', seer: 'elder', cultist: 'priest', priest: 'cleric',
+  monk: 'cleric', ranger: 'archer', elder: 'cleric',
+};
+
+/** Plates whose female half was painted under a different word. */
+const FEMALE_PLATE_NAME = { sorcerer: 'sorceress' };
+
+/**
  * The generated portrait plates.
  *
  * `available` is a static list rather than a directory scan because the browser
@@ -4828,50 +4958,109 @@ const FIGURE_LOOK = {
  * Selection is deterministic — the same character always draws the same face,
  * which matters because a party whose portraits reshuffle between sessions
  * would be worse than no portraits at all.
+ *
+ * The list is also a claim about the filesystem, and a wrong claim used to be
+ * invisible: `has()` asks this Set, not the disk, so a name listed here and
+ * missing from `public/art/portraits/` handed back a dead URL and the frame
+ * painted empty. `_probe` closes that. The first time a plate is asked for, an
+ * `Image` is pointed at it — the same file the CSS is about to fetch, so it
+ * costs a cache hit — and if it fails the name is struck off, which sends every
+ * later resolution down the `PLATE_NEAR` ladder instead. Strike them all off
+ * and `pick` returns null, which is what finally makes the procedural painter
+ * below the fallback its own comment always claimed it was.
  */
 const PORTRAIT_PLATES = {
   base: 'art/portraits/',
   available: new Set([
+    // The original sixteen.
     'm-knight', 'm-paladin', 'm-archer', 'm-cleric', 'm-sorcerer',
     'm-druid', 'm-rogue', 'm-elder',
     'f-knight', 'f-paladin', 'f-archer', 'f-cleric', 'f-sorceress',
     'f-druid', 'f-rogue', 'f-elder',
+    // The seventeen roles the world was already writing and had no face for.
+    'm-townsfolk_a', 'm-townsfolk_b', 'm-townsfolk_c', 'm-townsfolk_d',
+    'm-guard', 'm-alchemist', 'm-royal', 'm-smith', 'm-scholar', 'm-official',
+    'm-monk', 'm-noble', 'm-necromancer', 'm-seer', 'm-cultist', 'm-priest', 'm-ranger',
+    'f-townsfolk_a', 'f-townsfolk_b', 'f-townsfolk_c', 'f-townsfolk_d',
+    'f-guard', 'f-alchemist', 'f-royal', 'f-smith', 'f-scholar', 'f-official',
+    'f-monk', 'f-noble', 'f-necromancer', 'f-seer', 'f-cultist', 'f-priest', 'f-ranger',
     'tombstone',
   ]),
 
   has(name) { return this.available.has(name); },
 
-  /** Which plate suits this character, by class first and then by build. */
-  pick(spec = {}) {
+  /**
+   * Confirm a plate is really there, once, and strike it off if it is not.
+   *
+   * Asynchronous by nature — the answer arrives a frame or two after the face
+   * has already been asked for, so the screen that asked first may show an
+   * empty frame until it next redraws. That is the honest bound: the alternative
+   * is holding every portrait back until fifty-one images have been round-tripped,
+   * which would put a blank party bar on the boot screen of a tree where the art
+   * is all present, i.e. every tree that ships.
+   */
+  _probe(name) {
+    this._probed ??= new Set();
+    if (this._probed.has(name)) return;
+    this._probed.add(name);
+    if (typeof Image !== 'function') return;
+    const img = new Image();
+    img.onerror = () => { this.available.delete(name); };
+    img.src = artUrl(`${this.base}${name}.jpg`);
+  },
+
+  /** Which of a role's faces this sitter wears, fixed by a hash of their key. */
+  variant(role, spec = {}) {
+    const faces = PLATE_VARIANTS[role];
+    if (!faces) return role;
+    const seed = String(spec.key ?? spec.classId ?? spec.plate ?? role);
+    return faces[hashSeed(`portrait:${role}:${seed}`) % faces.length];
+  },
+
+  /**
+   * The plate stem for a sitter — `m-knight`, `f-townsfolk_c` — or null.
+   *
+   * Separate from `pick` so tools can measure the spread without a document to
+   * resolve URLs against; `tools/facetest.mjs` walks every speaker in the game
+   * through this and counts what comes out.
+   */
+  name(spec = {}) {
     const sex = (spec.gender ?? spec.sex ?? 'm') === 'f' ? 'f' : 'm';
 
-    // Promoted classes share their base class's face.
-    const BASE = {
-      knight: 'knight', cavalier: 'knight', champion: 'knight', black_knight: 'knight',
-      paladin: 'paladin', crusader: 'paladin', hero: 'paladin', villain: 'paladin',
-      archer: 'archer', battle_mage: 'archer', warrior_mage: 'archer', master_archer: 'archer',
-      cleric: 'cleric', priest: 'cleric', priest_of_light: 'cleric', priest_of_dark: 'cleric',
-      sorcerer: 'sorcerer', wizard: 'sorcerer', archmage: 'sorcerer', lich: 'sorcerer',
-      druid: 'druid', great_druid: 'druid', arch_druid: 'druid',
-    };
     // An explicit plate wins outright. Without this the elder faces were
-    // unreachable: `pick` maps class to role, no class maps to `elder`, and
-    // two committed plates could never be chosen by anything.
-    if (spec.plate && this.has(spec.plate)) return artUrl(`${this.base}${spec.plate}.jpg`);
+    // unreachable: nothing maps a class to `elder`, so two committed plates
+    // could never be chosen by anything. It takes a full stem where the caller
+    // knows one and a bare role where it only knows the kind of person.
+    const asked = spec.plate ?? null;
+    if (asked && this.has(asked)) { this._probe(asked); return asked; }
 
-    const role = BASE[spec.classId] ?? 'rogue';
-    const want = sex === 'f' && role === 'sorcerer' ? 'f-sorceress' : `${sex}-${role}`;
+    const start = PLATE_ROLE[asked] ?? PLATE_ROLE[spec.classId] ?? DEFAULT_PLATE_ROLE;
 
-    if (this.has(want)) return artUrl(`${this.base}${want}.jpg`);
+    // Walk the near-face ladder until one of the steps is actually on disk.
+    const seen = new Set();
+    for (let role = start; role && !seen.has(role); role = PLATE_NEAR[role]) {
+      seen.add(role);
+      const stem = this.variant(role, spec);
+      const want = sex === 'f' && FEMALE_PLATE_NAME[stem] ? `f-${FEMALE_PLATE_NAME[stem]}` : `${sex}-${stem}`;
+      if (this.has(want)) { this._probe(want); return want; }
+    }
 
-    // No plate for that exact role: fall back within the same sex, chosen by a
-    // stable hash of the character's key so it never changes between sessions.
-    const pool = [...this.available].filter((n) => n.startsWith(`${sex}-`));
+    // Nothing on the ladder survived: spread over whatever is left for this
+    // sex, by a stable hash of the key so it still never changes between
+    // sessions. An empty pool means the art directory is absent entirely, and
+    // the caller falls through to the procedural painter.
+    const pool = [...this.available].filter((n) => n.startsWith(`${sex}-`)).sort();
     if (!pool.length) return null;
-    const seed = String(spec.key ?? spec.classId ?? 'x');
-    let hsh = 0;
-    for (let i = 0; i < seed.length; i++) hsh = (hsh * 31 + seed.charCodeAt(i)) >>> 0;
-    return artUrl(`${this.base}${pool[hsh % pool.length]}.jpg`);
+    const seed = String(spec.key ?? spec.classId ?? start);
+    const chosen = pool[hashSeed(`portrait:${seed}`) % pool.length];
+    this._probe(chosen);
+    return chosen;
+  },
+
+  /** Which plate suits this character, as a URL. */
+  pick(spec = {}) {
+    const name = this.name(spec);
+    return name ? artUrl(`${this.base}${name}.jpg`) : null;
   },
 };
 

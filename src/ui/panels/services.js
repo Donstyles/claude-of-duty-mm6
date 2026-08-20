@@ -4,6 +4,7 @@ import { el, setChildren, tooltip, tipMarkup, fmt, goldOval, labelRow, attribute
 import { icon } from '../Icons.js';
 import { enterLine } from './dialogue.js';
 import { TownServices } from '../../game/TownServices.js';
+import { hashSeed } from '../../core/RNG.js';
 
 /**
  * The three civic buildings: the counting house, the temple and the tavern.
@@ -45,14 +46,38 @@ const OFFICES = {
 };
 
 /**
- * The painted head that stands in for each kind of keeper.
+ * The painted heads that stand in for each kind of keeper.
  *
- * These are plate *roles*, not classes: the portrait set has one face per role,
- * and a clerk of the Ledger in a dark embroidered coat is the sorcerer plate
- * whatever it was drawn for. Three different roles so a clerk and an innkeeper
- * are never the same man.
+ * These are plate *roles*, not classes: a clerk of the Ledger in a dark
+ * embroidered coat is the `official` plate whatever it was drawn for.
+ *
+ * It used to be one role apiece — `{ bank: 'sorcerer', temple: 'cleric',
+ * tavern: 'rogue' }` — which was enough to keep a clerk and an innkeeper apart
+ * and nothing else. There are ten taverns in Caerwen and all ten had the same
+ * innkeeper, seven temples had two priests between them, and the taproom you
+ * sleep in is the room a player sees most often in the game. A list per
+ * building and a hash of the keeper's name fixes each house's face for the
+ * campaign without anybody having to author nineteen of them; `townsfolk`
+ * counts for four, because `UITextures` spreads it over four plates.
  */
-const KEEPER_LOOK = { bank: 'sorcerer', temple: 'cleric', tavern: 'rogue' };
+const KEEPER_LOOK = {
+  bank: ['official', 'scholar', 'noble'],
+  temple: ['cleric', 'priest', 'monk'],
+  tavern: ['townsfolk', 'rogue', 'official'],
+};
+
+/**
+ * Which of a building's faces this keeper wears — the same one every time.
+ *
+ * Exported so `tools/facetest.mjs` can count what the nineteen civic buildings
+ * actually resolve to rather than restating this table beside it; a gate that
+ * keeps its own copy of the thing it guards stops guarding it the day the two
+ * disagree.
+ */
+export function keeperLook(service, keeper) {
+  const pool = KEEPER_LOOK[service] ?? KEEPER_LOOK.tavern;
+  return pool[hashSeed(`keeper-face:${keeper ?? service}`) % pool.length];
+}
 
 /** Offices that are a page to read rather than a counter to lean on. */
 const TALL_PAGES = new Set(['ledger', 'hiring']);
@@ -84,10 +109,17 @@ export class ServicesPanel extends Panel {
     this._warm = [];
     for (const kind of ['bank', 'temple', 'tavern']) this._preload(`/art/interiors/${kind}.jpg`);
     // The keeper's face is a painted plate and arrives the same way, so warm
-    // the six that the three buildings can ask for.
-    for (const classId of Object.values(KEEPER_LOOK)) {
-      for (const gender of ['m', 'f']) {
-        this._preload(this.ui.textures?.portrait?.({ key: `svc-${classId}`, classId, gender }));
+    // every role the three buildings can ask for. There are more of them than
+    // there were — three roles became three short lists — but they are 256 px
+    // JPEGs and warming them is still cheaper than a frame with a hole in it.
+    // A tavern that lands on `townsfolk` warms one of that role's four plates
+    // rather than the one its own keeper will get, so that single house pays
+    // one decode on first open; every other building is covered exactly.
+    for (const pool of Object.values(KEEPER_LOOK)) {
+      for (const classId of pool) {
+        for (const gender of ['m', 'f']) {
+          this._preload(this.ui.textures?.portrait?.({ key: `svc-${classId}`, classId, gender }));
+        }
       }
     }
 
@@ -196,7 +228,7 @@ export class ServicesPanel extends Panel {
     const keeper = venue?.keeper ?? null;
     this.portraitEl.style.backgroundImage = `url("${T.portrait({
       key: keeper ?? venue?.name ?? 'house',
-      classId: KEEPER_LOOK[this.service] ?? 'rogue',
+      classId: keeperLook(this.service, keeper ?? venue?.name),
       gender: femaleName(keeper) ? 'f' : 'm',
     })}")`;
     this.portraitEl.classList.toggle('is-vacant', !keeper);

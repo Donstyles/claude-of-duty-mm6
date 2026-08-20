@@ -1089,7 +1089,8 @@ export class DialogueSystem extends System {
   _finish(base, rng) {
     const s = { ...base };
     s.manner = MANNERS[s.manner] ? s.manner : 'wry';
-    s.portraitSpec = portraitFor(s, rng);
+    // No `rng`: a face is a fact about a person, not a draw. See `portraitFor`.
+    s.portraitSpec = portraitFor(s);
     s.hire = this._hireOffer(s, rng);
     s.errand = this._errandFor(s, rng);
     s.rumours = this._rumoursFor(s);
@@ -2169,30 +2170,69 @@ function timeWord(hour) {
 /**
  * Which of the painted plates sits behind this person.
  *
- * The plates are cut by class, so a townsperson is mapped onto the class whose
- * portrait a person of that trade and age would most plausibly have sat for —
- * a bonesetter reads as a cleric, a scavenger as a rogue.
+ * A face is chosen from the trade first and the profession second, because a
+ * person of that trade is who sat for that plate: a bonesetter reads as a
+ * cleric, a scavenger as a rogue, an herb-wife as an apothecary. The plain
+ * working trades — netmender, cooper, thatcher, salt-boiler — read as nothing
+ * in particular, which is what the four townsfolk plates are for, and which
+ * one of the four a person gets is fixed by a hash of their key inside
+ * `UITextures`.
+ *
+ * Two things were wrong here and both were the same mistake in different
+ * clothes. Twelve of the twenty-seven trades had no entry at all and fell
+ * through to `rng.pick(['rogue','archer','druid','cleric'])` — an actual roll,
+ * from a stream that advances with every other thing the speaker generator
+ * asks of it, so a street sitter's face changed when the world was rebuilt in a
+ * different order. It is gone: nothing about a person's appearance may come
+ * from a die. And the roles it could choose from were the six classes that had
+ * plates, so even the twelve that *were* mapped were being asked to describe a
+ * sexton as a cleric because there was no priest.
+ *
+ * `age` is resolved here rather than at paint time. The dialogue panel used to
+ * swap an old sitter onto the elder plate by rewriting the filename, which
+ * only worked while every filename was `{m,f}-<word>.jpg`; the townsfolk
+ * plates carry a variant suffix and would have slipped past it. Deciding the
+ * role here keeps one rule in one place and leaves that rewrite an idempotent
+ * no-op.
  */
-function portraitFor(s, rng) {
+export function portraitFor(s) {
   const TRADE_LOOK = {
-    bonesetter: 'cleric', herbwife: 'druid', sexton: 'cleric', scrivener: 'sorcerer',
-    oldsoldier: 'knight', ratter: 'rogue', scavenger: 'rogue', fisher: 'archer',
-    eeler: 'archer', shepherd: 'archer', charcoal: 'druid', beekeeper: 'druid',
-    housekeeper: 'cleric', furrier: 'rogue', slagpicker: 'knight',
+    // The trades that read as somebody in particular.
+    bonesetter: 'cleric', sexton: 'priest', herbwife: 'alchemist', scrivener: 'scholar',
+    oldsoldier: 'guard', ratter: 'rogue', scavenger: 'rogue', furrier: 'rogue',
+    slagpicker: 'smith', charcoal: 'druid', beekeeper: 'druid', shepherd: 'ranger',
+    // And the ones that read as a neighbour, which is most of a street.
+    netmender: 'townsfolk', fisher: 'townsfolk', cooper: 'townsfolk',
+    thatcher: 'townsfolk', woolcomber: 'townsfolk', chandler: 'townsfolk',
+    carter: 'townsfolk', peatcutter: 'townsfolk', eeler: 'townsfolk',
+    sawyer: 'townsfolk', saltboiler: 'townsfolk', ropemaker: 'townsfolk',
+    cordwainer: 'townsfolk', bonecarver: 'townsfolk', housekeeper: 'townsfolk',
   };
   const PROF_LOOK = [
-    [/priest|prior|sister|brother|abbot|chapl/i, 'cleric'],
-    [/magister|adept|warden|archiv|apothec|alchem/i, 'sorcerer'],
-    [/marshal|serjeant|master-at-arms|huscarl|knight|smith|forge/i, 'knight'],
-    [/factor|clerk|harbourmaster|driver|trader|ferrier/i, 'rogue'],
-    [/keeper|ranger|hunt/i, 'archer'],
+    [/necroman|unlisted/i, 'necromancer'],
+    [/seer|oracle|cantor|augur/i, 'seer'],
+    [/priest|prior|sister|brother|abbot|chapl|sexton|beadsm/i, 'priest'],
+    [/monk|initiate|ascetic/i, 'monk'],
+    [/magister|adept|archiv|scholar|scribe|warden|librar/i, 'scholar'],
+    [/apothec|alchem|herb|distill/i, 'alchemist'],
+    [/smith|forge|farrier|founder/i, 'smith'],
+    [/marshal|serjeant|sergeant|master-at-arms|huscarl|guard|watch|gate/i, 'guard'],
+    [/knight|paladin|champion/i, 'knight'],
+    [/king|queen|prince|princess|crown/i, 'royal'],
+    [/lady|lord|noble|baron/i, 'noble'],
+    [/factor|clerk|harbourmaster|banker|reeve|trader|merchant|purser/i, 'official'],
+    [/ranger|hunt|forester|verderer|keeper/i, 'ranger'],
+    [/crone|elder|greybeard/i, 'elder'],
   ];
   let classId = s.trade ? TRADE_LOOK[s.trade] : null;
   if (!classId) {
     for (const [re, id] of PROF_LOOK) if (re.test(s.profession ?? '')) { classId = id; break; }
   }
-  if (!classId) classId = rng.pick(['rogue', 'archer', 'druid', 'cleric']);
-  return { key: s.key, classId, gender: s.sex ?? 'm', age: s.age ?? 'adult' };
+  const age = s.age ?? 'adult';
+  // An old face outranks the trade, because that is what the eye reads first.
+  if (age === 'older' || age === 'ancient') classId = 'elder';
+  if (!classId) classId = 'townsfolk';
+  return { key: s.key, classId, gender: s.sex ?? 'm', age };
 }
 
 /**

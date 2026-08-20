@@ -30,6 +30,7 @@
  */
 
 import { System } from '../core/Engine.js';
+import { hashSeed } from '../core/RNG.js';
 import {
   SKILLS, MAGIC_SCHOOL_IDS, MASTERY_ORDER, MASTERY_LABEL,
   MASTERY_TRAINING_COST, MASTERY_SKILL_REQUIREMENT, MASTERY_SPELL_CAP,
@@ -281,7 +282,22 @@ const GUILD_RULES = {
   },
 };
 
-/** Which painted plate stands in for a keeper of each guild. */
+/**
+ * Which painted plate stands in for a keeper of each guild.
+ *
+ * `face` is the order's own identity, used when a screen is opened without a
+ * venue and there is no keeper to read. `faces` is the list a hall picks from,
+ * and it exists because eleven orders keep twenty-two halls: the Warden at
+ * Millhaven and the Warden at Emberhold were the same painted head, and a
+ * player who joins an order in one town and walks into its chapter house in
+ * another was meant to notice they are different buildings, not the same room
+ * twice. Which face a hall gets is a hash of its keeper's name — the keeper is
+ * authored in `Venues.js` and never changes, so neither does the face.
+ *
+ * The lists say what an order's masters look like rather than what they cast:
+ * the Long Shadow keeps necromancers, the Deep Stone keeps people who look
+ * like the mountain they study, and the Ledger keeps clerks.
+ */
 const GUILD_FACE = {
   guild_ember: ['knight', 'm'],
   guild_gale: ['elder', 'f'],
@@ -296,6 +312,35 @@ const GUILD_FACE = {
   the_ledger: ['rogue', 'f'],
 };
 
+/** The list each order's halls draw from — see `GUILD_FACE` above. */
+const GUILD_FACES = {
+  guild_ember: ['sorcerer', 'smith', 'alchemist'],
+  guild_gale: ['elder', 'seer', 'sorcerer'],
+  guild_tide: ['archer', 'druid', 'seer'],
+  guild_deepstone: ['elder', 'smith', 'druid'],
+  guild_quiethall: ['cleric', 'monk', 'priest'],
+  guild_openeye: ['sorcerer', 'seer', 'scholar'],
+  guild_steadyhand: ['druid', 'alchemist', 'cleric'],
+  guild_dawnbell: ['cleric', 'priest', 'paladin'],
+  guild_longshadow: ['necromancer', 'sorcerer', 'cultist'],
+  sword_chapter: ['paladin', 'knight', 'guard'],
+  the_ledger: ['official', 'scholar', 'noble'],
+};
+
+/**
+ * The yards. Five training halls all took the knight, which made the
+ * drillmaster at Duskorn the drillmaster at Millhaven; a yard is one of the
+ * few rooms in a town with exactly one person in it, so that face is the whole
+ * of the building's character.
+ */
+const TRAINER_FACES = ['guard', 'knight', 'paladin', 'monk', 'smith'];
+
+/** One of a list, fixed forever by a hash of the name over the door. */
+function faceFrom(pool, key, fallback) {
+  if (!pool?.length) return fallback;
+  return pool[hashSeed(`guild-face:${key ?? fallback}`) % pool.length];
+}
+
 /** The guild orders, rules merged onto the identities Venues.js publishes. */
 const orders = {};
 for (const [id, order] of Object.entries(GUILD_ORDERS)) {
@@ -307,6 +352,7 @@ for (const [id, order] of Object.entries(GUILD_ORDERS)) {
     skills: rules.skills ?? [],
     join: rules.join ?? {},
     face: GUILD_FACE[id] ?? ['elder', 'm'],
+    faces: GUILD_FACES[id] ?? [GUILD_FACE[id]?.[0] ?? 'elder'],
   };
 }
 
@@ -460,9 +506,15 @@ export class GuildSystem extends System {
       spellStock: order.school
         ? spellsForSchool(order.school).filter((s) => s.level <= maxSpellLevel).map((s) => s.id)
         : [],
-      // The plate is chosen by the order's own look but sexed by whoever
-      // Venues.js actually put behind this counter.
-      portrait: { key: venue?.keeper ?? order.id, classId: order.face[0], gender: guessSex(venue?.keeper) ?? order.face[1] },
+      // The plate is drawn from the order's own list and sexed by whoever
+      // Venues.js actually put behind this counter. Reading only `face[0]`
+      // gave every hall of an order the same head; the keeper's name is what
+      // separates them, and it is authored, so the face is stable.
+      portrait: {
+        key: venue?.keeper ?? order.id,
+        classId: faceFrom(order.faces, venue?.keeper ?? order.id, order.face[0]),
+        gender: guessSex(venue?.keeper) ?? order.face[1],
+      },
     };
   }
 
@@ -503,7 +555,11 @@ export class GuildSystem extends System {
       tier,
       maxLevel: TIER_LEVEL_CAP[tier] ?? 10,
       priceMult: tierPrice(tier),
-      portrait: { key: venue.keeper ?? venue.id, classId: 'knight', gender: guessSex(venue.keeper) },
+      portrait: {
+        key: venue.keeper ?? venue.id,
+        classId: faceFrom(TRAINER_FACES, venue.keeper ?? venue.id, 'guard'),
+        gender: guessSex(venue.keeper),
+      },
     };
   }
 

@@ -16,6 +16,7 @@
 import './ui.panels.css';
 
 import { System } from '../core/Engine.js';
+import { hashSeed } from '../core/RNG.js';
 import { UITextures } from './UITextures.js';
 import { HUD } from './HUD.js';
 import { PANEL_CLASSES, itemFootprint } from './Panel.js';
@@ -1705,8 +1706,12 @@ export class UISystem extends System {
       services,
       portraitSpec: {
         key: src.id,
-        classId: NPC_LOOK[src.portrait] ?? 'ranger',
-        gender: /a$|ess$|women|lady|priestess|madame/i.test(src.name) ? 'f' : 'm',
+        // The word is passed through where this map has nothing to say about
+        // it, rather than defaulted — see `NPC_LOOK`. The key is the NPC's id
+        // because the four townsfolk faces are spread by a hash of it, and the
+        // same townsman has to keep his face across a save.
+        classId: NPC_LOOK[src.portrait] ?? src.portrait ?? 'townsfolk',
+        gender: npcSex(src.name),
       },
     };
   }
@@ -1948,10 +1953,74 @@ const PIN_LABELS = {
   foe: '', npc: '', loot: '', door: '', town: 'Town', dungeon: 'Ruin', shrine: 'Shrine',
 };
 
-const NPC_LOOK = {
-  noble: 'knight', guard: 'knight', priest: 'cleric', mage: 'sorcerer',
-  merchant: 'thief', townsfolk: 'ranger', smith: 'knight', scholar: 'sorcerer',
+/**
+ * The catalogue's word for a face, translated to the word the plates use.
+ *
+ * `NPCs.js` writes twenty-two distinct `portrait` values. This map knew eight
+ * of them and sent the other fourteen to `ranger` — which was not a plate
+ * either, so `UITextures` fell those through to `rogue`. Measured against the
+ * real table that put forty-nine of the sixty-eight catalogue NPCs on one
+ * scarred mercenary: the necromancer, the seer, the royal, both cultists, the
+ * monk, the elder, the druid and every one of the twenty-four townsfolk. The
+ * failure was silent at every step, because each link's default was a word the
+ * next link had never heard of.
+ *
+ * All twenty-two are spelled out now, even where the translation is the
+ * identity, because this map is the list of what the world is allowed to ask
+ * for and a reader should be able to check it against `NPCs.js` without
+ * following the chain any further. A word that is not here is passed through
+ * untouched rather than defaulted, so `UITextures.PLATE_ROLE` — which knows
+ * synonyms this does not — gets a chance at it before anything gives up.
+ */
+export const NPC_LOOK = {
+  townsfolk: 'townsfolk', scholar: 'scholar', cleric: 'cleric', mage: 'sorcerer',
+  alchemist: 'alchemist', smith: 'smith', knight: 'knight', priest: 'priest',
+  official: 'official', cultist: 'cultist', guard: 'guard', royal: 'royal',
+  paladin: 'paladin', archer: 'archer', thief: 'rogue', ranger: 'ranger',
+  druid: 'druid', monk: 'monk', elder: 'elder', noble: 'noble',
+  necromancer: 'necromancer', seer: 'seer',
 };
+
+/** The honorifics Caerwen uses, and the ones that say nothing either way. */
+const SHE_TITLE = /^(sister|madame|goodwife|widow|marsh-wife|bellows-wife|lady|dame|mother|queen)$/i;
+const HE_TITLE = /^(brother|master|father|prior|serjeant|sergeant|lord|sir|huscarl|herald|smith|forge-master|skald|driver|sexton|king)$/i;
+const NEUTRAL_TITLE = /^(adept|warden|warden-in-exile|magister|harbourmaster|marshal|captain|the|old|young|bad|pale)$/i;
+
+/**
+ * Which plate's sex a catalogue name asks for.
+ *
+ * `NPCs.js` records no sex, so this is a guess, and the guess it replaces was
+ * `/a$|ess$|women|lady|priestess|madame/` against the *whole* name — which
+ * matched two of sixty-eight. Sister Elin, Goodwife Perrin, Widow Ansel, Alys
+ * Bracken and Hedda Lune all drew a bearded plate, and half the portrait set
+ * was unreachable from the catalogue entirely. Thirty-two of the sixty-eight
+ * come out female now.
+ *
+ * The rule is the one `ShopSystem` already applies to keepers, so the two seams
+ * agree: an honorific decides where there is one, the ending of the given name
+ * decides where the register is clear, and a stable hash of the whole name
+ * decides the rest — never a roll, because a face that changes when the screen
+ * reopens is worse than a face that is occasionally wrong. It will be
+ * occasionally wrong; these are invented names and there is no dictionary to
+ * appeal to. The cure is a `sex` field in `NPCs.js`, which is that file's to
+ * add and this function's to prefer the day it exists.
+ */
+export function npcSex(name) {
+  const n = String(name ?? '').trim();
+  for (const word of n.split(/\s+/)) {
+    if (SHE_TITLE.test(word)) return 'f';
+    if (HE_TITLE.test(word)) return 'm';
+    // A title that says nothing about the person is stepped over rather than
+    // read as a name. `Adept Yorwin` and `Warden-in-Exile Coll` both used to be
+    // decided on the word "Adept", which is how a roster of sixty-eight
+    // produced two women.
+    if (NEUTRAL_TITLE.test(word)) continue;
+    if (/(win|olf|ulk|egg|esk|esh|uun|olm|ain)$/i.test(word)) return 'm';
+    if (/(a|ie|ine|elle|wen|ys|eau|de|ve|ny|gan|sin|lin)$/i.test(word)) return 'f';
+    break;
+  }
+  return hashSeed(`npc-sex:${n}`) % 2 ? 'f' : 'm';
+}
 
 /** Run `fn`, returning `fallback` if it throws or returns undefined. */
 function safe(fn, fallback) {
