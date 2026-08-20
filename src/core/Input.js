@@ -22,9 +22,18 @@ export const DEFAULT_BINDINGS = {
   turnRight: ['ArrowRight'],
   jump: ['Space'],
   run: ['ShiftLeft', 'ShiftRight'],
+  autoRun: ['NumpadDivide', 'Slash'],
   sneak: ['ControlLeft'],
-  interact: ['KeyE', 'Enter'],
-  attack: ['KeyA'],
+  // `Enter` is MM6's turn-based toggle and CombatSystem hard-binds it as such
+  // at init. It used to sit on `interact` as well, so pressing Enter at a
+  // tavern door opened the venue *and* dropped the party into turn-based
+  // combat — one key, two systems, both of them answering.
+  interact: ['KeyE'],
+  // Not `KeyA`: that is `strafeLeft`, and `action()` does not care that two
+  // entries want the same code. Every sidestep to the left swung the party's
+  // weapon. `KeyF` is the nearest free key; the left mouse button, which
+  // CombatSystem reads directly, is still the primary.
+  attack: ['KeyF'],
   turnBased: ['KeyR', 'Enter'],
   rest: ['KeyX'],
   quickCast: ['KeyC'],
@@ -68,6 +77,19 @@ export class Input {
 
     /** When true, gameplay actions are suppressed (a modal UI owns the keyboard). */
     this.uiCaptured = false;
+    /**
+     * Auto-run latch. MM6 walks at a jog and runs on Shift, and a player
+     * crossing a region holds Shift for two solid minutes; a toggle is what the
+     * genre has always offered instead. Folded into `action('run')` rather than
+     * read anywhere else, so the thumbstick's rim-push and the key agree.
+     */
+    this.autoRun = false;
+    /**
+     * Multiplier on the look delta, for a sensitivity slider. Applied here
+     * rather than in PlayerSystem so mouse and touch scale together and the
+     * radians-per-pixel constant downstream stays the one conversion.
+     */
+    this.lookSensitivity = 1;
     /** Set by the capture harness to drive input deterministically. */
     this.scripted = null;
 
@@ -177,10 +199,45 @@ export class Input {
     if (document.pointerLockElement) document.exitPointerLock();
   }
 
+  /**
+   * Rebind an action. Codes are `KeyboardEvent.code` strings.
+   *
+   * Any code this action takes is removed from every other action first. Two
+   * actions sharing a code is not a configuration, it is the bug that had
+   * `strafeLeft` and `attack` both on `KeyA` — `action()` answers for whichever
+   * asks, so both fire and neither is wrong.
+   */
+  setBinding(name, codes) {
+    if (!name || !(name in this.bindings)) return false;
+    const next = (Array.isArray(codes) ? codes : [codes]).filter(Boolean);
+    for (const [other, list] of Object.entries(this.bindings)) {
+      if (other === name) continue;
+      const kept = list.filter((c) => !next.includes(c));
+      if (kept.length !== list.length) this.bindings[other] = kept;
+    }
+    this.bindings[name] = next;
+    return true;
+  }
+
+  /** Which action owns `code` right now, or null. */
+  bindingFor(code) {
+    for (const [name, list] of Object.entries(this.bindings)) {
+      if (list.includes(code)) return name;
+    }
+    return null;
+  }
+
+  resetBindings() {
+    this.bindings = structuredClone(DEFAULT_BINDINGS);
+  }
+
   /** Is any key bound to `action` held right now? */
   action(name) {
     if (this.uiCaptured && !UI_SAFE_ACTIONS.has(name)) return false;
     if (this.scripted) return !!this.scripted.held?.[name];
+    // Auto-run answers before anything else looks at a key: a latched run is
+    // still a run whether or not a thumb or a Shift is on the way in.
+    if (name === 'run' && this.autoRun) return true;
     // The thumbstick answers `forward`, `back`, `strafeLeft`, `strafeRight`
     // and `run`. It is folded in here rather than only into `axis()` because
     // `axis()` has no callers: PlayerSystem reads `action()` for each of the
@@ -241,6 +298,15 @@ export class Input {
 
   /** Consume per-frame state. Call once at the very end of each frame. */
   endFrame() {
+    if (!this.uiCaptured && !this.scripted) {
+      for (const c of this.bindings.autoRun ?? []) {
+        if (this.pressed.has(c)) { this.autoRun = !this.autoRun; break; }
+      }
+      // Sneaking cancels it. Creeping up on a guard with the run latch still
+      // held is never what the player meant, and a latch you cannot see is a
+      // latch you forget you set.
+      if (this.autoRun && this.action('sneak')) this.autoRun = false;
+    }
     this.pressed.clear();
     this.released.clear();
     this.mouse.pressedButtons.clear();
@@ -268,10 +334,14 @@ export class Input {
    * downstream stays the single place the conversion to radians happens.
    */
   lookDelta() {
+    // The capture harness drives raw pixels and must not be re-scaled — a
+    // sensitivity slider that moved the screenshots would be a regression
+    // dressed as a setting.
     if (this.scripted) return this.scripted.look ?? { dx: 0, dy: 0 };
+    const s = this.lookSensitivity;
     const t = this.touch?.look;
-    if (!t) return { dx: this.mouse.dx, dy: this.mouse.dy };
-    return { dx: this.mouse.dx + t.dx, dy: this.mouse.dy + t.dy };
+    if (!t) return { dx: this.mouse.dx * s, dy: this.mouse.dy * s };
+    return { dx: (this.mouse.dx + t.dx) * s, dy: (this.mouse.dy + t.dy) * s };
   }
 
   dispose() {
