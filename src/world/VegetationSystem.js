@@ -79,6 +79,135 @@ const GRASS_PER_TILE = 34;         // clusters attempted per tile at ultra
 const GRASS_BLADES = 7;            // blades per cluster
 const GRASS_FADE = 7;              // metres of soft edge at the streaming rim
 
+/* ──────────────────────────── understory ───────────────────────────────── */
+
+/**
+ * Everything that grows below knee height and is *not* grass.
+ *
+ * Grass answers to one test — `biomeAt() === 'grass'` — which meant nineteen of
+ * the twenty regions had literally nothing on the ground between the trees. A
+ * fen with no reeds in it is a lake with a brown texture; a waste with no scrub
+ * is a car park. The region character the ground and the treelines already read
+ * (`Regions.js` biome mixes, differenced against the downs exactly as
+ * `TerrainSystem._buildRegionTexture` does) picks the mix here too, so the
+ * reeds stop where the fen stops rather than at a rectangle.
+ *
+ * **The budget, stated before the geometry.** Five kinds, one material, one
+ * instanced mesh apiece: five draw calls in the worst region and two in a
+ * typical one, because a mesh whose count is zero is never submitted. The
+ * streaming disc is 26 m — a third further than grass, since a reed bed reads
+ * as a bed only if you can see across it — and holds at most 564 clusters at
+ * `high`. At 30 triangles for the heaviest cluster that is **16.9 k triangles
+ * worst case**, against 57.6 k already spent on grass inside 17 m. The cost is
+ * bounded by the disc, not by the world: walking from the downs into the
+ * Gallowfen cannot make it grow.
+ */
+const UNDERSTORY_TILE = 8;         // metres per streaming tile
+const UNDERSTORY_RADIUS = 26;      // metres, at ultra
+const UNDERSTORY_PER_TILE = 20;    // clusters attempted per tile at ultra
+const UNDERSTORY_FADE = 9;         // metres of soft edge at the streaming rim
+
+/**
+ * One entry per kind. `stems × (2·(segs−1) + 1)` is the triangle count, which
+ * is the number that has to stay small: 30, 25, 21, 18 and 24 respectively.
+ *
+ * `lean` splays the stems away from vertical, `arch` bends them over along
+ * their length, and `radial` spaces them evenly around the cluster instead of
+ * at random azimuths — which is the difference between a cactus and a bush.
+ */
+export const UNDERSTORY_KINDS = {
+  // Tall, near-vertical, almost no leaf: a reed is a line, not a blade.
+  reed: {
+    stems: 6, segs: 3, height: [0.85, 1.6], width: [0.030, 0.055],
+    spread: 0.22, lean: 0.12, arch: 0.34, flutter: 0.62, radial: false,
+    tint: [0.74, 0.78, 0.50], scale: [0.80, 1.35],
+  },
+  // Low and wide, arching hard: a fern is a rosette seen from above.
+  fern: {
+    stems: 5, segs: 3, height: [0.36, 0.66], width: [0.17, 0.30],
+    spread: 0.13, lean: 0.74, arch: 0.95, flutter: 0.40, radial: true,
+    tint: [0.42, 0.62, 0.34], scale: [0.85, 1.30],
+  },
+  // A mat, not a plant. Heather reads as colour on the ground at 20 m.
+  heather: {
+    stems: 7, segs: 2, height: [0.16, 0.30], width: [0.055, 0.10],
+    spread: 0.26, lean: 0.46, arch: 0.30, flutter: 0.22, radial: false,
+    tint: [0.60, 0.50, 0.56], scale: [0.85, 1.40],
+  },
+  // Woody, stiff, half-dead: the plant that survives where nothing else does.
+  scrub: {
+    stems: 6, segs: 2, height: [0.45, 0.95], width: [0.06, 0.13],
+    spread: 0.30, lean: 0.90, arch: 0.18, flutter: 0.12, radial: false,
+    tint: [0.72, 0.64, 0.42], scale: [0.80, 1.45],
+  },
+  // Eight ribs on a ring read as a fluted column, which is what a cactus is.
+  cactus: {
+    stems: 8, segs: 2, height: [0.95, 1.9], width: [0.10, 0.15],
+    spread: 0.13, lean: 0.06, arch: 0.05, flutter: 0.0, radial: true,
+    tint: [0.40, 0.58, 0.36], scale: [0.75, 1.30],
+  },
+};
+
+/**
+ * Regions where the answer is nothing, and canon says so in as many words.
+ * The Sunder has a glass floor and "nothing grows"; Ossra Deep is under it.
+ * Both would otherwise score high on the bare term and grow a fine crop of
+ * desert scrub across the one place in the world that must stay sterile.
+ */
+const BARREN_REGIONS = new Set(['the_sunder', 'ossra_deep']);
+
+/**
+ * What a region's biome mix means for the ground cover, as five weights.
+ *
+ * Every term is a *difference against the Millhaven Downs*, for the same reason
+ * the ground's own character map is: the downs carry the capture viewpoints and
+ * every settled grade measurement in `STYLE.md`, so differencing them out makes
+ * this function return zero there and leaves the measured frames untouched. It
+ * only ever adds cover to the nineteen regions that had none.
+ *
+ * Exported because it is the only honest way to count the cost per region
+ * without a renderer: `tools/` can call it with each region's mix and multiply
+ * by the streaming disc.
+ *
+ * @param {object} m    a region's `biomes` mix
+ * @param {object} ref  the downs' own terms, from `understoryReference()`
+ */
+export function understoryMix(m, ref) {
+  const wet = (m.swamp ?? 0) + (m.water ?? 0) * 0.5;
+  const arid = (m.sand ?? 0) + (m.rock ?? 0) * 0.4;
+  const verd = (m.forest ?? 0) + (m.grass ?? 0) * 0.5;
+  const dry = Math.max(0, 1 - Math.min(1, wet * 1.6));
+
+  const w = {
+    // Standing water, and the reed bed that always follows it.
+    reed: Math.max(0, wet - ref.wet) * 3.4,
+    // Closed canopy. The local test asks for an actual tree overhead as well.
+    fern: Math.max(0, (m.forest ?? 0) - ref.forest) * 3.0,
+    // Peat and heath: a real dirt share, and not if it is under water.
+    heather: Math.max(0, (m.dirt ?? 0) - 0.22) * 3.6 * dry,
+    // Two ways to be scrub country — sun-bleached, or simply bare of cover.
+    scrub: (Math.max(0, arid - ref.arid) * 2.2 + Math.max(0, ref.verd - verd) * 1.8) * dry,
+    // Desert only. Gated on sand outright, because a basalt shaft is 62% rock
+    // and would otherwise clear an aridity bar on its way to growing a saguaro.
+    cactus: Math.max(0, (m.sand ?? 0) - 0.30) * 2.0,
+  };
+  // Nothing puts out a frond under a snowfield.
+  const snow = Math.max(0, 1 - Math.min(1, (m.snow ?? 0) * 2.2));
+  for (const k of Object.keys(w)) w[k] *= snow;
+  return w;
+}
+
+/** The neutral the mix is measured against — read off the downs, not written. */
+export function understoryReference(worldSize = WORLD_SIZE) {
+  const m = regionAt(-worldSize * 0.375, worldSize * 0.375, worldSize)?.biomes ?? {};
+  return {
+    wet: (m.swamp ?? 0) + (m.water ?? 0) * 0.5,
+    arid: (m.sand ?? 0) + (m.rock ?? 0) * 0.4,
+    verd: (m.forest ?? 0) + (m.grass ?? 0) * 0.5,
+    forest: m.forest ?? 0,
+  };
+}
+
 /** Keep-out radii around named places so nothing grows through a building. */
 /**
  * The market square, kept clear of deliberate planting. Wide enough that the
@@ -123,6 +252,7 @@ export class VegetationSystem extends System {
     this._imposter = null;
     this._imposterTarget = null;
     this._grass = null;
+    this._under = null;
     this._copses = [];
     this._ready = false;
 
@@ -163,6 +293,7 @@ export class VegetationSystem extends System {
     this._bakeImposters(ctx);
     this._buildInstances(ctx);
     this._buildGrass(ctx, lib, terrain, q);
+    this._buildUnderstory(ctx, lib, terrain, q);
 
     this._registerShots(ctx, terrain);
     this._ready = true;
@@ -999,6 +1130,279 @@ export class VegetationSystem extends System {
     };
   }
 
+  /* ─────────────────────────── understory ─────────────────────────────── */
+
+  /**
+   * One cluster of one kind, built from the same tapered ribbon as a grass
+   * blade so the wind moves all of it with one shader. `spec.segs` ribs of
+   * `spec.stems` strands, which is the whole triangle bill: nothing here has a
+   * second LOD because nothing here is visible past 26 m.
+   */
+  _understoryGeometry(rng, spec) {
+    const pos = [], nrm = [], uv = [], col = [], wind = [], idx = [];
+    const up = new THREE.Vector3(0, 1, 0);
+    const segs = spec.segs;
+
+    for (let b = 0; b < spec.stems; b++) {
+      const a = spec.radial
+        ? (b / spec.stems) * Math.PI * 2 + 0.31
+        : rng.range(0, Math.PI * 2);
+      const rad = Math.sqrt(rng.next()) * spec.spread;
+      const ox = Math.cos(a) * rad, oz = Math.sin(a) * rad;
+      const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      const h = rng.range(spec.height[0], spec.height[1]);
+      const w = rng.range(spec.width[0], spec.width[1]);
+      // `lean` throws the stem outward, `arch` bends it over as it climbs.
+      const outward = spec.lean * rng.range(0.7, 1.3);
+      const bendAmt = spec.arch * rng.range(0.75, 1.25);
+      const phase = rng.range(0, Math.PI * 2);
+      const side = new THREE.Vector3().crossVectors(dir, up).normalize();
+      const face = new THREE.Vector3().crossVectors(side, up).normalize();
+      // Same argument as the grass blade: normals lean hard toward up, because
+      // a near-vertical surface shaded off its own face goes black and MM6's
+      // ground cover never does.
+      const n = face.clone().multiplyScalar(0.36).addScaledVector(up, 0.93).normalize();
+
+      const base = pos.length / 3;
+      for (let s = 0; s <= segs; s++) {
+        const t = s / segs;
+        const out = (Math.pow(t, 1.4) * bendAmt + t * outward) * h;
+        const y = h * t * (1 - 0.20 * t * t * outward);
+        const hw = (w * (1 - t * 0.82)) * 0.5;
+        const shade = 0.86 + 0.40 * t;
+        const sway = Math.pow(t, 1.4);
+        if (s < segs) {
+          for (const sgn of [-1, 1]) {
+            pos.push(ox + dir.x * out + side.x * hw * sgn,
+              y,
+              oz + dir.z * out + side.z * hw * sgn);
+            nrm.push(n.x, n.y, n.z);
+            uv.push(sgn > 0 ? 1 : 0, t);
+            col.push(spec.tint[0] * shade, spec.tint[1] * shade, spec.tint[2] * shade);
+            wind.push(sway, phase, spec.flutter);
+          }
+        } else {
+          pos.push(ox + dir.x * out, y, oz + dir.z * out);
+          nrm.push(n.x, n.y, n.z);
+          uv.push(0.5, 1);
+          col.push(spec.tint[0] * shade, spec.tint[1] * shade, spec.tint[2] * shade);
+          wind.push(sway, phase, spec.flutter);
+        }
+      }
+      for (let s = 0; s < segs - 1; s++) {
+        const a0 = base + s * 2, a1 = a0 + 1, b0 = a0 + 2, b1 = a0 + 3;
+        idx.push(a0, b0, b1, a0, b1, a1);
+      }
+      const last = base + (segs - 1) * 2;
+      idx.push(last, base + segs * 2, last + 1);
+    }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geom.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+    geom.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geom.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geom.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 3));
+    geom.setIndex(idx);
+    geom.computeBoundingSphere();
+    return geom;
+  }
+
+  _buildUnderstory(ctx, lib, terrain, q) {
+    if (!q.grass) return;
+    const tex = lib.getTextures('dry-grass');
+    if (!tex?.map) return;
+
+    const radius = Math.min(UNDERSTORY_RADIUS, q.grassRadius * 1.55);
+    const perTile = Math.max(4, Math.round(UNDERSTORY_PER_TILE * q.grass));
+    // The true worst case is the disc, not the tile square the loop walks:
+    // every candidate past `radius` is dropped before it is written.
+    const cap = Math.ceil((Math.PI * radius * radius / (UNDERSTORY_TILE ** 2)) * perTile) + 16;
+
+    // One material for all five kinds. The tints are baked into vertex colour,
+    // so a reed and a cactus differ without costing a second shader program —
+    // and the whole layer is five draw calls at absolute worst.
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex.map,
+      normalMap: tex.normalMap ?? null,
+      color: 0xffffff,
+      roughness: 0.96,
+      metalness: 0.0,
+      vertexColors: true,
+      side: THREE.DoubleSide,
+    });
+    mat.name = 'mat:veg-understory';
+    patchFoliageMaterial(mat, { tipLight: 0.14 });
+    this._materials.push(mat);
+
+    const rng = ctx.rng.fork('veg-understory');
+    const kinds = [];
+    for (const [name, spec] of Object.entries(UNDERSTORY_KINDS)) {
+      const geom = this._understoryGeometry(rng, spec);
+      const mesh = new THREE.InstancedMesh(geom, mat, cap);
+      mesh.name = `veg:under-${name}`;
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+      mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+      const fade = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
+      const phase = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
+      fade.setUsage(THREE.DynamicDrawUsage);
+      phase.setUsage(THREE.DynamicDrawUsage);
+      geom.setAttribute('aFade', fade);
+      geom.setAttribute('aPhase', phase);
+      mesh.count = 0;
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      this.group.add(mesh);
+      kinds.push({ name, spec, mesh, fade, phase, geom, count: 0 });
+    }
+
+    this._under = {
+      kinds, radius, perTile, cap, terrain,
+      seed: ctx.state?.seed ?? 0,
+      ref: understoryReference(terrain.worldSize),
+      mixCache: new Map(),
+      tile: { x: 1e9, z: 1e9 },
+    };
+  }
+
+  /** The five weights where the camera stands, cached per region record. */
+  _understoryMix(x, z) {
+    const u = this._under;
+    const region = regionAt(x, z, this._worldSize ?? WORLD_SIZE);
+    if (!region || BARREN_REGIONS.has(region.id)) return null;
+    let mix = u.mixCache.get(region.id);
+    if (!mix) {
+      const w = understoryMix(region.biomes, u.ref);
+      // Names come from the kind table, not from the mix, so the two cannot
+      // drift into a weight for a plant no mesh was ever built for.
+      const names = Object.keys(UNDERSTORY_KINDS).filter((n) => w[n] > 0);
+      const total = names.reduce((a, n) => a + w[n], 0);
+      mix = total > 0.02 ? { names, weights: w, total } : null;
+      u.mixCache.set(region.id, mix ?? false);
+    }
+    return mix || null;
+  }
+
+  /**
+   * Will this kind actually stand here? The region says *what* grows; the
+   * ground says *where*. Without the local half a fen region grows reeds up
+   * its own hillsides and the weald grows ferns in its clearings, which is the
+   * region rectangle showing through again in a different colour.
+   */
+  _understoryFits(terrain, name, x, z, h, biome, slope) {
+    switch (name) {
+      // Reeds want their feet wet: peat, or ground barely above the tide.
+      case 'reed': return slope < 0.30 && (biome === 'swamp' || h < 3.4);
+      // Ferns want shade, and the trees are already indexed in the hash grid,
+      // so "is there a canopy over this point" costs one grid probe.
+      case 'fern': return slope < 0.52 && biome !== 'sand' && this._tooNear(x, z, 8.5);
+      case 'heather': return slope < 0.46 && (biome === 'grass' || biome === 'dirt');
+      case 'scrub': return slope < 0.62 && biome !== 'swamp';
+      case 'cactus': return slope < 0.38 && (biome === 'sand' || biome === 'dirt');
+      default: return false;
+    }
+  }
+
+  /** Rebuild the understory instance buffers for the tile the camera stands in. */
+  _streamUnderstory(ctx) {
+    const u = this._under;
+    if (!u) return;
+    const cam = ctx.camera.position;
+    const tx = Math.floor(cam.x / UNDERSTORY_TILE);
+    const tz = Math.floor(cam.z / UNDERSTORY_TILE);
+    if (tx === u.tile.x && tz === u.tile.z) return;
+    u.tile.x = tx;
+    u.tile.z = tz;
+
+    const terrain = u.terrain;
+    const span = Math.ceil(u.radius / UNDERSTORY_TILE) + 1;
+    const inner = u.radius - UNDERSTORY_FADE;
+    const rot = new THREE.Matrix4();
+    const scaleV = new THREE.Vector3();
+    const mat = new THREE.Matrix4();
+    for (const k of u.kinds) k.count = 0;
+
+    for (let iz = -span; iz <= span; iz++) {
+      for (let ix = -span; ix <= span; ix++) {
+        const cx = (tx + ix) * UNDERSTORY_TILE;
+        const cz = (tz + iz) * UNDERSTORY_TILE;
+        const near = Math.hypot(
+          Math.max(0, Math.abs(cam.x - (cx + UNDERSTORY_TILE / 2)) - UNDERSTORY_TILE / 2),
+          Math.max(0, Math.abs(cam.z - (cz + UNDERSTORY_TILE / 2)) - UNDERSTORY_TILE / 2),
+        );
+        if (near > u.radius) continue;
+        // The mix is read once per tile, not once per plant. Region borders are
+        // blurred over ~200 m by the character map; an 8 m tile is uniform.
+        const mix = this._understoryMix(cx + UNDERSTORY_TILE / 2, cz + UNDERSTORY_TILE / 2);
+        if (!mix) continue;
+
+        // Same seeding rule as the grass: the tile's own coordinates, so the
+        // same patch of fen grows the same reeds every time you walk back —
+        // see the note below, which is what makes that literally true here.
+        const rng = new RNG(`under:${u.seed}:${tx + ix}:${tz + iz}`);
+        // Every random for a candidate is drawn *before* any test, and none of
+        // the tests the tile's own stream sees are camera-dependent. That is
+        // what makes the promise above true: the grass loop below draws its
+        // scale and tint only after a distance check against the camera, so
+        // the same tile approached from the north and from the south consumes
+        // different amounts of its stream and grows different plants.
+        for (let i = 0; i < u.perTile; i++) {
+          const x = cx + rng.next() * UNDERSTORY_TILE;
+          const z = cz + rng.next() * UNDERSTORY_TILE;
+          const name = rng.weighted(mix.names, mix.names.map((n) => mix.weights[n]));
+          // The density term: a region with a weak mix gets sparse cover rather
+          // than the same carpet made of fewer kinds.
+          const sparse = rng.next() > Math.min(1, mix.total * 0.85);
+          const k = u.kinds.find((e) => e.name === name);
+          const s = rng.range(k.spec.scale[0], k.spec.scale[1]);
+          const sy = s * rng.range(0.85, 1.2);
+          const yaw = rng.range(0, Math.PI * 2);
+          const t = rng.range(0.84, 1.14);
+          const tr = t * rng.range(0.93, 1.06);
+          const tb = t * rng.range(0.88, 1.04);
+          const phase = rng.range(0, Math.PI * 2);
+
+          if (sparse || k.count >= u.cap) continue;
+          const d = Math.hypot(x - cam.x, z - cam.z);
+          if (d > u.radius) continue;
+          if (terrain.isWater(x, z)) continue;
+          if (terrain.roadAt(x, z) > 0.2) continue;
+          const biome = terrain.biomeAt(x, z);
+          if (biome === 'snow') continue;
+          const slope = terrain.slopeAt(x, z);
+          const h = terrain.heightAt(x, z);
+          if (!this._understoryFits(terrain, name, x, z, h, biome, slope)) continue;
+
+          scaleV.set(s, sy, s);
+          rot.makeRotationY(yaw);
+          mat.copy(rot).scale(scaleV).setPosition(x, h - 0.04, z);
+          mat.toArray(k.mesh.instanceMatrix.array, k.count * 16);
+
+          const c = k.mesh.instanceColor.array;
+          c[k.count * 3 + 0] = tr;
+          c[k.count * 3 + 1] = t;
+          c[k.count * 3 + 2] = tb;
+          k.fade.array[k.count] = 1 - smoothstep(inner, u.radius, d);
+          k.phase.array[k.count] = phase;
+          k.count++;
+        }
+      }
+    }
+
+    for (const k of u.kinds) {
+      k.mesh.count = k.count;
+      k.mesh.visible = k.count > 0;
+      if (k.count === 0) continue;
+      k.mesh.instanceMatrix.needsUpdate = true;
+      k.mesh.instanceColor.needsUpdate = true;
+      k.fade.needsUpdate = true;
+      k.phase.needsUpdate = true;
+    }
+  }
+
   /** Rebuild the grass instance buffer for the tile the camera now stands in. */
   _streamGrass(ctx) {
     const g = this._grass;
@@ -1095,6 +1499,7 @@ export class VegetationSystem extends System {
       this._rebin(ctx);
     }
     this._streamGrass(ctx);
+    this._streamUnderstory(ctx);
   }
 
   /* ───────────────────────────── shots ────────────────────────────────── */
@@ -1317,6 +1722,7 @@ export class VegetationSystem extends System {
     for (const v of this.variants) for (const g of v.lods) g.dispose();
     this._imposter?.geom?.dispose();
     this._grass?.geom?.dispose();
+    for (const k of this._under?.kinds ?? []) k.geom.dispose();
     this._imposterTarget?.dispose();
     for (const m of this._materials) m.dispose();
     this.group?.parent?.remove(this.group);
