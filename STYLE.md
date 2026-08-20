@@ -703,6 +703,17 @@ starts at `320u`. Give the strip roughly 8–10u of air upward — after checkin
 what the item grid's bottom edge actually is, which is the part I did not get
 to — and `--u` goes to about 0.92, worth ~2% on every control and every letter.
 
+> **CLOSED (round 12).** Ten native pixels were freed above the strip:
+> `.mm-pack` `top` 16u → 8u, the name line 13u → 12u, the oval row's last pixel
+> of inset, and `Arrange`'s own box 12u → 11u with its 10u type untouched so
+> §6's contrast argument still holds. **Binding sum 347.5u → 337.5u, ceiling
+> 0.9006 → ~0.9198.** The 14 × 9 grid keeps its 32-pixel pitch, because the
+> painted case is drawn to that pitch.
+>
+> The remaining half is the floor: `Math.max(u, 0.9)` in `UISystem._applyScale`,
+> whose own comment quotes the now-stale 0.9006. Freeing the constraint is not
+> the same as claiming it.
+
 ### Still small, and each in a file of its own
 
 `quests.css` `.mm-quest-tab` 42 × 20 — its `clip-path` clips the pseudo-element
@@ -716,6 +727,15 @@ tall and clickable (that is how a skill point is spent). `inventory.css`
 (`The Muster Roll`) overlaps the exit oval by 1.8px **at every scale, desktop
 included**.
 
+> **CLOSED (round 12).** The cause was `justify-content: center` on a list
+> taller than its box, so the overflow spilled evenly out of *both* ends onto
+> the brass. 11u was reclaimed from the blocks above (account margin 12u → 8u,
+> account rows 15u → 14u, options margin 12u → 8u) and the gap went 9u → **8u
+> and no lower**: `ui.panels.css` grows each action's touch box 4u above and
+> below on a coarse pointer, so a 7u gap would have had neighbouring targets
+> stealing each other's taps. 7u ≈ 13px of daylight, and the arithmetic is
+> written into the file.
+
 ### Ultra-wide (2.17 : 1)
 
 Nothing breaks. `spellbook.css` is the model — it caps the page at 460u and
@@ -724,3 +744,12 @@ its two stat columns stretch to an 831u panel against the 460u they were drawn
 for, so label→value gaps run about double the design. Legible, even, and not
 MM6's proportion; `max-width: calc(var(--u) * 448); margin: 0 auto` on
 `.mm-sheet` would fix it, at the cost of changing 16:9 desktop.
+
+> **CLOSED (round 12)**, with exactly that rule, and the cost paid knowingly.
+> Right column against its 266u design:
+>
+> | | before | after |
+> | --- | --- | --- |
+> | 1200 × 900 (4:3, the design) | 1.00× | **1.00× — does not move** |
+> | 1600 × 900 (16:9 desktop) | 1.50× | **1.03×** |
+> | 932 × 430 (14 Pro Max) | 1.94× | **1.03×** |
