@@ -266,6 +266,16 @@ function potion(id, name, colour, layer, effect, power, value, opts = {}) {
   potions[id] = {
     id, name, category: 'potion', colour, layer,
     effect, power, value, weight: 1,
+    /**
+     * Which attribute a `boost-stat` or `permanent-stat` bottle raises.
+     *
+     * Without it the seven Potions of Might/Intellect/… were byte-for-byte the
+     * same record under seven names, and so were the seven Pures: a collision
+     * scan over the catalogue matched all fourteen on every field but `id`,
+     * `name` and `desc`. Nothing that drank one could have told Luck from
+     * Endurance, because the record did not say.
+     */
+    attr: opts.attr ?? null,
     recipe: opts.recipe ?? null,
     duration: opts.duration ?? 0,
     cures: opts.cures ?? null,
@@ -310,10 +320,10 @@ potion('potion_harden_item', 'Potion of Item Hardening', 'tar', 4, 'harden-item'
 for (const attr of ATTRIBUTES) {
   const label = attr[0].toUpperCase() + attr.slice(1);
   potion(`potion_boost_${attr}`, `Potion of ${label}`, 'amber', 3, 'boost-stat', 15, 450, {
-    duration: 3600 * 6, desc: `Raises ${label} for the day.`,
+    attr, duration: 3600 * 6, desc: `Raises ${label} for the day.`,
   });
   potion(`potion_pure_${attr}`, `Pure ${label}`, 'black', 4, 'permanent-stat', 5, 4000, {
-    permanent: true, desc: `Adds permanently to ${label}. There are not many of these in the world.`,
+    attr, permanent: true, desc: `Adds permanently to ${label}. There are not many of these in the world.`,
   });
 }
 
@@ -540,8 +550,16 @@ export const SUFFIXES = deepFreeze(suffixes);
 // ── Artifacts and relics ────────────────────────────────────────────────────
 // Unique, never generated twice, and most carry a real cost.
 
-const artifact = (id, name, base, effects, downside, value, desc) =>
-  ({ id, name, category: 'artifact', baseItem: base, unique: true, effects, downside, value, weight: 6, desc });
+/**
+ * `fixed` is true by default and that is the point: every one of the
+ * twenty-two below is staked by a named dungeon vault or a named quest — ten
+ * of them by both — so a random chest coughing one up is not a third source,
+ * it is a second copy of an authored prize. A relic written for the random
+ * tables passes `false` and joins `artifactsForTable`'s pool; until someone
+ * writes one, that pool is empty and the tables' `artifactChance` waits.
+ */
+const artifact = (id, name, base, effects, downside, value, desc, fixed = true) =>
+  ({ id, name, category: 'artifact', baseItem: base, unique: true, fixed, effects, downside, value, weight: 6, desc });
 
 export const ARTIFACTS = deepFreeze({
   art_oathkeep: artifact('art_oathkeep', 'Oathkeep', 'sword_bastard',
@@ -668,6 +686,14 @@ export function itemsForLevel(level, categories = null) {
 // One band per stretch of the campaign. `weights` are relative and are consumed
 // by LootSystem's weighted pick; `enchantChance` and `artifactChance` are
 // probabilities per generated item.
+//
+// `itemTiers` is a four-wide rolling window, not a two-wide one. There are six
+// tiers of gear and only five amulets and five rings in the whole catalogue, so
+// the old [5, 6] on the last band left the endgame with exactly **one** amulet
+// and **one** ring against weights of 8 and 9 — a sixth of every level-46 drop
+// was the same two objects. Widening the window is MM6's own answer: the top
+// bands still turn up ordinary steel, they turn it up *enchanted*, which is
+// what an 0.80 `enchantChance` is for.
 
 export const TREASURE_TABLES = deepFreeze([
   {
@@ -685,25 +711,25 @@ export const TREASURE_TABLES = deepFreeze([
   {
     id: 'treasure_3', tier: 3, levels: [14, 21], gold: [200, 900], items: [2, 3],
     weights: { weapon: 21, armour: 17, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 4, amulet: 5, ring: 6, potion: 11, scroll: 7, reagent: 4, gem: 5, wand: 4, misc: 2 },
-    itemTiers: [2, 4], enchantChance: 0.35, doubleEnchantChance: 0.08, artifactChance: 0.004,
+    itemTiers: [1, 4], enchantChance: 0.35, doubleEnchantChance: 0.08, artifactChance: 0.004,
     potionLayers: [2, 3], scrollMaxLevel: 8, gemTiers: [2, 4],
   },
   {
     id: 'treasure_4', tier: 4, levels: [22, 32], gold: [700, 2500], items: [2, 4],
     weights: { weapon: 20, armour: 16, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 5, amulet: 6, ring: 7, potion: 10, scroll: 6, reagent: 3, gem: 6, wand: 4, misc: 2 },
-    itemTiers: [3, 5], enchantChance: 0.50, doubleEnchantChance: 0.15, artifactChance: 0.012,
+    itemTiers: [2, 5], enchantChance: 0.50, doubleEnchantChance: 0.15, artifactChance: 0.012,
     potionLayers: [2, 4], scrollMaxLevel: 10, gemTiers: [3, 5],
   },
   {
     id: 'treasure_5', tier: 5, levels: [33, 45], gold: [2000, 7000], items: [2, 4],
     weights: { weapon: 19, armour: 15, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 5, amulet: 7, ring: 8, potion: 9, scroll: 5, reagent: 2, gem: 8, wand: 4, misc: 1 },
-    itemTiers: [4, 6], enchantChance: 0.65, doubleEnchantChance: 0.28, artifactChance: 0.025,
+    itemTiers: [3, 6], enchantChance: 0.65, doubleEnchantChance: 0.28, artifactChance: 0.025,
     potionLayers: [3, 4], scrollMaxLevel: 11, gemTiers: [3, 5],
   },
   {
     id: 'treasure_6', tier: 6, levels: [46, 200], gold: [6000, 20000], items: [3, 5],
     weights: { weapon: 18, armour: 14, shield: 6, helm: 6, boots: 5, belt: 5, cloak: 5, gauntlets: 5, amulet: 8, ring: 9, potion: 8, scroll: 4, reagent: 1, gem: 10, wand: 5, misc: 1 },
-    itemTiers: [5, 6], enchantChance: 0.80, doubleEnchantChance: 0.40, artifactChance: 0.05,
+    itemTiers: [4, 6], enchantChance: 0.80, doubleEnchantChance: 0.40, artifactChance: 0.05,
     potionLayers: [3, 4], scrollMaxLevel: 11, gemTiers: [4, 5],
   },
 ]);
@@ -752,13 +778,20 @@ export function tablePool(table, category) {
   return out;
 }
 
-/** Artifacts a band may turn up, cheapest first so the ladder reads. */
+/**
+ * Artifacts a band may turn up, cheapest first so the ladder reads.
+ *
+ * `fixed` relics are excluded: all twenty-two of them are the authored reward
+ * of a named dungeon or quest, and a chest producing one would be handing the
+ * party a duplicate of something the world already owes them. The random path
+ * and the fixed path share one supply rather than running two.
+ */
 export function artifactsForTable(table) {
   // A relic ladder of its own: the cheapest come first, and the eighty-thousand
   // gold pieces stay in the last band where the campaign puts the party.
   const cap = 10000 + (table?.tier ?? 1) * 12000;
   return Object.values(ARTIFACTS)
-    .filter((a) => a.value <= cap)
+    .filter((a) => !a.fixed && a.value <= cap)
     .sort((a, b) => a.value - b.value)
     .map((a) => a.id);
 }

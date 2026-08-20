@@ -15,17 +15,50 @@
    sidebar. Both are gone: one control, one typeface, one reading of each
    number. */
 
-/* ── the name line, y 304-317 ─────────────────────────────────────────────── */
+/* ── the pack, lifted ─────────────────────────────────────────────────────── */
 
-/* 48 native pixels under the grid, and the five 58 x 30 ovals want 30 of them.
-   The name line takes the 13 above, three pixels of granite separate the two,
-   and the row sits on the last 1 — which also lands the ovals on MM6's own
-   measured y 320-350. Both are pinned to the grid's 448-pixel column rather
-   than to the panel, which is wider than MM6's 460 on any non-4:3 window. */
+/* This screen sets the interface's scale for the whole game and it should not.
+   `--u` is `height/480` with a 0.9 floor on a fine pointer; the panel body is
+   `height − 128u`, and the tightest thing in it is this one — `Arrange` cleared
+   the row of ovals underneath it by 3.19px at the shipped 0.8958 and by
+   −8.33px at 0.92, which is where `UISystem._applyScale`'s measured ceiling of
+   0.9006 comes from. Every touch target and every glyph in the game is held
+   down by it.
+
+   Ten native pixels, taken where they cost least:
+
+     8   the blank leather over the grid (16u -> 8u). The pack has no title bar
+         and never had — that band was empty.
+     1   the name line, 13u -> 12u. The name is 11u type; 12u still clears it.
+     1   the oval row's last pixel of inset (bottom 1u -> 0).
+
+   The grid itself is untouched: 14 x 9 cells at a 32-pixel pitch, because the
+   compartmented case is painted to that pitch and a cell that is not 32 puts
+   the relief off the cell boundaries. `Arrange`'s box goes 12u -> 11u, which
+   its 10u type sits in exactly; §6's contrast argument is about glyph size, and
+   the glyph did not change.
+
+   That moves the binding sum from 347.5u to 337.5u and the ceiling from 0.9006
+   to about 0.9198 — ~2% on every control and every letter. Claiming it is one
+   number in `UISystem._applyScale`, which this file does not own: see the
+   report. */
+[data-panel="inventory"] .mm-pack {
+  top: calc(var(--u) * 8);
+}
+
+/* ── the name line, y 296-308 ─────────────────────────────────────────────── */
+
+/* The five 58 x 30 ovals want 30 pixels of the space under the grid. The name
+   line takes 12 above them, and what granite is left between the two is the
+   slack the panel body has at whatever scale the window gives it — the row is
+   pinned to the body's bottom edge and the line to the grid's, so the air
+   between them is the give, not a measurement. Both are pinned to the grid's
+   448-pixel column rather than to the panel, which is wider than MM6's 460 on
+   any non-4:3 window. */
 [data-panel="inventory"] .mm-pack-foot {
   left: 50%;
   right: auto;
-  bottom: calc(var(--u) * 1);
+  bottom: 0;
   width: calc(var(--u) * 448);
   transform: translateX(-50%);
 }
@@ -36,9 +69,9 @@
 [data-panel="inventory"] .mm-inv-strip {
   position: absolute;
   left: 50%;
-  top: calc(var(--u) * 304);
+  top: calc(var(--u) * 296);
   width: calc(var(--u) * 448);
-  height: calc(var(--u) * 13);
+  height: calc(var(--u) * 12);
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -64,7 +97,7 @@
   color: var(--ink);
   font-style: italic;
   font-size: calc(var(--u) * 11);
-  line-height: calc(var(--u) * 13);
+  line-height: calc(var(--u) * 12);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -88,7 +121,7 @@
 [data-panel="inventory"] .mm-inv-arrange {
   flex: none;
   width: calc(var(--u) * 58);
-  height: calc(var(--u) * 12);
+  height: calc(var(--u) * 11);
   color: var(--ink);
   font-style: italic;
   /* Sized by measurement, not by eye: at 9 native the label came in at 4.37:1
@@ -96,7 +129,7 @@
      smaller glyph is a larger share of antialiased edge. The ink is already
      `--ink`, so glyph size is the only lever the ground leaves. */
   font-size: calc(var(--u) * 10);
-  line-height: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 11);
   text-align: center;
   text-shadow: var(--shadow);
 }

@@ -139,6 +139,13 @@ export class LootSystem extends System {
       item.bonus = [describeEffects(base.effects ?? {}), describeEffects(base.downside ?? {})]
         .filter(Boolean).join(' — but ');
       item.identified = opts.identified ?? true;
+      // Claim here rather than in `_rollArtifact`, because this is the one
+      // place every path passes through. A dungeon's authored prize
+      // (`DungeonSystem`), a quest reward (`QuestSystem`) and a campaign stage
+      // all call this directly, and none of them touched the claimed set — so
+      // the random roller could hand out a second Assessor to a party already
+      // carrying the one from Crown Undercroft. One chokepoint, one supply.
+      if (base.unique) this.claimed.add(itemId);
       return item;
     }
 
@@ -224,11 +231,13 @@ export class LootSystem extends System {
    * bandless records (every gem, every reagent, every artifact) could not be
    * found by any means in the game.
    */
-  rollTreasure(level, rng = this.rng) {
+  rollTreasure(level, rng = this.rng, count = null) {
     const table = treasureTableFor(level);
     const out = [];
     const [lo, hi] = table.items ?? [1, 2];
-    const count = rng.int(lo, hi);
+    // A caller may ask for a fixed number — a corpse carries what it carried,
+    // which is not a chest's haul.
+    count ??= rng.int(lo, hi);
     const cats = Object.keys(table.weights);
     const weights = cats.map((c) => table.weights[c]);
 
@@ -265,11 +274,28 @@ export class LootSystem extends System {
 
   // ── drops ────────────────────────────────────────────────────────────────
 
-  /** A monster died: scatter its gold and treasure on the ground. */
+  /**
+   * A monster died: scatter its gold and treasure on the ground.
+   *
+   * The field is `treasureTier`. This read `def.treasure`, which is not a field
+   * any monster has ever carried — all ninety-nine records write
+   * `treasureTier`, from 1 on a rat to 6 on a titan — so `tier` was nought for
+   * every corpse in the game and the branch below it never once ran. **No
+   * monster has ever dropped an item.** Only gold, and always at the
+   * lowest share.
+   *
+   * The purse is a fraction of a chest, not a chest. Paying the band's full
+   * `gold` range per corpse put 2100–7000 gold on a single level-46 kill and
+   * about 266,000 through a forty-corpse clear, against the 6000–20000 the same
+   * band's chest is worth; a tenth to a fifth of a purse per body keeps the
+   * chest the thing worth crossing the room for, which is the whole point of a
+   * chest.
+   */
   dropFrom(def, position) {
     const ctx = this._ctx;
     if (!ctx) return;
     const level = def.level ?? 1;
+    const tier = def.treasureTier ?? def.treasure ?? 0;
 
     // Purses come off the band the level sits in, so a Duskorn revenant is not
     // paying out on the same scale as a Millhaven rat. The old formula was a
@@ -277,13 +303,14 @@ export class LootSystem extends System {
     // own `gold` range unread and the endgame paying pocket change.
     const table = treasureTableFor(level);
     const [glo, ghi] = table.gold ?? [10, 80];
-    const share = (def.treasure ?? 0) > 0 ? 1 : 0.35;
-    const gold = Math.round(this.rng.int(glo, ghi) * share);
+    const gold = Math.round(this.rng.int(glo, ghi) * (0.04 + tier * 0.025));
     if (gold > 0) this.dropGold(ctx, gold, position);
 
-    const tier = def.treasure ?? 0;
-    if (tier > 0 && this.rng.chance(0.25 + tier * 0.12)) {
-      for (const item of this.rollTreasure(level + tier, this.rng)) {
+    // A body carries what it was carrying — one thing, or two off something
+    // that hoarded — not a chest's whole haul. The chance is what makes the
+    // grass worth searching without making it the main supply.
+    if (tier > 0 && this.rng.chance(0.05 + tier * 0.035)) {
+      for (const item of this.rollTreasure(level, this.rng, tier >= 5 ? 2 : 1)) {
         this.dropItem(ctx, item, position);
       }
     }
