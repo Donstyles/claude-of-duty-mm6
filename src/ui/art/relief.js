@@ -324,6 +324,96 @@ export function mineral(g, w, h, opts = {}) {
 }
 
 /**
+ * Pebbled hide, added over whatever leather is already painted.
+ *
+ * The backpack ground was nine hundred soft elliptical dabs and a grain pass —
+ * which is the same procedure the chiselled rock runs, with a browner palette.
+ * Measured on the two plates as a normalised power spectrum split over four
+ * scale bands, leather and rock sat 0.373 apart while every other pair in the
+ * set sat 0.73–1.55 apart: two materials, one signature. Dabs cannot fix that,
+ * because a dab has no interior — leather's whole character is that it is made
+ * of *cells*, each one a small dome, with dirt in the valleys between them.
+ *
+ * So: jittered cells at two sizes; inside a cell the tone tilts along the lamp,
+ * so every pebble is lit up-left and shaded down-right like everything else in
+ * the interface; the boundary between two cells darkens, which is where a used
+ * bag holds its grime; and a fine follicle speckle rides on top. The rub — the
+ * proud cells catching enough light to go warm — is what says *worn* rather
+ * than *dyed*, and it is keyed off the same tilt so it cannot disagree with it.
+ */
+export function hide(g, w, h, opts = {}) {
+  const seed = opts.seed ?? 0;
+  // Amplitudes are deliberately small. The backpack ground sits at value 16, so
+  // a crease deep enough to look right on paper takes the valleys to zero and
+  // the plate loses its floor: the first cut of this pass measured p05/p50 =
+  // 0.000 against 0.638 before it. Grain has to be scaled to its ground.
+  const cells = opts.cells ?? [
+    { size: 7.5, amp: 7, crease: 11, facet: 13 },
+    { size: 21, amp: 5, crease: 5, facet: 7 },
+  ];
+  const pore = opts.pore ?? 4;
+  const lift = opts.lift ?? 0;
+  const rub = opts.rub ?? [40, 26, 12];
+  let img;
+  try {
+    img = g.getImageData(0, 0, w, h);
+  } catch {
+    return;
+  }
+  const d = img.data;
+  // Cell counts are whole numbers of cells across the tile, so the field wraps.
+  const grids = cells.map((c) => ({
+    ...c,
+    nx: Math.max(2, Math.round(w / c.size)),
+    ny: Math.max(2, Math.round(h / c.size)),
+  }));
+  const wrap = (i, n) => ((i % n) + n) % n;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (d[i + 3] === 0) continue;
+      let tone = lift + (hash2(x + 3, y + 11 + seed) - 0.5) * 2 * pore;
+      let lit = 0;
+      for (let o = 0; o < grids.length; o++) {
+        const { nx, ny, amp, crease, facet } = grids[o];
+        const cw = w / nx, ch = h / ny;
+        const gx = Math.floor(x / cw), gy = Math.floor(y / ch);
+        // Nearest and second-nearest jittered centre: F2 − F1 is the crease.
+        let f1 = 1e9, f2 = 1e9, ox = 0, oy = 0;
+        for (let jy = -1; jy <= 1; jy++) {
+          for (let jx = -1; jx <= 1; jx++) {
+            const cx = gx + jx, cy = gy + jy;
+            const hx = hash2(wrap(cx, nx) + 91 + seed + o * 53, wrap(cy, ny) + 17);
+            const hy = hash2(wrap(cy, ny) + 311, wrap(cx, nx) + 7 + seed + o * 53);
+            const px = (cx + 0.15 + hx * 0.7) * cw;
+            const py = (cy + 0.15 + hy * 0.7) * ch;
+            const dx = (x + 0.5 - px) / cw, dy = (y + 0.5 - py) / ch;
+            const dd = dx * dx + dy * dy;
+            if (dd < f1) { f2 = f1; f1 = dd; ox = dx; oy = dy; }
+            else if (dd < f2) { f2 = dd; }
+          }
+        }
+        const edge = clamp01((Math.sqrt(f2) - Math.sqrt(f1)) * 2.4);
+        // Grime sits in the valley, not on the crown.
+        tone -= (1 - edge) * crease;
+        // The cell's own dome, tilted into the key: lit up-left, dark down-right.
+        const tilt = -(ox * KEY[0] + oy * KEY[1]);
+        tone += tilt * facet;
+        const cell = hash2(wrap(gx, nx) + 700 + seed + o * 37, wrap(gy, ny) + 1300);
+        tone += (cell - 0.5) * 2 * amp;
+        if (o === 0) lit = clamp01(tilt * 1.6) * edge;
+      }
+      // The rub: only the crowns that face the lamp take it, and it is warm.
+      const wr = lit * lit;
+      d[i] = Math.max(0, Math.min(255, d[i] + tone + rub[0] * wr));
+      d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + tone * 0.92 + rub[1] * wr));
+      d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + tone * 0.84 + rub[2] * wr));
+    }
+  }
+  g.putImageData(img, 0, 0);
+}
+
+/**
  * A cast shadow: one soft offset silhouette, down and to the right, and never
  * a second one anywhere else.
  */

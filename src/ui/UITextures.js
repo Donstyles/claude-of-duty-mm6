@@ -26,7 +26,7 @@ import { RNG, hashSeed } from '../core/RNG.js';
 // `art/relief.js` — every raised or cut form below is lit from up and to the
 // left, casts down and right, and terminates in its own falloff.
 import {
-  cabochon, castShadow, cylinderValue, cylinderGradient, mineral, seatedStud,
+  cabochon, castShadow, cylinderValue, cylinderGradient, hide, mineral, seatedStud,
 } from './art/relief.js';
 
 const TAU = Math.PI * 2;
@@ -154,6 +154,36 @@ export class UITextures {
       }
       g.putImageData(img, 0, 0);
     } catch { /* never break the UI over a grain pass */ }
+  }
+
+  /**
+   * Directional paper fibre — grain's anisotropic sibling.
+   *
+   * `grain` is isotropic, which is right for stone and wrong for a sheet: rag
+   * paper is felted from fibres that lie down with the machine, so the tooth
+   * runs *along* the sheet and the eye reads it as paper rather than as noise.
+   * Measured as a power spectrum, the old spell page put 85% of its energy
+   * above 16px — a gradient with soft blobs on it, and 2.76% relative contrast
+   * against the reference sheet's 4.11%. This is the missing half: a short
+   * horizontal correlation on the fine noise, plus the occasional longer slub.
+   */
+  static fibre(g, w, h, rng, amount = 9, run = 5) {
+    try {
+      const img = g.getImageData(0, 0, w, h);
+      const d = img.data;
+      for (let y = 0; y < h; y++) {
+        let carry = 0;
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          if (d[i + 3] === 0) continue;
+          // A first-order filter along the row is a fibre; white noise is dust.
+          carry += ((rng.next() - 0.5) * 2 * amount - carry) / run;
+          const n = carry + (rng.next() - 0.5) * amount * 0.35;
+          d[i] += n; d[i + 1] += n * 0.96; d[i + 2] += n * 0.9;
+        }
+      }
+      g.putImageData(img, 0, 0);
+    } catch { /* never break the UI over a fibre pass */ }
   }
 
   /** A soft painterly dab — the workhorse of every shading pass. */
@@ -2495,7 +2525,14 @@ export class UITextures {
         g.stroke();
         g.restore();
       }
-      UITextures.grain(g, w, h, rng, 12);
+      // Blue-grey rock is an aggregate, and the dabs alone gave it none: this is
+      // the same crystal pass the panel granite carries, at a coarser grain
+      // because the shop's surround is quarried block rather than dressed slate.
+      mineral(g, w, h, { seed: 5, octaves: [
+        { cell: 4.2, amp: 13, hue: 3.2, facet: 15 },
+        { cell: 11, amp: 15, hue: 2.4, facet: 11 },
+      ], fine: 5, warm: 0.4 });
+      UITextures.grain(g, w, h, rng, 9);
     });
   }
 
@@ -2513,15 +2550,34 @@ export class UITextures {
         UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(1, 5), rng.range(1, 4),
           rng.range(0, TAU), rng.chance(0.5) ? '#5A2A0C' : '#070200', rng.range(0.1, 0.3), 1);
       }
-      UITextures.grain(g, w, h, rng, 13);
+      // The dabs are the dye lot; `hide` is the leather. Without it this plate
+      // and the chiselled rock two functions up were the same generator in two
+      // palettes — 0.373 apart on a four-band spectral signature against
+      // 0.73–1.55 for every other pair on the sheet.
+      hide(g, w, h, { seed: 11, lift: 7 });
+      UITextures.grain(g, w, h, rng, 9);
     });
   }
 
   // ── the book screens ──────────────────────────────────────────────────────
 
-  /** Pale warm grey-beige spellbook paper — not golden parchment. */
+  /**
+   * Pale warm grey-beige spellbook paper — not golden parchment.
+   *
+   * This plate is stretched to fill its element, so the shape of the sheet —
+   * gutter, edge falloff, drop — is the stylesheet's job and is already done
+   * there. What the plate owes is the *material*, and it was not paying: a
+   * three-stop gradient with soft blobs on it put 85% of its energy above 16px
+   * and measured 2.76% relative contrast against the reference sheet's 4.11%.
+   * So the tooth is now felted fibre running with the sheet, and the sheet has
+   * been foxed — a used book, not a fresh ream.
+   *
+   * Painted at 1024 because it is the largest single surface in the game and
+   * the only one drawn 1:1 rather than tiled: at 512 a three-times phone was
+   * resampling it 2.9×, which turns fibre into fog.
+   */
   spellPage() {
-    return this._make('spell-page', 512, 448, (g, w, h, rng) => {
+    return this._make('spell-page', 1024, 896, (g, w, h, rng) => {
       const grd = g.createLinearGradient(0, 0, 0, h);
       grd.addColorStop(0, '#D8CFC3');
       grd.addColorStop(0.4, '#D2C8BC');
@@ -2529,10 +2585,21 @@ export class UITextures {
       g.fillStyle = grd;
       g.fillRect(0, 0, w, h);
       for (let i = 0; i < 260; i++) {
-        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(8, 60), rng.range(6, 34),
-          rng.range(0, TAU), rng.chance(0.5) ? '#E4DCD0' : '#B8AE9F', rng.range(0.04, 0.14), 10);
+        UITextures.dab(g, rng.range(0, w), rng.range(0, h), rng.range(16, 120), rng.range(12, 68),
+          rng.range(0, TAU), rng.chance(0.5) ? '#E4DCD0' : '#B8AE9F', rng.range(0.04, 0.14), 20);
       }
-      UITextures.grain(g, w, h, rng, 7);
+      // Foxing: small rust-brown blooms where the size has failed, thickest
+      // near the edges the fingers reach, which is where a real book carries it.
+      for (let i = 0; i < 130; i++) {
+        const x = rng.range(0, w);
+        const y = rng.range(0, h);
+        const edge = Math.min(x, w - x, y, h - y) / Math.min(w, h);
+        if (rng.next() < edge * 1.6) continue;
+        UITextures.dab(g, x, y, rng.range(2, 11), rng.range(2, 9), rng.range(0, TAU),
+          rng.chance(0.65) ? '#A98F6A' : '#8A6E4E', rng.range(0.05, 0.16), 3);
+      }
+      UITextures.fibre(g, w, h, rng, 9, 5);
+      UITextures.grain(g, w, h, rng, 5);
     });
   }
 
