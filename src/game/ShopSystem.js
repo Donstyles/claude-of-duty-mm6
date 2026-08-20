@@ -316,6 +316,11 @@ const COUNTER_TALK = freeze({
 
 let UID = 1;
 
+/** Keep the counter ahead of any uid read back out of a save. */
+function bumpUID(uid) {
+  if (Number.isFinite(uid) && uid >= UID) UID = Math.floor(uid) + 1;
+}
+
 /**
  * A shelf copy of a catalogue entry. The catalogue is deep-frozen and shared,
  * so anything that can be broken, spent or identified has to be a fresh object.
@@ -1141,6 +1146,69 @@ export class ShopSystem extends System {
     const when = days <= 1 ? 'tomorrow' : `in ${days} days`;
     if (!shop.stock.length) return `${shop.keeper}: "Picked clean. The cart is due ${when}."`;
     return `${shop.stock.length} pieces on the board. The next delivery is ${when}.`;
+  }
+
+  // ── persistence ───────────────────────────────────────────────────────────
+
+  /**
+   * Every counter the party has actually stood at.
+   *
+   * The epoch alone would be cheaper — a pristine shelf is a pure function of
+   * (seed, shop, epoch) and could be regenerated from three numbers — but it
+   * would be *wrong*, because a shelf stops being pristine the moment anyone
+   * trades across it. Buying takes a piece off the board, the rack under the
+   * counter moves onto it, an appraisal flips a piece to identified, and the
+   * alchemist's daily favour is spent. Restoring from the epoch would put back
+   * everything the party bought and take back everything they were shown, so
+   * the goods travel with the file and the epoch travels beside them to say
+   * which delivery they came off.
+   *
+   * That epoch is the whole point. Without it a reload rerolled every shelf in
+   * Caerwen, which is not a lost field but an exploit: quit, load, and keep
+   * loading until the smith has the blade you wanted. With it the shelf is what
+   * you left, and the cart still comes on the day the calendar says — the check
+   * lives in `shop()`, which compares the restored epoch against today's on the
+   * next visit, so a save read a fortnight later restocks exactly once.
+   *
+   * Only visited shops are written; the other counters in the kingdom are still
+   * three numbers each until someone opens their door.
+   */
+  toJSON() {
+    const shops = {};
+    for (const [id, live] of this._live) {
+      shops[id] = {
+        epoch: live.epoch,
+        favourDay: live.favourDay,
+        stock: live.stock,
+        hidden: live.hidden,
+      };
+    }
+    return { seedTag: this._seedTag, shops };
+  }
+
+  fromJSON(state) {
+    // The tag comes back with the goods. A save carries its own kingdom's
+    // shelves, so its next delivery has to be drawn from that kingdom's seed;
+    // taking the running world's would hand the party a cart from somewhere
+    // else the first time the calendar turned over.
+    if (state?.seedTag) this._seedTag = state.seedTag;
+    this._live.clear();
+    for (const [id, saved] of Object.entries(state?.shops ?? {})) {
+      const def = SHOPS[id];
+      if (!def) continue;               // a counter that has since left the map
+      const stock = (saved.stock ?? []).filter(Boolean);
+      const hidden = (saved.hidden ?? []).filter(Boolean);
+      this._live.set(id, {
+        ...def,
+        epoch: saved.epoch ?? -1,
+        stock,
+        hidden,
+        favourDay: saved.favourDay ?? -1,
+      });
+      // Restored copies carry the uids they were minted with; the counter has
+      // to clear them or the next shop in this session mints duplicates.
+      for (const it of [...stock, ...hidden]) bumpUID(it?.uid);
+    }
   }
 
   // ── plumbing ──────────────────────────────────────────────────────────────

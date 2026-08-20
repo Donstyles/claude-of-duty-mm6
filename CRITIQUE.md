@@ -425,3 +425,36 @@ every frame — had no test at all, while three gates booted headless Chromium.
 - **The automap's "discovered" mask** is regenerated procedurally from a forked
   RNG rather than tracked as the party walks. Discovery is not a thing yet; it
   only looks like one.
+
+### Running seventeen critics at once: what the workflow itself taught
+
+The fan-out is the method, so its failure modes are worth the same treatment as
+the code's.
+
+- **Disjoint file ownership is the whole trick.** Seventeen agents wrote into
+  one tree for two hours with zero merge conflicts between them, because each
+  brief named the files it owned and forbade the rest. Every collision this
+  round was caused by the coordinator, not by the fleet.
+- **Never `git stash` under a live agent.** The one conflict of the round was
+  mine: an agent was mid-edit in `savetest.mjs`, the coordinator stashed that
+  path to hold back a deliberately-red test, and the agent kept writing into the
+  reverted file. `stash pop` then conflicted against work that had moved on. If
+  a file must be held out of a commit, hold it by staging the others — never by
+  changing what the agent sees under its feet.
+- **Brief with the measurements already taken.** The first wave died on a rate
+  limit before writing a line; the relaunch carried the census in every brief,
+  and no agent re-derived a number somebody else already had.
+- **A red test is not a broken tree.** The persistence critic was told to make
+  its assertions fail *before* its fix, so a mid-round `savetest` reporting
+  `1 FIELD(S) LOST` was the test working. Committing that to satisfy a hook is
+  how a suite stops meaning anything.
+- **Agents correct the coordinator, and should be told to.** Three did this
+  round: `worldTime` was not stopped while walking, it was 22x too cheap; the
+  quoted 44 h/km was 22.9; and the brief's "eighteen barrows opened from the
+  inside" is not canon — there are nine on the ridge, and building eighteen
+  would have made a survey quest uncountable. Every one of those was in a brief
+  written by the coordinator, and every one was caught because the brief also
+  said to verify it.
+- **An adversarial verifier is worth a builder.** Fourteen fixes with numbers
+  attached are fourteen claims, and claims written into commit messages become
+  the project's memory whether or not they are true.
