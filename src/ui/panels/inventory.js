@@ -434,6 +434,10 @@ export class InventoryPanel extends Panel {
   /**
    * Resolve a drop by geometry rather than by event target, so the ghost, a
    * tooltip or any stray overlay cannot swallow it.
+   *
+   * Three places take an item and one gives it back: the pack, the figure, a
+   * portrait on the bar below — and anywhere else, which puts it down where it
+   * came from rather than leaving it stuck to the cursor.
    */
   _dropAt(x, y) {
     const held = this.held;
@@ -456,7 +460,69 @@ export class InventoryPanel extends Panel {
         this._endCarry();
         this.refresh();
       }
+      return;
     }
+    const face = this._portraitAt(x, y);
+    if (face != null) { this._giveTo(face, held); return; }
+    // Dead granite. MM6 never leaves a load hanging off the cursor with nowhere
+    // to put it down, and neither does this: the carry ends and the item is
+    // exactly where it was, because nothing left the pack to begin with.
+    this._cancel();
+  }
+
+  /**
+   * Which party portrait is under the cursor, if any.
+   *
+   * The bar is the HUD's, not this screen's, so it is asked by hit test rather
+   * than by reaching into its internals — and the carried sprite takes no
+   * pointer events, so it cannot answer for the portrait beneath it.
+   */
+  _portraitAt(x, y) {
+    const cell = document.elementFromPoint(x, y)?.closest?.('.mm-cell[data-index]');
+    const index = cell ? Number(cell.dataset.index) : NaN;
+    return Number.isInteger(index) ? index : null;
+  }
+
+  /**
+   * An item let go over a character's picture.
+   *
+   * MM6 says this itself, on the Letter's own description card: "pick the
+   * scroll up and left-click over the character picture in the inventory
+   * screen." A bottle is drunk, a scroll is read, and anything else is simply
+   * looked over — the same channel `_use` goes through.
+   *
+   * Only the pack's own owner answers. Nothing in the model can take an item
+   * out of one character's pack and spend it on another, so handing a potion
+   * across would drink it and leave the bottle behind; the screen says so
+   * instead of doing that.
+   */
+  _giveTo(index, held) {
+    if (index !== held.owner) {
+      this._say('Nothing crosses between packs.');
+      return;
+    }
+    if (held.from !== 'grid') {
+      this._say(`${this._name(held.item)} is worn, not carried.`);
+      return;
+    }
+    // The bar's own click handler would change character out from under the
+    // result; the press has been spent here.
+    this._swallowClick();
+    this._act(() => this.ui.useItem(index, held.entry));
+    this._endCarry();
+    this.refresh();
+  }
+
+  /** Eat the click this mouseup is about to raise, once. */
+  _swallowClick() {
+    const stop = (e) => {
+      e.stopPropagation();
+      window.removeEventListener('click', stop, true);
+    };
+    window.addEventListener('click', stop, true);
+    // A press that never completes into a click must not leave the trap armed
+    // for the next one, so it is disarmed a frame or two later either way.
+    setTimeout(() => window.removeEventListener('click', stop, true), 200);
   }
 
   /** Put the cursor down. The strip is left alone: whatever the drop had to say

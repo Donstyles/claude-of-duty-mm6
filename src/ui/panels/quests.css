@@ -362,6 +362,25 @@
   line-height: 1.4;
 }
 
+/* ── awards ───────────────────────────────────────────────────────────────── */
+
+/* A citation, not a checklist row: the star is the mark a clerk puts beside a
+   settled entry, the sentence hangs from it, and nothing here is selectable —
+   so no hover ink, no pointer, and the same unshadowed black on paper the rest
+   of the book's prose is set in. */
+.mm-panel[data-panel='quests'] .mm-qb-award {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 5);
+  margin: 0 0 calc(var(--u) * 5);
+  color: #100c06;
+  text-shadow: none;
+  font-family: var(--face);
+  font-size: calc(var(--u) * 10);
+  line-height: 1.4;
+}
+.mm-panel[data-panel='quests'] .mm-qb-award i { color: #7a6528; line-height: 0; flex: 0 0 auto; }
+
 /* ── tabs, clasps and the exit plaque ─────────────────────────────────────── */
 
 /* Bookmark tabs are cream flaps of card overhanging the binding, with a
@@ -369,11 +388,28 @@
    the original's: the chosen flap is gilt and carries a warm halo, and the
    others keep their jade ink on bone. */
 .mm-panel[data-panel='quests'] .mm-quest-tabs { right: calc(var(--u) * 30); top: calc(var(--u) * 2); gap: calc(var(--u) * 3); }
+
+/* The button is a plain unclipped box; the card it paints is the flap inside
+   it. Four tabs at 46u with 3u between them is 193u, which sits inside the
+   right leaf's 234u with 27u to spare — measured against `.mm-quest-page`'s
+   flex ratio, not eyeballed. */
 .mm-panel[data-panel='quests'] .mm-quest-tab {
   width: calc(var(--u) * 46);
   height: calc(var(--u) * 22);
+  position: relative;
+  display: block;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+.mm-panel[data-panel='quests'] .mm-quest-flap {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
   font-size: calc(var(--u) * 10);
   color: #26381f;
+  text-shadow: none;
   background: linear-gradient(180deg, #f2ead8 0 20%, #d9cfb6 52%, #a89d86 100%);
   clip-path: polygon(
     0 0, 88% 0, 100% 16%, 88% 32%, 100% 50%, 88% 68%, 100% 84%, 88% 100%, 0 100%);
@@ -385,7 +421,7 @@
     inset calc(var(--u) * -1) calc(var(--u) * -1) 0 rgba(88, 78, 58, 0.85);
   filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 2) rgba(0, 0, 0, 0.6));
 }
-.mm-panel[data-panel='quests'] .mm-quest-tab.is-active {
+.mm-panel[data-panel='quests'] .mm-quest-tab.is-active .mm-quest-flap {
   color: #241a08;
   background: linear-gradient(180deg, #fff6d0 0 20%, #f0cf72 52%, #c19a34 100%);
   box-shadow:
@@ -396,6 +432,32 @@
      is the whole selection mechanism on this screen. One filter, on a box, not
      on text — §12's single-shadow rule is about type. */
   filter: drop-shadow(0 0 calc(var(--u) * 5) rgba(255, 224, 140, 0.9));
+}
+
+/* The tap box, and the arithmetic behind every number in it.
+ *
+ * At the phone's `--u` of 0.8958 the painted flap is 41.2 × 19.7 px. Across,
+ * each tab takes half the 3u gap on each side — the row is partitioned edge to
+ * edge, STYLE.md §13's remedy — which is 41.2 + 2.7 = 43.9 px, and the outer
+ * two take a little of the leaf margin as well to clear 44 outright.
+ *
+ * Down is the only direction with room: the row sits 2u from the top of the
+ * panel, and `.mm-panel` clips its overflow, so anything grown upward past
+ * that is not merely invisible but untappable. 2u up and 25u down puts the box
+ * at 49u = 43.9 px. The 25u below lands on the head of `.mm-qb-entry`, which
+ * is prose and holds no control of its own — §13 forbids a box that swallows a
+ * neighbouring *control*, and there is none here. */
+@media (pointer: coarse) {
+  .mm-panel[data-panel='quests'] .mm-quest-tab::after {
+    content: '';
+    position: absolute;
+    top: calc(var(--u) * -2);
+    bottom: calc(var(--u) * -25);
+    left: calc(var(--u) * -1.5);
+    right: calc(var(--u) * -1.5);
+  }
+  .mm-panel[data-panel='quests'] .mm-quest-tab:first-child::after { left: calc(var(--u) * -6); }
+  .mm-panel[data-panel='quests'] .mm-quest-tab:last-child::after { right: calc(var(--u) * -6); }
 }
 
 /* Gilt serpent clasps down the binding — a painted object, not a gold pip. */

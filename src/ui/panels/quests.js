@@ -25,6 +25,7 @@ const TABS = [
   { id: 'active', label: 'Current Quests', tab: 'Current' },
   { id: 'completed', label: 'Completed Quests', tab: 'Done' },
   { id: 'notes', label: 'Auto Notes', tab: 'Notes' },
+  { id: 'awards', label: 'Awards', tab: 'Awards' },
 ];
 
 /**
@@ -217,7 +218,7 @@ export class QuestPanel extends Panel {
   constructor(ui) {
     super(ui);
     this.filter = 'active';
-    this.selected = { active: 0, completed: 0, notes: 0 };
+    this.selected = { active: 0, completed: 0, notes: 0, awards: 0 };
     /** The old tab shim: the capture harness and UISystem both drive it. */
     this.tabs = { setActive: (id) => { this.filter = id; if (this.opened) this.refresh(); } };
     this.ctx?.events?.on('quest:updated', () => { if (this.opened) this.refresh(); });
@@ -239,8 +240,17 @@ export class QuestPanel extends Panel {
     this.metaEl = el('div', { className: 'mm-qb-meta' });
     this.countEl = el('div', { className: 'mm-qb-count' });
 
+    // The flap is a child rather than the button itself.
+    //
+    // A `clip-path` clips an element's pseudo-elements too — for hit-testing as
+    // much as for paint — so while the swallow-tail lived on the button there
+    // was no way to grow the tap box past the painted card, and the row stayed
+    // 42 × 20 px on a phone (STYLE.md §13 lists it by name). Cutting the notch
+    // into an inner span leaves the button an unclipped box, free to carry the
+    // `::after` that grows it to 44.
     this.tabEls = TABS.map((t) => {
-      const b = el('button', { className: 'mm-quest-tab', type: 'button', text: t.tab });
+      const b = el('button', { className: 'mm-quest-tab', type: 'button' },
+        el('span', { className: 'mm-quest-flap', text: t.tab }));
       b.addEventListener('click', () => {
         this.filter = t.id;
         this.refresh();
@@ -302,6 +312,10 @@ export class QuestPanel extends Panel {
 
     if (this.filter === 'notes') {
       this._renderNotes(book.notes);
+      return;
+    }
+    if (this.filter === 'awards') {
+      this._renderAwards(book.awards);
       return;
     }
     const list = this.filter === 'completed' ? book.completed : book.active;
@@ -457,6 +471,47 @@ export class QuestPanel extends Panel {
     setChildren(this.entryEl, ...render(all.slice(half)));
   }
 
+  /**
+   * The awards page: what the party is owed the credit for.
+   *
+   * MM6 keeps awards apart from the quest log because they are not work in
+   * hand — they are the record of what has already been settled, and a player
+   * reads them the way they read a citation, top to bottom, with nothing to
+   * click. So the page is two columns of prose like the autonotes rather than
+   * an index and an entry, and nothing on it is selectable.
+   *
+   * Nothing here is invented. `QuestSystem.awards` holds whatever the campaign
+   * has actually granted, and beneath it the book rules a line per finished
+   * quest, naming who set it — which is the same fact the Done tab holds,
+   * written as a deed rather than as a job.
+   */
+  _renderAwards(awards) {
+    this._rows = [];
+    this.countEl.textContent = awards.length ? `${awards.length} to the party’s name` : '';
+    setChildren(this.metaEl);
+    setChildren(this.footEl);
+    if (!awards.length) {
+      setChildren(this.indexEl, el('p', { className: 'mm-qb-empty', text: 'Nothing has been awarded yet. Finish something and the book will say so.' }));
+      setChildren(this.entryEl, el('div', { className: 'mm-qb-blank' },
+        el('p', { text: 'Awards are written here as they are earned.' })));
+      return;
+    }
+    // Split by weight of text rather than by count, exactly as the autonotes
+    // do, or one long citation leaves a page and a half of empty parchment.
+    const total = awards.reduce((a, w) => a + w.text.length + 60, 0);
+    let carried = 0;
+    let half = awards.length;
+    for (let i = 0; i < awards.length; i++) {
+      carried += awards[i].text.length + 60;
+      if (carried >= total / 2) { half = i + 1; break; }
+    }
+    const render = (list) => list.map((a) => el('div', { className: 'mm-qb-award' },
+      el('i', { html: icon('star', { size: 11 }) }),
+      el('span', { text: a.text })));
+    setChildren(this.indexEl, ...render(awards.slice(0, half)));
+    setChildren(this.entryEl, ...render(awards.slice(half)));
+  }
+
   // ── data ──────────────────────────────────────────────────────────────────
 
   /**
@@ -468,10 +523,12 @@ export class QuestPanel extends Panel {
     const sys = this.ctx?.get('quests');
     const live = this._liveEntries(sys);
     const source = live.length ? live : this._chronicle(sys);
+    const completed = source.filter((q) => q.complete);
     return {
       active: source.filter((q) => !q.complete),
-      completed: source.filter((q) => q.complete),
+      completed,
       notes: this._notes(sys),
+      awards: this._awards(sys, completed),
     };
   }
 
@@ -532,11 +589,31 @@ export class QuestPanel extends Panel {
    */
   _notes(sys) {
     const live = Array.isArray(sys?.notes) ? sys.notes : Array.isArray(sys?.autonotes) ? sys.autonotes : null;
-    const notes = live
+    return live
       ? live.map((n) => (typeof n === 'string' ? { group: 'Noted', text: n } : n))
       : [...AUTONOTES];
-    for (const award of sys?.awards ?? []) notes.push({ group: 'Deeds', text: award });
-    return notes;
+  }
+
+  /**
+   * Awards, which used to be filed under the autonotes as a "Deeds" group and
+   * now have the page MM6 gives them. `QuestSystem.awards` is a flat list of
+   * sentences the campaign wrote; the finished quests are appended after it so
+   * a party that has never been formally cited still has a record.
+   */
+  _awards(sys, completed) {
+    const out = [];
+    const seen = new Set();
+    const add = (text) => {
+      const s = String(text ?? '').trim();
+      if (!s || seen.has(s)) return;
+      seen.add(s);
+      out.push({ text: s });
+    };
+    for (const award of sys?.awards ?? []) add(award);
+    for (const q of completed) {
+      add(q.giver ? `${q.name} — settled for ${q.giver}.` : `${q.name} — settled.`);
+    }
+    return out;
   }
 
   // ── capture ───────────────────────────────────────────────────────────────
@@ -556,6 +633,8 @@ export class QuestPanel extends Panel {
       + 'whoever set it, with the full entry on the right-hand page.');
     shot('ui-quests-notes', 'notes', 'The quest book on its Autonotes tab: rumours, lore and places the '
       + 'party has been told about, in two columns of parchment.');
+    shot('ui-quests-awards', 'awards', 'The quest book on its Awards tab: what the party has been formally '
+      + 'credited with, and every job it has settled, in two columns of parchment.');
   }
 }
 

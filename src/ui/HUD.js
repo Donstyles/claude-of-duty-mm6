@@ -187,22 +187,27 @@ export class HUD {
       flavour: 'Shops keep daylight hours; the roads do not.',
     }));
 
-    const spine = (index, panel, name, key, tip = null) => {
+    const spine = (index, panel, name, key, onClick, tip = null) => {
       const b = el('button', {
         className: 'mm-spine', type: 'button', dataset: { index: String(index), panel },
         'aria-label': name,
       });
-      b.addEventListener('click', () => this.ui.togglePanel(panel));
+      b.addEventListener('click', onClick);
       tooltip.attach(b, tip ?? (() => tipMarkup({ title: name, subtitle: key })));
       return b;
     };
+    // Four spines, four books. Two of them are two leaves of the same journal —
+    // MM6 shelves Current Quests and Auto Notes separately and opens each on its
+    // own page, so each spine carries its own page here rather than dropping the
+    // player on whichever tab the book was last left on.
     this.shelfEl = el('div', { className: 'mm-shelf' },
-      spine(0, 'quests', 'Current Quests', 'Q'),
-      spine(1, 'quests', 'Auto Notes', 'N'),
-      spine(2, 'map', 'Maps', 'M'),
-      // The Calendar spine is where MM6 keeps the date, so it answers it here
-      // rather than making the player open a book to learn the hour.
-      spine(3, 'quests', 'Calendar', 'C', () => tipMarkup({
+      spine(0, 'quests', 'Current Quests', 'Q', () => this._openBook('quests', 'active')),
+      spine(1, 'quests', 'Auto Notes', 'N', () => this._openBook('quests', 'notes')),
+      spine(2, 'map', 'Maps', 'M', () => this.ui.togglePanel('map')),
+      // The Calendar is the one book with no screen behind it: everything it
+      // would hold is one line long, so it goes where every other one-line
+      // answer in the play view goes — the message strip.
+      spine(3, 'calendar', 'Calendar', 'C', () => this._readCalendar(), () => tipMarkup({
         title: 'Calendar',
         lines: [{ k: 'Time', v: this._clockText() }, { k: 'Date', v: this._dateText() }],
         footer: 'C',
@@ -254,6 +259,26 @@ export class HUD {
 
     this.sidebarEl = el('div', { className: 'mm-sidebar' }, this.sideField);
     return this.sidebarEl;
+  }
+
+  /**
+   * Open a book on a named page. The spine toggles, as every book key does, and
+   * a book that has just been opened is turned to its own leaf first so the two
+   * journal spines never land on each other's page.
+   */
+  _openBook(id, tab) {
+    this.ui.togglePanel(id);
+    const panel = this.ui.panels?.get?.(id);
+    if (panel?.opened) panel.tabs?.setActive?.(tab);
+  }
+
+  /**
+   * The Calendar spine. MM6 gives the date a page of its own; ours has the hour,
+   * the day and the month and nothing else to say, so it says it in the one text
+   * channel the play view has rather than covering the world to print two lines.
+   */
+  _readCalendar() {
+    this.log(`It is ${this._clockText()} on ${this._dateText().replace(' · ', ', ')}.`, 'info');
   }
 
   /** The active character's quick spell, if they have set one. */

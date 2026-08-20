@@ -51,6 +51,21 @@ const SCHOOL_INK = {
 
 const SCHOOL_IDS = new Set(MAGIC_SCHOOLS.map((s) => s.id));
 
+/**
+ * Whether the plaque has to be asked for rather than hovered into.
+ *
+ * `tooltip.attach` binds `mouseenter` to start a timer and `mousedown` to
+ * cancel it, and a tap on iOS fires `mouseenter` and then `mousedown` inside
+ * the same gesture — so on the phone the timer is always cancelled before it
+ * fires and the plaque never appears. Everything the page says about damage,
+ * duration, target and mastery lives in that plaque, which means on the device
+ * this ships on it was unreachable. Selecting a spell opens it instead: that is
+ * MM6's own right-click plaque, reached by the one gesture a phone has.
+ */
+const coarsePointer = () => typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia('(pointer: coarse)').matches;
+
 /** Plates are static files under `public/`, addressed the way portraits are. */
 const PLATE_BASE = 'art/spells/';
 const plateUrl = (spellId) => `${PLATE_BASE}${spellId}.plate.png`;
@@ -230,6 +245,10 @@ export class SpellbookPanel extends Panel {
       page,
       this.tabsEl,
       el('div', { className: 'mm-sb-btns' }, this.castBtn, this.quickBtn, exit));
+    // A tap-opened plaque has no `mouseleave` to close it, so the next touch
+    // anywhere in the book puts it away before the cell under that touch gets
+    // the chance to open its own. Capture, so it runs ahead of the cell.
+    root.addEventListener('pointerdown', () => tooltip.hide(), true);
     root.style.setProperty('--sb-book', bookPlate(2));
     root.style.setProperty('--sb-slot', slotSetting());
     root.style.setProperty('--sb-frame', illumFrame());
@@ -423,7 +442,9 @@ export class SpellbookPanel extends Panel {
       const again = this._lastClick?.id === spell.id && now - this._lastClick.at < 420;
       this._lastClick = { id: spell.id, at: now };
       this.select(spell, learned, check);
-      if (again && learned && check.ok) this.ui.castSpell(vm.index, spell.id);
+      if (again && learned && check.ok) { this.ui.castSpell(vm.index, spell.id); return; }
+      // The plaque, for the pointer that cannot hover one out of the page.
+      if (coarsePointer()) tooltip.show(this._spellTip(spell, vm, state, learned, check));
     });
     return cell;
   }

@@ -189,14 +189,14 @@
   background: center / contain no-repeat;
   filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.6));
 }
-.mm-panel[data-panel='create'] .mm-create-arrows
+.mm-panel[data-panel='create'] .mm-create-arrows,
 .mm-panel[data-panel='create'] .mm-create-sex {
   display: flex;
   width: calc(var(--u) * 44);
   height: calc(var(--u) * 15);
   background: rgba(8, 14, 8, 0.45);
 }
-.mm-panel[data-panel='create'] .mm-create-arrow
+.mm-panel[data-panel='create'] .mm-create-arrow,
 .mm-panel[data-panel='create'] .mm-create-sex-opt {
   flex: 1;
   display: grid;
@@ -205,7 +205,7 @@
   line-height: 1;
   color: #cfd6c4;
 }
-.mm-panel[data-panel='create'] .mm-create-arrow:hover
+.mm-panel[data-panel='create'] .mm-create-arrow:hover,
 .mm-panel[data-panel='create'] .mm-create-sex-opt:hover { color: var(--gold); }
 .mm-panel[data-panel='create'] .mm-create-sex-opt.is-on { color: #4ad8f0; }
 
@@ -303,7 +303,7 @@
   color: var(--gold);
   visibility: hidden;
 }
-.mm-panel[data-panel='create'] .mm-create-stat:hover .mm-create-step
+.mm-panel[data-panel='create'] .mm-create-stat:hover .mm-create-step,
 .mm-panel[data-panel='create'] .mm-create-stat.is-cursor .mm-create-step { visibility: visible; }
 .mm-panel[data-panel='create'] .mm-create-stat:hover { background: rgba(255, 250, 200, 0.06); }
 .mm-panel[data-panel='create'] .mm-create-stat.is-cursor { background: rgba(255, 250, 200, 0.10); }
