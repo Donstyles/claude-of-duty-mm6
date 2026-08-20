@@ -34,10 +34,28 @@
  * hue, same value, alpha over an identical colour changes nothing. It buys
  * depth where a shape overlaps the ground (the book's far cover, the map's
  * folds) and buys nothing at all where it sits inside the body — which is why
- * the coin's star, the helm's visor slots, the skull's sockets and the mana
- * drop's spark were all invisible before the bevel pass gave their boundaries a
- * lit edge. That is a geometry fix, not a paint one; the paint is still wrong
- * and is named at the foot of this file.
+ * the coin's star, the helm's visor slots and the skull's sockets read as a
+ * blank disc, a blank capsule and a blank dome.
+ *
+ * So interior detail is no longer painted in the tint. It is **cut**: `SHADE`
+ * over the body, which multiplies the tint instead of restating it (`CUT` and
+ * `CUT_LINE` below, declared per path because the stacking idiom is still
+ * right where a shape crosses the ground). Rasterised at 24px on this
+ * interface's own grounds, interior p95/p05 measured inside the eroded
+ * silhouette — the body with the seating lobes' own rim taken off, so a blank
+ * one reads 1.00 by construction — moved on all eleven:
+ *
+ *     coin / gold  1.006 → 1.75     cond-poisoned    1.001 → 2.35
+ *     helm         1.002 → 1.75     cond-diseased    1.005 → 2.11
+ *     skull        1.001 → 2.45     cond-afraid      1.001 → 2.35
+ *     cond-dead    1.092 → 2.45     cond-unconscious 1.002 → 2.35
+ *     mana         1.002 → 1.75     mind             1.004 → 2.11
+ *
+ * and forty-odd other paths across the set with them. The tint is unharmed: the
+ * gold ink's saturation on granite, (max−min)/max of its mean colour, reads
+ * 0.4842 before and 0.4833 after. A cut is a shadow *in* the form, so the hue
+ * goes through it — which a white pass over the same paths, tried and reverted
+ * in the previous round, does not.
  */
 
 import { LIGHT } from './art/relief.js';
@@ -134,8 +152,8 @@ P.shield = `
 // Broad pauldrons and three lames: without them the cuirass was a bell with a
 // cross on it, which is a shield. The shoulders are what make it worn.
 P.armour = `
-<path d="M8.6 2.2L12 4.6l3.4-2.4 4 2-1.4 4.2 1.2 2.4c0 5.9-3 9.7-7.2 11.2-4.2-1.5-7.2-5.3-7.2-11.2l1.2-2.4-1.4-4.2z"/>
-<path d="M4.8 6.2C2.6 6.6 1 8.2 1 10.4c0 1.3.5 2.4 1.3 3.2l3.4-2zM19.2 6.2c2.2.4 3.8 2 3.8 4.2 0 1.3-.5 2.4-1.3 3.2l-3.4-2z"/>
+<path d="M8.6 3c1.2 0 2 1.6 3.4 1.6S14.2 3 15.4 3l4 1.2-1.4 4.2 1.2 2.4c0 5.9-3 9.7-7.2 11.2-4.2-1.5-7.2-5.3-7.2-11.2l1.2-2.4-1.4-4.2z"/>
+<path d="M5.2 7.4C3 8.2 1.6 10 1.6 12.2c0 1 .3 1.9.8 2.7l3.8-1.8zM18.8 7.4c2.2.8 3.6 2.6 3.6 4.8 0 1-.3 1.9-.8 2.7l-3.8-1.8z"/>
 <path d="M6.1 12.4h11.8M6.7 15.6h10.6M8.4 18.6h7.2" ${CUT_LINE} stroke-width="1.3" opacity=".45"/>
 <path d="M12 5.4v6.2" ${CUT_LINE} stroke-width="1.2" opacity=".4"/>`;
 
@@ -708,30 +726,47 @@ export function hasIcon(name) {
 }
 
 /**
- * What the lamp does not fix, measured, for whoever takes the next round.
+ * What is left, measured, for whoever takes the next round.
  *
- * Seating the glyphs gave the set a light direction — rim asymmetry along the
- * key went from 0.000 on all three of this interface's grounds to +0.35 on
- * timber, +0.14 on granite and +0.06 on marble, and white ink on pale marble
- * went from 1.44 to 2.06 within-cell p95/p05. None of that is a drawing.
+ * The two faults the lamp could not fix are fixed. Distinguishability, as mean
+ * |Δ| per channel between two 24px cells on the same ground (0–255, timber at
+ * DPR 1 / granite at DPR 3):
  *
- * Two faults are, and they are drawing work, not lighting work:
+ *     speed vs cond-paralyzed     8.79 → 45.34  |  7.93 → 35.00
+ *     shield vs endurance         7.10 → 34.48  |  6.36 → 29.03
+ *     armour vs endurance         9.20 → 36.81  |  8.02 → 30.58
+ *     shield vs armour           12.68 → 25.46  | 10.75 → 23.13
+ *     light vs sun               15.14 → 23.12  | 13.83 → 20.14
+ *     mana vs water               0.06 →  7.64  |  0.04 →  7.20
+ *     cond-poisoned vs water      0.05 →  6.93  |  0.03 →  6.25
+ *     cond-diseased vs afraid     0.12 →  6.80  |  0.11 →  7.17
+ *     afraid vs unconscious       0.14 →  8.02  |  0.11 →  8.62
  *
- *   1. **Interior detail painted as `currentColor` at low opacity is
- *      invisible**, for the reason given at the top of this file. Eleven
- *      glyphs are carried entirely by detail that never renders: `coin` and
- *      `gold` are a blank disc, `helm` a blank capsule, `skull` and
- *      `cond-dead` a blank dome, `mana` and `cond-poisoned` are the `water`
- *      drop exactly, `cond-diseased`, `cond-afraid` and `cond-unconscious`
- *      are the same blank circle as each other. The fix is to paint those
- *      shapes as *cuts* — a dark overlay, which multiplies the tint instead of
- *      re-stating it — not to raise their opacity.
- *   2. **Four collisions a player would misread.** `speed` and
- *      `cond-paralyzed` are both a bolt with motion lines, and they mean
- *      opposite things; `crosshair` and `accuracy` are one ringed dot;
- *      `shield`, `armour` and `endurance` are one shield; `light` and `sun`
- *      are one burst. Each needs one of the pair redrawn, and that is a
- *      content decision about what the glyph depicts.
+ * `crosshair` vs `accuracy` is the exception and is worth stating honestly: at
+ * 47.2 it was already the *furthest* apart of the four, so the aggregate never
+ * showed the fault, and it did not move (45.4). What the two shared was a
+ * shape family — a rotationally symmetric ring-and-dot — and that is what the
+ * reticle drops. Ink occupancy in the ring's own band, r ∈ [6,7) of 12, goes
+ * 0.59 → 0.04 against accuracy's 0.76 there, and the radial-profile
+ * correlation between the pair falls 0.34 → 0.25.
+ *
+ * Nearest-neighbour over the whole set, same metric, now bottoms out at 6.01
+ * (`water` / `cond-poisoned`), level with pairs nobody has ever complained
+ * about — `dagger`/`spear` at 6.23, `cond-asleep`/`moon` at 7.46. Three things
+ * a next round could still take:
+ *
+ *   1. `water`, `mana` and `cond-poisoned` still share a drop. That is
+ *      defensible — they are all a fluid, and they now differ by corona, by
+ *      fumes and by what is cut into them — but if a round wants them properly
+ *      apart, `mana` has to stop being a drop, and that is a content decision.
+ *   2. `dagger`/`spear` and `mace`/`staff` are close for the same reason the
+ *      four collisions were: a shared silhouette family, here inherited rather
+ *      than introduced. Neither was reported by a player.
+ *   3. The cuts are one tone, `SHADE`, at a per-path opacity. A form with a
+ *      real interior — the skull's brow, the coin's relief — would take a lit
+ *      shoulder on the *cut's* upper-left edge as well, which is what the
+ *      plate's own mouldings do. That is another node per cut path, so it
+ *      wants measuring against the DOM cost before anyone spends it.
  */
 
 export default icon;
