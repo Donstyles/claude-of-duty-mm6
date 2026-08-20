@@ -103,6 +103,49 @@ export class MySystem extends System {
 `(worldTime / 3600) % 24` is the hour of day. `Math.floor(worldTime / 86400)` is
 the day number. Never store a separate clock.
 
+### World scale — the map is not the kingdom
+
+Two constants in two different files are multiplied together, and only the
+product means anything:
+
+| constant | file | value |
+|---|---|---|
+| `WORLD_SIZE` | `game/data/Regions.js` | `4096` metres of playfield |
+| `LEAGUE_SCALE` | `game/PlayerSystem.js` | `100` metres of kingdom per metre of world |
+
+```
+WORLD_SIZE × LEAGUE_SCALE ≈ 409.6 km of Caerwen        ← the invariant
+```
+
+`WORLD_SIZE = 4096` is not wrong, it is *unlabelled*. This is the label. Leave
+it alone unless you have a reason, and **if you do rescale, move `LEAGUE_SCALE`
+inversely in the same commit** — halve the world, double the scale. That
+applies to anything that changes the ground the towns stand on: `WORLD_SIZE`
+itself, the region bounds and town `position` arrays in `Regions.js`, or the
+terrain extent in `world/TerrainSystem.js`. Nothing throws if you don't.
+
+The failure mode is silent and it is economic. `overlandHours()` bills the
+world clock `LEAGUE_SCALE ÷ FOOT_KMH` = **25 in-game hours per kilometre of
+world walked**, and all 23 fares in `game/data/Travel.js` are priced against
+that one number: coach legs banded at 8–16 hours per kilometre of world,
+packets at 11–26, so that buying a seat always saves the party at least a
+third of the hours the boots would cost (measured floor: 36%). Break the
+invariant and the whole board silently reprices:
+
+- **Halve the world, leave `LEAGUE_SCALE` at 100** — walking gets twice as
+  cheap and four of the thirteen coach legs become *strictly worse than
+  walking*: `coach_netherby_thornwick` goes from saving 36% of the march to
+  costing 28% more than it. The fare board becomes a screen nobody opens, and
+  no test fails.
+- **Double the world** — walking becomes ruinous, the worst margin on the
+  board rises to 68%, and every fare is free money.
+
+The fiction is pinned to the same product. The Ledger quotes Saltmarch to
+Coldwater as two days' sail; those towns are 2.3 km apart on the map, and that
+is 230 km of sea in 40 hours only while `WORLD_SIZE × LEAGUE_SCALE` holds. That
+leg is the anchor the rest of the packet timetable is priced off — see the rate
+band comment at the head of `Travel.js` before touching any of it.
+
 ### Determinism
 
 All world generation must go through `ctx.rng.fork('<your-tag>')`. Never call
