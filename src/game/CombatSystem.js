@@ -434,8 +434,55 @@ export class CombatSystem extends System {
    * way it came. `opts.kind` names what threw it and `opts.source` names who,
    * because a trap has nothing to reflect to.
    */
+  /**
+   * Not being hit at all, which is a different thing from being hurt less.
+   *
+   * Dodging's Grandmaster step and Unarmed's Master step both promise a chance
+   * to avoid a blow outright, and both numbers were resolved onto every
+   * character sheet in the game and read by nobody — the two most expensive
+   * steps on two ladders, bought with gold and skill points, and the sheet was
+   * the only place they existed.
+   *
+   * Three conditions, each of which is the skill's own description rather than
+   * a balance dial. It must be a blow: you do not dodge a poison tick or a
+   * spike pit, which is why an attacker has to be present and the damage has
+   * to be physical. You have to be able to move: a paralysed or sleeping
+   * character is not dodging anything. And a block is bare hands, because
+   * Unarmed is the skill of having no weapon.
+   *
+   * The roll is only drawn when the chance is above zero. That is not a
+   * micro-optimisation — `this.rng` is a seeded stream and every draw shifts
+   * everything after it, so a character who has not bought the step must not
+   * consume one. Otherwise adding this would have silently re-rolled every
+   * fight in the game.
+   */
+  _avoided(char, type, opts) {
+    if (type !== 'physical' || !opts.source || !char?.canAct) return null;
+
+    const evade = charSkillEffect(char, 'dodging').evadeChance ?? 0;
+    if (evade > 0 && this.rng.next() < evade) return 'evade';
+
+    const bare = !char?.equipment?.mainhand && !char?.equipment?.offhand;
+    const block = bare ? (charSkillEffect(char, 'unarmed').blockChance ?? 0) : 0;
+    if (block > 0 && this.rng.next() < block) return 'block';
+
+    return null;
+  }
+
   _hurtParty(ctx, party, index, amount, type, power, opts = {}) {
     const char = party.members[index];
+
+    const dodged = this._avoided(char, type, opts);
+    if (dodged) {
+      ctx.events.emit('ui:log', {
+        text: dodged === 'evade'
+          ? `${char.name} is not where the blow lands.`
+          : `${char.name} turns it aside bare-handed.`,
+        kind: 'info',
+      });
+      return 0;
+    }
+
     const resist = (char?.bonuses?.resists?.[type] ?? 0) + (char?.resists?.[type] ?? 0);
     const luck = effectiveStat(char, 'luck');
     const applied = type === 'physical' || !resist
@@ -461,6 +508,22 @@ export class CombatSystem extends System {
     const board = char?.equipment?.offhand;
     if (opts.kind === 'missile' && board?.category === 'shield') {
       const cut = charSkillEffect(char, 'shield').missileReduction ?? 0;
+      if (cut > 0) incoming = Math.max(1, Math.round(incoming * (1 - cut)));
+    }
+
+    // The other end of all three armour ladders. Leather, chain and plate each
+    // promise a flat cut to physical damage at Grandmaster — 5, 10 and 15 per
+    // cent — and all three numbers were unread, so the last and dearest step
+    // on the armour ladder bought a doubled Armour Class and nothing else.
+    //
+    // Keyed off the harness actually worn rather than the best skill held: a
+    // Grandmaster of plate standing in leather gets leather's five per cent,
+    // because the reduction is the harness turning the blade, and the skill is
+    // knowing how to stand in it. `item.skill` is the same field
+    // `armourClassFor` reads to decide which ladder a piece belongs to.
+    if (type === 'physical') {
+      const worn = char?.equipment?.armour;
+      const cut = worn ? (charSkillEffect(char, worn.skill ?? 'leather').physicalReduction ?? 0) : 0;
       if (cut > 0) incoming = Math.max(1, Math.round(incoming * (1 - cut)));
     }
 

@@ -111,6 +111,10 @@ const GATES = [
     why: 'every module agrees with the catalogues on what the fields are called' },
   { name: 'events', slow: false, cmd: 'node', args: ['tools/eventcheck.mjs', '--gate'],
     why: 'no event is emitted into an empty room' },
+  { name: 'start', slow: false, cmd: 'node', args: ['tools/starttest.mjs'],
+    why: 'a party the player rolled is armed, and can mix what it picks up' },
+  { name: 'skills', slow: false, cmd: 'node', args: ['tools/skilltest.mjs'],
+    why: 'the dearest step on each ladder buys a number that moves' },
   { name: 'physics', slow: false, cmd: 'node',
     args: ['--import', './tools/null-css.register.mjs', 'tools/phystest.mjs'],
     why: 'the player cannot leave the world, and the colliders are not empty' },
@@ -125,6 +129,8 @@ const GATES = [
     why: 'the travel spells move the party, and relight the world on the way out' },
   { name: 'tier', slow: true, cmd: 'node', args: ['tools/tiertest.mjs'],
     why: 'the game boots clean at the tier it ships at, and hazard dungeons build there' },
+  { name: 'drops', slow: true, cmd: 'node', args: ['tools/droptest.mjs'],
+    why: 'loot dropped on a dungeon floor is close enough to pick up' },
 ];
 
 function run(gate) {

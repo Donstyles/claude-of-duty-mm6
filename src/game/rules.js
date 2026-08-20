@@ -392,6 +392,25 @@ const ARMOUR_SLOTS = ['armour', 'helm', 'offhand', 'gauntlets', 'boots', 'belt',
  * Armour Class: Speed bonus, worn armour, armour-skill bonuses, dodging (only
  * where it applies) and any spell/item bonuses.
  */
+/**
+ * How many hands this character needs for this weapon.
+ *
+ * Not a property of the weapon, which is how it was written everywhere:
+ * `item.hands === 2` appears at seven call sites and asks the spear, never the
+ * spearman. Spear at Expert says "the shaft can be worked one-handed, leaving
+ * the shield hand free", and `oneHanded` was the last mastery step in the game
+ * with no reader at all — so the step that exists to let a spearman carry a
+ * board did not let him carry a board, and the tooltip went on calling his
+ * spear two-handed while he held it in one.
+ *
+ * Only spears. A greatsword at Grandmaster is still a greatsword.
+ */
+export function handsFor(char, item) {
+  if (item?.hands !== 2) return 1;
+  if (item.skill !== 'spear') return 2;
+  return charSkillEffect(char, 'spear').oneHanded ? 1 : 2;
+}
+
 export function armourClassFor(char) {
   let ac = statBonus(effectiveStat(char, 'speed'));
   let wearingHeavy = false;

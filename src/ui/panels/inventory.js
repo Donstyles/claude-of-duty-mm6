@@ -3,6 +3,7 @@ import { Panel, itemFootprint, itemSprite } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, clamp } from '../widgets.js';
 import { getClass } from '../../game/data/Classes.js';
 import { getItem } from '../../game/data/Items.js';
+import { handsFor } from '../../game/rules.js';
 import { packCase } from '../art/packCase.js';
 
 const GRID_COLS = 14;
@@ -606,9 +607,12 @@ export class InventoryPanel extends Panel {
     if (item.skill && cls && !(item.skill in (cls.skills ?? {})) && !(cls.startingSkills ?? []).includes(item.skill)) {
       return { ok: false, why: `A ${vm?.className ?? 'character of this class'} cannot use ${titleCase(item.skill)}.` };
     }
-    const twoHanded = vm?.equipment?.mainhand;
-    if (slotId === 'offhand' && twoHanded?.hands === 2) {
-      return { ok: false, why: `${vm.name} needs both hands for the ${twoHanded.name}.` };
+    // `handsFor`, not `item.hands`. A spearman at Expert works the shaft
+    // one-handed and keeps his shield hand, which is the entire content of
+    // that mastery step and was refused here for as long as the step existed.
+    const inHand = vm?.equipment?.mainhand;
+    if (slotId === 'offhand' && inHand && handsFor(vm, inHand) === 2) {
+      return { ok: false, why: `${vm.name} needs both hands for the ${inHand.name}.` };
     }
     return { ok: true, why: '' };
   }
@@ -621,7 +625,7 @@ export class InventoryPanel extends Panel {
       return false;
     }
     // A two-hander wants the shield hand as well.
-    if (slotId === 'mainhand' && held.slot !== 'mainhand' && held.item.hands === 2 && vm.equipment?.offhand) {
+    if (slotId === 'mainhand' && held.slot !== 'mainhand' && handsFor(vm, held.item) === 2 && vm.equipment?.offhand) {
       if (!this._stow(vm, 'offhand')) {
         this._say('No room in the pack for the off hand.');
         return false;
@@ -702,7 +706,10 @@ export class InventoryPanel extends Panel {
 
   _kind(item) {
     if (item.category === 'weapon') {
-      return `${titleCase(item.weaponType ?? 'weapon')}, ${item.hands === 2 ? 'two-handed' : 'one-handed'}`;
+      // Asked of the character whose pack this is, so a trained spearman is
+      // not told his spear is two-handed while he holds it in one.
+      const hands = handsFor(this.ui.active(), item);
+      return `${titleCase(item.weaponType ?? 'weapon')}, ${hands === 2 ? 'two-handed' : 'one-handed'}`;
     }
     if (item.category === 'artifact') return 'Relic, unique';
     return titleCase(item.category ?? 'item');
