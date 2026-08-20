@@ -6,7 +6,41 @@
  * disabled slot without a second asset. Depth comes from stacking the same
  * colour at different opacities rather than from baked-in palettes, which keeps
  * the whole set tintable.
+ *
+ * Tintable it was, and lit it was not. Measured on a 24px sheet over three of
+ * this interface's own grounds, the set's asymmetry along the lamp axis — mean
+ * rim luminance up-light minus down-light, over the cell's own ground — read
+ * **0.000 on all three**. Every other raised form on screen obeys `LIGHT` in
+ * `art/relief.js`; a flat stencil sitting on an embossed plate is the seam this
+ * project has spent rounds closing, and it was the last one left.
+ *
+ * So each glyph is now seated on the plate rather than printed on it, without
+ * any glyph being redrawn:
+ *
+ *   - a **shade lobe** under the body, offset down-right along `LIGHT.cast` —
+ *     the contact shadow, and the thing that gives the glyph an edge on a pale
+ *     ground, where white ink measured 1.44 p95/p05 and all but vanished;
+ *   - a **bevel pass** over the body, offset up-left along the key, in the
+ *     lamp's own warm white — the lit shoulder. It rides *over* the body on
+ *     purpose: it is what re-lights the interior detail, which is otherwise
+ *     invisible (see the note on `.55` fills below).
+ *
+ * Both are `<use>` instances of the one body, so the cost is three nodes per
+ * icon regardless of how many paths the glyph has, and the body itself is
+ * untouched `currentColor` — the tint still goes all the way through.
+ *
+ * **The stacking trick only works outside the silhouette.** `currentColor` at
+ * `opacity: .45` painted *on top of* the same `currentColor` is a no-op: same
+ * hue, same value, alpha over an identical colour changes nothing. It buys
+ * depth where a shape overlaps the ground (the book's far cover, the map's
+ * folds) and buys nothing at all where it sits inside the body — which is why
+ * the coin's star, the helm's visor slots, the skull's sockets and the mana
+ * drop's spark were all invisible before the bevel pass gave their boundaries a
+ * lit edge. That is a geometry fix, not a paint one; the paint is still wrong
+ * and is named at the foot of this file.
  */
+
+import { LIGHT } from './art/relief.js';
 
 const P = {};
 
@@ -433,6 +467,51 @@ function resolve(name) {
   return P[key] ?? P.unknown;
 }
 
+// ── the lamp ────────────────────────────────────────────────────────────────
+
+/** `LIGHT.key` flattened to the plate and normalised: the direction of "up-light". */
+const KEY2 = (() => {
+  const m = Math.hypot(LIGHT.key[0], LIGHT.key[1]) || 1;
+  return [LIGHT.key[0] / m, LIGHT.key[1] / m];
+})();
+/** `LIGHT.cast` the same way: where a shadow goes, down and right. */
+const CAST2 = (() => {
+  const m = Math.hypot(LIGHT.cast[0], LIGHT.cast[1]) || 1;
+  return [LIGHT.cast[0] / m, LIGHT.cast[1] / m];
+})();
+
+/** The lamp's own warm white — `seatedStud`'s lip colour, so the two agree. */
+const LIT = 'rgb(255,252,244)';
+/** Contact tone. Not black: the plate bounces, and a hole is never a void. */
+const SHADE = 'rgb(10,7,4)';
+
+let seq = 0;
+
+/**
+ * Seat a glyph body on the plate.
+ *
+ * `bevel` is in viewBox units, and the caller scales it so the lit edge stays
+ * about one CSS pixel wide at whatever size the icon is drawn — a bevel belongs
+ * to the plate, not to the glyph, so it must not grow with the art. Below about
+ * half a unit the lobes stop being edges and start being a wash, so it clamps.
+ */
+function seat(body, bevel) {
+  const id = `mmi${(seq = (seq + 1) % 1000000)}`;
+  const b = Math.min(1.9, Math.max(0.55, bevel));
+  const sx = (CAST2[0] * b).toFixed(2);
+  const sy = (CAST2[1] * b).toFixed(2);
+  const hx = (KEY2[0] * b).toFixed(2);
+  const hy = (KEY2[1] * b).toFixed(2);
+  // Both lobes go *under* the body. Over it they wash the tint — a 0.30 white
+  // pass measured the gold ink's saturation, (max−min)/max, down from 0.388 to
+  // 0.286, a quarter of the theme gone — and tint is the whole point of the
+  // set. Under, the tint is bit-for-bit what it was and only the shoulders
+  // show. Three nodes, whatever the glyph is made of.
+  return `<use href="#${id}" x="${sx}" y="${sy}" fill="${SHADE}" color="${SHADE}" opacity=".62"/>`
+    + `<use href="#${id}" x="${hx}" y="${hy}" fill="${LIT}" color="${LIT}" opacity=".55"/>`
+    + `<g id="${id}">${body}</g>`;
+}
+
 /**
  * Returns an `<svg>` string for `name`, sized in CSS pixels and tinted by the
  * inherited `color`. Unknown names fall back to a question mark rather than
@@ -443,10 +522,11 @@ export function icon(name, opts = {}) {
   const body = resolve(name);
   const cls = `mm-icon${className ? ` ${className}` : ''}`;
   const style = opacity !== 1 ? ` style="opacity:${opacity}"` : '';
+  // 0.9 CSS px of bevel, expressed in the 24-unit grid at this icon's size.
   return `<svg class="${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor"`
     + ` role="img" aria-hidden="${title ? 'false' : 'true'}" focusable="false"${style}>`
     + (title ? `<title>${escapeHtml(title)}</title>` : '')
-    + body
+    + seat(body, 21.6 / size)
     + '</svg>';
 }
 
@@ -503,16 +583,23 @@ export function paintedIcon(name, material = 'iron', opts = {}) {
   const ramp = MATERIALS[material] ?? MATERIALS.iron;
   const id = `mmg${(gradSeq = (gradSeq + 1) % 100000)}`;
   const body = resolve(name);
+  // The ramp runs along the lamp, not along an arbitrary diagonal: bright where
+  // the key strikes, dark where it does not. It was within a few degrees of
+  // this already, which is why nothing had to be redrawn to say it properly.
+  const gx = (0.5 - KEY2[0] * 0.62).toFixed(3);
+  const gy = (0.5 - KEY2[1] * 0.62).toFixed(3);
   // Item sprites fill their whole grid footprint: a sword laid across 1x3 cells
   // is a long sword, not a small sword floating in a tall box.
+  // The ramp is declared on the root so the two seating lobes, which set their
+  // own fill, are not overridden by a group that declares one.
   return `<svg class="mm-icon ${className}" viewBox="0 0 24 24" width="100%" height="100%"`
-    + ' preserveAspectRatio="none" role="img" aria-hidden="true" focusable="false">'
-    + `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0.85" y2="1">`
+    + ` preserveAspectRatio="none" role="img" aria-hidden="true" focusable="false" fill="url(#${id})">`
+    + `<defs><linearGradient id="${id}" x1="${(1 - gx).toFixed(3)}" y1="${(1 - gy).toFixed(3)}" x2="${gx}" y2="${gy}">`
     + `<stop offset="0" stop-color="${ramp[0]}"/>`
     + `<stop offset="0.42" stop-color="${ramp[1]}"/>`
     + `<stop offset="1" stop-color="${ramp[2]}"/>`
     + '</linearGradient></defs>'
-    + `<g fill="url(#${id})">${body}</g>`
+    + seat(body, 0.8)
     + '</svg>';
 }
 
@@ -535,5 +622,32 @@ export function escapeHtml(str) {
 export function hasIcon(name) {
   return !!(P[name] ?? P[ALIASES[name]]);
 }
+
+/**
+ * What the lamp does not fix, measured, for whoever takes the next round.
+ *
+ * Seating the glyphs gave the set a light direction — rim asymmetry along the
+ * key went from 0.000 on all three of this interface's grounds to +0.35 on
+ * timber, +0.14 on granite and +0.06 on marble, and white ink on pale marble
+ * went from 1.44 to 2.06 within-cell p95/p05. None of that is a drawing.
+ *
+ * Two faults are, and they are drawing work, not lighting work:
+ *
+ *   1. **Interior detail painted as `currentColor` at low opacity is
+ *      invisible**, for the reason given at the top of this file. Eleven
+ *      glyphs are carried entirely by detail that never renders: `coin` and
+ *      `gold` are a blank disc, `helm` a blank capsule, `skull` and
+ *      `cond-dead` a blank dome, `mana` and `cond-poisoned` are the `water`
+ *      drop exactly, `cond-diseased`, `cond-afraid` and `cond-unconscious`
+ *      are the same blank circle as each other. The fix is to paint those
+ *      shapes as *cuts* — a dark overlay, which multiplies the tint instead of
+ *      re-stating it — not to raise their opacity.
+ *   2. **Four collisions a player would misread.** `speed` and
+ *      `cond-paralyzed` are both a bolt with motion lines, and they mean
+ *      opposite things; `crosshair` and `accuracy` are one ringed dot;
+ *      `shield`, `armour` and `endurance` are one shield; `light` and `sun`
+ *      are one burst. Each needs one of the pair redrawn, and that is a
+ *      content decision about what the glyph depicts.
+ */
 
 export default icon;
