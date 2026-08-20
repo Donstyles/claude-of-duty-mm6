@@ -212,7 +212,18 @@ export class UISystem extends System {
 
     on('monster:died', (p = {}) => this.log(`${p.monster?.name ?? 'The creature'} falls.`, 'combat'));
     on('loot:picked', (p = {}) => this.log(`Picked up ${p.item?.name ?? 'something'}.`, 'loot'));
-    on('spell:cast', (p = {}) => this.log(`${this._name(p.caster)} casts ${p.spellId ?? 'a spell'}.`, 'magic'));
+    // `spellId` is an ID — `spirit_detect_life` — and printing it raw put
+    // "The party casts spirit_detect_life." in the strip beside SpellSystem's
+    // own correctly-worded line. Two entries per cast, one of them in the
+    // machine's vocabulary rather than the player's.
+    //
+    // SpellSystem already announces every cast through `ui:log`, so this
+    // listener only speaks for a cast that arrives from somewhere else, and it
+    // prettifies when it does.
+    on('spell:cast', (p = {}) => {
+      if (p.announced) return;
+      this.log(`${this._name(p.caster)} casts ${p.spellId ? prettyId(p.spellId) : 'a spell'}.`, 'magic');
+    });
     on('party:levelUp', (p = {}) => {
       this.toast(`${this._name(p.index)} reaches level ${p.level}!`, 'good');
       this.log(`${this._name(p.index)} is now level ${p.level}.`, 'good');
@@ -1786,7 +1797,12 @@ export class UISystem extends System {
         this.hud?.setRegion('Millhaven Downs');
         this.selectMember(0);
         // Everything the game has to say goes through the one message strip.
-        this.hud?.log('tree', 'info');
+        // Through `seeLine()`, not around it. STYLE.md §5 is why the strip
+        // reads "You see a tree." and not "tree" — and this line, which exists
+        // only to dress the `ui-hud` capture, is what put a bare noun in the
+        // shipped screenshot of the HUD. A shot that stages the interface badly
+        // teaches every reviewer the wrong thing about it.
+        this.hud?.setReticleHint?.('tree');
       },
     });
 
