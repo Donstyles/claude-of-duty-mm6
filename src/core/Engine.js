@@ -118,7 +118,14 @@ export class Engine {
     );
     this.camera.rotation.order = 'YXZ'; // yaw then pitch — correct for FPS look
 
-    this.input = new Input(window, canvas);
+    // The event bus is handed to Input here, and that is the whole fix for a
+    // retry loop that ran on every touch boot. `TouchInput` wanted `ui:reticle`
+    // to light its Interact button, could not see a context from inside the
+    // constructor, and so polled `window.__ENGINE` twelve times at 400 ms —
+    // up to 4.8 seconds of timers on a phone, for a signal that was available
+    // the whole time. `this.events` is built at the top of this constructor,
+    // twenty-five lines above; nobody had passed it down.
+    this.input = new Input(window, canvas, this.events);
     this.ctx = new GameContext(this);
 
     /** @type {Map<string, System>} */

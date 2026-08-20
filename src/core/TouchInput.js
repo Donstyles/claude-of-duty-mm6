@@ -150,7 +150,6 @@ export class TouchInput {
     this._knob = null;
     this._interactBtn = null;
     this._eventsBound = null;
-    this._reticleTries = 0;
     /** False until the chrome has been found and measured at least once. */
     this._measured = false;
     this._frames = 0;
@@ -518,20 +517,31 @@ export class TouchInput {
    * Light the Interact button when the world says something is in range.
    *
    * `ui:reticle` is the existing signal for exactly this — VenueSystem emits it
-   * with the name of the door you are standing at. Bound through
-   * `window.__ENGINE`, the hook `main.js` publishes and the harnesses already
-   * use, because `Input` is built inside the engine's constructor and there is
-   * no context to be handed one yet. It is purely cosmetic: every button works
-   * whether or not this ever binds, which is why it is allowed to give up.
+   * with the name of the door you are standing at.
+   *
+   * This used to reach for `window.__ENGINE`, miss it, and retry twelve times
+   * at 400 ms — up to 4.8 seconds of timers on every touch boot, for a bus
+   * that already existed. The reasoning in the old comment was sound as far as
+   * it went ("`Input` is built inside the engine's constructor and there is no
+   * context to be handed one yet") and simply stopped one step early: the
+   * engine builds its `EventBus` twenty-five lines BEFORE it builds `Input`.
+   * There was never anything to wait for. `Engine` passes it to `Input` now
+   * and `Input` hands it here, so this binds once, synchronously, or not at
+   * all.
+   *
+   * Still allowed to find nothing — Input can be constructed standalone, and
+   * every button works whether or not this ever binds, because it is purely
+   * cosmetic.
    */
   _bindWorldSignals() {
-    if (!this.armed) return;   // disposed while a retry was pending
-    const events = window.__ENGINE?.ctx?.events;
-    if (!events) {
-      if (this._reticleTries++ > 12) return;
-      setTimeout(() => this._bindWorldSignals(), 400);
-      return;
-    }
+    if (!this.armed) return;
+    // `globalThis.window?.` and not `window.` — the fallback is for a harness
+    // that built Input without a bus, and a harness is exactly the place where
+    // `window` may not be declared at all, in which case the bare reference
+    // throws before optional chaining can save it. The regression test in
+    // tools/inputtest.mjs caught this within a minute of the fix landing.
+    const events = this.input?.events ?? globalThis.window?.__ENGINE?.ctx?.events;
+    if (!events) return;
     const on = ({ mode } = {}) => {
       this._interactBtn?.classList.toggle('is-live', !!mode && mode !== 'default');
     };

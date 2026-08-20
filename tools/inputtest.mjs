@@ -51,5 +51,32 @@ ok('lookSensitivity scales the mouse',inp.lookDelta().dx===50,String(inp.lookDel
 inp.scripted={look:{dx:100,dy:0}};
 ok('capture path is unscaled',inp.lookDelta().dx===100,String(inp.lookDelta().dx));
 
+// 7. the touch layer binds ui:reticle synchronously, with no retry timer
+//
+// It used to poll `window.__ENGINE` twelve times at 400 ms — up to 4.8 s of
+// timers on every touch boot — for an event bus the engine had already built
+// twenty-five lines before it built Input. Engine threads the bus down now.
+// This drives the real method against a stub and fails if a timer reappears.
+const { TouchInput } = await import('../src/core/TouchInput.js');
+const timers = [];
+const realSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (...a) => { timers.push(a); return realSetTimeout(() => {}, 0); };
+let subscribed = null;
+const bus = { on(n, f) { subscribed = n; }, off() {} };
+const t = Object.create(TouchInput.prototype);
+t.armed = true; t.input = { events: bus }; t._interactBtn = null;
+t._bindWorldSignals();
+globalThis.setTimeout = realSetTimeout;
+ok('touch binds ui:reticle from the bus', subscribed === 'ui:reticle', String(subscribed));
+ok('and sets no retry timer', timers.length === 0, `${timers.length} timer(s)`);
+
+// It must still be harmless when there is no bus at all — Input can be built
+// standalone, and the Interact button works either way. It just goes dark.
+const t2 = Object.create(TouchInput.prototype);
+t2.armed = true; t2.input = { events: null }; t2._interactBtn = null;
+let threw = false;
+try { t2._bindWorldSignals(); } catch { threw = true; }
+ok('survives having no bus at all', !threw, threw ? 'threw' : 'returned quietly');
+
 for(const l of R)console.log('  '+l);
 console.log(`\n${R.filter(l=>l.startsWith('PASS')).length}/${R.length} pass`);

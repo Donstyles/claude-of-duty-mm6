@@ -53,8 +53,17 @@ export const DEFAULT_BINDINGS = {
 };
 
 export class Input {
-  constructor(target = window, canvas = null) {
+  constructor(target = window, canvas = null, events = null) {
     this.target = target;
+    /**
+     * The engine's event bus, or null when Input is built standalone.
+     *
+     * Only the touch layer needs it, and only to hear `ui:reticle`. It is
+     * threaded through here rather than fetched from a global because a global
+     * is not available yet at construction time — which is exactly what sent
+     * `TouchInput` polling for one.
+     */
+    this.events = events;
     this.canvas = canvas;
     this.bindings = structuredClone(DEFAULT_BINDINGS);
 
