@@ -294,6 +294,13 @@ const PER_ITEM = new Set([
   // a tall rectangle. The two lines that would have made them look right were
   // already written.
   'wand',
+  // And then the same thing again, one line down. `quest` was posed here too
+  // — "seen from a natural angle" — and left out of this set, so all
+  // TWENTY-EIGHT quest items in the game drew `_letter`: the psalter, the
+  // crown, the pilot's key, the severed hand and the folded summons were one
+  // identical folded letter with a wax seal. These are the objects the whole
+  // campaign is about; they are the last thing that should be interchangeable.
+  'quest',
 ]);
 
 /** One plate for a whole family, varied in code rather than in credits. */
@@ -331,13 +338,202 @@ export function itemPlates(ITEMS) {
   return out;
 }
 
+/**
+ * Creature hides.
+ *
+ * `MonsterGen` builds real articulated meshes rather than MM6's billboards,
+ * which is the better call — they turn, they animate, they cast shadow. What
+ * they have never had is a surface: `MeshStandardMaterial({ color })` with no
+ * `map` at all, so ninety-nine creatures are ninety-nine flat solid colours,
+ * and a dragon and an ooze differ only in silhouette and hue. The eyes are
+ * two emissive spheres because, as the file says, that is the cheapest way to
+ * make a shape read as alive — which is a fair thing to say about a shape
+ * with nothing else on it.
+ *
+ * One hide per FAMILY, not per monster: the three tiers of a family are
+ * explicitly authored as palette swaps of one silhouette, and the palette
+ * still tints the map. Thirty-three surfaces instead of ninety-nine, and the
+ * ladder keeps reading as a ladder.
+ *
+ * The prompt is built from the record's own `visual.features`, so a hide
+ * cannot drift from the creature it belongs to — the same discipline the
+ * spell miniatures use.
+ */
+const HIDE_STYLE =
+  'A seamless flat-lit material swatch photographed straight on, filling the '
+  + 'entire frame edge to edge, no object, no silhouette, no background, no '
+  + 'horizon, no lighting gradient, no vignette, no text, no border. Uniform '
+  + 'even illumination so it can be lit by the renderer. Fine surface detail '
+  + 'at close range, in the style of a game texture map.';
+
+export function monsterHides(MONSTERS) {
+  const seen = new Map();
+  for (const def of Object.values(MONSTERS)) {
+    if (!seen.has(def.family)) seen.set(def.family, def);
+  }
+  return [...seen.entries()].map(([family, def]) => {
+    const feats = (def.visual?.features ?? []).join(', ');
+    return {
+      id: `monsters/${family}`,
+      prompt: `The skin surface of a ${def.name}: ${def.desc ?? ''} `
+        + `${feats ? `Its surface shows ${feats}. ` : ''}`
+        + `A ${def.visual?.bodyPlan ?? 'creature'}. ${HIDE_STYLE}`,
+      aspect: '1:1',
+    };
+  });
+}
+
+/**
+ * Faces for the roles the catalogue actually writes down.
+ *
+ * There are sixteen portraits in this game and every speaker in it resolves
+ * into them through a chain of maps that each fall back to the next. Chased
+ * end to end against the real table, the answer is: forty-nine of sixty-eight
+ * NPCs draw the same rogue. The necromancer, the seer, both cultists, the
+ * royal, the monk, the elder, the druid and all twenty-four townsfolk are two
+ * faces between them. Every tavern in Caerwen is one innkeeper.
+ *
+ * These are the twenty-two `portrait` values `NPCs.js` writes, minus the ones
+ * a plate already exists for. Townsfolk get four apiece because twenty-four
+ * NPCs carry that value and one face for twenty-four people is what this is
+ * meant to fix. Party creation draws from the same pool — it has seven faces
+ * per sex today, against MM6's twenty-odd, and a screen the player stares at
+ * for five minutes before the game starts should not be the thinnest one.
+ */
+const ROLE_FACES = {
+  townsfolk_a: ['a village blacksmith\'s wife, plain woollen kirtle, hair under a linen coif, ruddy healthy face',
+    'a farmer in middle age, sun-creased face, undyed homespun shirt open at the throat'],
+  townsfolk_b: ['a young serving girl, straw-blonde hair escaping a cap, freckled, plain grey dress',
+    'a young carter, wind-burnt, dark curls, patched leather jerkin over a coarse shirt'],
+  townsfolk_c: ['an old widow, deeply lined face, black shawl over grey hair, sharp knowing eyes',
+    'a stooped old labourer, white stubble, weather-ruined skin, faded brown smock'],
+  townsfolk_d: ['a stout matron, apple-cheeked, brown hair coiled and pinned, apron over a russet dress',
+    'a heavyset innkeep, balding, broad red face, sleeves rolled to the elbow'],
+  guard: ['a woman town guard, dark hair cropped short, alert and unsmiling, iron kettle helm under one arm, mail coif',
+    'a town guard in his forties, thick moustache, broken nose, iron kettle helm, mail coif over a padded coat'],
+  alchemist: ['a woman apothecary, hair tied back severely, ink-stained fingers at her collar, spectacles, dark green smock',
+    'an apothecary, thin and precise, close-cropped grey hair, small round spectacles, dark green smock and a leather apron'],
+  royal: ['a queen in late middle age, iron-grey hair under a slender gold circlet, cold composed face, ermine at the shoulders',
+    'a king, heavy-browed, greying beard trimmed square, gold circlet, deep crimson mantle with ermine'],
+  smith: ['a woman smith, forearms thick, soot on her cheek, hair bound in a sweat-rag, scorched leather apron',
+    'a blacksmith, black-bearded, massive shoulders, soot-streaked face, scorched leather apron over a bare chest'],
+  scholar: ['a woman scholar, hair pinned tight, pale from indoors, high-collared dark blue gown, quill behind one ear',
+    'a scholar, thin, receding hair, spectacles pushed up, high-collared dark blue gown, ink on his fingers'],
+  official: ['a woman magistrate, hair severe under a flat cap, unimpressed expression, black robe with a chain of office',
+    'a town clerk, jowly, self-important, flat black cap, black robe with a chain of office'],
+  monk: ['a woman of a fighting order, head shaved, calm level gaze, plain undyed robe with a knotted cord belt',
+    'a fighting monk, shaved head, callused hands, serene and watchful, plain undyed robe and a knotted cord belt'],
+  noble: ['a noblewoman, pale, auburn hair dressed with pearls, haughty, deep green velvet with slashed sleeves',
+    'a young nobleman, fine-boned, dark hair to the jaw, faintly bored, deep green velvet doublet with slashed sleeves'],
+  necromancer: ['a woman necromancer, bloodless skin, black hair scraped back, colourless eyes, high black collar over grey',
+    'a necromancer, cadaverous, shaven-headed, sunken eyes, high black collar over ash-grey robes'],
+  seer: ['a blind seer, milk-white eyes, wild grey hair, a faded blue cloth bound across her brow',
+    'a blind seer, milk-white eyes, long white hair, a faded blue cloth bound across his brow'],
+  cultist: ['a woman cultist, hood back off shaved head, fervent staring eyes, a spiral brand at her temple, rough dark robe',
+    'a cultist, hood back, gaunt, fervent staring eyes, a spiral brand at his temple, rough dark robe'],
+  priest: ['a priestess, middle-aged, plain unadorned white wimple, tired kind face, undyed vestments',
+    'a parish priest, heavyset, thinning hair, tired kind face, undyed vestments and a plain wooden pendant'],
+  ranger: ['a woman ranger, dark braided hair, a healed scar along one cheek, hood down, oiled leather and green wool',
+    'a ranger, weather-beaten, short beard, watchful pale eyes, hood down, oiled leather and green wool'],
+};
+
+export const ROLE_PORTRAITS = Object.entries(ROLE_FACES).flatMap(([role, [female, male]]) => [
+  P(`f-${role}`, `Head-and-shoulders portrait of ${female}.`),
+  P(`m-${role}`, `Head-and-shoulders portrait of ${male}.`),
+]);
+
+/**
+ * Class heraldry.
+ *
+ * `UITextures.classEmblem` draws one of five hard-coded canvas shapes for
+ * thirty-two classes, and it sits directly beside a painted portrait on the
+ * creation screen, so the flat vector is compared against an oil painting
+ * every frame. Promotions are the game's long reward and a distinct badge is
+ * most of what sells one.
+ */
+const EMBLEM_STYLE =
+  'A single heraldic device centred on a plain dark slate background, painted '
+  + 'as an enamelled and gilded metal badge in the style of a 1998 CRPG '
+  + 'interface: raised metal, jewelled accents, strong directional light from '
+  + 'the upper left. The device fills the frame. No shield outline unless the '
+  + 'device is itself a shield, no text, no lettering, no border, no frame.';
+
+export function classEmblems(CLASSES) {
+  return Object.entries(CLASSES).map(([id, cls]) => ({
+    id: `emblems/${id}`,
+    prompt: `The heraldic badge of the ${cls.name ?? id}: ${cls.desc ?? ''} ${EMBLEM_STYLE}`,
+    aspect: '1:1',
+  }));
+}
+
+/**
+ * The things there is exactly one of, and no art for at all.
+ *
+ * The kingdom chart is drawn with `fill()` calls — twenty provinces and eleven
+ * towns as coloured blobs — where MM6's is a painted parchment map, which is
+ * the one thing a generator does better than any amount of
+ * `quadraticCurveTo`. The boot screen is a CSS radial gradient. The rest
+ * screen's "photographic landscape plate" is three `lineTo` ridges and some
+ * triangle pines.
+ */
+export const SCENES = [
+  // Parchment, not a map.
+  //
+  // The obvious prompt — "a painted fantasy kingdom map" — returns a
+  // beautiful chart of somewhere else: its own coastline, its own mountains,
+  // its own eleven towns, none of which are Caerwen's. Laid under the real
+  // twenty provinces it reads as two maps disagreeing. What the chart is
+  // actually missing is not geography, which the data already has, but a
+  // ground to be drawn on. So: the sheet only, and `map.chart.js` keeps
+  // drawing the kingdom that exists.
+  { id: 'scenes/chart', aspect: '16:9',
+    prompt: 'A blank sheet of aged parchment filling the entire frame edge to edge, seen '
+      + 'flat from directly above under even light: warm ochre and cream vellum, subtle '
+      + 'fibre grain, faint water staining and foxing toward the edges, a few soft creases. '
+      + 'Absolutely nothing drawn or written on it — no map, no coastline, no ink, no text, '
+      + 'no lettering, no border decoration, no torn edges, no background, no table, no '
+      + 'shadow. Only the paper surface.' },
+  { id: 'scenes/title', aspect: '16:9',
+    prompt: 'A wide fantasy landscape at dusk seen from a high ridge: a walled town far below '
+      + 'in a river valley, dark forest to one side, distant snow mountains, heavy gold and '
+      + 'violet cloud, a road winding down out of the foreground. Oil-painted photoreal '
+      + 'realism in the style of a 1998 CRPG title screen. Dark and uncluttered across the '
+      + 'upper third so a title can sit there. No text, no lettering, no border, no figures.' },
+  { id: 'scenes/menu', aspect: '16:9',
+    prompt: 'The interior of an old stone vault lit by a single guttering torch, carved '
+      + 'columns receding into darkness, worn flagstones, a deep warm falloff to near black '
+      + 'at the edges. Oil-painted photoreal realism in the style of a 1998 CRPG menu '
+      + 'backdrop. Very dark and uncluttered in the centre. No text, no figures, no border.' },
+  { id: 'scenes/camp_spring', aspect: '16:9',
+    prompt: 'A green river valley in early morning under a clear pale sky, low hills, a stand '
+      + 'of birches, wildflowers in the grass. Oil-painted photoreal realism, 1998 CRPG '
+      + 'landscape plate. No figures, no text, no border.' },
+  { id: 'scenes/camp_summer', aspect: '16:9',
+    prompt: 'A high meadow at golden hour in high summer, dry grass, a dark treeline, warm '
+      + 'raking light and long shadows. Oil-painted photoreal realism, 1998 CRPG landscape '
+      + 'plate. No figures, no text, no border.' },
+  { id: 'scenes/camp_autumn', aspect: '16:9',
+    prompt: 'A wooded hillside in late autumn under a grey overcast sky, bare branches and '
+      + 'russet leaf litter, mist in the hollows. Oil-painted photoreal realism, 1998 CRPG '
+      + 'landscape plate. No figures, no text, no border.' },
+  { id: 'scenes/camp_winter', aspect: '16:9',
+    prompt: 'A snowbound moor at blue hour, drifted snow, black rocks, a frozen beck, cold '
+      + 'violet light with a last band of orange at the horizon. Oil-painted photoreal '
+      + 'realism, 1998 CRPG landscape plate. No figures, no text, no border.' },
+];
+
 import { SPELLS } from '../src/game/data/Spells.js';
 import { ITEMS } from '../src/game/data/Items.js';
+import { MONSTERS } from '../src/game/data/Monsters.js';
+import { CLASSES } from '../src/game/data/Classes.js';
 
 export const SPELL_ART = spellPlates(SPELLS);
 export const ITEM_ART = itemPlates(ITEMS);
+export const MONSTER_ART = monsterHides(MONSTERS);
+export const EMBLEM_ART = classEmblems(CLASSES);
 
 export const ALL = [
-  ...PORTRAITS, ...MISC, ...SPELL_ART, ...SPELL_COVERS, ...VENUE_INTERIORS,
-  ...FIGURES, ...ITEM_ART,
+  ...PORTRAITS, ...ROLE_PORTRAITS, ...MISC, ...SPELL_ART, ...SPELL_COVERS,
+  ...VENUE_INTERIORS, ...FIGURES, ...ITEM_ART, ...MONSTER_ART, ...EMBLEM_ART,
+  ...SCENES,
 ];

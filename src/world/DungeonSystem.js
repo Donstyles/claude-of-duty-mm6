@@ -3,6 +3,7 @@ import { System } from '../core/Engine.js';
 import { getMaterialLibrary } from '../render/MaterialLibrary.js';
 import { DUNGEONS, entranceOf } from '../game/data/Dungeons.js';
 import { QUESTS } from '../game/data/Quests.js';
+import { charSkillEffect } from '../game/rules.js';
 
 /**
  * Dungeons — the fifty-five interiors in `data/Dungeons.js`, built on demand.
@@ -2284,6 +2285,15 @@ export class DungeonSystem extends System {
     const p = ctx.get('player')?.position;
     if (!p) return;
     const pressed = ctx.input?.actionPressed?.('interact') && !ctx.state.modal;
+
+    // "Hidden caches are revealed at range." Perception's Master step, and the
+    // reason it exists: below Expert you have to be within arm's reach of a
+    // seam to have any chance of seeing it, and at 4.5 m in a warren you walk
+    // past most of them. The ladder gives 0, 6, 14 and 30 metres; the floor
+    // stays the old 4.5 so an untrained party is exactly as it was.
+    const reach = Math.max(4.47, this._perception(ctx).revealRange ?? 0);
+    const reachSq = reach * reach;
+
     for (const door of built.doors) {
       const near = (door.x - p.x) ** 2 + (door.z - p.z) ** 2 < 20
         && Math.abs(door.y - p.y) < 4;
@@ -2291,7 +2301,9 @@ export class DungeonSystem extends System {
       // interacted with; the only thing that happens near it is that somebody
       // in the party might look at it properly.
       if (door.secret && !door.found) {
-        if (near) this._notice(ctx, door);
+        const inSight = (door.x - p.x) ** 2 + (door.z - p.z) ** 2 < reachSq
+          && Math.abs(door.y - p.y) < 4;
+        if (inSight) this._notice(ctx, door);
         continue;
       }
       if (near) {
@@ -2321,6 +2333,23 @@ export class DungeonSystem extends System {
       if (chest.open) continue;
       if ((chest.x - p.x) ** 2 + (chest.z - p.z) ** 2 > 4) continue;
       const level = this.currentDef?.level ?? 1;
+
+      // "Traps are marked before you touch them" — Perception at Expert, and
+      // the only step on that ladder whose whole value is a warning. Without
+      // it a trapped chest was indistinguishable from a safe one until it went
+      // off in somebody's face, which makes the skill worth nothing at the
+      // exact moment it should be worth the most. Marked once, then the next
+      // press is the party deciding to try it anyway; MM6 gives you the same
+      // choice.
+      if (chest.trap && !chest.marked && this._perception(ctx).marksTraps) {
+        chest.marked = true;
+        ctx.events.emit('ui:log', {
+          text: 'There is a needle set behind the lockplate. Press again to try it.', kind: 'warn',
+        });
+        ctx.get('audio')?.play?.('ui-discover');
+        continue;
+      }
+
       if (chest.trap && !this._disarm(ctx, chest.trap)) {
         ctx.get('party')?.damage?.(0, Math.max(2, Math.round(level * 1.4)), 'physical');
         ctx.events.emit('ui:log', { text: 'The lock was trapped.', kind: 'bad' });
@@ -2414,21 +2443,46 @@ export class DungeonSystem extends System {
    * still gets there eventually. MM6 never let a secret be permanently missed
    * and neither does this.
    */
+  /**
+   * The party's best pair of eyes, as the skill itself defines them.
+   *
+   * `_notice` used to carry its own copy of the mastery ladder —
+   * `{normal:1, expert:1.5, master:2, grandmaster:3}` — and its own curve, so
+   * Perception worked, by a rule that was not Perception's. All three fields
+   * the skill actually resolves (`spotChance`, `marksTraps`, `revealRange`)
+   * had no reader anywhere, which made this the largest block of inert steps
+   * left in the game: three of the last four, on a skill that appeared to be
+   * functioning.
+   *
+   * It also read `c.skill('perception')` rather than `charSkillEffect`, so the
+   * `of Perception` suffix — an enchantment on eleven wearable slots, worth
+   * five points — moved nothing. The bonus bag is folded in by
+   * `charSkillEffect` and by nothing else.
+   */
+  _perception(ctx) {
+    let best = { spotChance: 0, marksTraps: false, revealRange: 0 };
+    for (const c of ctx.get('party')?.members ?? []) {
+      const e = charSkillEffect(c, 'perception');
+      if ((e.spotChance ?? 0) > best.spotChance) best = e;
+    }
+    return best;
+  }
+
   _notice(ctx, door) {
     const t = ctx.state.elapsed;
     if (t < (door.nextRoll ?? 0)) return;
     door.nextRoll = t + 0.75;
-    const party = ctx.get('party');
-    let best = 0;
-    for (const c of party?.members ?? []) {
-      const s = c.skill?.('perception');
-      if (!s) continue;
-      const mult = { normal: 1, expert: 1.5, master: 2, grandmaster: 3 }[s.mastery] ?? 1;
-      best = Math.max(best, s.level * mult);
-    }
+
+    // Grandmaster's own text is "nothing hidden escapes you", and a roll of
+    // 1.0 is what that sentence means — no dungeon is deep enough to hide a
+    // seam from it. Everyone below that rolls against how well this particular
+    // place hides things.
+    const eye = this._perception(ctx);
     const level = this.currentDef?.trapLevel ?? 1;
-    const chance = Math.max(0.04, Math.min(0.6, (best + 2) / (best + level * 3 + 14)));
-    if ((this.rollRng?.next() ?? 1) >= chance) return;
+    const chance = eye.spotChance >= 1
+      ? 1
+      : Math.max(0.02, Math.min(0.6, eye.spotChance / (1 + level * 0.12)));
+    if (chance < 1 && (this.rollRng?.next() ?? 1) >= chance) return;
     door.found = true;
     door.target = 1;
     door.closeAt = t + 9;

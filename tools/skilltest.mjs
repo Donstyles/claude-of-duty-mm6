@@ -200,5 +200,78 @@ console.log('\noneHanded — Spear expert');
   }
 }
 
+console.log('\nspotChance / marksTraps / revealRange — Perception, all three steps');
+{
+  const { DungeonSystem } = await import('../src/world/DungeonSystem.js');
+  const dun = new DungeonSystem();
+  dun.currentDef = { trapLevel: 6, level: 6 };
+
+  const c = subject();
+  const eye = () => dun._perception(ctx);
+
+  // A secret door is rolled once every 0.75 s while the party is in range.
+  // What a rank buys is how many of those rolls find it.
+  //
+  // This repeats `_notice`'s curve rather than calling it, which is the exact
+  // shape of bug this file exists to catch, and it is worth saying so out
+  // loud: if the curve there changes and this does not, the numbers below stop
+  // meaning what they say. What it does test honestly is the part that was
+  // actually broken — that `spotChance` reaches a roll at all, and that it
+  // carries the equipment bonus. `tools/droptest.mjs` is the pattern for
+  // testing the real thing; a secret door needs a built floor to stand in.
+  const finds = (rolls) => {
+    dun.rollRng = new RNG(777);
+    let found = 0;
+    for (let i = 0; i < rolls; i++) {
+      const e = eye();
+      const chance = e.spotChance >= 1
+        ? 1 : Math.max(0.02, Math.min(0.6, e.spotChance / (1 + 6 * 0.12)));
+      if (chance >= 1 || dun.rollRng.next() < chance) found++;
+    }
+    return found;
+  };
+
+  skill(c, 'perception', 20, 'normal');
+  const atNormal = finds(200);
+  skill(c, 'perception', 20, 'expert');
+  const atExpert = finds(200);
+  cmp('perception normal → expert (of 200 rolls, found)', atNormal, atExpert);
+
+  skill(c, 'perception', 20, 'master');
+  const atMaster = finds(200);
+  cmp('perception expert → master (of 200 rolls, found)', atExpert, atMaster);
+
+  skill(c, 'perception', 20, 'grandmaster');
+  cmp('perception master → grandmaster (nothing escapes)', atMaster, finds(200));
+
+  // revealRange: how far away a seam can be looked at at all.
+  const reachAt = (mastery) => {
+    skill(c, 'perception', 20, mastery);
+    return Math.max(4.47, eye().revealRange ?? 0).toFixed(2);
+  };
+  console.log(`  ..    reveal range by rank                        `
+    + `none ${(4.47).toFixed(2)} · normal ${reachAt('normal')} · expert ${reachAt('expert')}`
+    + ` · master ${reachAt('master')} · grandmaster ${reachAt('grandmaster')} m`);
+  skill(c, 'perception', 20, 'normal');
+  const rNormal = Number(reachAt('normal'));
+  const rMaster = Number(reachAt('master'));
+  cmp('revealRange normal → master', rNormal, rMaster, ' m');
+
+  skill(c, 'perception', 20, 'normal');
+  const marksNormal = eye().marksTraps;
+  skill(c, 'perception', 20, 'expert');
+  cmp('marksTraps normal → expert', String(marksNormal), String(eye().marksTraps));
+
+  // And the enchantment that was moving nothing: `of Perception` is +5, and
+  // `_notice` used to read the raw skill, which does not know about it.
+  const bare = subject();
+  skill(bare, 'perception', 10, 'expert');
+  const without = eye().spotChance;
+  bare.equipment.amulet = { ...item('amulet_amulet'), skillBonus: { perception: 5 } };
+  bare.refresh?.();
+  cmp('an amulet of Perception (+5) reaches the roll',
+    without.toFixed(3), eye().spotChance.toFixed(3));
+}
+
 console.log(`\n${inert ? `${inert} STILL INERT` : 'every step measured buys something'}`);
 process.exit(inert);
