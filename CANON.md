@@ -209,3 +209,28 @@ fantasy vocabulary predating and outside Might & Magic, and stays.
   Saltmarch ↔ Coldwater ↔ Brackwater ↔ Fallowmere ↔ Emberhold. Costs more,
   takes longer, opens the islands.
 - Both are gated by act: coaches unlock in act 2, ships in act 3.
+
+---
+
+## 9. Notes from the far side of the map
+
+Appended by the campaign pass, which found the side catalogue clustered in the
+first three regions and had to write the last seven. Nothing here overrides
+anything above it; it is detail hung on hooks §3 already put in the ground.
+
+- **The Assize.** The Imperium held a standing court in what is now the
+  Gallowfen and never adjourned it. It cannot be killed and will not be argued
+  with, but it will be *adjourned*, because adjournment is in the procedure.
+  The register of the condemned is still being added to. Use it whenever the
+  Imperium needs to be shown as bureaucracy that outlived its own state.
+- **The Malveth household.** Nobody has told the family in Malveth Hold that
+  the Imperium fell. They receive embassies, ask which prefecture you come
+  from, and believe the answer. Court dress in the Cindric cut is buyable in
+  Duskorn and is the only way through the door.
+- **Nine feet four inches.** The corridors under Ossra Deep are all the same
+  width, everywhere, with no join. This is the first physical evidence the
+  party can measure themselves, and it is the correct way to reveal §2's buried
+  premise: a number, taken three times, that does not vary. Never a speech.
+- **The berths.** Eleven hundred and forty of them down the Long Gallery, one
+  plate each, marks running in a sequence that does not repeat. What is in them
+  is not stated, and should not be.

@@ -936,6 +936,310 @@ side({
   rewards: { xp: 40000, gold: 18000, items: ['art_thornwick_harness'] },
 });
 
+// ── The far side of the map ─────────────────────────────────────────────────
+//
+// The side catalogue grew where the writers were standing: eight quests in the
+// Millhaven Downs, one in Ossra Deep, which is where the game ends. What
+// follows redresses that, and does it with shapes the book was short of —
+// a fare paid, a night held, a question answered — rather than another cellar
+// with another thing at the bottom of it. Roughly two thirds of the objectives
+// in this catalogue were `clear`, `kill` or `collect`, which is one shape
+// wearing three names, and a player feels that long before they can name it.
+
+side({
+  id: 'side_the_assize', name: 'The Assize', giver: 'npc_alys_bracken', location: 'gallowfen', level: 30,
+  summary: 'The Imperium held a court in the Gallowfen and never adjourned it. The register of the condemned is legible, and it is still being added to.',
+  objectives: [
+    { type: 'collect', target: 'qi_assize_writ', text: 'Take a writ off one of the marsh bailiffs.' },
+    { type: 'clear', target: 'dun_the_hanging_yard', stage: 1, text: 'Get down into the hanging yard and stop the sitting.' },
+    { type: 'flag', target: 'assize_adjourned', stage: 2, text: 'Adjourn the court in the words it will accept.' },
+  ],
+  stages: [
+    'A bailiff will not stop you if you are carrying a writ, and will not look at your face if you are. They have not looked at a face in eight hundred years.',
+    'Six feet of marsh over a courtroom, and the court in session. The register runs to nine thousand names and the last entry is from the spring.',
+    'It will not be killed and it will not be argued with, but it will be adjourned, because adjournment is in the procedure and procedure is all it has left. Bracken wrote the formula out for us twice.',
+  ],
+  rewards: { xp: 38000, gold: 14000, items: ['art_recant'], reputation: 12 },
+});
+
+side({
+  id: 'side_the_hold_that_never_heard', name: 'The Hold That Never Heard', giver: 'npc_isabeau_ossran', location: 'malveth_spires', level: 36,
+  summary: 'The Malveth household has not been told the Imperium fell. Isabeau would like it told, and would like the contents of the muniment room afterwards.',
+  objectives: [
+    { type: 'spend', target: 'gold', count: 3000, text: 'Have court dress made in the Cindric cut. It is not cheap and it cannot be borrowed.' },
+    { type: 'reach', target: 'dun_malveth_hold', stage: 1, text: 'Present yourselves at the hold as an imperial embassy.' },
+    { type: 'talk', target: 'npc_isabeau_ossran', stage: 2, text: 'Tell Isabeau what the household said.' },
+  ],
+  stages: [
+    'A tailor in Duskorn who does nothing else. Three thousand gold, four days, and she will not take a deposit from strangers.',
+    'The steward asked which prefecture we came from, and we gave one, and he believed us because nobody has told him there are none. Lord Ash Malveth received us in a room lit for a court that ended in 214.',
+    'Isabeau listened without interrupting, which she never does. Then she said the muniment room was ours and that she wanted the household left alone, and those two sentences did not sit well together.',
+  ],
+  rewards: { xp: 52000, gold: 18000, items: ['art_ossran_pendant'], reputation: 8 },
+});
+
+side({
+  id: 'side_the_split_hall', name: 'The Split Hall', giver: 'npc_ysolde_caerwen', location: 'the_riven_steppe', level: 22,
+  summary: 'A canyon opened under an imperial hall and took half of it down. The giants hold the half that is still up, and the crown wants what is in the half that is not.',
+  objectives: [
+    { type: 'reach', target: 'dun_the_split_hall', text: 'Get down the canyon face to the fallen half.' },
+    { type: 'survive', target: 'split_hall_night', stage: 1, text: 'Wait out the night on the ledge. Thane Hulm walks it after dark.' },
+    { type: 'deliver', target: 'npc_ysolde_caerwen', stage: 2, text: 'Bring the survey back to Thornwick.' },
+  ],
+  stages: [
+    'A hundred feet down and still furnished. The tables are where the tables were, and everything on them slid one way.',
+    'Hulm came along the ledge twice in the night and did not come out onto it. Neither did we.',
+    'The Queen wanted the measurements, not the plate. She had the survey copied out three times before we left the room.',
+  ],
+  rewards: { xp: 21000, gold: 9000, items: ['art_quernstone'], reputation: 10 },
+});
+
+side({
+  id: 'side_the_pit_singer', name: 'The Pit Singer', giver: 'npc_huscarl_dain', location: 'the_riven_steppe', level: 25,
+  summary: 'The Choir sent recruiters into the canyon sinks. The harpies ate two of them and kept the tune.',
+  objectives: [
+    { type: 'talk', target: 'npc_huscarl_dain', text: 'Get the recruiters\' route out of Dain.' },
+    { type: 'clear', target: 'dun_windward_pits', stage: 1, text: 'Go down into the windward pits.' },
+    { type: 'talk', target: 'npc_nim_vellory', stage: 2, text: 'Describe what you heard to Archivist Vellory.' },
+  ],
+  stages: [
+    'Dain lost a cousin to the recruiters and has the route memorised in the way people memorise things they intend to use.',
+    'The wind sings across the sinks on its own. What is down there has learned to sing the other thing over the top of it, in the Choir\'s notation, badly.',
+    'Vellory made us hum it four times and wrote it down each time. Then she asked, without looking up, whether it had been the same each time. It had.',
+  ],
+  rewards: { xp: 26000, gold: 10000, items: ['art_alderquiet'], reputation: 8 },
+});
+
+side({
+  id: 'side_the_eel_stair', name: 'The Eel Stair', giver: 'npc_old_hessa', location: 'brackwater_isle', level: 17,
+  summary: 'Three families on Brackwater have been hiding things in the same sea cave for a hundred years, including, twice, each other.',
+  objectives: [
+    { type: 'talk', target: 'npc_old_hessa', text: 'Let Hessa explain the arrangement, at length.' },
+    { type: 'collect', target: 'qi_stair_tally', count: 3, stage: 1, text: 'Bring up all three families\' tallies from the stair.' },
+    { type: 'deliver', target: 'npc_old_hessa', stage: 2, text: 'Put all three in front of Hessa at once.' },
+  ],
+  stages: [
+    'A hundred years of agreement about who uses which chamber on which tide, none of it written, all of it remembered wrong in three different directions.',
+    'Three tallies, three chambers, and one chamber that is on all three tallies and belongs to none of them. The matriarch of the stair has been in it the whole time.',
+    'Hessa laid them side by side, read across, and laughed until she had to sit down. The island will be arguing about this for another hundred years, which she says is the point of it.',
+  ],
+  rewards: { xp: 13000, gold: 6000, items: ['art_magpie'], reputation: 6 },
+});
+
+side({
+  id: 'side_the_ashpit_face', name: 'The Face They Stopped Digging', giver: 'npc_adept_grell', location: 'the_cindermoor', level: 11,
+  summary: 'The peat cutters keep turning up whole Cindric dead, tanned brown, hands tied. They have stopped digging that face and will not say why.',
+  objectives: [
+    { type: 'flag', target: 'ashpit_face_counted', text: 'Count what has come out of the cutting so far. The cutters will not.' },
+    { type: 'clear', target: 'dun_ashpit_workings', stage: 1, text: 'Dig the face they left.' },
+    { type: 'talk', target: 'npc_adept_grell', stage: 2, text: 'Give Grell the count and the shape of it.' },
+  ],
+  stages: [
+    'Forty-one, laid in the drying shed under sacking, all of them tied the same way, all of them facing the same quarter.',
+    'The face goes back nine feet and then stops being peat. They were not buried in the moor. The moor grew over what they were buried in.',
+    'Grell wanted the number and the bearing and nothing else. He gave us the fee out of the guild box and told us not to write it up, which is the first time an adept has ever asked us that.',
+  ],
+  rewards: { xp: 5200, gold: 2400, items: ['potion_grey', 'ring_signet'], reputation: 5 },
+});
+
+side({
+  id: 'side_the_blue_throat', name: 'The Blue Throat', giver: 'npc_huscarl_dain', location: 'the_whitemantle', level: 27,
+  summary: 'A meltwater shaft two hundred feet down through the glacier, past everything the ice has taken in four hundred years, in order.',
+  objectives: [
+    { type: 'spend', target: 'gold', count: 1500, text: 'Buy the rope, the pitons and the oil. Coldwater charges what the season will bear.' },
+    { type: 'clear', target: 'dun_the_blue_throat', stage: 1, text: 'Go down the throat.' },
+    { type: 'collect', target: 'qi_throat_core', stage: 2, text: 'Cut a core out of the deepest wall you reach.' },
+  ],
+  stages: [
+    'Fifteen hundred gold of gear and Dain\'s own opinion of our chances, given free.',
+    'A whaling crew at sixty feet, a Cindric survey party at a hundred and forty, and at the bottom something that is not in the ice but has ice growing around it.',
+    'The core is banded like a tree and one of the bands is grey glass. Vellory will want it. Dain says we should not tell her where it came from and we are going to anyway.',
+  ],
+  rewards: { xp: 29000, gold: 11000, items: ['art_sallowhide'], reputation: 8 },
+});
+
+side({
+  id: 'side_the_bricked_widow', name: 'What the Grange Bricked In', giver: 'npc_widow_ansel', location: 'fallowmere', level: 22,
+  summary: 'The last family to farm the Old Grange bricked themselves into their own cellar from the inside, and left the trowel outside the wall.',
+  objectives: [
+    { type: 'reach', target: 'dun_the_old_grange', text: 'Walk out to the Old Grange.' },
+    { type: 'flag', target: 'grange_wall_read', stage: 1, text: 'Read what is written on the inside of the wall before you break it.' },
+    { type: 'clear', target: 'dun_the_old_grange', stage: 2, text: 'Break the wall and finish what is behind it.' },
+  ],
+  stages: [
+    'Two miles of nettles and a house with its door standing open, which nobody on Fallowmere has closed in forty years.',
+    'Nine courses of brick, laid from the inside, and every brick on the inner face written on. It is not a prayer. It is a list of times, and the intervals get shorter.',
+    'They were not keeping something out. They were keeping to a schedule, and the schedule ran out. Widow Ansel took the news the way you take news you have already had.',
+  ],
+  rewards: { xp: 20000, gold: 8500, items: ['art_small_hours'], reputation: 10 },
+});
+
+side({
+  id: 'side_the_glass_survey', name: 'A Survey of the Glass', giver: 'npc_nim_vellory', location: 'the_sunder', level: 33,
+  summary: 'Vellory wants the crater floor measured. Nobody has measured it, because measuring it means standing on it for three days.',
+  objectives: [
+    { type: 'survive', target: 'glass_survey_three_days', text: 'Stand three days on the glass and take the readings.' },
+    { type: 'collect', target: 'qi_survey_plate', count: 4, stage: 1, text: 'Cut four plates from four bearings.' },
+    { type: 'deliver', target: 'npc_nim_vellory', stage: 2, text: 'Carry the plates back to the Concord.' },
+  ],
+  stages: [
+    'Three days, no shade, no water that is not carried, and a floor that is the same temperature at noon and at midnight. That last fact is in the readings four times because we did not believe it.',
+    'Four plates, four bearings, and the grain in all four running the same way. Glass does not have a grain. This is not glass.',
+    'Vellory laid them out on the table in the bearings we cut them at, looked for a while, and then moved them into a different arrangement without saying anything, and they fitted.',
+  ],
+  rewards: { xp: 42000, gold: 15000, items: ['art_assessor'], reputation: 15 },
+});
+
+side({
+  id: 'side_the_cistern_toll', name: 'The Toll at the Cisterns', giver: 'npc_hedda_lune', location: 'verhal_sands', level: 37,
+  summary: 'The Choir waters its caravans at the Verhal cisterns and charges everybody else for the privilege. Hedda has been paying it for two years.',
+  objectives: [
+    { type: 'spend', target: 'gold', count: 5000, text: 'Pay the toll once, like a caravan, and get inside the gate.' },
+    { type: 'flag', target: 'cistern_sluices_opened', stage: 1, text: 'Open every sluice in the cistern floor.' },
+    { type: 'kill', target: 'boss_the_cistern_choir', count: 1, stage: 2, text: 'Deal with what comes up when the water goes down.' },
+  ],
+  stages: [
+    'Five thousand gold and a wave through the gate, which is exactly what a caravan gets and exactly how we found out how many caravans there are.',
+    'Nine sluices, all of them shut for four hundred years, all of them turning. Somebody has been greasing them.',
+    'What was living in the standing water did not like being in the air. Hedda has stopped paying the toll and says four other factors have too, which is more than she expected and more than we did.',
+  ],
+  rewards: { xp: 58000, gold: 22000, items: ['art_null_band'], reputation: 14 },
+});
+
+side({
+  id: 'side_the_vault_keeper', name: "Nine Generations, Sorted", giver: 'npc_warden_coll', location: 'duskorn_waste', level: 28,
+  summary: 'The Ossran vaults hold nine generations of scavenging, labelled and shelved, and the keeper has stopped letting the family in.',
+  objectives: [
+    { type: 'talk', target: 'npc_isabeau_ossran', text: 'Get the shelf-marks out of Isabeau. She will not go herself.' },
+    { type: 'clear', target: 'dun_ossran_vaults', stage: 1, text: 'Get past the keeper to the ninth shelf.' },
+    { type: 'collect', target: 'qi_ossran_daybooks', stage: 2, text: "Take the ninth generation's daybooks." },
+    { type: 'deliver', target: 'npc_warden_coll', stage: 3, text: 'Bring the daybooks to Warden Coll, not to Isabeau.' },
+  ],
+  stages: [
+    'Isabeau gave us the marks in the order her grandmother taught her them, which is not the order they are shelved in, and she knew that.',
+    'Everything down there is labelled in one hand across two hundred years. The keeper is what has been doing the labelling.',
+    'The ninth generation is her own. The daybooks stop four months ago and the last twenty pages are in a different ink.',
+    'Coll read them in front of us and then asked us, very carefully, not to tell Isabeau that he had. We have not decided.',
+  ],
+  rewards: { xp: 31000, gold: 12500, items: ['art_cindrast_yew'], reputation: 10 },
+});
+
+side({
+  id: 'side_the_berths', name: 'The Berths', giver: 'npc_tamsin_ashe', location: 'ossra_deep', level: 42,
+  summary: 'A mile of gallery under the crater, berths down both sides, and something in every one of them. The Order wants them counted and named.',
+  objectives: [
+    { type: 'reach', target: 'dun_the_long_gallery', text: 'Get into the long gallery.' },
+    { type: 'collect', target: 'qi_berth_plate', count: 6, stage: 1, text: 'Take the plate off six berths.' },
+    { type: 'flag', target: 'berths_counted', stage: 2, text: 'Count the gallery end to end and record the number.' },
+  ],
+  stages: [
+    'A mile of it, lit, dry, and level to a degree no mason in Caerwen could hold for twenty feet.',
+    'Every berth has a plate at the head of it with a mark on it. The marks are not the same as each other and they are not decoration — they run in a sequence and the sequence does not repeat.',
+    'Eleven hundred and forty. Prior Ashe asked what was in them and we said we did not open them, which is true, and she said good, which is not what a priest says.',
+  ],
+  rewards: { xp: 90000, gold: 30000, items: ['art_standing_ring'], reputation: 20 },
+});
+
+side({
+  id: 'side_what_the_grid_is_for', name: 'What the Grid Is For', giver: 'npc_nim_vellory', location: 'ossra_deep', level: 39,
+  summary: 'Vellory will not come down, and will not stop asking. Three questions about the first descent, and no weapon answers any of them.',
+  objectives: [
+    { type: 'flag', target: 'grid_width_measured', text: 'Measure a corridor. Then measure another. Then a third.' },
+    { type: 'flag', target: 'grid_doors_tried', stage: 1, text: 'Find a door with no keyhole and work out what opens it.' },
+    { type: 'flag', target: 'grid_lights_traced', stage: 2, text: 'Trace one of the lights back to whatever is feeding it.' },
+  ],
+  stages: [
+    'Nine feet four inches. Nine feet four inches. Nine feet four inches. Across a mile, in three directions, in rock, with no join anywhere.',
+    'It opened when the fourth of us stood in front of it and not when the first three did, and it has done that consistently since, and none of us wants to say the obvious thing.',
+    'It goes back into the wall and does not come out anywhere. There is no oil, no wick, no flame and no heat, and it has been lit since before Caerwen had a name for itself. Vellory read the notes twice and then asked us to stop writing them down.',
+  ],
+  rewards: { xp: 76000, gold: 24000, items: ['art_oakhallow_lance'], reputation: 18 },
+});
+
+side({
+  id: 'side_the_seat', name: 'The Seat', giver: 'npc_old_hessa', location: 'ossra_deep', level: 44,
+  summary: 'Hessa went down forty years ago, got as far as the room with the seat in it, and came back up. She would like to know what she was looking at.',
+  objectives: [
+    { type: 'talk', target: 'npc_old_hessa', text: 'Let Hessa tell it. It takes a while and she has never told it straight through.' },
+    { type: 'reach', target: 'dun_the_pilots_chamber', stage: 1, text: 'Get down to the room at the bottom.' },
+    { type: 'survive', target: 'the_seat_watched', stage: 2, text: 'Stay in the room long enough to describe it properly.' },
+    { type: 'talk', target: 'npc_old_hessa', stage: 3, text: 'Go back up and tell her.' },
+  ],
+  stages: [
+    'She was nineteen, there were six of them, and she is the one who came out. She has never once said what the other five did.',
+    'Everything below the gallery is built round getting to this room, and the room is built round one chair.',
+    'It is made for something with a different number of arms. Hessa\'s description from forty years ago is accurate in every particular including that one, which she has never said out loud to anybody.',
+    'She listened all the way through without moving. Then she said, "Right," and went and stood outside for a long time. She is eighty-one and she has been waiting forty years to be told she was not mad.',
+  ],
+  rewards: { xp: 110000, gold: 35000, items: ['plate_noble', 'potion_black', 'potion_golden'], reputation: 25 },
+});
+
+// The four dungeons below had no quest pointing at them at all. A dungeon
+// nobody is sent to is a week of somebody's generation work that the player
+// walks past, so each one gets a reason.
+
+side({
+  id: 'side_hobbs_adit', name: "Hobb's Adit", giver: 'npc_deri_hobb', location: 'millhaven_downs', level: 3,
+  summary: 'Hobb\'s grandfather dug two hundred feet of bad iron under the downs and hit a milestone sideways. Hobb wants the milestone.',
+  objectives: [
+    { type: 'clear', target: 'dun_hobbs_adit', text: 'Go down the adit.' },
+    { type: 'deliver', target: 'npc_deri_hobb', stage: 1, text: 'Tell Hobb what is holding his roof up.' },
+  ],
+  stages: [
+    'Bad iron the whole way, which is why it was abandoned, and at the end of it a Cindric milestone standing upright in the working face.',
+    'It is not in the roof. The roof is resting on it, and it is resting on nothing we could find. Hobb has decided he does not want it after all and paid us anyway.',
+  ],
+  rewards: { xp: 900, gold: 350, items: ['potion_blue'], reputation: 3 },
+});
+
+side({
+  id: 'side_the_orchard_vault', name: 'The Steward of Nothing', giver: 'npc_nell_ockham', location: 'thornwick_vale', level: 7,
+  summary: 'There is an imperial grain vault under a cider orchard outside Thornwick, still stocked, with a steward still counting it.',
+  objectives: [
+    { type: 'reach', target: 'dun_the_orchard_vault', text: 'Find the vault head under the orchard.' },
+    { type: 'flag', target: 'vault_count_matched', stage: 1, text: 'Count the sacks with him. He will not be interrupted, but he will be joined.' },
+    { type: 'clear', target: 'dun_the_orchard_vault', stage: 2, text: 'Finish it once the count comes out wrong.' },
+  ],
+  stages: [
+    'The orchard is four hundred years old and planted in rows that avoid one particular square of ground.',
+    'Eight hundred sacks, and he has counted them every day for eight centuries, and every day it comes to eight hundred.',
+    'It came to seven hundred and ninety-nine with us counting. He went very quiet, and then he did not. Ockham wanted the grain surveyed and has instead had to have the orchard resurveyed.',
+  ],
+  rewards: { xp: 3400, gold: 1500, items: ['amulet_pendant', 'potion_yellow'], reputation: 5 },
+});
+
+side({
+  id: 'side_the_green_chapter', name: 'The Green Chapter', giver: 'npc_alys_bracken', location: 'verdant_weald', level: 17,
+  summary: 'A Cindric road runs through the Weald and the wood eats it back every time anyone reopens it. The circle doing the eating would like to be left alone.',
+  objectives: [
+    { type: 'talk', target: 'npc_alys_bracken', text: 'Hear the wardens\' side of it first.' },
+    { type: 'reach', target: 'dun_the_green_chapter', stage: 1, text: 'Walk the road in as far as it still goes.' },
+    { type: 'flag', target: 'green_chapter_answered', stage: 2, text: 'Give the circle an answer. There are two and both cost something.' },
+  ],
+  stages: [
+    'Bracken is a warden and will not pretend to be neutral. She says the road serves four villages and the circle serves the wood, and that both of those are true.',
+    'Six miles of imperial paving under root, and the root is not old. It has come up in ten years, on purpose, in a pattern.',
+    'We gave them one. Four villages will use a longer road now, or the Weald will lose a mile of itself a year — and whichever we chose, Bracken wrote it into the warden roll under our names.',
+  ],
+  rewards: { xp: 14000, gold: 5500, items: ['cloak_fur', 'potion_green'], reputation: 10 },
+});
+
+side({
+  id: 'side_reedmarrow', name: 'Where the Fever Comes From', giver: 'npc_marsh_wife_onna', location: 'greywater_fen', level: 18,
+  summary: 'Greywater has had the fever every summer in living memory. Onna has finally worked out which water it comes off.',
+  objectives: [
+    { type: 'collect', target: 'qi_fever_sample', count: 5, stage: 0, text: 'Take water from five standings across the fen.' },
+    { type: 'clear', target: 'dun_reedmarrow', stage: 1, text: 'Go into the bog cavern the fifth sample came off.' },
+    { type: 'deliver', target: 'npc_marsh_wife_onna', stage: 2, text: 'Bring Onna the last sample and what was in it.' },
+  ],
+  stages: [
+    'Four samples are fen water. The fifth is not water that has been standing. It is water that has been moving, in a place with nothing to move it.',
+    'A cavern with standing water in it that has never once been still, and the stillness is what everything down there is arranged around not having.',
+    'Onna will not be able to stop it and says so. She will be able to tell Greywater which standing to keep the children off, which is eleven fewer graves a summer, and she wanted that written down exactly.',
+  ],
+  rewards: { xp: 15000, gold: 6000, items: ['amulet_talisman', 'potion_white'], reputation: 12 },
+});
+
 // ── Registry ────────────────────────────────────────────────────────────────
 
 export const QUESTS = deepFreeze(quests);
