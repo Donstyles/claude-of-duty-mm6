@@ -1784,6 +1784,22 @@ export class UISystem extends System {
     panelShot('ui-skills', 'character', 'The skills page: four categories across two columns, mastery in gold, the '
       + 'point cost of the next level, and untaught skills listed rather than hidden.',
     () => this.selectMember(0), { page: 'skills' });
+    // Awards is the one screen in the character family nothing photographed.
+    //
+    // It has a Titles ladder, an Honours block and a ledger of deeds, and until
+    // this shot existed NO REVIEWER HAD EVER SEEN IT — not in a blind test, not
+    // in a contact sheet, not once. A screen no capture can open is a screen
+    // that gets audited by reading its source, which is exactly how the quest
+    // book kept a stale meta chip through two rounds: the bug was visible in a
+    // photograph and invisible in the code.
+    //
+    // There is no MM6 reference for this page (REFERENCE.md:1342 records the
+    // absence), so it cannot be blind-tested against the original. That is a
+    // reason to photograph it MORE, not less — with nothing to compare against,
+    // our own eyes are the only check it will ever get.
+    panelShot('ui-awards', 'character', 'The awards page: the titles ladder with the current rank marked, honours, '
+      + 'and the ledger of deeds and awards.',
+    () => this.selectMember(0), { page: 'awards' });
 
     // The town-service screens. Each is opened through a real venue so the
     // painted room, the sign and the proprietor are the ones the game shows.
