@@ -254,6 +254,47 @@ def _write_item_index(names):
         )
 
 
+def _write_interior_index():
+    """Which venue interiors exist, and how many variants each kind has.
+
+    `Panel._applyInterior` set `background-image` unconditionally and its own
+    docstring claimed "a missing plate is not an error" — which it was, because
+    the browser resolves a missing URL to a broken background and a console
+    404, not to nothing. The same trap `_write_item_index` was written to
+    close. Variants make it worse rather than better: `house_3` may or may not
+    have been generated yet, and a panel must not have to find out the hard
+    way.
+    """
+    repo = os.path.dirname(os.path.dirname(ROOT))
+    dst = os.path.join(repo, 'src', 'ui', 'interiorPlates.js')
+    kinds = {}
+    for src in sorted(glob.glob(os.path.join(ROOT, 'interiors', '*.jpg'))):
+        base = os.path.basename(src)[:-4]
+        kind, _, n = base.rpartition('_')
+        if kind and n.isdigit():
+            kinds.setdefault(kind, set()).add(int(n))
+        else:
+            kinds.setdefault(base, set()).add(1)
+    body = '\n'.join(
+        f"  {k}: {sorted(v)}," for k, v in sorted(kinds.items()) if 1 in v
+    )
+    with open(dst, 'w') as f:
+        f.write(
+            '/**\n'
+            ' * Which venue interiors have been painted, and their variants.\n'
+            ' *\n'
+            ' * Written by tools/artpack.py, not by hand. A kind appears here only\n'
+            ' * if its base plate exists, so a variant can never be the only thing\n'
+            ' * a panel has to fall back to.\n'
+            ' */\n'
+            'export const INTERIOR_VARIANTS = Object.freeze({\n'
+            + body +
+            '\n});\n\n'
+            "export const INTERIOR_BASE = 'art/interiors/';\n"
+        )
+    return len(kinds)
+
+
 def _flat_ground_mask(a):
     """The connected run of flat backdrop reachable from the frame edge."""
     ring = np.concatenate([
@@ -341,6 +382,7 @@ if __name__ == '__main__':
     f = pack_figures()
     t = pack_items()
     i = pack_flat('interiors', 960)
+    _write_interior_index()
     # The school covers sit in the same folder as the spell plates but are
     # opaque framed paintings rather than matted cut-outs, so they take the
     # flat treatment; pack_spells skips them by prefix for the same reason.

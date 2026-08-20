@@ -187,7 +187,41 @@ const INTERIORS = {
   house: 'The front room of a modest cottage: a fire in a small grate, a table with a loaf and a jug, a settle, herbs drying, a shuttered window.',
 };
 
-export const VENUE_INTERIORS = Object.entries(INTERIORS).map(([kind, subject]) => ({
+/**
+ * Second and third rooms for the kinds there are a lot of.
+ *
+ * One painting per kind means all fifty-five cottages in Caerwen are the same
+ * fireplace and all twenty-two guild halls are the same reading table, which
+ * is fine for the first door the player opens and worse with every one after.
+ * A variant is not a re-roll of the same prompt: a second house is a different
+ * *kind* of house, so the town reads as a town rather than as one room
+ * photographed repeatedly. Which venue gets which is a stable hash of the
+ * venue's own id, so a house does not change its furniture between visits.
+ */
+const INTERIOR_VARIANTS = {
+  house_2: 'The front room of a weaver\'s cottage: a large floor loom half-strung under a shuttered window, baskets of dyed wool, a low fire, a stool and a clothes press.',
+  house_3: 'The front room of a fisherman\'s cottage: nets hung to dry across the beams, a lobster creel in the corner, a salt barrel, a small peat fire, oilskins on a peg.',
+  house_4: 'The front room of a prosperous burgher\'s house: a panelled wall with a painted chest, a carpet on the table, pewter on a shelf, a well-swept hearth with a high-backed settle.',
+  guild_2: 'A guild hall of a fighting order: a long trestle table, a rack of practice weapons along one wall, a great fireplace with a shield above it, benches, a map pinned to boards.',
+  guild_3: 'A guild hall of a scholarly order: a vaulted reading room with a spiral stair to a gallery of shelves, a globe on a stand, a desk with an astrolabe, high leaded windows.',
+  tavern_2: 'A dockside tavern: a low smoky room with a plank bar, a ship\'s lantern hung from a beam, barrels for tables, a wide window onto masts and rain.',
+  tavern_3: 'A coaching inn parlour: a bright fire in a wide stone hearth, settles either side, a long table laid with plates, a stair to the rooms above, pewter on the mantel.',
+  generalstore_2: 'A chandler\'s shop: hanging bunches of tallow candles, coils of tarred rope, wooden tubs of pitch and grease, a plank counter with a knife and a ball of twine.',
+  weaponsmith_2: 'A bladesmith\'s shop front: finished swords in a rack behind a counter, a grindstone on a treadle, a leather-topped bench with files and a vice, a small forge glowing at the back.',
+  temple_2: 'A larger stone temple: a stepped altar under a carved tympanum, ranks of votive candles, a stone font, deep shadow between heavy piers, light falling from a clerestory.',
+  coachstop_2: 'A coach yard office in a stable block: a stove with a kettle, a bench, harness and a spare wheel against the wall, a wide door standing open onto a cobbled yard.',
+  dock_2: 'A ship chandler\'s store on a quay: blocks and tackle hung from the ceiling, folded canvas, a barrel of nails, a plank counter, grey light from a wide doorway.',
+  armourer_2: 'A plate armourer\'s workshop: a breastplate on a stake anvil, planishing hammers on a rack, a polishing wheel, mail draped over a beam, a small forge.',
+  alchemist_2: 'A herbalist\'s room: bundles of dried plants on every beam, a long drying rack, a scarred chopping bench, jars of seeds, a low fire under a covered pot.',
+  trainer_2: 'A weapons master\'s hall: a bare boarded floor, a pell post scarred with cuts, wooden practice swords in a barrel, benches along one wall, high shuttered windows.',
+  magicshop_2: 'A scrivener and enchanter\'s shop: a writing desk under a window with inks and quills, sealed scroll cases in pigeonholes, a locked cabinet of small charms, a candle in a brass holder.',
+  bank_2: 'A money changer\'s booth: a barred window onto a small dark room, a table of coin trays and scales, a strapped chest under the bench, a tally board on the wall.',
+};
+
+export const VENUE_INTERIORS = [
+  ...Object.entries(INTERIORS),
+  ...Object.entries(INTERIOR_VARIANTS),
+].map(([kind, subject]) => ({
   id: `interiors/${kind}`,
   prompt: `${subject} ${INTERIOR_STYLE}`,
   aspect: '4:3',

@@ -10,9 +10,9 @@ import {
   hpForLevel, spForLevel, armourClassFor, effectiveStat,
   experienceForLevel, levelForExperience, worstCondition, isIncapacitated,
   skillPointsForLevel, skillPointCost, deathOutcome, hasBuff, ERADICATION_OVERKILL,
-  CONDITIONS,
+  CONDITIONS, charSkillEffect,
 } from './rules.js';
-import { DAMAGE_TYPES } from './data/Skills.js';
+import { DAMAGE_TYPES, MAGIC_SCHOOL_IDS } from './data/Skills.js';
 
 const ATTRS = ['might', 'intellect', 'personality', 'endurance', 'accuracy', 'speed', 'luck'];
 
@@ -178,6 +178,29 @@ export class Character {
       b.ac += buff.acBonus ?? 0;
     }
     this.bonuses = b;
+
+    // The Grandmaster of an element, who was getting nothing for it.
+    //
+    // Each of the four elemental schools promises "resistance equal to your
+    // skill in this element" at Grandmaster, and `resolveSkill` returns both
+    // halves of that sentence — `resist` for how much and `resistType` for
+    // which. Nothing anywhere read either. Every other source of resistance in
+    // the game lands in `b.resist` through `takeResist`, and the school's own
+    // never did, so the last step on four ladders — the one the whole
+    // elemental specialisation builds toward — moved no number at all.
+    //
+    // It has to happen after `this.bonuses = b`, not inside the loops above,
+    // because `charSkillEffect` reads `bonuses.skills` to fold in the `of Fire
+    // Magic` suffixes, and that bag is not finished until here. A Grandmaster
+    // wearing +5 Fire Magic resists by the raised skill, which is what the two
+    // sentences together say.
+    for (const school of MAGIC_SCHOOL_IDS) {
+      const eff = charSkillEffect(this, school);
+      if (eff.resist > 0 && eff.resistType) {
+        b.resist[eff.resistType] = (b.resist[eff.resistType] ?? 0) + eff.resist;
+      }
+    }
+
     this._publishResists();
     // Clamp pools after the maxima move.
     this.hp = Math.min(this.hp, this.maxHP);

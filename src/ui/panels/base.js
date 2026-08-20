@@ -27,12 +27,28 @@ import { MAGIC_SCHOOLS, ATTRIBUTES, ATTRIBUTE_LABEL, MASTERY_LABEL, masteryRank 
 import { spellsForSchool } from '../../game/data/Spells.js';
 import { VENUES } from '../../game/data/Venues.js';
 import { ITEM_PLATES, ITEM_PLATE_BASE } from '../itemPlates.js';
+import { INTERIOR_VARIANTS, INTERIOR_BASE } from '../interiorPlates.js';
+import { hashSeed } from '../../core/RNG.js';
 
 /**
  * venue id -> venue kind, so a panel can find its room from the id the venue
  * handed it without importing the whole catalogue's helpers.
  */
 const VENUE_INTERIOR = new Map(Object.values(VENUES).map((v) => [v.id, v.kind]));
+
+/**
+ * Pick one of n by name, the same way every time.
+ *
+ * Not `rng.next()`: a roll would give a venue a different room on every visit,
+ * which is worse than one room for every venue — a house that rearranges its
+ * furniture while you are standing in the doorway is a bug the player can see.
+ * `hashSeed` is the project's own string hash and is already what the world
+ * generator seeds from, so this needs no state, survives a save, and cannot
+ * drift.
+ */
+function hashIndex(key, n) {
+  return n > 0 ? hashSeed(String(key)) % n : 0;
+}
 const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 // ── base ────────────────────────────────────────────────────────────────────
@@ -133,18 +149,33 @@ export class Panel {
    * gets it without doing anything: the venue tells us its kind when it opens
    * the panel.
    *
-   * A missing plate is not an error. The panel keeps its own surface material
-   * and simply reads as a panel, which is what it did before these existed.
+   * A missing plate is not an error — except that it was. This line set
+   * `background-image` to whatever URL the kind spelled, and a browser
+   * resolves a URL that is not there to a broken background and a console 404,
+   * not to nothing. `INTERIOR_VARIANTS` is the index `artpack.py` writes, and
+   * a kind appears in it only once its base plate exists, which is the same
+   * discipline `ITEM_PLATES` already imposes on every item sprite.
+   *
+   * The variant is the other half. One painting per kind means all fifty-five
+   * cottages in Caerwen are the same fireplace and all twenty-two guild halls
+   * are the same reading table — fine for the first door the player opens and
+   * worse with every one after. Which venue gets which room is a stable hash
+   * of the venue's own id rather than a roll, so a house does not rearrange
+   * its furniture between two visits, and the same house is the same house
+   * across a save.
    */
   _applyInterior(opts) {
     const kind = opts?.interior ?? this.constructor.interior
       ?? (opts?.venue ? VENUE_INTERIOR.get(opts.venue) : null);
-    if (!kind) {
+    const variants = kind ? INTERIOR_VARIANTS[kind] : null;
+    if (!kind || !variants?.length) {
       this.el.style.backgroundImage = '';
       this.el.classList.remove('has-interior');
       return;
     }
-    this.el.style.backgroundImage = `url("/art/interiors/${kind}.jpg")`;
+    const which = variants[hashIndex(opts?.venue ?? kind, variants.length)];
+    const file = which === 1 ? kind : `${kind}_${which}`;
+    this.el.style.backgroundImage = `url("/${INTERIOR_BASE}${file}.jpg")`;
     this.el.classList.add('has-interior');
   }
 
