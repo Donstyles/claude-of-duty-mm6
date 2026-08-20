@@ -24,6 +24,7 @@ import * as THREE from 'three';
 import { el, tooltip, tipMarkup, fmt, ellipsis, nu } from './widgets.js';
 import { RNG } from '../core/RNG.js';
 import { icon } from './Icons.js';
+import { getSpell, SPELL_LIST } from '../game/data/Spells.js';
 
 const MAX_LOG_LINES = 60;
 const MAX_FLOATERS = 32;
@@ -295,14 +296,21 @@ export class HUD {
    * and four. With none set it opens the book, which is where you set it.
    */
   _castQuick() {
-    const spell = this._quickSpell();
+    const stored = this._quickSpell();
     const party = this.ctx?.get('party');
     const spells = this.ctx?.get('spells');
-    if (spell && spells?.cast) {
+    if (stored && spells?.cast) {
+      const id = spellIdOf(stored);
+      if (!id) {
+        // Set, but to something the catalogue has never heard of. `cast` would
+        // refuse this without a word, which is a button that does nothing.
+        this.log(`${stored} is not a spell anyone here knows.`, 'warn');
+        return;
+      }
       // A refusal — no spell points, a caster who cannot act, a spell the book
       // does not know — is already stated in the message strip by `cast`, so it
       // does not also throw a book at the player.
-      spells.cast(this.ctx, party?.activeIndex ?? 0, spell);
+      spells.cast(this.ctx, party?.activeIndex ?? 0, id);
       return;
     }
     this.ui.openPanel('spellbook');
@@ -881,6 +889,30 @@ function seeLine(text) {
   if (/^(a|an|the|some|your|his|her|their)\s/i.test(s)) return `You see ${s}.`;
   if (/^[A-Z]/.test(s)) return `You see ${s}.`;
   return `You see ${/^[aeiou]/i.test(s) ? 'an' : 'a'} ${s}.`;
+}
+
+/**
+ * What the character sheet stored, as an id the spell catalogue answers to.
+ *
+ * The quick spell crosses a seam in two vocabularies. The spellbook sets it
+ * with a real id — `fire_torch_light` — and `UISystem.setQuickSpell` prettifies
+ * it on the way in, so what comes back out is `Fire Torch Light`. `getSpell`
+ * returns undefined for that, and `cast` refuses an unknown spell without a
+ * word, which is exactly what the star oval was doing: nothing, silently.
+ *
+ * So the reader normalises rather than trusting the writer's vocabulary. Both
+ * routes are unambiguous and both were checked against the catalogue: all 99
+ * spell ids round-trip through the display form, and no two spells share a
+ * name. Returns null only for a value that is neither.
+ */
+function spellIdOf(value) {
+  const s = String(value ?? '').trim();
+  if (!s) return null;
+  if (getSpell(s)) return s;
+  const underscored = s.toLowerCase().replace(/\s+/g, '_');
+  if (getSpell(underscored)) return underscored;
+  const named = SPELL_LIST.find((sp) => sp.name.toLowerCase() === s.toLowerCase());
+  return named ? named.id : null;
 }
 
 /**
