@@ -34,7 +34,7 @@ const { ServicesSystem } = await import('../src/game/ServicesSystem.js');
 const { TravelSystem } = await import('../src/game/TravelSystem.js');
 const { VenueSystem } = await import('../src/game/VenueSystem.js');
 const { TownServices } = await import('../src/game/TownServices.js');
-const { ShopSystem, SHOPS, SHOP_IDS } = await import('../src/game/ShopSystem.js');
+const { ShopSystem, SHOPS } = await import('../src/game/ShopSystem.js');
 const { LootSystem } = await import('../src/game/LootSystem.js');
 const { Character } = await import('../src/game/Character.js');
 const { CAMPAIGN_STAGE_IDS } = await import('../src/game/data/Campaign.js');
@@ -192,7 +192,7 @@ const sortBuffs = (list) => [...(list ?? [])]
   .sort((a, b) => String(a.spellId).localeCompare(String(b.spellId)));
 
 /** The two counters the party trades at: one with a rack, one with a favour. */
-const SMITH = 'town_thornwick_weaponsmith';
+const SMITH = 'town_ashford_weaponsmith';
 const ALCHEMIST = 'town_millhaven_alchemist';
 
 /** A shelf, one line per piece: what it is, which copy, its state and price. */
@@ -328,6 +328,13 @@ console.log(`the cart came once on day ${Math.floor(after.state.worldTime / 8640
 console.log(`seed recorded in the file: ${json.seed} (the running world's is ${after.state.seed} — restore warns)`);
 console.log(`slot label: ${JSON.stringify(before.get('save').list?.() ? json.meta : null)}`);
 console.log(`save is ${JSON.stringify(json).length} bytes over ${Object.keys(json.systems).length} systems`);
+// A round trip that carried nothing would also be "clean", so say what it
+// carried: two picked-over shelves, two things on the grass, two emptied chests.
+{
+  const shelves = Object.entries(a['shop.shelves']);
+  console.log(`carried: ${shelves.length} shelves (${shelves.map(([id, s]) => `${id.split('_').pop()} ${s.stock.length}+${s.hidden.length}`).join(', ')}) · `
+    + `${a['loot.drops'].length} drops · ${a['loot.containers'].length} emptied containers · ${a['loot.claimed'].length} relics claimed`);
+}
 if (!lost.length) {
   console.log('ROUND TRIP CLEAN — every field survived.');
 } else {
