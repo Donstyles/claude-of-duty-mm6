@@ -371,3 +371,57 @@ is a floor worth having rather than a hole.
   schools, and exactly 99 scrolls for 99 spells, is the signature of a generator
   or a quota rather than of design. It may be fine. It should be checked rather
   than admired.
+
+### What the thirteen critics found
+
+Every finding below is a bug that was in the shipping build, was invisible to
+all six gates, and was found by measurement rather than by reading.
+
+| domain | the finding | measured |
+|---|---|---|
+| quests | QuestSystem read a schema `Quests.js` does not export — `stages[].objective` where a stage is `{index, journal}`, and `reward.gold` where the record has `rewards.gold` | **0 of 73 quests could ever complete**, and none paid anything |
+| combat | `monsterAttack` read `def.damage`/`def.aggro`/`def.attackRounds`; the bestiary spells them `def.attack.damage`/`def.aggroRadius`/`def.attack.recovery` | every monster hit for **1d4**; Titan Lord DPS 1.25 → 126.6 |
+| items | the loot constructor named 11 fields and dropped the rest, including a `.damage` that **no weapon record has** — they carry `dice` | every weapon swung **barehanded 1d3** |
+| spells | 4 silent causes: a delivery kind with no case, `_defaultTargets` returning `[]`, `spell.condition` read by nothing, 13 utility values with 4 handlers | **35 of 99** spells inert, incl. Town Portal; all **29 buffs** inert |
+| character | one quantity, four spellings — `bonuses.resist` / `.resists` / `.resistances` / `char.resists` | 8 sheet rows read **0 forever**; 7 resistance spells did nothing |
+| save | `expires: Infinity` → `JSON.stringify` → `null`, and `null > t` is false | **every permanent buff died one frame after each load**; the temple blessing doubled per load |
+| services | the panel did `new TownServices()` while the system registered its own, and SaveSystem collects the system's | **every deposit, donation and blessing discarded on save** |
+| travel | `travel:ambushed` was emitted and `grep` finds exactly one hit — the emit | ambush had **zero listeners**; network diameter 7 → 3 |
+| audio | `weather:lightning` carries the comment "(extra, for audio)" — built by another agent *so sound could exist* | nothing listened; **0 ambience beds**, 20 region variants ignored |
+| physics | collide-and-slide converts run speed into climb on a face steeper than the walk limit, and nothing takes it back | walking at a 60° cliff rose **16.44 m in 1.5 s** — over any town wall |
+| input | two actions may claim one key code and `action()` does not care | `KeyA` was **attack *and* strafe-left**; `Enter` opened a door *and* started combat |
+| dungeons | room size, corridor style and loop count were constants; size had four possible values | **5 distinct floor plans across 55 dungeons**; 0 unique rewards |
+| exterior | no file in `src/world/` imported `Regions.js`; `regionAt()` was never called by terrain, vegetation or props | **1 of 20 regions visually distinct**; snow rendered nowhere |
+| art | `packLeather` and `chiselRock` ran the same generator | four-band distance **0.373** vs 0.727–1.551 for every other pair |
+
+**The pattern is one pattern.** Eleven of the fourteen are a *name* that does not
+match across a seam — a field, an event, a key — and every one of them failed
+silently, because JavaScript hands you `undefined` and a plausible default
+rather than an error. The build was green through all of it. The content gate
+was green through all of it. What caught them was arithmetic: print the table,
+and a column of 1.25s where a curve should be is not subtle.
+
+**Two gates now cost 0.7 s and would have caught two of them.** `phystest` and
+`inputtest` were written this round, found four bugs, and had been impossible to
+put in `tools/` only because `import './touch.css'` throws in plain Node. One
+8-line loader hook. The character controller — the subsystem the player touches
+every frame — had no test at all, while three gates booted headless Chromium.
+
+### Honest, and not fixed
+
+- **Twenty hours is a claim, not a measurement.** 80 stages over 53 dungeon
+  floors is 10.1 h at 5 min/floor, 21.4 h at 11, 31.6 h at 16. The catalogue
+  clears the bar only if a floor is an eleven-minute crawl, and that is a
+  property of `DungeonSystem` and `MonsterSystem`, not of the quest data.
+  Nobody should repeat the figure until somebody holds a stopwatch to a floor.
+- **Every leg of the travel network is dominated by walking.** The kingdom is
+  4096 m across; the longest coach leg is 961 m, which is 84 seconds on foot,
+  and `worldTime` does not advance while walking. So the fares, timetables,
+  ambushes, storms and the whole act-two/act-three gating are systems the player
+  has no reason to use. This is world scale, not route data.
+- **`chiselRock` moved on principle and is unverified** against the reference —
+  no clean crop of MM6's shop-board surround could be found to measure. Recorded
+  by its own author as unverified rather than quietly counted as a win.
+- **The automap's "discovered" mask** is regenerated procedurally from a forked
+  RNG rather than tracked as the party walks. Discovery is not a thing yet; it
+  only looks like one.
