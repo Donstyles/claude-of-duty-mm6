@@ -55,6 +55,16 @@ const RESISTANCES = [
   ['mind', 'Mind'], ['body', 'Body'], ['light', 'Light'], ['dark', 'Dark'],
 ];
 
+/**
+ * The slots `rules.armourClassFor` reads, in its own order. Restated here for
+ * one reason: the Armor Class plaque shows its working by subtraction, so if
+ * this list disagrees with that one the working is wrong even when the total
+ * is right.
+ */
+const AC_SLOTS = [
+  'armour', 'helm', 'offhand', 'gauntlets', 'boots', 'belt', 'cloak', 'amulet', 'ring1', 'ring2',
+];
+
 const RESISTANCE_NOTE = {
   fire: 'Flame, dragon breath and every Fire Magic bolt.',
   air: 'Lightning, shock traps and Air Magic.',
@@ -155,7 +165,11 @@ export class CharacterPanel extends Panel {
       return tipMarkup({
         title: 'Skill Points',
         subtitle: points ? `${points} unspent` : 'None unspent',
-        flavour: 'Awarded on every level gained and spent on the skills page: a skill costs its own next level in points.',
+        lines: [
+          { k: 'Per level gained', v: '2 points' },
+          { k: 'Every fifth level', v: '3 points' },
+        ],
+        flavour: 'Spent on the skills page: a skill costs its own next level in points, so the tenth point of a skill costs ten.',
       });
     });
 
@@ -433,7 +447,14 @@ export class CharacterPanel extends Panel {
    */
   _resistance(c, src, id) {
     const base = Math.round(src?.resistances?.[id] ?? c.resistances?.[id]?.base ?? 0);
-    const items = Math.round(src?.bonuses?.resist?.[id] ?? src?.bonuses?.resistances?.[id] ?? 0);
+    // `Character.refresh()` now aliases resist / resists / resistances onto one
+    // cell, so these three are the same number; they are all still asked for
+    // because a view model built by something other than Character may only
+    // carry one of them.
+    const items = Math.round(
+      src?.bonuses?.resist?.[id] ?? src?.bonuses?.resists?.[id]
+      ?? src?.bonuses?.resistances?.[id] ?? 0,
+    );
     const school = Math.round(charSkillEffect(src, id).resist ?? 0);
     return { base, items, school, cur: base + items + school };
   }
@@ -487,7 +508,12 @@ export class CharacterPanel extends Panel {
 
   _acTip(c, src) {
     const speed = statBonus(effectiveStat(src, 'speed'));
-    const worn = Object.values(src?.equipment ?? {}).reduce((n, item) => n + (item?.ac ?? 0), 0);
+    // Only the slots `rules.armourClassFor` itself counts. Summing every slot
+    // instead put a weapon's own armour into the worn line — a Dwarven sword
+    // carries `ac: 3` — and, because the skill share is derived by subtraction,
+    // took the same 3 back off "Armour and dodging skill". Both lines wrong,
+    // the total right, which is the hardest kind of wrong to notice.
+    const worn = AC_SLOTS.reduce((n, slot) => n + (src?.equipment?.[slot]?.ac ?? 0), 0);
     const items = src?.bonuses?.ac ?? 0;
     // The armour and dodging skills are whatever is left over, which keeps the
     // working reconciled with rules.armourClassFor by construction.

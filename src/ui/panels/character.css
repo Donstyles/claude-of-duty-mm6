@@ -5,7 +5,38 @@
    x 190-460, five wide gold ovals across the bottom. What is left for the two
    columns is 268 native pixels of height, and the right column has to fit
    fifteen lines into it, so this page runs a tighter pitch than the shared
-   row — that is the whole reason these overrides exist. */
+   row — that is the whole reason these overrides exist.
+
+   Every selector below is scoped to `[data-panel="character"]` (STYLE.md §11).
+   The `.mm-skill-*` and `.mm-award-*` prefixes were written bare, which §11
+   calls latent rather than broken — a unique-looking class name is not scoping,
+   it is a bet that no other screen adopts the name, and `.mm-npc-side` is the
+   proof the bet loses. Rescoping is the file owner's job and this is that. */
+
+/* ── the page is capped and centred, not stretched ─────────────────────────
+   STYLE.md §13's outstanding ultra-wide finding, with the arithmetic redone
+   here because the fix costs a visible change at 16:9 and ought to be
+   defensible.
+
+   `.mm-panel` runs from 8u to the 172u sidebar and `.mm-sheet` insets 12u a
+   side, so the sheet gets `width/u − 204` native pixels whatever the window
+   is:
+
+     1200 × 900  (4:3, the design)   u 1.8750   436u   the drawn width
+     1600 × 900  (16:9 desktop)      u 1.8750   649u   +49%
+      932 × 430  (14 Pro Max, 2.17)  u 0.8958   836u   +92%
+
+   The right column is drawn for 270 of 436, so at 836u its label→value gap runs
+   very nearly double — legible, even, and not MM6's proportion. `spellbook.css`
+   already answers this by capping its page and letting the surplus become
+   binding cloth; this is the same answer at the width this page was drawn for.
+   448u is the cap STYLE.md names: above the 4:3 width so nothing moves at the
+   design ratio, and it is 16:9 desktop that changes, deliberately. */
+[data-panel="character"] .mm-sheet {
+  max-width: calc(var(--u) * 448);
+  margin-left: auto;
+  margin-right: auto;
+}
 
 [data-panel="character"] .mm-row {
   line-height: calc(var(--u) * 15);
@@ -59,11 +90,11 @@
    Thirty-odd skills in two columns: even columns here, not the stats page's
    160/270 split, because a mastery word is as long as the skill it qualifies. */
 
-.mm-sheet.is-skills .mm-sheet-col.is-left,
-.mm-sheet.is-skills .mm-sheet-col.is-right { flex: 1; }
-.mm-sheet.is-skills .mm-block-head { line-height: calc(var(--u) * 14); }
+[data-panel="character"] .mm-sheet.is-skills .mm-sheet-col.is-left,
+[data-panel="character"] .mm-sheet.is-skills .mm-sheet-col.is-right { flex: 1; }
+[data-panel="character"] .mm-sheet.is-skills .mm-block-head { line-height: calc(var(--u) * 14); }
 
-.mm-skill {
+[data-panel="character"] .mm-skill {
   display: flex;
   align-items: baseline;
   gap: calc(var(--u) * 5);
@@ -73,34 +104,34 @@
   font-style: italic;
   white-space: nowrap;
 }
-.mm-skill-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+[data-panel="character"] .mm-skill-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 /* The mastery word *names* the level beside it rather than being it, so it
    takes the label colour, not gold (STYLE.md §2). */
-.mm-skill-rank { color: var(--dim); }
-.mm-skill-level { width: calc(var(--u) * 26); text-align: right; }
-.mm-skill-cost { width: calc(var(--u) * 28); text-align: right; }
+[data-panel="character"] .mm-skill-rank { color: var(--dim); }
+[data-panel="character"] .mm-skill-level { width: calc(var(--u) * 26); text-align: right; }
+[data-panel="character"] .mm-skill-cost { width: calc(var(--u) * 28); text-align: right; }
 /* The two column heads ride at the row's own size, or their words overflow the
    narrow boxes they label and run into each other. */
-.mm-skill-heads { display: flex; gap: calc(var(--u) * 5); font-size: calc(var(--u) * 11); }
+[data-panel="character"] .mm-skill-heads { display: flex; gap: calc(var(--u) * 5); font-size: calc(var(--u) * 11); }
 
 /* Points enough to buy the next level: the cost turns green, exactly as the
    available-points count in the title bar does. */
-.mm-skill.is-ready .mm-skill-cost { color: var(--up); }
+[data-panel="character"] .mm-skill.is-ready .mm-skill-cost { color: var(--up); }
 
 /* MM6's one piece of cursor feedback on this page: name, rank and both numbers
    go red together. Only rows that can actually be trained answer to it. */
-.mm-skill.is-known:hover,
-.mm-skill.is-known:hover > * { color: var(--down); }
+[data-panel="character"] .mm-skill.is-known:hover,
+[data-panel="character"] .mm-skill.is-known:hover > * { color: var(--down); }
 
 /* Not learned is listed, not hidden — recessed to a stone grey so the roster
    reads as a plan rather than an inventory of failures. */
-.mm-skill.is-untaught > * { color: #9d968c; }
-.mm-skill.is-untaught .mm-skill-rank { color: #86807a; font-size: calc(var(--u) * 10); }
+[data-panel="character"] .mm-skill.is-untaught > * { color: #9d968c; }
+[data-panel="character"] .mm-skill.is-untaught .mm-skill-rank { color: #86807a; font-size: calc(var(--u) * 10); }
 
 /* ── awards ────────────────────────────────────────────────────────────────
    Award lines are prose and wrap; a small deep-gold lozenge marks each one. */
 
-.mm-award {
+[data-panel="character"] .mm-award {
   display: flex;
   align-items: baseline;
   gap: calc(var(--u) * 6);
@@ -110,8 +141,8 @@
   line-height: calc(var(--u) * 15);
 }
 /* A bullet, not a sum: gold-deep is the money colour (STYLE.md §2). */
-.mm-award-mark { color: var(--dim); font-size: calc(var(--u) * 9); }
-.mm-award-text { flex: 1; }
-.mm-award:hover .mm-award-text { color: var(--gold); }
-.mm-award.is-empty { color: #9d968c; }
-.mm-award.is-empty:hover .mm-award-text { color: #9d968c; }
+[data-panel="character"] .mm-award-mark { color: var(--dim); font-size: calc(var(--u) * 9); }
+[data-panel="character"] .mm-award-text { flex: 1; }
+[data-panel="character"] .mm-award:hover .mm-award-text { color: var(--gold); }
+[data-panel="character"] .mm-award.is-empty { color: #9d968c; }
+[data-panel="character"] .mm-award.is-empty:hover .mm-award-text { color: #9d968c; }

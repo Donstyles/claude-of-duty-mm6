@@ -9,8 +9,9 @@ import { EQUIP_SLOTS } from './data/Items.js';
 import {
   hpForLevel, spForLevel, armourClassFor, effectiveStat,
   experienceForLevel, levelForExperience, worstCondition, isIncapacitated,
-  CONDITIONS,
+  skillPointsForLevel, CONDITIONS,
 } from './rules.js';
+import { DAMAGE_TYPES } from './data/Skills.js';
 
 const ATTRS = ['might', 'intellect', 'personality', 'endurance', 'accuracy', 'speed', 'luck'];
 
@@ -47,8 +48,19 @@ export class Character {
     /** @type {{spellId:string, expires:number, power:number}[]} */
     this.buffs = spec.buffs ?? [];
 
+    /**
+     * Permanent resistance, per damage channel. It starts at nothing — nobody
+     * in Caerwen is born fireproof — but it has to *exist*, because before it
+     * did the character sheet's eight resistance rows read `0 / 0` for the
+     * whole game and no potion, blessing or deed had anywhere to write.
+     */
+    this.resistances = { ...(spec.resistances ?? spec.resists ?? {}) };
+
     /** Aggregate item/spell bonuses, recomputed by refresh(). */
     this.bonuses = { stats: {}, resist: {}, hp: 0, sp: 0, ac: 0, attack: 0, damage: 0 };
+    // Before the first refresh() as well as after it: a character built and
+    // handed straight to combat must already answer to all four spellings.
+    this._publishResists();
 
     this.hp = spec.hp ?? this.maxHP;
     this.sp = spec.sp ?? this.maxSP;
@@ -116,15 +128,21 @@ export class Character {
   /** Recompute equipment bonuses. Call after any equipment change. */
   refresh() {
     const b = { stats: {}, resist: {}, hp: 0, sp: 0, ac: 0, attack: 0, damage: 0 };
+    // One quantity, spelled four ways across the tree. Read both spellings so a
+    // shop's `resists` bag and a loot roll's `resistBonus` land in the same
+    // place; `_publishResists` then writes that place under every name the rest
+    // of the game asks for.
+    const takeResist = (bag) => {
+      for (const [k, v] of Object.entries(bag ?? {})) b.resist[k] = (b.resist[k] ?? 0) + v;
+    };
     for (const slot of EQUIP_SLOTS) {
       const item = this.equipment[slot];
       if (!item || item.broken) continue;
       for (const [k, v] of Object.entries(item.statBonus ?? {})) {
         b.stats[k] = (b.stats[k] ?? 0) + v;
       }
-      for (const [k, v] of Object.entries(item.resistBonus ?? {})) {
-        b.resist[k] = (b.resist[k] ?? 0) + v;
-      }
+      takeResist(item.resistBonus);
+      takeResist(item.resists);
       b.hp += item.hpBonus ?? 0;
       b.sp += item.spBonus ?? 0;
       b.ac += item.acBonus ?? 0;
@@ -135,13 +153,58 @@ export class Character {
       for (const [k, v] of Object.entries(buff.statBonus ?? {})) {
         b.stats[k] = (b.stats[k] ?? 0) + v;
       }
+      // Seven spells in the book are tagged `['buff', 'resistance']` and
+      // `SpellSystem` builds every one of them as `{ resistBonus: {…} }`. This
+      // loop never read the key, so all seven were sound and light: the sheet
+      // did not move and `CombatSystem._hurtParty` never saw a point of it.
+      takeResist(buff.resistBonus);
+      takeResist(buff.resists);
       b.ac += buff.acBonus ?? 0;
     }
     this.bonuses = b;
+    this._publishResists();
     // Clamp pools after the maxima move.
     this.hp = Math.min(this.hp, this.maxHP);
     this.sp = Math.min(this.sp, this.maxSP);
     return this;
+  }
+
+  /**
+   * Publish the resistance total under every name the tree reads it by.
+   *
+   * This is the `mainhand`/`bow` bug again, and it had cost more: combat asks
+   * for `bonuses.resists`, the character sheet asks for `bonuses.resist`, the
+   * view model asks for `bonuses.resistances`, and `_hurtParty` also looks at
+   * `char.resists`. Four spellings, one number, and until now `refresh()` wrote
+   * only the second — so a Fire Resistance charm showed on the sheet and did
+   * nothing in the fight, which is the worst way round for a bug to be.
+   *
+   * The names are aliased rather than picked because Character is the producer
+   * and the four consumers are other people's files. They share one cell, so a
+   * module that writes `bonuses.resistances` (the temple blessing does) is read
+   * by a module that asks for `bonuses.resists` (combat does). The `bonuses`
+   * bag stays gear-and-spells only and `resists` stays the permanent base,
+   * which is exactly the split every consumer already assumes when it adds the
+   * two together.
+   */
+  _publishResists() {
+    const gear = this.bonuses.resist ?? {};
+    const share = { value: gear };
+    for (const alias of ['resist', 'resists', 'resistances']) {
+      Object.defineProperty(this.bonuses, alias, {
+        get: () => share.value,
+        set: (v) => { share.value = v ?? {}; },
+        enumerable: true,
+        configurable: true,
+      });
+    }
+    this.resists = this.resistances;
+    return gear;
+  }
+
+  /** Resistance in one channel, base plus everything worn and cast. */
+  resistance(type) {
+    return (this.resistances[type] ?? 0) + (this.bonuses.resist?.[type] ?? 0);
   }
 
   addCondition(id) {
@@ -205,10 +268,19 @@ export class Character {
     return gained;
   }
 
-  /** Apply a level gained at a training hall. */
+  /**
+   * Apply a level gained at a training hall.
+   *
+   * The award comes from `rules.skillPointsForLevel` and not from a class
+   * field. It read `this.cls?.skillPointsPerLevel ?? 5` — and no class record
+   * in `Classes.js` has ever carried `skillPointsPerLevel`, so the fallback did
+   * the whole job and handed out a flat five where the rule says two, and three
+   * on every fifth level. Two and a half times the intended budget, printed in
+   * the skills page's own title bar, from a key nothing defines.
+   */
   levelUp() {
     this.level += 1;
-    this.skillPoints += this.cls?.skillPointsPerLevel ?? 5;
+    this.skillPoints += skillPointsForLevel(this.level);
     const gainedHP = this.maxHP - this.hp;
     this.hp = this.maxHP;
     this.sp = this.maxSP;
@@ -234,7 +306,7 @@ export class Character {
       age: this.age, level: this.level, experience: this.experience,
       skillPoints: this.skillPoints, stats: this.stats, skills: this.skills,
       equipment: this.equipment, inventory: this.inventory,
-      conditions: this.conditions, buffs: this.buffs,
+      conditions: this.conditions, buffs: this.buffs, resistances: this.resistances,
       hp: this.hp, sp: this.sp, quickSpell: this.quickSpell,
     };
   }
