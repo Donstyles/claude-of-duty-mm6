@@ -109,14 +109,12 @@
    takes the label colour, not gold (STYLE.md §2). */
 [data-panel="character"] .mm-skill-rank { color: var(--dim); }
 [data-panel="character"] .mm-skill-level { width: calc(var(--u) * 26); text-align: right; }
-[data-panel="character"] .mm-skill-cost { width: calc(var(--u) * 28); text-align: right; }
 /* The two column heads ride at the row's own size, or their words overflow the
    narrow boxes they label and run into each other. */
 [data-panel="character"] .mm-skill-heads { display: flex; gap: calc(var(--u) * 5); font-size: calc(var(--u) * 11); }
 
 /* Points enough to buy the next level: the cost turns green, exactly as the
    available-points count in the title bar does. */
-[data-panel="character"] .mm-skill.is-ready .mm-skill-cost { color: var(--up); }
 
 /* MM6's one piece of cursor feedback on this page: name, rank and both numbers
    go red together. Only rows that can actually be trained answer to it. */

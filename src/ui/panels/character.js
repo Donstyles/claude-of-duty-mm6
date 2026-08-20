@@ -594,9 +594,22 @@ export class CharacterPanel extends Panel {
   // ── skills ────────────────────────────────────────────────────────────────
 
   /**
-   * Every skill the class may ever hold, in category order, the learned ones
-   * first. What the character has not learned is listed as untaught rather than
-   * hidden, because knowing what is missing is half of planning a build.
+   * The skills this character has actually learned, in category order.
+   *
+   * This used to list every skill the class may EVER hold, marking the rest
+   * "Untaught", on the argument that knowing what is missing is half of
+   * planning a build. That argument is fine and it is not what MM6 does.
+   * Screenshot (22) shows a level-1 knight with four rows — Sword, Spirit
+   * Magic, Shield, Chain — and `Misc: None` under the empty category. The
+   * German 144812 shows a thoroughly developed sorceress with fourteen. MM6
+   * puts "what could I learn" on the TRAINER, where you have to go anyway to
+   * learn it, and keeps the sheet a record of what you are.
+   *
+   * Ours listed 25 rows of which 21 read "Untaught" — the single largest
+   * visual departure from the reference, and the reason the right column
+   * needed sixteen rows, which is what made a 44px touch target unreachable on
+   * a phone. Matching the reference fixes the appearance and the ergonomics
+   * with one change; see the pitch note in character.css.
    */
   _skills(c) {
     const cls = getClass(c.classId);
@@ -609,13 +622,18 @@ export class CharacterPanel extends Panel {
       for (const [category, label] of categories) {
         scroll.appendChild(el('div', { className: 'mm-block-head' },
           el('span', { text: label }),
+          // `Level` alone. MM6 heads each category with that one word and has
+          // no equivalent of a cost column; the price of the next rank belongs
+          // in the message strip, where the reference puts it.
           el('span', { className: 'mm-skill-heads' },
-            el('span', { className: 'mm-skill-level', text: 'Level' }),
-            el('span', { className: 'mm-skill-cost', text: 'Cost' }))));
+            el('span', { className: 'mm-skill-level', text: 'Level' }))));
         const ids = this._skillIds(cls, held, category);
         if (!ids.length) {
+          // "None", exactly as Screenshot (22) prints under Misc. Not
+          // "No misc skills for a Knight" — the reference is terser than the
+          // explanation, and the explanation was ours.
           scroll.appendChild(el('div', { className: 'mm-skill is-untaught' },
-            el('span', { className: 'mm-skill-name', text: `No ${label.toLowerCase()} for a ${c.className}` })));
+            el('span', { className: 'mm-skill-name', text: 'None' })));
           continue;
         }
         for (const id of ids) scroll.appendChild(this._skillRow(c, id, held.get(id), points));
@@ -628,13 +646,11 @@ export class CharacterPanel extends Panel {
     setChildren(this.colRight, column(SKILL_COLUMNS[1]));
   }
 
-  /** Class-legal skills in a category, learned first, then alphabetical. */
+  /** Skills this character HOLDS in a category. The sheet is a record, not a menu. */
   _skillIds(cls, held, category) {
     const ids = new Set();
-    for (const id of Object.keys(cls?.skills ?? {})) {
-      if (SKILLS[id]?.category === category) ids.add(id);
-    }
-    // A skill picked up outside the class table still belongs on the page.
+    // A skill picked up outside the class table still belongs on the page —
+    // that is why this reads the held map rather than the class's own list.
     for (const [id, s] of held) {
       if ((SKILLS[id]?.category ?? s.category) === category) ids.add(id);
     }
@@ -648,10 +664,13 @@ export class CharacterPanel extends Panel {
   }
 
   /**
-   * One skill line: name, mastery word in gold, level, and what the next level
-   * costs in points. The whole row turns red under the cursor — MM6's only
-   * feedback on this page, and the reason the cost sits in the row rather than
-   * behind a hover.
+   * One skill line: name, mastery word, level. Three parts, as the reference
+   * has it — the German 144812 reads `Wasser Experte 8` and nothing else.
+   *
+   * There was a fourth column here carrying the point cost of the next rank.
+   * MM6 has no such column; it puts that number in the message strip, and now
+   * so do we (see `_nag`), which is both the reference's answer and the reason
+   * the row can afford the height it needs on a phone.
    *
    * The other half of that feedback is the message strip. In MM6 the strip
    * answers the cursor, not the click: hold it over a skill you cannot afford
@@ -671,8 +690,7 @@ export class CharacterPanel extends Panel {
     },
       el('span', { className: 'mm-skill-name', text: def?.name ?? titleCase(id) }),
       el('span', { className: 'mm-skill-rank', text: held ? (rank > 1 ? MASTERY_LABEL[held.mastery] : '') : 'Untaught' }),
-      el('span', { className: 'mm-skill-level', text: held ? String(held.level) : '—' }),
-      el('span', { className: 'mm-skill-cost', text: held ? String(cost) : '—' }));
+      el('span', { className: 'mm-skill-level', text: held ? String(held.level) : '—' }));
     tooltip.attach(row, () => this._skillTip(c, id, held, cap, points));
     row.addEventListener('mouseenter', () => this._say(this._nag(c, id, held, cost, points)));
     row.addEventListener('mouseleave', () => this._say(''));
