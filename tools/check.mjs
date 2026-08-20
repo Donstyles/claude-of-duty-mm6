@@ -115,6 +115,10 @@ const GATES = [
     why: 'a party the player rolled is armed, and can mix what it picks up' },
   { name: 'skills', slow: false, cmd: 'node', args: ['tools/skilltest.mjs'],
     why: 'the dearest step on each ladder buys a number that moves' },
+  { name: 'faces', slow: false, cmd: 'node', args: ['tools/facetest.mjs'],
+    why: 'no speaker in Caerwen falls back to a stranger of the wrong trade' },
+  { name: 'journal', slow: false, cmd: 'node', args: ['tools/questtest.mjs'],
+    why: 'the book shows what the party did, and an idle hour buys no deed' },
   { name: 'physics', slow: false, cmd: 'node',
     args: ['--import', './tools/null-css.register.mjs', 'tools/phystest.mjs'],
     why: 'the player cannot leave the world, and the colliders are not empty' },
@@ -131,6 +135,8 @@ const GATES = [
     why: 'the game boots clean at the tier it ships at, and hazard dungeons build there' },
   { name: 'drops', slow: true, cmd: 'node', args: ['tools/droptest.mjs'],
     why: 'loot dropped on a dungeon floor is close enough to pick up' },
+  { name: 'monsters', slow: true, cmd: 'node', args: ['tools/monstertest.mjs'],
+    why: 'every creature has a surface, and moves when it strikes and when it dies' },
 ];
 
 function run(gate) {
