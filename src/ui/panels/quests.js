@@ -327,6 +327,11 @@ export class QuestPanel extends Panel {
     this.selected[this.filter] = index;
 
     if (!list.length) {
+      // The chips describe the selected row, so an empty page must drop them.
+      // They used to survive the switch and print the *previous* tab's giver,
+      // place and kind under a page that said nothing was finished yet — three
+      // stale facts, stated with the same authority as the live ones.
+      setChildren(this.metaEl);
       setChildren(this.indexEl, el('p', { className: 'mm-qb-empty', text: this.filter === 'completed'
         ? 'Nothing is finished yet. The book keeps everything, so this page fills on its own.'
         : 'No work in hand. Ask in a tavern, a guild hall, or wherever people are standing about looking wronged.' }));
@@ -439,6 +444,8 @@ export class QuestPanel extends Panel {
   _renderNotes(notes) {
     this._rows = [];
     this.countEl.textContent = notes.length ? `${notes.length} noted` : '';
+    // Nothing on this page is selected, so the selected-row chips come off it.
+    setChildren(this.metaEl);
     setChildren(this.footEl);
     if (!notes.length) {
       setChildren(this.indexEl, el('p', { className: 'mm-qb-empty', text: 'The party has learned nothing worth writing down. Give it a week.' }));
