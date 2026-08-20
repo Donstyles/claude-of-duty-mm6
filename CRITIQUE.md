@@ -305,3 +305,69 @@ own shadow, an anvil worn bright on the horn where it is struck.
 - 10–15 fps in the capture harness is software rendering, **not** a bug.
 - Bounded directional shadowing is intentional; see the caps in `REFERENCE.md`.
 - Dusk is now warm gold, not magenta — that is fixed; do not re-tint it.
+
+---
+
+## Round 12 — the census: every system audited at once
+
+The brief was harsh feedback loops on *every* system and subsystem, every menu
+and submenu, on content variety and scope. Thirteen domain critics were
+dispatched in parallel — combat, magic, items, quests, NPCs, dungeons, town
+services, party creation, travel, generated art, the exterior, audio, HUD and
+save, physics and controls — each owning a disjoint set of files so they could
+work simultaneously without colliding.
+
+Ahead of them, one census. The numbers below are the evidence base the round
+rests on; nothing here is an impression.
+
+```
+spells    99 over 9 schools, exactly 11 each     items     290 ids in 9 classes
+monsters  99 in 33 families, level 1..46         quests    73 = 14 main + 36 side + 23 promo
+campaign  80 stages over 5 acts (12/14/20/18/16) venues    145 over 13 kinds
+towns     11    regions 20    dungeons 55        classes   32    skills 35
+travel    14 legs — 7 coach, 7 ship
+```
+
+### The two findings the census made unarguable
+
+**The world got emptier as the campaign got bigger.** Dialogue topics per
+venue, which normalises for town size, ran from 0.15 to 1.68 — an eleven-fold
+spread, and the thin end was not where you would guess. Millhaven, the town the
+party leaves in the first hour, sat at 1.53. Coldwater sat at 0.15: thirteen
+venues, one person, two topics. Emberhold 0.20 across ten venues. Brackwater
+0.57, Fallowmere 0.43. Those four are the act-three and act-four island chain,
+so the back half of a twenty-hour campaign was a set of ports where every door
+had a sign and one of them had somebody behind it.
+
+**105 of 145 shopkeepers were a string painted on a door.** 138 venues name a
+keeper; 33 of those keepers existed as a person with a face and a line.
+
+Both are now closed, and they closed together: all nineteen NPCs added were
+keepers `Venues.js` had *already named*, so nobody new was invented and the
+sign over each door now matches the person under it. Ashford, which the first
+pass left as the new floor at 0.80, was staffed the same way.
+
+```
+topics per venue    before  0.15 .. 1.68   (11x spread)
+                    after   1.11 .. 1.69   (1.5x spread)
+```
+
+Greywater is the floor now at 1.11, and it is a nine-venue fen hamlet, so that
+is a floor worth having rather than a hole.
+
+### Method notes for the next round
+
+- **The graph analysis is cheap and nobody had run it.** Eleven towns, fourteen
+  legs: connected as a whole, but coach-only is five components and ship-only is
+  six. That split is the act-two/act-three gating doing its job, not a bug — but
+  it took ten lines of Node to know that rather than assume it, and three towns
+  hang off a single leg each.
+- **Beware a census keyed on the wrong field.** The first pass reported zero
+  quests in every town and it was the census that was wrong, not the content:
+  quests key `location` to a *region*, not a town. The real distribution is
+  lopsided in a different way — saltmarch 9, millhaven\_downs 8, duskorn\_waste 7,
+  against ossra\_deep 1. `ossra_deep` is the act-five finale region.
+- **Perfect symmetry is worth a second look.** Exactly 11 spells in each of 9
+  schools, and exactly 99 scrolls for 99 spells, is the signature of a generator
+  or a quota rather than of design. It may be fine. It should be checked rather
+  than admired.
