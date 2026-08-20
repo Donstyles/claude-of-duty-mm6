@@ -45,8 +45,18 @@ await new Promise((resolve, reject) => {
 });
 
 const port = await freePort();
+
+/**
+ * Spawned detached and killed by PROCESS GROUP, not by handle.
+ *
+ * `spawn('npx', …)` starts npx, which starts `vite preview` as its child, so
+ * `server.kill()` reaps the wrapper and orphans the server — which keeps a port
+ * and a core for the rest of the session. Eighteen were found alive at once on
+ * this box, from runs that had all reported success, quietly starving every
+ * capture that came after them.
+ */
 const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort', '--host', '127.0.0.1'],
-  { cwd: ROOT, stdio: 'ignore' });
+  { cwd: ROOT, stdio: 'ignore', detached: true });
 await new Promise((r) => setTimeout(r, 6000));
 
 const browser = await chromium.launch({
@@ -139,7 +149,7 @@ try {
   });
 } finally {
   await browser.close();
-  server.kill();
+  try { process.kill(-server.pid, 'SIGTERM'); } catch { server.kill(); }
 }
 
 if (out?.error) {

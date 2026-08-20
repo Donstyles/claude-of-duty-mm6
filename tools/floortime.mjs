@@ -172,8 +172,18 @@ async function collect(ids) {
   console.log('[floortime] building…');
   await build();
   const port = await freePort();
-  const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort', '--host', '127.0.0.1'],
-    { cwd: ROOT, stdio: 'ignore' });
+  
+/**
+ * Spawned detached and killed by PROCESS GROUP, not by handle.
+ *
+ * `spawn('npx', …)` starts npx, which starts `vite preview` as its child, so
+ * `server.kill()` reaps the wrapper and orphans the server — which keeps a port
+ * and a core for the rest of the session. Eighteen were found alive at once on
+ * this box, from runs that had all reported success, quietly starving every
+ * capture that came after them.
+ */
+const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort', '--host', '127.0.0.1'],
+    { cwd: ROOT, stdio: 'ignore', detached: true });
   await new Promise((r) => setTimeout(r, 6000));
   console.log(`[floortime] serving http://127.0.0.1:${port}/`);
 
@@ -258,7 +268,7 @@ async function collect(ids) {
     }
   } finally {
     await browser.close().catch(() => {});
-    server.kill();
+    try { process.kill(-server.pid, 'SIGTERM'); } catch { server.kill(); }
   }
   return out;
 }
