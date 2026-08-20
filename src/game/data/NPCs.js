@@ -958,7 +958,7 @@ npc({
 npc({
   id: 'npc_brother_cade', name: 'Brother Cade', profession: 'Almoner of the Lamp of the Hollow',
   town: 'town_ashford', location: 'ashford_hollow', portrait: 'priest',
-  look: { build: 'lean', age: 'adult', dress: 'robe', palette: 0xc0a878 },
+  look: { build: 'lean', age: 'adult', dress: 'lamp-robe', palette: 0xc0a878 },
   greeting: '"Come in out of the smoke. Everything in this valley is either burning or about to be."',
   topics: [
     { id: 'heal', label: 'Healing', text: '"Burns, mostly. We are very good at burns and it is not a distinction I wanted."', service: 'town_ashford_temple' },
@@ -983,7 +983,7 @@ npc({
 npc({
   id: 'npc_driver_ims', name: 'Ims', profession: 'Driver of the Hollow Post',
   town: 'town_ashford', location: 'ashford_hollow', portrait: 'townsfolk',
-  look: { build: 'lean', age: 'adult', dress: 'travel-coat', palette: 0x4a4237 },
+  look: { build: 'lean', age: 'adult', dress: 'travel-leather', palette: 0x4a4237 },
   greeting: '"Post leaves when the horses are ready and not when you are. Sit down."',
   topics: [
     { id: 'travel', label: 'Take a Seat', text: '"Down to Thornwick on good stone, out to Greywater on causeway, over the moor to Netherby if you have the stomach. Ledger warrant or you walk."', service: 'town_ashford_coachstop' },
@@ -1034,7 +1034,7 @@ npc({
 npc({
   id: 'npc_prior_sef', name: 'Prior Sef', profession: 'Prior of the Lamp Against the Night',
   town: 'town_coldwater', location: 'coldwater_sound', portrait: 'priest',
-  look: { build: 'average', age: 'older', dress: 'robe', palette: 0xb8a074 },
+  look: { build: 'average', age: 'older', dress: 'lamp-vestments', palette: 0xb8a074 },
   greeting: '"The lamp is lit. It is always lit. That is not a miracle, it is a rota."',
   topics: [
     { id: 'heal', label: 'Healing', text: '"We take what you can give and we do the work either way. Kneel, and stop apologising."', service: 'town_coldwater_temple' },
@@ -1121,7 +1121,7 @@ npc({
 npc({
   id: 'npc_sexton_pell', name: 'Sexton Pell', profession: 'Sexton of the Empty Church',
   town: 'town_fallowmere', location: 'fallowmere', portrait: 'priest',
-  look: { build: 'wiry', age: 'ancient', dress: 'robe', palette: 0x9a8e70 },
+  look: { build: 'wiry', age: 'ancient', dress: 'monk-robe', palette: 0x9a8e70 },
   greeting: '"There is no priest. There has been no priest since I was a boy. There are still lamps, and I am still the man who fills them."',
   topics: [
     { id: 'lamps', label: 'The Lamps', text: '"Every night. Nine lamps, and no night in sixty years without them. Ask why and I will tell you it is a habit. Ask twice and I will tell you the same thing in the same words."' },
