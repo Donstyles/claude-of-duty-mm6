@@ -704,6 +704,118 @@ export const TOWNS = deepFreeze({
 
 export const TOWN_IDS = Object.freeze(Object.keys(TOWNS));
 
+// ── The Verast Line ─────────────────────────────────────────────────────────
+
+/**
+ * Eighteen Cindric obelisks, one to a region, carrying one inscription between
+ * them.
+ *
+ * This is the world-spanning collectible, and the only piece of content in the
+ * game that asks the party to walk into a region it has no quest in. The
+ * reward for finishing it is not the point; the point is that the eighteenth
+ * clause cannot be read until somebody has stood in the Verhal Sands, and the
+ * Sands are otherwise a place you visit once for a dungeon door.
+ *
+ * The fiction is the Imperium's survey meridian — the line of stones its
+ * prefects chained the coast against, so that a mile taxed in Saltmarch was
+ * the same mile taxed at Duskorn. Ilva Tharnec cut her closing report into
+ * them clause by clause, which is a bureaucrat's way of making a record nobody
+ * can burn, and the last clause is where the province's last pay-chest went.
+ * That fits §9's Assize: the Imperium is a machine that outlived its own state
+ * and kept filing.
+ *
+ * The order is authored, not derived, and it climbs the danger table: clause I
+ * stands in the starting meadow and clause XVIII — the one that names the
+ * cache — stands in a danger-10 desert. Reading them out of order is fine and
+ * expected; the register in `PropSystem` remembers which clauses are held, and
+ * the inscription only reads as prose once all eighteen are in hand.
+ *
+ * The Sunder and Ossra Deep have no stone on purpose. Nothing stands on the
+ * glass, and the survey was closed six centuries before anything fell there.
+ */
+const obeliskLine = [
+  ['millhaven_downs', 'I am Ilva Tharnec, prefect of the survey, and the line begins where the sheep-walls begin.'],
+  ['thornwick_vale', 'Eighteen stones, cut in one season and set so that a mile is a mile in every province.'],
+  ['ashford_hollow', 'The valley was chained twice because the charcoal-burners moved the first marks for firewood.'],
+  ['saltmarch', 'I measured the flats at both tides and the sea disagreed with the ledger each time.'],
+  ['the_cindermoor', 'On the black moor the line meets nine stones older than the Imperium, and the survey went around them.'],
+  ['brackwater_isle', 'The eel-islands were paced from a boat and stand in the register as approximate.'],
+  ['verdant_weald', 'In the old wood the wardens would let us cut nothing, so this stone was carried in whole.'],
+  ['greywater_fen', 'Three of my chainmen went into the slow water here. The register was amended once and closed.'],
+  ['coldwater_sound', 'At the fjord the light failed for forty days and the whole reach was surveyed by lamp.'],
+  ['fallowmere', 'The island grew wheat that year. Set that down, because nobody will believe it later.'],
+  ['netherby_moors', 'We did not open the mounds. The order to open them came afterwards and I did not sign it.'],
+  ['the_riven_steppe', 'The canyons were paced along the giants\' road, which is a wider mile than ours and older.'],
+  ['the_whitemantle', 'The ice moved four hundred feet between the first survey and the second. I recorded both.'],
+  ['gallowfen', 'The court in the marsh required the survey in writing, and then required it again in the same words.'],
+  ['duskorn_waste', 'When the treasury was ordered home I was told to see the last chest out of the city.'],
+  ['emberhold', 'The forge-cults would not take it. They said coin melts and stone does not.'],
+  ['malveth_spires', 'The house on the basalt would not take it either, and asked me which prefecture I came from.'],
+  ['verhal_sands', 'So the last payment of the province lies under the flat stone at the heart of the nine on the black moor, and the survey is closed.'],
+];
+
+export const OBELISKS = deepFreeze(obeliskLine.map(([regionId, clause], i) => ({
+  id: `obelisk_${regionId}`,
+  region: regionId,
+  /** 1-based, and the number cut on the stone itself. */
+  clause: i + 1,
+  text: clause,
+})));
+
+export const OBELISK_TOTAL = OBELISKS.length;
+
+/**
+ * Where the eighteenth clause sends the party.
+ *
+ * Named by landmark rather than by coordinate, because the stone circle on the
+ * Cindermoor is placed from the world seed like everything else and moves if
+ * the seed does. `PropSystem` resolves it against the circle it actually
+ * built, so the inscription and the ground agree by construction.
+ */
+export const OBELISK_CACHE = deepFreeze({
+  region: 'the_cindermoor',
+  landmark: 'circle',
+  radius: 14,
+  place: 'the stone circle on the Cindermoor',
+  /**
+   * Large, and deliberately so. The gate on it is not danger — the moor is a
+   * danger-4 heath a level-8 party can walk across — it is having stood in
+   * eighteen regions, one of which is a danger-10 desert. A chest that pays
+   * like a dungeon boss would make the walking pointless.
+   *
+   * The Philosopher's Stone is the tie to the other half of the trade: it is
+   * the strongest booster reagent in the catalogue, worth 5 000 on its own, and
+   * a party that has just been handed one has a reason to find out what the
+   * Alchemy skill is for.
+   */
+  reward: {
+    gold: 15000,
+    xp: 30000,
+    items: ['philosophers_stone', 'potion_pure_luck'],
+  },
+});
+
+/** The obelisk standing in a region, or undefined. */
+export function obeliskIn(regionId) {
+  return OBELISKS.find((o) => o.region === regionId);
+}
+
+/**
+ * The inscription in reading order, with unread clauses withheld.
+ *
+ * A collectible that shows you the finished text before you have finished it
+ * has no reason to be collected, so an unheld clause comes back as its number
+ * and nothing else.
+ */
+export function obeliskInscription(heldIds = []) {
+  const held = new Set(heldIds);
+  return OBELISKS.map((o) => ({
+    clause: o.clause,
+    region: REGIONS[o.region]?.name ?? o.region,
+    text: held.has(o.id) ? o.text : null,
+  }));
+}
+
 // ── Lookups ─────────────────────────────────────────────────────────────────
 
 /** Region record by id, or undefined. */

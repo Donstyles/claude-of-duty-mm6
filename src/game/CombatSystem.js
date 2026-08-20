@@ -4,7 +4,7 @@ import {
   toHitChance, resolveHit, damageRoll, applyResistance, resistanceCheck,
   critChance, recoveryTime, attackBonusFor, damageBonusFor,
   armourClassFor, effectiveStat, statBonus,
-  hasBuff, painReflection, weaponRiders, wardsCondition,
+  hasBuff, painReflection, weaponRiders, wardsCondition, charSkillEffect,
 } from './rules.js';
 import { evaluateSpell } from './data/Spells.js';
 
@@ -213,7 +213,9 @@ export class CombatSystem extends System {
 
   _resolveMeleeOrHit(ctx, char, index, target, weapon) {
     const attack = attackBonusFor(char, weapon);
-    const ac = target.def.ac ?? 0;
+    // Through the monster system, so an axe that has already split this thing's
+    // harness is easier to hit for the rest of the minute.
+    const ac = ctx.get('monsters')?.armourClassOf?.(target) ?? target.def.ac ?? 0;
     const { hit, chance } = resolveHit({ attack }, { ac }, this.rng.next());
 
     if (!hit) {
@@ -228,7 +230,12 @@ export class CombatSystem extends System {
     const roll = damageRoll(spec, this.rng, { crit, targetHP: target.hp });
     let amount = roll.amount + damageBonusFor(char, weapon);
 
-    const resist = target.def.resists?.[roll.type] ?? 0;
+    // A Master blaster "ignores all target resistances" — the salvage under the
+    // glass does not care what you are made of. That sentence was the entire
+    // content of the blaster's Expert→Master step and `ignoreResistance` had no
+    // reader, so the step bought nothing.
+    const skillEff = weapon?.skill ? charSkillEffect(char, weapon.skill) : null;
+    const resist = skillEff?.ignoreResistance ? 0 : (target.def.resists?.[roll.type] ?? 0);
     // Luck belongs on the roll: it was passed as a flat 0, which made the
     // attribute worth nothing at all on the one path that consulted resists.
     const applied = applyResistance(
@@ -244,6 +251,38 @@ export class CombatSystem extends System {
       kind: crit ? 'crit' : 'hit',
     });
     this._resolveWeaponRiders(ctx, char, target, amount);
+    this._resolveMasteryRiders(ctx, char, target, skillEff);
+  }
+
+  /**
+   * What the weapon skill itself does on a blow that landed.
+   *
+   * Two mastery steps in the whole game bought only these: an Axe at Master
+   * "shatters the target's armour (-10 AC for one minute)" and a Mace at
+   * Grandmaster paralyzes. Both numbers were resolved every time anybody opened
+   * the character sheet and neither `sunderChance` nor `paralyzeChance` had a
+   * reader anywhere, so the Axe's Expert→Master step and the Mace's
+   * Master→Grandmaster step were purchases of prose.
+   *
+   * `stunChance` — the Mace's Master step — is read here too, because it was in
+   * the same condition: resolved, described, unclaimed. The mace ladder now
+   * escalates the way its tier text says, stun into paralysis.
+   */
+  _resolveMasteryRiders(ctx, char, target, eff) {
+    if (!eff || !target?.alive) return;
+    const monsters = ctx.get('monsters');
+    if (!monsters) return;
+
+    if (eff.sunderChance > 0 && this.rng.next() < eff.sunderChance) {
+      monsters.sunder?.(ctx, target, 10, 60);
+    }
+    // Paralysis first: at Grandmaster the mace does both, and being pinned is
+    // strictly the worse of the two, so a stun must not shadow it.
+    if (eff.paralyzeChance > 0 && this.rng.next() < eff.paralyzeChance) {
+      monsters.hold?.(ctx, target, 3, 'is pinned where it stands');
+    } else if (eff.stunChance > 0 && this.rng.next() < eff.stunChance) {
+      monsters.hold?.(ctx, target, 1.2, 'reels');
+    }
   }
 
   /**
@@ -411,6 +450,19 @@ export class CombatSystem extends System {
     let incoming = applied.amount;
     const shielded = opts.kind === 'missile' && hasBuff(char, 'air_shield');
     if (shielded) incoming = Math.max(1, Math.round(incoming / 2));
+
+    // "A wall you carry. Trained hands turn arrows aside as easily as blades."
+    //
+    // A shield at Master halves missile damage, and that halving was the only
+    // thing its Expert→Master step bought — `missileReduction` was resolved on
+    // every character sheet in the game and read by nobody, so the step was
+    // 4,000 gold for a changed word. It needs a shield actually in the offhand:
+    // the skill is the training, the board is what stops the arrow.
+    const board = char?.equipment?.offhand;
+    if (opts.kind === 'missile' && board?.category === 'shield') {
+      const cut = charSkillEffect(char, 'shield').missileReduction ?? 0;
+      if (cut > 0) incoming = Math.max(1, Math.round(incoming * (1 - cut)));
+    }
 
     const dealt = party.damage(index, incoming, type);
     if (shielded) {
@@ -689,7 +741,8 @@ export class CombatSystem extends System {
     const target = p.target;
     if (!target?.alive) return;
     const attack = attackBonusFor(p.owner, p.weapon);
-    const { hit } = resolveHit({ attack }, { ac: target.def.ac ?? 0 }, this.rng.next());
+    const ac = ctx.get('monsters')?.armourClassOf?.(target) ?? target.def.ac ?? 0;
+    const { hit } = resolveHit({ attack }, { ac }, this.rng.next());
     if (!hit) {
       ctx.events.emit('ui:log', { text: `${p.owner.name}'s arrow goes wide.`, kind: 'miss' });
       return;
@@ -698,10 +751,13 @@ export class CombatSystem extends System {
     const spec = p.weapon?.damage ?? { dice: [1, 5], bonus: 0, type: 'physical' };
     const roll = damageRoll(spec, this.rng, { crit, targetHP: target.hp });
     // Arrows used to skip resistance entirely, which quietly made a bow the
-    // best answer to every creature that shrugs off steel. It is not.
+    // best answer to every creature that shrugs off steel. It is not — unless
+    // it is a blaster at Master, which is the one weapon whose tier text says
+    // in as many words that it ignores what the target is made of.
+    const skillEff = p.weapon?.skill ? charSkillEffect(p.owner, p.weapon.skill) : null;
     const raw = roll.amount + damageBonusFor(p.owner, p.weapon);
     const amount = applyResistance(
-      raw, target.def.resists?.[roll.type] ?? 0,
+      raw, skillEff?.ignoreResistance ? 0 : (target.def.resists?.[roll.type] ?? 0),
       effectiveStat(p.owner, 'luck'), p.owner.level, this.rng.next(),
     ).amount;
     ctx.get('monsters').damage(ctx, target, amount, roll.type);

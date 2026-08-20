@@ -9,6 +9,26 @@
  * A quest is a list of `objectives` (machine-checkable) plus `stages` (journal
  * prose). QuestSystem advances a stage when every objective at that stage is
  * satisfied. Nothing here is stateful: this is the script, not the playthrough.
+ *
+ * Two rules about `collect`, both learned the hard way, because thirty-one
+ * quests — eleven of the fourteen main-line ones — carried a `collect` naming
+ * an item no code path could ever put in the party's hands, and every one of
+ * them stalled forever with a green build and no error anywhere:
+ *
+ *   1. A `collect` target must be a real id in `Items.js`. The only thing that
+ *      moves a `collect` counter is `loot:picked`, and `loot:picked` carries
+ *      the `baseId` of an item the loot system actually made — so an objective
+ *      naming an id the catalogue has never heard of is not a hard quest, it
+ *      is an unfinishable one. Seven objectives named such ghosts and are now
+ *      typed as the work they were always describing.
+ *   2. A quest may not ask the party to collect its own reward. Seven did:
+ *      the warrant, the seal, the cipher, the reliquary, the lens, the harness
+ *      and Hessa's answer were each the turn-in prize of the quest that sent
+ *      you looking for them. Those `collect` lines are gone; the reward still
+ *      hands the item over, which is where it was always coming from.
+ *
+ * What remains is the honest case: an item that exists, seeded into a dungeon
+ * in the region the quest names, found by picking it up.
  */
 
 function deepFreeze(o) {
@@ -140,7 +160,6 @@ quest({
   objectives: [
     { type: 'clear', target: 'dun_hollow_stockade', text: 'Take the Hollow Stockade off the Ashford road.' },
     { type: 'kill', target: 'choir_precentor', count: 1, stage: 1, text: 'Confront the precentor paying the garrison.' },
-    { type: 'collect', target: 'qi_sword_warrant', stage: 2, text: 'Take the warrant from Oakhallow.' },
   ],
   stages: [
     'The stockade stopped sending returns in the spring and started charging by the cart. Chapter arms, Chapter drill, Chapter men.',
@@ -196,7 +215,6 @@ quest({
   objectives: [
     { type: 'talk', target: 'npc_nim_vellory', text: 'Take the commission from Archivist Vellory.' },
     { type: 'clear', target: 'dun_the_undercut', stage: 1, text: 'Fetch the Deep Stone key out of the Undercut at Ashford.' },
-    { type: 'collect', target: 'qi_ninefold_seal', stage: 2, text: 'Gather the nine keys onto one ring.' },
   ],
   stages: [
     'Nine guilds, nine prices. Seven of them want a dungeon emptied and the other two want a secret kept.',
@@ -267,9 +285,8 @@ quest({
   requires: { quests: ['main_10_duskorn_falls'], level: 28 },
   summary: 'Corvane Wysk rides the Duskorn road four times a year and the crown has never once sent him.',
   objectives: [
-    { type: 'collect', target: 'qi_wysk_cipher', text: "Take the cipher wheel from Wysk's rooms." },
-    { type: 'talk', target: 'npc_corvane_wysk', stage: 1, text: 'Put the cipher to the magister.' },
-    { type: 'deliver', target: 'npc_ysolde_caerwen', stage: 2, text: 'Take what he says to the Queen.' },
+    { type: 'talk', target: 'npc_corvane_wysk', text: "Get into Wysk's rooms and put the cipher wheel on the desk to the magister." },
+    { type: 'deliver', target: 'npc_ysolde_caerwen', stage: 1, text: 'Take what he says to the Queen.' },
   ],
   stages: [
     'His rooms are three flights above the muniment room and the lock on them is Concord work, which means it is honest.',
@@ -286,9 +303,8 @@ quest({
   summary: 'There is a whole city under Duskorn, unlooted and lit, and the Choir is singing in it. Take it apart.',
   objectives: [
     { type: 'clear', target: 'dun_the_duskorn_undercity', text: 'Fight down through the Duskorn undercity.' },
-    { type: 'kill', target: 'arch_devil', count: 1, stage: 1, text: 'Kill what is standing where the altar was.' },
-    { type: 'collect', target: 'qi_reliquary', stage: 2, text: 'Take the sealed reliquary.' },
-    { type: 'deliver', target: 'npc_bren_oakhallow', stage: 3, text: 'Carry the reliquary to the Lord Marshal.' },
+    { type: 'kill', target: 'arch_devil', count: 1, stage: 1, text: 'Kill what is standing where the altar was, and take the sealed reliquary off it.' },
+    { type: 'deliver', target: 'npc_bren_oakhallow', stage: 2, text: 'Carry the reliquary to the Lord Marshal.' },
   ],
   stages: [
     'The city below the city, four floors of it, lit as of this spring by somebody who came down with a great many lamps and a schedule.',
@@ -306,8 +322,7 @@ quest({
   summary: 'The Ninefold Seal opens the tear in the crater floor. Vellory is certain it is a stairwell.',
   objectives: [
     { type: 'reach', target: 'dun_the_wound', text: 'Open the seal and go down into the Wound.' },
-    { type: 'kill', target: 'guardian', count: 1, stage: 1, text: 'Get past what is standing on the landing.' },
-    { type: 'collect', target: 'qi_glass_lens', stage: 2, text: 'Take the lens off the landing.' },
+    { type: 'kill', target: 'guardian', count: 1, stage: 1, text: 'Get past what is standing on the landing, and take the lens off it.' },
   ],
   stages: [
     'Nine keys, one door, and a tear in the glass that goes down a great deal further than the crater is deep. It reads as a cave for the first hundred feet and then it stops.',
@@ -380,8 +395,7 @@ promo({
   location: 'netherby_moors', level: 25, classes: ['champion'], promotes: 'black_knight', xp: 40000,
   summary: 'Take the black harness out of the barrow works under the Netherhall — and put it on.',
   objectives: [
-    { type: 'clear', target: 'dun_the_opened_barrows', text: 'Go down into the opened barrows below the Netherhall.' },
-    { type: 'collect', target: 'qi_black_harness', stage: 1, text: 'Take the Black Harness.' },
+    { type: 'clear', target: 'dun_the_opened_barrows', text: 'Go down into the opened barrows below the Netherhall and take the harness off what is wearing it.' },
   ],
   stages: ['The Malveths have guarded a hole their family did not dig for nine generations.', 'It fits. It always fits. That is the part to worry about.'],
   items: ['qi_black_harness'],
@@ -577,9 +591,8 @@ promo({
   location: 'the_whitemantle', level: 20, classes: ['initiate'], promotes: 'master', xp: 25000,
   summary: 'Climb the Wind Stair on the Whitemantle and bring back one word.',
   objectives: [
-    { type: 'reach', target: 'dun_the_wind_stair', text: 'Climb the Wind Stair to the shrine on the glacier face.' },
-    { type: 'collect', target: 'qi_hessas_answer', stage: 1, text: "Retrieve Hessa's Answer." },
-    { type: 'deliver', target: 'npc_old_hessa', stage: 2, text: 'Carry it back to Brackwater.' },
+    { type: 'reach', target: 'dun_the_wind_stair', text: 'Climb the Wind Stair to the shrine on the glacier face and take what is sealed there.' },
+    { type: 'deliver', target: 'npc_old_hessa', stage: 1, text: 'Carry it back to Brackwater unopened.' },
   ],
   stages: ['One word, sealed in wax, at the top of a glacier.', 'We did not open it. That was, we suspect, most of the test.', 'Master. She never did tell us the word.'],
   items: ['qi_hessas_answer'],
@@ -950,7 +963,7 @@ side({
   id: 'side_the_assize', name: 'The Assize', giver: 'npc_alys_bracken', location: 'gallowfen', level: 30,
   summary: 'The Imperium held a court in the Gallowfen and never adjourned it. The register of the condemned is legible, and it is still being added to.',
   objectives: [
-    { type: 'collect', target: 'qi_assize_writ', text: 'Take a writ off one of the marsh bailiffs.' },
+    { type: 'kill', target: 'skeleton_knight', count: 3, text: 'Put down three of the marsh bailiffs and take a writ off one of them.' },
     { type: 'clear', target: 'dun_the_hanging_yard', stage: 1, text: 'Get down into the hanging yard and stop the sitting.' },
     { type: 'flag', target: 'assize_adjourned', stage: 2, text: 'Adjourn the court in the words it will accept.' },
   ],
@@ -1015,7 +1028,7 @@ side({
   summary: 'Three families on Brackwater have been hiding things in the same sea cave for a hundred years, including, twice, each other.',
   objectives: [
     { type: 'talk', target: 'npc_old_hessa', text: 'Let Hessa explain the arrangement, at length.' },
-    { type: 'collect', target: 'qi_stair_tally', count: 3, stage: 1, text: 'Bring up all three families\' tallies from the stair.' },
+    { type: 'clear', target: 'dun_the_eel_stair', stage: 1, text: 'Go down the stair and settle which chamber is whose — the matriarch is in the disputed one.' },
     { type: 'deliver', target: 'npc_old_hessa', stage: 2, text: 'Put all three in front of Hessa at once.' },
   ],
   stages: [
@@ -1047,8 +1060,8 @@ side({
   summary: 'A meltwater shaft two hundred feet down through the glacier, past everything the ice has taken in four hundred years, in order.',
   objectives: [
     { type: 'spend', target: 'gold', count: 1500, text: 'Buy the rope, the pitons and the oil. Coldwater charges what the season will bear.' },
-    { type: 'clear', target: 'dun_the_blue_throat', stage: 1, text: 'Go down the throat.' },
-    { type: 'collect', target: 'qi_throat_core', stage: 2, text: 'Cut a core out of the deepest wall you reach.' },
+    { type: 'reach', target: 'dun_the_blue_throat', stage: 1, text: 'Go down the throat.' },
+    { type: 'clear', target: 'dun_the_blue_throat', stage: 2, text: 'Cut a core out of the deepest wall you reach, past what the ice has grown around.' },
   ],
   stages: [
     'Fifteen hundred gold of gear and Dain\'s own opinion of our chances, given free.',
@@ -1079,7 +1092,7 @@ side({
   summary: 'Vellory wants the crater floor measured. Nobody has measured it, because measuring it means standing on it for three days.',
   objectives: [
     { type: 'survive', target: 'glass_survey_three_days', text: 'Stand three days on the glass and take the readings.' },
-    { type: 'collect', target: 'qi_survey_plate', count: 4, stage: 1, text: 'Cut four plates from four bearings.' },
+    { type: 'clear', target: 'dun_the_rim_camp', stage: 1, text: 'Cut four plates from four bearings — the fourth runs through the rim camp, and the rim camp holds it.' },
     { type: 'deliver', target: 'npc_nim_vellory', stage: 2, text: 'Carry the plates back to the Concord.' },
   ],
   stages: [
@@ -1111,8 +1124,8 @@ side({
   summary: 'The Ossran vaults hold nine generations of scavenging, labelled and shelved, and the keeper has stopped letting the family in.',
   objectives: [
     { type: 'talk', target: 'npc_isabeau_ossran', text: 'Get the shelf-marks out of Isabeau. She will not go herself.' },
-    { type: 'clear', target: 'dun_ossran_vaults', stage: 1, text: 'Get past the keeper to the ninth shelf.' },
-    { type: 'collect', target: 'qi_ossran_daybooks', stage: 2, text: "Take the ninth generation's daybooks." },
+    { type: 'reach', target: 'dun_ossran_vaults', stage: 1, text: 'Get down into the vaults and find the ninth shelf.' },
+    { type: 'clear', target: 'dun_ossran_vaults', stage: 2, text: "Get past the keeper and take the ninth generation's daybooks." },
     { type: 'deliver', target: 'npc_warden_coll', stage: 3, text: 'Bring the daybooks to Warden Coll, not to Isabeau.' },
   ],
   stages: [
@@ -1129,7 +1142,7 @@ side({
   summary: 'A mile of gallery under the crater, berths down both sides, and something in every one of them. The Order wants them counted and named.',
   objectives: [
     { type: 'reach', target: 'dun_the_long_gallery', text: 'Get into the long gallery.' },
-    { type: 'collect', target: 'qi_berth_plate', count: 6, stage: 1, text: 'Take the plate off six berths.' },
+    { type: 'clear', target: 'dun_the_long_gallery', stage: 1, text: 'Take the plate off six berths. The sixth is occupied and does not stay that way.' },
     { type: 'flag', target: 'berths_counted', stage: 2, text: 'Count the gallery end to end and record the number.' },
   ],
   stages: [
@@ -1228,7 +1241,7 @@ side({
   id: 'side_reedmarrow', name: 'Where the Fever Comes From', giver: 'npc_marsh_wife_onna', location: 'greywater_fen', level: 18,
   summary: 'Greywater has had the fever every summer in living memory. Onna has finally worked out which water it comes off.',
   objectives: [
-    { type: 'collect', target: 'qi_fever_sample', count: 5, stage: 0, text: 'Take water from five standings across the fen.' },
+    { type: 'reach', target: 'dun_reedmarrow', stage: 0, text: 'Take water from five standings across the fen, and follow the fifth to its mouth.' },
     { type: 'clear', target: 'dun_reedmarrow', stage: 1, text: 'Go into the bog cavern the fifth sample came off.' },
     { type: 'deliver', target: 'npc_marsh_wife_onna', stage: 2, text: 'Bring Onna the last sample and what was in it.' },
   ],

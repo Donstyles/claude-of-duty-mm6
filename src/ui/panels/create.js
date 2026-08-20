@@ -673,11 +673,17 @@ export class CreatePanel extends Panel {
     }
     const members = this.model.build();
     const party = this.ctx?.get('party');
-    if (party) {
-      party.members = members;
-      party.activeIndex = 0;
-    }
-    this.ctx?.events?.emit('party:created', { members: members.map((m) => m.toJSON()) });
+    // `setParty`, not `party.members = members`.
+    //
+    // Assigning the array direct skipped `equipStartingKit`, so a party the
+    // player rolled walked out of this screen with no weapon, no armour, no
+    // torch and no potion, while the default party — the one nobody plays —
+    // got all four. The first fight is not winnable bare-handed. The screen
+    // then hand-rolled the `party:created` the system already emits, which is
+    // the tell: two copies of one contract, and the half that mattered — the
+    // kit — lived only in the copy nobody called.
+    if (party) party.setParty(members);
+    else this.ctx?.events?.emit('party:created', { members: members.map((m) => m.toJSON()) });
     // The interface re-reads the party ten times a second anyway; pushing it
     // now means the bar under the closing screen is already the new party.
     this.ui._syncParty?.(true);

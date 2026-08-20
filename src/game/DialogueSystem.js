@@ -942,17 +942,72 @@ export class DialogueSystem extends System {
       // open a promotion printed a line of prose and did nothing whatsoever,
       // including Wat Fletcher's "Work", which is the first quest in the game.
       // The slice then cut three more topics off three NPCs' boards outright.
-      catalogueTopics: topics.map((t) => ({
-        id: t.id,
-        label: t.label,
-        text: t.text,
-        requires: t.requires ?? null,
-        gives: t.gives ?? null,
-        service: t.service ?? null,
-        promotes: t.promotes ?? null,
-      })),
+      //
+      // The same seam failed once more a layer up, and this is the second half
+      // of the repair: what the catalogue wrote is not all the work this person
+      // has, and `_offeredTopics` puts the rest of it on the board. Generated
+      // rows go last, so a hand-written one can never be stood in front of.
+      catalogueTopics: [
+        ...topics.map((t) => ({
+          id: t.id,
+          label: t.label,
+          text: t.text,
+          requires: t.requires ?? null,
+          gives: t.gives ?? null,
+          service: t.service ?? null,
+          promotes: t.promotes ?? null,
+        })),
+        ...this._offeredTopics(def, topics),
+      ],
       desc: def.desc ?? '',
     }, rng);
+  }
+
+  /**
+   * The work this person is down as giving that nobody wrote them a topic for.
+   *
+   * `Quests.js` names a `giver` on all ninety-one quests and `offersFrom()`
+   * reads that field, filtered to what the party could take or is already
+   * running — but nothing outside `QuestSystem.js` ever called it, so a quest
+   * reached the journal only if somebody had also hand-written a `gives:` topic
+   * for it. Eighteen finished quests had no such topic and no unlock edge:
+   * 644,500 experience and 230,750 gold, including a level-44 four-stage piece
+   * of work, that no conversation in the kingdom could ever offer. All eighteen
+   * have since been written into `NPCs.js` properly, in the giver's own voice,
+   * which is why this returns nothing today — and it is here so that the next
+   * quest somebody adds is offered by its giver whether or not they remember
+   * to write the topic. Reachability is a property of the giver field now.
+   *
+   * Two rules keep the generated rows in their place. The catalogue is the
+   * author's board and wins outright: anything they wrote a `gives:` for is
+   * skipped here, so no quest is offered twice on one board. And the record is
+   * built whole — the same seven fields a hand-authored topic carries — because
+   * dropping four of them at a copy is precisely the bug the comment above
+   * this one is about.
+   */
+  _offeredTopics(def, own) {
+    const quests = this.ctx?.get?.('quests');
+    if (typeof quests?.offersFrom !== 'function' || !def?.id) return [];
+    const written = new Set((own ?? []).map((t) => t.gives).filter(Boolean));
+    return quests.offersFrom(def.id)
+      .filter((q) => !written.has(q.id))
+      .map((q) => ({
+        id: `offer_${q.id}`,
+        label: q.name,
+        // Not `q.summary`, which is the obvious thing to put here and wrong.
+        // A summary is the journal's voice — third person, past tense — and on
+        // seven of the eighteen it says the speaker's own name back at them:
+        // "Hessa went down forty years ago… She would like to know what she
+        // was looking at," out of Hessa's own mouth. It stays in the journal
+        // it was written for, and the board says the one thing that is true of
+        // every offer. Where somebody has written the line, that line is the
+        // topic and this never runs.
+        text: 'That one is mine to give, and it still wants doing.',
+        requires: null,
+        gives: q.id,
+        service: null,
+        promotes: q.rewards?.promotion ?? null,
+      }));
   }
 
   /** The proprietor named on a venue — ninety of them, and all committed. */

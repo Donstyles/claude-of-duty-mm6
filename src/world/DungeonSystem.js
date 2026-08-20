@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { System } from '../core/Engine.js';
 import { getMaterialLibrary } from '../render/MaterialLibrary.js';
 import { DUNGEONS, entranceOf } from '../game/data/Dungeons.js';
+import { QUESTS } from '../game/data/Quests.js';
 
 /**
  * Dungeons — the fifty-five interiors in `data/Dungeons.js`, built on demand.
@@ -217,6 +218,32 @@ export class DungeonSystem extends System {
 
   isInside(position) {
     return this.current !== null && position.y > BASE_Y - 400;
+  }
+
+  /**
+   * The height of the floor a point is standing on, indoors.
+   *
+   * `null` outside, deliberately — a sentinel of 0 reads as a real height and
+   * a caller cannot tell the two apart, which is how this went wrong in the
+   * first place. `LootSystem._placeDrop` seated every drop on
+   * `terrain.heightAt`, and an interior is built at y ≈ 887 over terrain at
+   * 40, so every item every monster in every dungeon in this game ever
+   * dropped landed eight hundred metres below the party and outside the 2.2 m
+   * pickup radius forever. Nothing threw. The drop was there, and it was
+   * simply somewhere else.
+   *
+   * The walk is the same one `update` does to pick the automap's floor:
+   * plans descend in y, so the first whose surface is at or below the point
+   * is the one being stood on.
+   */
+  floorYUnder(position) {
+    if (!position || !this.isInside(position)) return null;
+    const built = this.built.get(this.current);
+    if (!built?.floors?.length) return null;
+    for (const plan of built.floors) {
+      if (position.y > plan.y - 1.5) return plan.y;
+    }
+    return built.floors[built.floors.length - 1].y;
   }
 
   /** True while nothing hostile is close enough to object. `ui/panels/rest`. */
@@ -556,6 +583,28 @@ export class DungeonSystem extends System {
     // resolved once, here, rather than being assumed by the dresser.
     state.rewardHidden = !!def.reward?.hidden
       && state.floors.some((p) => p.rooms.some((r) => r.vault));
+    // And it can only be hidden in ONE of them. `rewardHidden` is a single
+    // dungeon-wide boolean, so a dresser that consulted it once per room put a
+    // copy of a one-of-a-kind artefact in every vault on every floor: fourteen
+    // Lamplighter's Plates under Duskorn, twelve Recants in the Empty Church,
+    // fifty-five copies of seven artefacts across the seven dungeons that hide
+    // one. The room is resolved once, here, deepest floor first, so the thing
+    // at the bottom of the dungeon is at the bottom of the dungeon.
+    state.prizeRoom = state.rewardHidden
+      ? state.floors.slice().reverse().flatMap((p) => p.rooms).find((r) => r.vault) ?? null
+      : null;
+    // What the quest script expects to be found down here. The boss room on the
+    // deepest floor, because a `collect` objective the party can walk past is
+    // the same bug in a better disguise — never the vault, which is optional by
+    // construction and eleven main-line quests are not.
+    const wanted = questItemsFor(def.id);
+    const last = state.floors[state.floors.length - 1];
+    state.questRoom = wanted.length
+      ? last.rooms.find((r) => r.boss)
+        ?? last.rooms.find((r) => !r.vault && !r.landing && r !== last.entry)
+        ?? last.rooms.find((r) => !r.vault) ?? null
+      : null;
+    state.questItems = state.questRoom ? wanted : [];
     // The shell waits until every floor's stair carving is known, so a shaft
     // can suppress the slab above it and the ceiling below it.
     for (const plan of state.floors) this._shell(state, plan);
@@ -872,6 +921,9 @@ export class DungeonSystem extends System {
    */
   _carveVault(rng, plan) {
     const S = plan.size;
+    // A lattice is thin walls all the way down and this carve wants thick ones,
+    // so act five gets its own. See `_carveLatticeVault`.
+    if (plan.grammar === 'grid') return this._carveLatticeVault(rng, plan);
     for (const room of rng.shuffle(plan.rooms.slice())) {
       if (room.landing || room.vault) continue;
       for (const [di, dj] of rng.shuffle(SIDES.slice())) {
@@ -899,6 +951,62 @@ export class DungeonSystem extends System {
         plan.grid[midj][mid] = 1; plan.tag[midj][mid] = 2;
         const vault = {
           x: cx - 1, y: cy - 1, w: 3, h: 3, cx, cy, kind: 'chamber', vault: true,
+          door: { i: gi, j: gj, di, dj },
+        };
+        plan.rooms.push(vault);
+        return vault;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The same secret, in a building with no thick walls in it.
+   *
+   * `_carveVault` needs a five-by-five block of rock — a three-by-three room
+   * with a cell of margin round it — and the act-five lattice does not contain
+   * one anywhere: the corridors run every four cells in both directions, so
+   * every pocket of rock between them is exactly three cells square. It also
+   * walks outward from a chamber's centre to find its rock, and on a lattice
+   * every direction out of a chamber is a corridor that runs to the board edge.
+   * Both halves fail, and act five came out with nought of the twenty-four
+   * vaults its catalogue lines ask for — three dungeons, seventeen floors, no
+   * secret doors at all, against 92–100% for every other layout.
+   *
+   * The fix is the pocket, not the carve. Opening a pocket whole would put
+   * corridor against room on all four faces, which is a chamber and not a
+   * secret; opening only its CENTRE cell leaves a cell of rock on three sides
+   * and takes the fourth as the leaf. That is one chamber four metres square
+   * behind a slab of the same stone — small, and correctly so, because the only
+   * thing act five has room to hide is a closet.
+   *
+   * Nothing else on the floor moves. Only rock is cut, so every corridor the
+   * lattice had it still has, and the two cells opened are reachable from
+   * nowhere except through the leaf. The test is written against the grid
+   * rather than against the lattice's spacing, so a change to `_layoutGrid`
+   * cannot quietly turn this back into nothing.
+   */
+  _carveLatticeVault(rng, plan) {
+    const S = plan.size;
+    const rock = (i, j) => i > 0 && j > 0 && i < S - 1 && j < S - 1 && !plan.grid[j][i];
+    // A chamber has to be rock on every side but the one the leaf stands in.
+    const pockets = [];
+    for (let j = 2; j < S - 2; j++) {
+      for (let i = 2; i < S - 2; i++) {
+        if (rock(i, j) && SIDES.every(([di, dj]) => rock(i + di, j + dj))) pockets.push([i, j]);
+      }
+    }
+    for (const [ci, cj] of rng.shuffle(pockets)) {
+      for (const [di, dj] of rng.shuffle(SIDES.slice())) {
+        const gi = ci + di, gj = cj + dj;
+        // The corridor the leaf opens onto, and the two wall faces that keep
+        // the leaf a wall rather than the mouth of an alcove.
+        if (!plan.grid[gj + dj]?.[gi + di]) continue;
+        if (!rock(gi - dj, gj - di) || !rock(gi + dj, gj + di)) continue;
+        plan.grid[cj][ci] = 1; plan.tag[cj][ci] = 1;
+        plan.grid[gj][gi] = 1; plan.tag[gj][gi] = 2;
+        const vault = {
+          x: ci, y: cj, w: 1, h: 1, cx: ci, cy: cj, kind: 'cell', vault: true,
           door: { i: gi, j: gj, di, dj },
         };
         plan.rooms.push(vault);
@@ -1511,12 +1619,24 @@ export class DungeonSystem extends System {
       // the dais with the boss standing over it, or — where the catalogue puts
       // it behind a wall instead — in the vault, which is the better trade: a
       // party that finds the seam gets the prize without the fight.
-      if (def.reward && (room.vault ? state.rewardHidden : room.boss && !state.rewardHidden)) {
+      if (def.reward && (room.vault ? room === state.prizeRoom : room.boss && !state.rewardHidden)) {
         const [px, pz] = cellToWorld(room.cx, room.cy, plan.size);
         state.chests.push({
           x: px + (room.boss ? 1.9 : 0), y: plan.y + (room.boss ? 0.6 : 0), z: pz,
           yaw: rng.range(0, Math.PI * 2), open: false,
           locked: true, trap: def.trapLevel, prize: def.reward,
+        });
+      }
+      // The errands. Not locked and not trapped: a lock is a roll the party
+      // retries until it opens, so it costs a campaign quest nothing but time,
+      // and time spent failing a roll in front of the only copy of the Choir
+      // Key is not a thing this game should be selling.
+      if (room === state.questRoom) {
+        const [qx, qz] = cellToWorld(room.cx, room.cy, plan.size);
+        state.chests.push({
+          x: qx - (room.boss ? 1.9 : 0), y: plan.y + (room.boss ? 0.6 : 0), z: qz,
+          yaw: rng.range(0, Math.PI * 2), open: false,
+          locked: false, trap: 0, questItems: state.questItems,
         });
       }
       // A chest is worth finding, so at most one a room and never one in the
@@ -2216,8 +2336,42 @@ export class DungeonSystem extends System {
       const loot = ctx.get('loot');
       const where = new THREE.Vector3(chest.x, chest.y + 0.7, chest.z);
       const tier = this.currentDef?.treasureTier ?? 1;
-      for (const item of loot?.rollTreasure?.(level + tier * 2) ?? []) {
-        loot.dropItem?.(ctx, item, where);
+      /**
+       * Into the packs, not onto the floor.
+       *
+       * `LootSystem._placeDrop` seats every drop at `terrain.heightAt(x, z)`,
+       * and an interior is built at y ≈ 887 over terrain that is at 40 — so
+       * everything a chest in this game has ever paid out landed eight hundred
+       * metres below the party, outside the 2.2 m pickup radius forever. That
+       * is a `LootSystem` bug and is not fixed from here. What is fixed from
+       * here is that a chest is opened at arm's length: its contents go into a
+       * pack, which is what MM6 does with one, and it is the only reason
+       * `loot:picked` — the event a `collect` objective listens for — fires
+       * indoors at all. The floor stays the fallback for a party with no room,
+       * where a drop is at least recoverable once the seating is fixed.
+       */
+      const take = (item) => {
+        if (!item) return false;
+        const who = loot?.giveToParty?.(item) ?? -1;
+        if (who < 0) {
+          ctx.events.emit('ui:log', { text: 'Nobody has room for that.', kind: 'warn' });
+          loot?.dropItem?.(ctx, item, where);
+          return false;
+        }
+        ctx.events.emit('loot:picked', { item, charIndex: who });
+        return true;
+      };
+      for (const item of loot?.rollTreasure?.(level + tier * 2) ?? []) take(item);
+      // The errands. `makeItem` stamps `baseId` with the catalogue id it was
+      // asked for, and `baseId` is the field `QuestSystem` matches a `collect`
+      // objective against when `LootSystem` emits `loot:picked` — so the chain
+      // from this line to a quest advancing is the shipped one, not a new one.
+      const errands = (chest.questItems ?? [])
+        .map((id) => loot?.makeItem?.(id)).filter(Boolean);
+      for (const found of errands) take(found);
+      if (errands.length) {
+        const names = [...new Set(errands.map((e) => e.name))].join(', ');
+        ctx.events.emit('ui:log', { text: `${names}. Somebody is waiting for that.`, kind: 'good' });
       }
       // The prize. `item` is a real catalogue id so it equips and sells like
       // anything else; the name is the dungeon's own, because the reason to
@@ -2226,9 +2380,9 @@ export class DungeonSystem extends System {
       if (prize) {
         prize.name = chest.prize.name;
         prize.unique = this.currentDef?.id ?? true;
-        loot.dropItem?.(ctx, prize, where);
+        take(prize);
         ctx.events.emit('ui:log', { text: `${chest.prize.name}. Nothing else in Caerwen is quite like it.`, kind: 'good' });
-      } else {
+      } else if (!errands.length) {
         ctx.events.emit('ui:log', { text: 'The chest opens.', kind: 'good' });
       }
       return;
@@ -2502,6 +2656,69 @@ export class DungeonSystem extends System {
 const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 function key(i, j) { return i * 4096 + j; }
+
+/**
+ * Which quest items each dungeon is the one place to find.
+ *
+ * `QuestSystem` advances a `collect` objective on `loot:picked`, and the only
+ * thing in the game that emits `loot:picked` is `LootSystem` — off the treasure
+ * bands, which weight no `quest` category, and off a chest's prize, of which
+ * none of the fifty-five was a quest item. So no `qi_*` id had a way into a
+ * pack, and thirty-one quests, eleven of them main-line, could not advance past
+ * the stage that asks for one. This is the placement half of that.
+ *
+ * Where a thing goes is the script's own opinion, read back out of it rather
+ * than authored a second time here:
+ *
+ *   1. the dungeon the quest names at or before the stage that asks for the
+ *      item — a `clear` or a `reach` objective whose target is a dungeon id,
+ *      which is how the catalogue already writes "go in there and get it";
+ *   2. failing that, the best dungeon in the region the quest is set in —
+ *      campaign before side work, then the shallowest band, so an errand lands
+ *      in the hole the party is going into anyway rather than one it may never
+ *      open;
+ *   3. failing that, any dungeon the quest names at all.
+ *
+ * Built once and cached: `_build` runs on every entry and this walks the whole
+ * quest script. `count` is honoured, because four of these ask for six.
+ */
+let questItemIndex = null;
+
+function questItemsFor(dungeonId) {
+  if (!questItemIndex) {
+    questItemIndex = new Map();
+    const byRegion = new Map();
+    for (const d of Object.values(DUNGEONS)) {
+      if (!byRegion.has(d.region)) byRegion.set(d.region, []);
+      byRegion.get(d.region).push(d);
+    }
+    for (const list of byRegion.values()) {
+      list.sort((a, b) => (a.role === 'side') - (b.role === 'side')
+        || a.band[0] - b.band[0] || (a.id < b.id ? -1 : 1));
+    }
+    for (const q of Object.values(QUESTS)) {
+      const named = (q.objectives ?? []).filter((o) => DUNGEONS[o.target])
+        .sort((a, b) => a.stage - b.stage);
+      const fallback = byRegion.get(q.location)?.[0]?.id
+        ?? (DUNGEONS[q.location] ? q.location : named[0]?.target);
+      for (const o of q.objectives ?? []) {
+        if (o.type !== 'collect' || !String(o.target).startsWith('qi_')) continue;
+        // The nearest dungeon named on the way to this objective, not the last
+        // one in the record: a quest that sends the party to two of them wants
+        // each item where the stage that asks for it put them.
+        const home = named.filter((n) => n.stage <= o.stage).pop()?.target ?? fallback;
+        if (!home) continue;
+        if (!questItemIndex.has(home)) questItemIndex.set(home, new Map());
+        const bag = questItemIndex.get(home);
+        // Two quests wanting the same thing want one of it each, not the sum.
+        bag.set(o.target, Math.max(bag.get(o.target) ?? 0, o.count ?? 1));
+      }
+    }
+  }
+  const bag = questItemIndex.get(dungeonId);
+  if (!bag) return [];
+  return [...bag].flatMap(([id, count]) => Array.from({ length: count }, () => id));
+}
 
 /** Cell centre in world XZ. The grid is centred on the origin; map.js knows. */
 function cellToWorld(i, j, size) {

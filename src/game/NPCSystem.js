@@ -6,7 +6,8 @@ import {
   NPCS, SHOPS, TEMPLES, TRAINING_HALLS, GUILDS, TAVERNS, BANKS,
   RUMOURS, hirelingsAt, spellPrice, HIRELING_PROFESSIONS,
 } from './data/NPCs.js';
-import { experienceForLevel, trainingCost } from './rules.js';
+import { VENUE_KINDS, venuesInTown } from './data/Venues.js';
+import { experienceForLevel, trainingCost, charSkillEffect } from './rules.js';
 
 /**
  * Townsfolk and the services they run.
@@ -22,6 +23,30 @@ import { experienceForLevel, trainingCost } from './rules.js';
  */
 
 const TALK_RADIUS = 4.0;
+
+/**
+ * How a keeper dresses when the roster does not say.
+ *
+ * Two thirds of the ninety venues in `Venues.js` name somebody who has no
+ * dialogue tree written for them. They still stand behind a real counter, so
+ * the trade over the door picks the clothes — the same `look` block the roster
+ * authors by hand, chosen by venue kind rather than by person.
+ */
+const KEEPER_LOOK = Object.freeze({
+  weaponsmith: { build: 'broad', age: 'adult', dress: 'stained-apron', palette: 0x6a5442 },
+  armourer: { build: 'broad', age: 'adult', dress: 'apron', palette: 0x7a7f88 },
+  magicshop: { build: 'lean', age: 'older', dress: 'scholar-coat', palette: 0x4a3a70 },
+  alchemist: { build: 'stooped', age: 'older', dress: 'stained-apron', palette: 0x4a7a30 },
+  generalstore: { build: 'average', age: 'adult', dress: 'factor-coat', palette: 0x8a6a3a },
+  bank: { build: 'slight', age: 'older', dress: 'official-coat', palette: 0x3a4a5a },
+  temple: { build: 'average', age: 'adult', dress: 'lamp-robe', palette: 0xd8b25c },
+  tavern: { build: 'broad', age: 'older', dress: 'apron', palette: 0x6a5030 },
+  trainer: { build: 'broad', age: 'adult', dress: 'town-mail', palette: 0x4a4f57 },
+  guild: { build: 'slight', age: 'adult', dress: 'guild-robe', palette: 0x6a3f8f },
+  coachstop: { build: 'wiry', age: 'adult', dress: 'travel-leather', palette: 0x5a4630 },
+  dock: { build: 'broad', age: 'older', dress: 'oilskin', palette: 0x4a5a5a },
+  house: { build: 'average', age: 'adult', dress: 'commoner', palette: 0x8c7a5a },
+});
 
 /* ═══════════════════════ figure construction helpers ═════════════════════ */
 
@@ -189,22 +214,25 @@ export class NPCSystem extends System {
     await this._loadMaterials(ctx);
 
     // Put a keeper on the door of every named building.
+    const townId = town.townId ?? town.id ?? null;
+    this._used = new Set();
     for (const door of town.doors ?? []) {
-      const npcId = this._npcForBuilding(door.type);
-      if (!npcId) continue;
-      this._spawn(ctx, npcId, door.position, door.name, terrain);
+      const who = this._npcForDoor(door, townId);
+      if (!who) continue;
+      this._spawn(ctx, who, door.position, door.name, terrain);
     }
 
-    // A few unattached townsfolk wandering the square.
+    // A few unattached townsfolk wandering the square — this town's, and
+    // never the same person twice.
     const centre = town.centre();
-    const idle = Object.keys(NPCS).slice(0, 6);
-    for (let i = 0; i < 5; i++) {
+    const idle = this._idlePool(townId);
+    for (let i = 0; i < Math.min(5, idle.length); i++) {
       const a = (i / 5) * Math.PI * 2 + 0.4;
       const r = 9 + this.rng.range(-3, 5);
       const p = new THREE.Vector3(
         centre.x + Math.sin(a) * r, centre.y, centre.z + Math.cos(a) * r,
       );
-      this._spawn(ctx, this.rng.pick(idle), p, null, terrain);
+      this._spawn(ctx, idle[i], p, null, terrain);
     }
 
     ctx.events.on('ui:talkTo', ({ id }) => {
@@ -242,44 +270,122 @@ export class NPCSystem extends System {
   }
 
   /**
-   * Which catalogue NPC keeps this kind of building.
+   * Who keeps this door.
    *
-   * Ids are `npc_<name>`, not role names, so matching has to go through the
-   * profession string. Each building type gets a list of keywords, and the
-   * first NPC whose profession contains one wins; anyone already placed is
-   * skipped so a town does not end up with the same person on four doors.
+   * The old rule read `door.type` and nothing else: it scanned the whole
+   * kingdom's roster for a profession keyword, first match wins, with no town
+   * filter anywhere. Walking into Coldwater put Millhaven's innkeep on the
+   * temple, Millhaven's watch sergeant on the training yard and Thornwick's
+   * weaponsmith on the Whalebone Anvil — six of Coldwater's eight trade doors
+   * were staffed from somewhere else, and the harbour office had nobody at all
+   * because `dock` was not one of the nine keys the table knew.
+   *
+   * There was never a need to guess. `TownSystem` builds every door from the
+   * town's own venue catalogue and writes the venue's name onto it, and
+   * `Venues.js` names the keeper of all ninety buildings, so matching the door
+   * back to its own venue record puts the right person behind every counter by
+   * construction — no keywords, no kingdom-wide scan, no town filter needed
+   * because the catalogue is already the town's.
+   *
+   * The roster in `NPCs.js` is smaller than the catalogue: about a third of the
+   * ninety keepers have a dialogue tree written for them and the rest are a
+   * name on a sign. Those get a figure built from the venue itself, keyed by
+   * the venue id — which is also how `SHOPS`, `TEMPLES`, `TAVERNS`, `GUILDS`
+   * and `BANKS` are keyed, so `topicsFor` finds their trade without any of
+   * this having to know what a bank is.
    */
-  _npcForBuilding(type) {
-    const KEYWORDS = {
-      weaponSmith: ['weapon smith', 'smith'],
-      armoury: ['armour', 'knight master', 'watch captain'],
-      magicShop: ['magister', 'arch magister'],
-      alchemist: ['alchemist'],
-      generalStore: ['harbourmaster', 'cartographer', 'elder'],
-      tavern: ['elder', 'harbourmaster'],
-      temple: ['priest', 'priestess', 'abbot'],
-      trainingHall: ['knight master', 'paladin master', 'ranger lord'],
-      townHall: ['marshal', 'watch captain', 'queen', 'elder'],
-      guildHall: ['guild', 'magister', 'druid', 'seer'],
-    };
-    const keys = KEYWORDS[type];
-    if (!keys) return null;
-
+  _npcForDoor(door, townId) {
     this._used ??= new Set();
-    for (const key of keys) {
-      for (const [id, def] of Object.entries(NPCS)) {
-        if (this._used.has(id)) continue;
-        if (String(def.profession ?? '').toLowerCase().includes(key)) {
-          this._used.add(id);
-          return id;
-        }
-      }
-    }
-    // Nothing matched: take any unused NPC rather than leaving the door empty.
-    for (const id of Object.keys(NPCS)) {
-      if (!this._used.has(id)) { this._used.add(id); return id; }
+    const post = venuesInTown(townId).find((v) => v.name === door.name);
+    if (!post?.keeper) return null;
+    return this._claim(post, townId);
+  }
+
+  /**
+   * Take the keeper of one venue, once.
+   *
+   * Several venues in a town name the same person — Skald Vey keeps The Long
+   * Dark and lives in Skald's House — so the first door they answer is the one
+   * they stand at, and the second gets nobody rather than a second copy of
+   * them. A door with its owner out is a quieter answer than a twin, and much
+   * quieter than importing somebody from two hundred miles away to fill it.
+   */
+  _claim(post, townId) {
+    const listed = this._rosterKeeper(post.keeper, townId);
+    // Keyed by the person, not by the door: a keeper the roster does not carry
+    // is still one person across the two or three venues that name them, and
+    // keying on the venue id would put Aud Brack behind her own counter and in
+    // her own doorway at the same time.
+    const id = listed?.id ?? `keeper:${String(post.keeper).toLowerCase()}`;
+    if (this._used.has(id)) return null;
+    this._used.add(id);
+    return listed ?? { id: post.id, def: this._keeperFromVenue(post, townId) };
+  }
+
+  /**
+   * The roster entry for a name on a sign.
+   *
+   * Matched on the bare name and scoped to the town, because the sign and the
+   * roster disagree about titles — `Adept Sella Roon` keeps one building and
+   * `Sella Roon` keeps the roster entry, and they are the same woman. Testing
+   * that the sign's name *ends with* the roster's is the whole rule: it needs
+   * no list of honorifics to stay in step with, and two people in one town
+   * never share a surname in `CANON.md`.
+   */
+  _rosterKeeper(keeper, townId) {
+    const sign = String(keeper).toLowerCase();
+    for (const [id, def] of Object.entries(NPCS)) {
+      if (def.town !== townId) continue;
+      const roster = String(def.name).toLowerCase();
+      if (sign === roster || sign.endsWith(` ${roster}`)) return { id, def };
     }
     return null;
+  }
+
+  /**
+   * A figure for a keeper the sign names and the roster does not.
+   *
+   * `DialogueSystem` already generates a full person for a venue with a keeper,
+   * so this owes it only a body and a name: the dress comes off the trade, the
+   * words come from there.
+   */
+  _keeperFromVenue(venue, townId) {
+    const kind = VENUE_KINDS[venue.kind] ?? {};
+    return {
+      id: venue.id,
+      name: venue.keeper,
+      profession: `${kind.label ?? 'Keeper'}, ${venue.name}`,
+      town: townId,
+      location: null,
+      portrait: 'townsfolk',
+      look: KEEPER_LOOK[venue.kind] ?? KEEPER_LOOK.house,
+      dialogue: { greeting: null, topics: [] },
+      questsGiven: [],
+      desc: '',
+    };
+  }
+
+  /**
+   * Townsfolk for the square: this town's residents, whoever is not already
+   * standing on a door. A hamlet with four names to its roster gets a quieter
+   * square than the capital, which is the honest answer — the alternative was
+   * five copies of Millhaven's chapel and watch in every town in the kingdom.
+   */
+  _idlePool(townId) {
+    this._used ??= new Set();
+    const out = [];
+    for (const [id, def] of Object.entries(NPCS)) {
+      if (def.town !== townId || this._used.has(id)) continue;
+      this._used.add(id);
+      out.push({ id, def });
+    }
+    // Then anybody else the catalogue names in this town and no door claimed.
+    for (const v of venuesInTown(townId)) {
+      if (!v.keeper || out.length >= 5) break;
+      const who = this._claim(v, townId);
+      if (who) out.push(who);
+    }
+    return out;
   }
 
   /**
@@ -680,9 +786,13 @@ export class NPCSystem extends System {
     return g;
   }
 
-  _spawn(ctx, npcId, position, buildingName, terrain) {
-    const def = NPCS[npcId];
-    if (!def) return null;
+  _spawn(ctx, who, position, buildingName, terrain) {
+    // `who` is either a catalogue id or the `{ id, def }` pair `_npcForDoor`
+    // returns, which is how a keeper the sign names but the roster does not
+    // gets a body without having to be written into `NPCs.js` twice.
+    const npcId = typeof who === 'string' ? who : who?.id;
+    const def = typeof who === 'string' ? NPCS[who] : who?.def;
+    if (!def || !npcId) return null;
     const figure = this._buildFigure(def, npcId);
     const y = terrain?.heightAt?.(position.x, position.z) ?? position.y;
     figure.position.set(position.x, y, position.z);
@@ -769,6 +879,25 @@ export class NPCSystem extends System {
   /**
    * Run a dialogue topic. Returns `{ text, ok }` for the UI to display.
    */
+  /**
+   * Diplomacy at a door: "NPC reactions improve."
+   *
+   * `reactionBonus` — 5 points at Expert, 10 at Master, 20 at Grandmaster —
+   * resolved on every character sheet in the game and was read nowhere, so all
+   * three of Diplomacy's mastery steps changed a word on the sheet and no
+   * number in the world. The party talks with one voice, so the best talker
+   * present does it, and the bonus comes off what somebody asks to work for
+   * or to let you through a guild door.
+   */
+  _reaction(ctx) {
+    let best = 0;
+    for (const c of ctx.get('party')?.members ?? []) {
+      if (c?.isDead || c?.isUnconscious) continue;
+      best = Math.max(best, charSkillEffect(c, 'diplomacy').reactionBonus ?? 0);
+    }
+    return Math.min(0.2, best / 100);
+  }
+
   choose(ctx, topicId) {
     const npc = this.talking;
     const party = ctx.get('party');
@@ -863,9 +992,12 @@ export class NPCSystem extends System {
       if (party.hirelings.length >= 2) return { ok: false, text: 'You already travel with two.' };
       const pick = this.rng.pick(available);
       const prof = HIRELING_PROFESSIONS[pick] ?? {};
-      party.hirelings.push({ id: pick, ...prof });
+      // A talker gets them for less. The fee is written onto the record the
+      // party carries, because that is the copy the rest system charges.
+      const fee = Math.max(1, Math.round((prof.fee ?? 0) * (1 - this._reaction(ctx))));
+      party.hirelings.push({ id: pick, ...prof, fee });
       ctx.events.emit('ui:log', { text: `${prof.name ?? pick} joins the party.`, kind: 'info' });
-      return { ok: true, text: `${prof.name ?? pick} will travel with you.` };
+      return { ok: true, text: `${prof.name ?? pick} will travel with you for ${fee} a day.` };
     }
 
     if (topicId === 'learn') {
@@ -879,7 +1011,7 @@ export class NPCSystem extends System {
 
     if (topicId === 'join') {
       const guild = GUILDS[npc.defId] ?? { joinCost: 100 };
-      const cost = guild.joinCost ?? 100;
+      const cost = Math.max(1, Math.round((guild.joinCost ?? 100) * (1 - this._reaction(ctx))));
       if (!party.spendGold(cost)) return { ok: false, text: `Membership is ${cost} gold.` };
       guild.members = [...(guild.members ?? []), 'party'];
       return { ok: true, text: 'Welcome to the guild.' };

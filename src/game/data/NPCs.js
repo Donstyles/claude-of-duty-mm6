@@ -546,8 +546,9 @@ npc({
     { id: 'magister', label: 'Corvane Wysk', text: '"My father made him magister and I have never once been able to say why. Find out where he goes on the Duskorn road."', gives: 'main_11_the_queens_magister' },
     { id: 'descend', label: 'The Descent', text: '"Nine seals, nine keys, and a stair under the glass. Whatever is down there has been waiting two hundred years. Do not make it wait politely."', gives: 'main_14_ossra_deep' },
     { id: 'steppe', label: 'The Riven Steppe', text: '"The giants have a hall under the plateau with imperial masonry in it. I would like to know who built for whom."', gives: 'side_hall_beneath' },
+    { id: 'split_hall', label: 'The Split Hall', text: '"A canyon opened under an imperial hall and took half of it down with it. The giants keep the standing half. I want what is in the other."', gives: 'side_the_split_hall' },
   ],
-  questsGiven: ['main_11_the_queens_magister', 'main_14_ossra_deep', 'side_hall_beneath'],
+  questsGiven: ['main_11_the_queens_magister', 'main_14_ossra_deep', 'side_hall_beneath', 'side_the_split_hall'],
   desc: 'Third of her line, holding a kingdom together with correspondence and nerve.',
 });
 
@@ -561,8 +562,9 @@ npc({
     { id: 'key', label: 'The Dawnbell Key', text: '"The Dawnbell will not part with its key while its founding shrine stands cold. Relight the font on the Cindermoor."', gives: 'main_08_the_dawnbell_key' },
     { id: 'priest_of_light', label: 'Become a Priest of Light', text: '"The ember of the old fire is still in the sealed sanctum, if you can reach it. Carry it out and light what it was cut for."', promotes: 'priest_of_light', gives: 'promo_priest_of_light' },
     { id: 'altars', label: 'The Seven Altars', text: '"Seven altars in the Weald, one per attribute, and each of them wants proof before it gives anything."', gives: 'side_seven_altars' },
+    { id: 'berths', label: 'The Berths', text: '"A mile of gallery under the crater, berths down both sides, and something still lying in every one of them. The Order wants them counted and named."', gives: 'side_the_berths' },
   ],
-  questsGiven: ['main_06_the_orders_warrant', 'main_08_the_dawnbell_key', 'promo_priest_of_light', 'side_seven_altars'],
+  questsGiven: ['main_06_the_orders_warrant', 'main_08_the_dawnbell_key', 'promo_priest_of_light', 'side_seven_altars', 'side_the_berths'],
   desc: 'Presides over the largest temple in Caerwen and trusts almost nobody inside it.',
 });
 
@@ -576,8 +578,10 @@ npc({
     { id: 'glass', label: 'Under the Glass', text: '"The shaft is not a shaft. It is a stairwell, and stairwells are built. Go and tell me I am wrong."', gives: 'main_13_under_the_glass' },
     { id: 'archmage', label: 'Sit the Examination', text: '"Four questions, one per element. Nobody has answered all four in eleven years and I have stopped hoping."', promotes: 'archmage', gives: 'promo_archmage' },
     { id: 'beacon', label: 'The Beacon', text: '"I set an anchor in a room and came back to it from ninety miles away. The Concord spent two years deciding whether to be pleased."' },
+    { id: 'glass_survey', label: 'A Survey of the Glass', text: '"I want the crater floor measured and nobody will do it, because measuring it means standing on the glass for three days."', gives: 'side_the_glass_survey' },
+    { id: 'grid', label: 'What the Grid Is For', text: '"I will not go down there and I will not stop asking. Three questions about the first descent, and no sword answers any of them."', gives: 'side_what_the_grid_is_for' },
   ],
-  questsGiven: ['main_07_the_ninefold_seal', 'main_13_under_the_glass', 'promo_archmage'],
+  questsGiven: ['main_07_the_ninefold_seal', 'main_13_under_the_glass', 'promo_archmage', 'side_the_glass_survey', 'side_what_the_grid_is_for'],
   desc: 'Speaks for the Concord, invented the Beacon, and would rather be reading.',
 });
 
@@ -649,8 +653,9 @@ npc({
     { id: 'keep', label: 'Hoarfast Keep', text: '"A whole garrison abandoned it in one season and the records stop mid-sentence. I want the rest of the sentence."', gives: 'side_hoarfast_keep' },
     { id: 'statues', label: 'The Garden', text: '"A temple in the Verhal buried to the roofline, and a forecourt of figures that were not carved."', gives: 'side_garden_of_statues' },
     { id: 'manor', label: 'Wenlow Manor', text: '"The house burned sixty years ago. The cellar did not, and neither, apparently, did the family."', gives: 'side_wenlow_cellar' },
+    { id: 'orchard', label: 'The Orchard Vault', text: '"An imperial grain vault under a cider orchard an hour out of town. Still stocked, and somebody is still counting it."', gives: 'side_the_orchard_vault' },
   ],
-  questsGiven: ['side_barrow_survey', 'side_hoarfast_keep', 'side_garden_of_statues', 'side_wenlow_cellar'],
+  questsGiven: ['side_barrow_survey', 'side_hoarfast_keep', 'side_garden_of_statues', 'side_wenlow_cellar', 'side_the_orchard_vault'],
   desc: 'Has walked two thirds of Caerwen with a chain and a notebook and intends to finish.',
 });
 
@@ -740,8 +745,9 @@ npc({
   topics: [
     { id: 'shop', label: 'Trade', text: '"Reagents by the ounce, potions by the bottle. I do not sell on credit to anybody who owns a sword."', service: 'town_saltmarch_alchemist' },
     { id: 'stone', label: 'Work', text: '"I want a philosopher\'s stone and I am not walking into the Verhal to fetch one myself."', gives: 'side_philosophers_stone' },
+    { id: 'toll', label: 'The Toll', text: '"The Choir waters its own caravans at the Verhal cisterns and charges the rest of us for the privilege. I have paid it two years. Stop it."', gives: 'side_the_cistern_toll' },
   ],
-  questsGiven: ['side_philosophers_stone'],
+  questsGiven: ['side_philosophers_stone', 'side_the_cistern_toll'],
   desc: 'Distils on the tide, because the flats water is only clean for four hours a day.',
 });
 
@@ -770,8 +776,9 @@ npc({
     { id: 'shop', label: 'Trade', text: '"Best still in Caerwen, in a shed, on stilts, in a fen. Nobody believes it until they taste the yellow."', service: 'town_greywater_alchemist' },
     { id: 'grotto', label: 'The Greenheart', text: '"Something has been chipping at the stone under the Weald and the whole fen has felt it. Go and look."', gives: 'side_greenheart' },
     { id: 'fever', label: 'The Fever', text: '"It comes every August, it takes the old and the very young, and the Order sends a lamp and no physician."' },
+    { id: 'reedmarrow', label: 'Where It Comes From', text: '"I know which water it comes off now. The Reedmarrow cut, out past the far stands, and I am ninety-one and not walking it."', gives: 'side_reedmarrow' },
   ],
-  questsGiven: ['side_greenheart'],
+  questsGiven: ['side_greenheart', 'side_reedmarrow'],
   desc: 'Ninety-one, still mends her own traps, still runs the village.',
 });
 
@@ -785,8 +792,10 @@ npc({
     { id: 'arch_druid', label: 'Become an Arch Druid', text: '"A day and a night at the Greenheart. No spells. Not one. If you cast, you start again."', promotes: 'arch_druid', gives: 'promo_arch_druid' },
     { id: 'swelling', label: 'The Swelling', text: '"It grows at the rate of a house a year. In ten years there will be no Gallowfen left to poison."', gives: 'side_the_swelling' },
     { id: 'second', label: 'The Second One', text: '"There is another under the crater rim, newer, and being dug faster. Close it before it learns the trick."', gives: 'side_second_swelling' },
+    { id: 'chapter', label: 'The Green Chapter', text: '"There is a Cindric road under the Weald and the wood takes it back every time it is reopened. The circle doing that is not one of mine and does not want visitors."', gives: 'side_the_green_chapter' },
+    { id: 'assize', label: 'The Assize', text: '"The Imperium opened a court in the Gallowfen and never closed it. The register of the condemned is still legible, and it is still being written in."', gives: 'side_the_assize' },
   ],
-  questsGiven: ['promo_great_druid', 'promo_arch_druid', 'side_the_swelling', 'side_second_swelling'],
+  questsGiven: ['promo_great_druid', 'promo_arch_druid', 'side_the_swelling', 'side_second_swelling', 'side_the_green_chapter', 'side_the_assize'],
   desc: 'Keeps a circle of nine and fully expects to outlive most of them.',
 });
 
@@ -800,8 +809,10 @@ npc({
     { id: 'master', label: 'Become a Master', text: '"Climb to the wind shrine under the Whitemantle. Bring back my answer. It is one word and you will know it when you see it."', promotes: 'master', gives: 'promo_master' },
     { id: 'cave', label: 'The Cave', text: '"It goes back further than it looks. Whatever walled the bottom of it in did the walling from this side."', gives: 'side_hessas_cave' },
     { id: 'sunder', label: 'The Sunder', text: '"I walked in at twenty and out at twenty-three and I remember one day of it. That is all you are getting."' },
+    { id: 'eel_stair', label: 'The Eel Stair', text: '"Three families have used that sea cave for a hundred years and none of them has ever met the others down it. Twice, what got hidden in it was a person."', gives: 'side_the_eel_stair' },
+    { id: 'seat', label: 'The Seat', text: '"Forty years ago I got as far as a room at the bottom with one chair in it, and I came back up. Go down and tell me what I was looking at."', gives: 'side_the_seat' },
   ],
-  questsGiven: ['promo_initiate', 'promo_master', 'side_hessas_cave'],
+  questsGiven: ['promo_initiate', 'promo_master', 'side_hessas_cave', 'side_the_eel_stair', 'side_the_seat'],
   desc: 'Ninety, went into the crater once, and came back out of it — which nobody else has done.',
 });
 
@@ -814,8 +825,9 @@ npc({
     { id: 'shop', label: 'Trade', text: '"Whatever the packet brought, at whatever the packet charged, plus what I need to eat."', service: 'town_fallowmere_generalstore' },
     { id: 'grange', label: 'The Old Grange', text: '"The last family to farm the north field bricked themselves in. Something else got out. Go and finish it."', gives: 'side_old_grange' },
     { id: 'church', label: 'The Church', text: '"It seats four hundred. There have not been four hundred people on this island in ninety years. We keep the lamps lit anyway."' },
+    { id: 'trowel', label: 'The Trowel', text: '"They bricked that cellar up from the inside and the trowel was found outside the wall. Somebody finished it for them. Go and see what for."', gives: 'side_the_bricked_widow' },
   ],
-  questsGiven: ['side_old_grange'],
+  questsGiven: ['side_old_grange', 'side_the_bricked_widow'],
   desc: 'Sells, sweeps, buries, and keeps the church lamps trimmed because somebody has to.',
 });
 
@@ -842,8 +854,10 @@ npc({
   topics: [
     { id: 'train', label: 'Drill', text: '"We train to thirty and then we send you south, which is an admission I dislike making."', service: 'town_coldwater_trainer' },
     { id: 'gullhold', label: 'Gullhold', text: '"The militia roll and the garrison roll no longer match. Retake the keep and I will not ask how."', gives: 'side_gullhold' },
+    { id: 'pit_singer', label: 'The Pit Singer', text: '"The Choir sent recruiters down into the canyon sinks. The harpies ate two of them and kept the tune. Go and stop the singing."', gives: 'side_the_pit_singer' },
+    { id: 'blue_throat', label: 'The Blue Throat', text: '"Two hundred feet of meltwater shaft through the glacier, and four hundred years of what the ice has taken lying in it in order. Go down and read it off."', gives: 'side_the_blue_throat' },
   ],
-  questsGiven: ['side_gullhold'],
+  questsGiven: ['side_gullhold', 'side_the_pit_singer', 'side_the_blue_throat'],
   desc: 'Runs the yard, the militia and the funerals, and considers them one job.',
 });
 
@@ -898,8 +912,9 @@ npc({
     { id: 'fall', label: 'The City', text: '"The Choir has taken the western forum and set watchers on the aqueduct. Three of my diggers did not come back. Push them off it."', gives: 'main_10_duskorn_falls' },
     { id: 'vent', label: 'The Vent', text: '"There is a hall cut into a live fissure out in the Verhal. Four surveyors went, none returned, and I will pay for what they carried."', gives: 'side_the_vent' },
     { id: 'stair', label: 'The Long Stair', text: '"Two thousand steps up a canyon wall, each of them waist-high. Somebody built that, and it was not giants."', gives: 'side_long_stair' },
+    { id: 'malveth', label: 'The Hold That Never Heard', text: '"Nobody has told the Malveth household that the Imperium fell. Go and tell them. I will take the muniment room afterwards."', gives: 'side_the_hold_that_never_heard' },
   ],
-  questsGiven: ['main_10_duskorn_falls', 'side_the_vent', 'side_long_stair'],
+  questsGiven: ['main_10_duskorn_falls', 'side_the_vent', 'side_long_stair', 'side_the_hold_that_never_heard'],
   desc: 'Old Cindric blood, living in her ancestors\' city, selling it back to the living by the crate.',
 });
 
@@ -1257,8 +1272,9 @@ npc({
     { id: 'want', label: 'What Coll Wants', text: '"I have the key. I have always had it. You may have it the evening the lamp of Duskorn is lit again — publicly, at dusk, where the whole waste can see it. That is the entire price."', gives: 'a3_dawn_2_what_coll_wants' },
     { id: 'schism', label: 'The Schism', text: '"A disagreement about the order of two verses. That is the whole of it. Both halves have since forgotten which order they were arguing for."' },
     { id: 'guild', label: 'The Dawnbell', text: '"Four members, one bell, and a waste outside the door that eats anything left standing."', service: 'town_duskorn_guild_dawnbell' },
+    { id: 'vaults', label: 'The Vault Keeper', text: '"Nine generations of Ossran scavenging, labelled and shelved, and the keeper has stopped letting the family through his own door. Ask him why. He will not answer me."', gives: 'side_the_vault_keeper' },
   ],
-  questsGiven: ['a3_dawn_2_what_coll_wants'],
+  questsGiven: ['a3_dawn_2_what_coll_wants', 'side_the_vault_keeper'],
   desc: 'Will trade forty years of custody for one lamp, lit publicly, at dusk.',
 });
 
@@ -1286,9 +1302,10 @@ npc({
     { id: 'survey', label: 'The Survey', text: '"We will not open the Undercut for a warrant. We will open it when somebody has walked the galleries and told me they will hold. That somebody is not going to be one of mine."', gives: 'a3_stone_1_the_survey' },
     { id: 'gallery', label: 'The Key in the Gallery', text: '"Our key went down with the master of works. He is still in the second gallery. So is it."', gives: 'a3_stone_2_the_key_in_the_gallery' },
     { id: 'hollow', label: 'Ashford Hollow', text: '"Charcoal, iron, and men in Chapter coats collecting at the road head every week. Ask the burners, not me — I hear it secondhand and I would rather keep it that way."' },
+    { id: 'ashpit', label: 'The Ashpit Face', text: '"The peat cutters keep bringing up Cindric dead. Whole, tanned brown, hands tied. They have stopped digging that face and they will not tell me why."', gives: 'side_the_ashpit_face' },
     { id: 'guild', label: 'The Deep Stone', text: '"We are under the hill, which is the point, and the roof has held two hundred years, which is also the point."', service: 'town_ashford_guild_deepstone' },
   ],
-  questsGiven: ['a3_stone_1_the_survey', 'a3_stone_2_the_key_in_the_gallery'],
+  questsGiven: ['a3_stone_1_the_survey', 'a3_stone_2_the_key_in_the_gallery', 'side_the_ashpit_face'],
   desc: 'Will not open the Undercut for a warrant, only for somebody who has walked the galleries.',
 });
 
@@ -1363,9 +1380,10 @@ npc({
   topics: [
     { id: 'glass', label: 'Four Crates', text: '"My bar iron was on that cart. What came off it is not bar iron. It does not cut like glass and it does not break like glass and it will not take heat at all."', gives: 'a1_four_crates_of_glass' },
     { id: 'trade', label: 'Their Trade', text: '"Third generation on this anvil. My grandmother put the horn on it and I have worn it bright again in the same place."' },
+    { id: 'adit', label: 'The Adit', text: '"My grandfather dug two hundred feet of bad iron under the downs and stopped at something standing upright in the face. Go down and tell me what it is."', gives: 'side_hobbs_adit' },
     { id: 'buy', label: 'Buy', text: '"Everything on the board is mine and everything on the board is honest."', service: 'town_millhaven_weaponsmith' },
   ],
-  questsGiven: ['a1_four_crates_of_glass'],
+  questsGiven: ['a1_four_crates_of_glass', 'side_hobbs_adit'],
   desc: 'Third generation on the same anvil, worn bright on the horn in the same place as her grandmother\'s.',
 });
 

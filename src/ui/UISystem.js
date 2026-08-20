@@ -1248,6 +1248,7 @@ export class UISystem extends System {
     const gy = Math.max(0, Math.min(rows - fp.h, y));
     const ignore = drag.from === 'grid' ? drag.entry : null;
     if (!this._gridFree(c.inventory, gx, gy, fp.w, fp.h, ignore)) {
+      if (this._tryMix(c, drag, gx, gy, ignore)) return true;
       this.toast('No room in the pack there.', 'warn');
       return false;
     }
@@ -1260,6 +1261,46 @@ export class UISystem extends System {
       c.refresh?.();
       this.log(`${c.name} stows the ${item.name}.`, 'info');
     }
+    this._syncParty(true);
+    return true;
+  }
+
+  /**
+   * A drop onto an occupied cell is a mixture, when the two go together.
+   *
+   * MM6 combines potions in the pack — you drag one bottle onto another — and
+   * so does this. `AlchemySystem` had the whole model: the draw, mix and boost
+   * verbs, the mastery ladder, the botch. What it had no hand for was this
+   * one branch, because the drop handler refused every occupied cell before
+   * anything could ask whether the two things answered to each other. So the
+   * entire Alchemy skill, and every reagent in the game, reached the player
+   * through no screen at all.
+   *
+   * `preview` is side-effect-free and returns the same plan `mix` will use,
+   * so asking costs nothing on the drops that are just a collision.
+   *
+   * The party index is looked up rather than assumed. `index` here addresses
+   * the interface's view-models, which is not the same list as `party.members`
+   * once a hireling holds a pane — and `mix` takes a party index. Two index
+   * spaces that look alike is the shape of half the bugs in this repo.
+   */
+  _tryMix(c, drag, gx, gy, ignore) {
+    if (drag.from !== 'grid' || !drag.entry) return false;
+    const alchemy = this.ctx?.get('alchemy');
+    if (!alchemy?.preview) return false;
+
+    const under = c.inventory.find((e) => {
+      if (e === ignore) return false;
+      const f = itemFootprint(e.item);
+      return gx >= e.x && gy >= e.y && gx < e.x + f.w && gy < e.y + f.h;
+    });
+    if (!under || under === drag.entry) return false;
+    if (!alchemy.preview(c, drag.item, under.item).verb) return false;
+
+    const partyIndex = this.ctx?.get('party')?.members?.indexOf(c) ?? -1;
+    if (partyIndex < 0) return false;
+
+    alchemy.mix(partyIndex, drag.entry, under);
     this._syncParty(true);
     return true;
   }

@@ -341,13 +341,26 @@ export class LootSystem extends System {
     });
   }
 
+  /**
+   * Seat a drop on the ground under it — whichever ground that is.
+   *
+   * This used to be `terrain.heightAt(x, z)` unconditionally, and a dungeon
+   * interior is built at y ≈ 887 over terrain that is at 40. So every item
+   * every monster in every dungeon in this game has ever dropped was seated
+   * eight hundred and fifty metres below the party, outside the 2.2 m pickup
+   * radius forever. Nothing threw and nothing logged: the drop existed, it
+   * was simply somewhere else, and indoor loot has never once been
+   * collectable. `DungeonSystem.floorYUnder` answers `null` outside rather
+   * than a plausible-looking 0, so the two cases cannot blur again.
+   */
   _placeDrop(ctx, mesh, position) {
     const terrain = ctx.get('terrain');
     // Scatter a little so a four-goblin kill does not stack everything on one
     // point and become impossible to pick up individually.
     const x = position.x + this.rng.range(-1.1, 1.1);
     const z = position.z + this.rng.range(-1.1, 1.1);
-    const y = (terrain?.heightAt?.(x, z) ?? position.y) + 0.18;
+    const floor = ctx.get('dungeon')?.floorYUnder?.(position);
+    const y = (floor ?? terrain?.heightAt?.(x, z) ?? position.y) + 0.18;
     mesh.position.set(x, y, z);
     mesh.rotation.y = this.rng.range(0, Math.PI * 2);
     this._group.add(mesh);

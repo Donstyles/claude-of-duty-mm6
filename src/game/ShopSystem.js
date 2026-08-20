@@ -27,6 +27,7 @@ import { MASTERY, ATTRIBUTE_LABEL } from './data/Skills.js';
 import { VENUES, VENUE_IDS } from './data/Venues.js';
 import {
   merchantPrice, canIdentify, canRepair, statBonus, heldSkill, effectiveStat,
+  skillEffect,
 } from './rules.js';
 
 function freeze(o) {
@@ -701,7 +702,7 @@ export class ShopSystem extends System {
     const vm = ui?.members?.()[i] ?? null;
     const live = party?.get?.(i) ?? vm?.source ?? null;
     const skills = {};
-    for (const id of ['merchant', 'identify_item', 'repair_item']) {
+    for (const id of ['merchant', 'identify_item', 'repair_item', 'diplomacy', 'stealing']) {
       skills[id] = this._skill(vm, live, id);
     }
     const personality = vm?.stats?.personality?.cur
@@ -716,13 +717,28 @@ export class ShopSystem extends System {
     };
   }
 
+  /**
+   * One of the trader's skills as `{ level, mastery }`, gear included.
+   *
+   * The bonus bag is the half that was missing. `heldSkill` is deliberately the
+   * bare roster entry — a worn ring must not buy a mastery — but every counter
+   * here priced off `heldSkill` alone, so the signet ring's `merchant: 2`, the
+   * hired Merchant's +3 and the factor's coat's +10 all stopped at the tooltip.
+   * `charSkillEffect` adds the bag before resolving; this does the same to the
+   * level *before* it reaches `merchantPrice`, which is the only place a shop
+   * looks. Zero stays zero on the same rule the resolver uses: a bonus needs a
+   * skill to add to, so a ring does not make a merchant out of nobody.
+   */
   _skill(vm, live, id) {
+    const gear = live?.bonuses?.skills?.[id] ?? 0;
+    const held = (level, mastery) => ({ level: level > 0 ? level + gear : 0, mastery });
     if (Array.isArray(vm?.skills)) {
       const s = vm.skills.find((k) => k.id === id);
-      if (s) return { level: s.level ?? 0, mastery: s.mastery ?? MASTERY.NORMAL };
-      if (id === 'merchant' && vm.merchant) return { ...vm.merchant };
+      if (s) return held(s.level ?? 0, s.mastery ?? MASTERY.NORMAL);
+      if (id === 'merchant' && vm.merchant) return held(vm.merchant.level ?? 0, vm.merchant.mastery ?? MASTERY.NORMAL);
     }
-    return heldSkill(live, id);
+    const h = heldSkill(live, id);
+    return held(h.level, h.mastery);
   }
 
   /** Which of the four flavour bands this buyer talks in. */
@@ -745,6 +761,22 @@ export class ShopSystem extends System {
   }
 
   /**
+   * Diplomacy at a counter: "shopkeepers deal with you as a favoured customer".
+   *
+   * That sentence is the Master tier's whole promise and nothing anywhere read
+   * `reactionBonus`, so the three tiers above Normal changed a word on the
+   * character sheet and no number in the kingdom. It eases the *spread* from
+   * the same end Personality does — 5, 10 or 20 points of reaction, taken as
+   * hundredths — so a talker narrows the gap between asking and paying without
+   * ever pushing a shop below par. The floor stays where Merchant put it.
+   */
+  _favour(trader) {
+    const d = trader?.skills?.diplomacy;
+    if (!d?.level) return 0;
+    return clamp((skillEffect('diplomacy', d.level, d.mastery).reactionBonus ?? 0) / 100, 0, 0.2);
+  }
+
+  /**
    * A hired Merchant, Trader or Banker haggling on the party's behalf.
    *
    * MM6 sells this as a hireling and it is one of the few whose value a player
@@ -762,7 +794,9 @@ export class ShopSystem extends System {
     const m = trader.skills.merchant ?? { level: 0, mastery: MASTERY.NORMAL };
     const buy = merchantPrice(1000, m, true, { markup: def.markup * (def.attitude ?? 1), sellback: def.sellback }) / 1000;
     const sell = merchantPrice(1000, m, false, { markup: def.markup, sellback: def.sellback }) / 1000;
-    const charm = clamp(this._charm(trader) + this._retinueDiscount(), -0.06, 0.5);
+    const charm = clamp(
+      this._charm(trader) + this._retinueDiscount() + this._favour(trader), -0.06, 0.5,
+    );
     return {
       buy: 1 + (buy - 1) * (1 - charm),
       sell: sell + (1 - sell) * charm,
@@ -1001,6 +1035,71 @@ export class ShopSystem extends System {
     this._say(`${shop.keeper} makes the ${displayName(item)} whole for ${fee} gold.`, 'info');
     this.ctx?.events?.emit('shop:repaired', { shopId: shop.id, item, fee, bySkill: false });
     return { ok: true, fee, bySkill: false, item };
+  }
+
+  // ── the other economy ─────────────────────────────────────────────────────
+
+  /**
+   * Steal from the counter.
+   *
+   * Stealing was the most expensive nothing in the game: 25,000 gold and ten
+   * skill points to Grandmaster, the rank word changing on the sheet, and not
+   * one line of code anywhere that asked what it was worth. It is the whole of
+   * the Thief line's stated identity and one of the two skills the Rogue's
+   * promotion gates on, so the game charged for it at the promotion door and
+   * never paid out on it in play.
+   *
+   * The resolver already computed all four numbers this needs and no caller
+   * ever read them: `effective` (level times the mastery multiplier), `maxHaul`
+   * (what a pocket that size holds), `canStealItems` (Master lifts goods, not
+   * just coin) and `caughtChance` (which a Grandmaster floors at 2%).
+   *
+   * A shop's till is not bottomless, so the haul is capped by the counter's
+   * tier as well as by the thief — a village provisioner has 60 gold in the
+   * drawer whatever your skill. One attempt per delivery: the keeper counts the
+   * float after a stranger leaves, and counts it again before the next cart.
+   */
+  steal(shop, index = null) {
+    const trader = this.trader(index);
+    const s = trader.skills.stealing ?? { level: 0, mastery: MASTERY.NORMAL };
+    if (!s.level) {
+      return this._no(shop, `${trader.name} would not know where to begin.`);
+    }
+    if (shop.stolenEpoch === shop.epoch) {
+      return this._no(shop, `${shop.keeper} has not taken their eyes off you since.`);
+    }
+    const eff = skillEffect('stealing', s.level, s.mastery);
+    const rng = (this._stealRng ??= new RNG(`${this._seedTag}:thieving`));
+    shop.stolenEpoch = shop.epoch;
+
+    if (rng.next() < (eff.caughtChance ?? 0.5)) {
+      // Caught. The counter does not call the watch — it remembers, which is
+      // worse: `attitude` multiplies the markup every visit from here on.
+      shop.attitude = Math.min(1.6, (shop.attitude ?? 1) * 1.25);
+      this._say(`${shop.keeper} catches ${trader.name}'s wrist. "Out. And I will remember the face."`, 'warn');
+      this.ctx?.get('audio')?.playSfx?.('miss');
+      return { ok: false, caught: true, gold: 0, item: null };
+    }
+
+    // Master and above can palm goods. Only what the hand covers: `effective`
+    // is the reach, so a Grandmaster gets the wand and a novice gets the flint.
+    if (eff.canStealItems && shop.stock.length && rng.chance(0.45)) {
+      const reach = (eff.effective ?? 0) * 40;
+      const palmable = shop.stock.filter((it) => this.appraise(it) <= reach);
+      const item = palmable.length ? rng.pick(palmable) : null;
+      if (item && this.stow(trader.bag, item)) {
+        shop.stock.splice(shop.stock.indexOf(item), 1);
+        this._say(`${trader.name} walks out with ${displayName(item)}.`, 'loot');
+        return { ok: true, caught: false, gold: 0, item };
+      }
+    }
+
+    const till = 60 * (shop.tier ?? 1) ** 2;
+    const gold = Math.max(1, Math.min(till, Math.round((eff.maxHaul ?? 25) * (0.35 + rng.next() * 0.65))));
+    this._receive(gold);
+    this._say(`${trader.name} lifts ${gold} gold off the counter.`, 'loot');
+    this.ctx?.get('audio')?.playSfx?.('coin');
+    return { ok: true, caught: false, gold, item: null };
   }
 
   // ── the house service ─────────────────────────────────────────────────────

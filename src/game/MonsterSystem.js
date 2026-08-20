@@ -3,6 +3,7 @@ import { System } from '../core/Engine.js';
 import { buildMonster, animateRig } from './MonsterGen.js';
 import { MONSTERS, MONSTER_FAMILIES } from './data/Monsters.js';
 import { REGION_LIST, TOWNS, townPosition, spawnPool } from './data/Regions.js';
+import { charSkillEffect } from './rules.js';
 
 /**
  * Monster spawning, behaviour and animation.
@@ -329,6 +330,13 @@ export class MonsterSystem extends System {
       wanderTarget: null,
       strafe: this.rng.chance(0.5) ? 1 : -1,
       hoverPhase: this.rng.range(0, Math.PI * 2),
+      /** Armour a rider has shattered off it, and how long that lasts. */
+      acDebuff: 0,
+      acDebuffFor: 0,
+      /** Seconds it cannot act for. A mace ends arguments this way. */
+      heldFor: 0,
+      /** Whether a talker has already talked it down: null until it looks up. */
+      pacified: null,
       alive: true,
     };
     this.monsters.push(m);
@@ -348,11 +356,99 @@ export class MonsterSystem extends System {
     ctx.get('loot')?.dropFrom?.(m.def, m.pos);
   }
 
+  // ── talking it down ──────────────────────────────────────────────────────
+
+  /**
+   * Diplomacy: "a hostile creature holds its attack."
+   *
+   * This is the reader `pacifyChance` never had. The skill has always resolved
+   * a real number — 1% per point of skill at Normal rising to a flat 90% at
+   * Grandmaster — and nothing in the game asked for it, so all three mastery
+   * steps above Normal moved a word on the character sheet and nothing else.
+   * Two promotion quests gate on Diplomacy, which meant the game charged for
+   * it at the door and never paid out on it on the road.
+   *
+   * Decided once per creature, the first time it looks up, and cached on the
+   * instance: re-rolling every frame would make a wolf flicker between charging
+   * and grazing. The party talks with one voice, so the best talker present
+   * speaks — a Cleric's Grandmaster covers the Sorcerer standing behind her.
+   *
+   * Grandmaster's promise is "only the truly mindless attack you unprovoked",
+   * so the bestiary's own `mindless` flag is the exemption, matching how the
+   * spell system already decides who can be charmed or frightened. A creature
+   * that has been hit is provoked by definition, and `damage()` clears this.
+   */
+  _talkedDown(ctx, m) {
+    if (m.pacified !== null) return m.pacified;
+    if (m.def?.flags?.mindless || m.def?.flags?.boss) { m.pacified = false; return false; }
+
+    let best = 0;
+    for (const c of ctx.get('party')?.members ?? []) {
+      if (c?.isDead || c?.isUnconscious) continue;
+      best = Math.max(best, charSkillEffect(c, 'diplomacy').pacifyChance ?? 0);
+    }
+    m.pacified = best > 0 && this.rng.next() < best;
+    if (m.pacified) {
+      ctx.events.emit('ui:log', {
+        text: `The ${m.def.name} watches the party pass and lets it.`, kind: 'info',
+      });
+    }
+    return m.pacified;
+  }
+
+  // ── riders a weapon leaves behind ────────────────────────────────────────
+
+  /**
+   * Armour class after anything that has been shattered off it.
+   *
+   * Callers used to read `m.def.ac` straight, and the bestiary is deep-frozen,
+   * so there was nowhere for a temporary debuff to live. This is that place.
+   */
+  armourClassOf(m) {
+    return Math.max(0, (m?.def?.ac ?? 0) - (m?.acDebuff ?? 0));
+  }
+
+  /** Shatter armour off a creature for a while. An axe at Master does this. */
+  sunder(ctx, m, points = 10, seconds = 60) {
+    if (!m?.alive || points <= 0) return false;
+    // Two hits do not stack into transparency; the longer, deeper wound wins.
+    m.acDebuff = Math.max(m.acDebuff ?? 0, points);
+    m.acDebuffFor = Math.max(m.acDebuffFor ?? 0, seconds);
+    ctx.events.emit('ui:log', {
+      text: `The ${m.def.name}'s armour splits open.`, kind: 'crit',
+    });
+    ctx.get('particles')?.burst?.('sparkle', m.pos.clone().setY(m.pos.y + 1), 10);
+    return true;
+  }
+
+  /**
+   * Pin a creature in place for a few seconds. A mace at Grandmaster does this.
+   *
+   * Deliberately MonsterSystem's own rather than the spell system's status
+   * table: a weapon rider has no caster, no school and no resistance roll to
+   * make, so borrowing that machinery would mean inventing a spell to hang it
+   * on. It is a property of the creature, and it expires in the same loop that
+   * ticks its cooldowns.
+   */
+  hold(ctx, m, seconds = 3, reason = 'is pinned in place') {
+    if (!m?.alive || seconds <= 0) return false;
+    if (m.def?.flags?.boss) seconds *= 0.4;   // a warlord shakes it off faster
+    m.heldFor = Math.max(m.heldFor ?? 0, seconds);
+    m.state = STATE.IDLE;
+    ctx.events.emit('ui:log', {
+      text: `The ${m.def.name} ${reason} (${Math.round(m.heldFor)}s).`, kind: 'crit',
+    });
+    return true;
+  }
+
   /** Damage a monster; returns what landed. */
   damage(ctx, m, amount, type = 'physical') {
     if (!m.alive) return 0;
     m.hp -= amount;
-    // Being hit makes it notice you, whatever it was doing.
+    // Being hit makes it notice you, whatever it was doing — and settles the
+    // diplomacy question for good. Nobody talks their way out after the first
+    // blow lands, so a pacified creature that is struck stays hostile.
+    m.pacified = false;
     if (m.state === STATE.IDLE || m.state === STATE.PATROL) m.state = STATE.CHASE;
     ctx.events.emit('combat:hit', {
       target: m, amount, type, position: m.pos.clone(), monster: true,
@@ -455,6 +551,20 @@ export class MonsterSystem extends System {
       m.stateTimer -= dt;
       m.attackCooldown = Math.max(0, m.attackCooldown - dt);
       m.rangedCooldown = Math.max(0, m.rangedCooldown - dt);
+      // Weapon riders keep their own clocks. They are not spells and have no
+      // caster, so they expire here rather than in the spell system's status
+      // table — a shattered pauldron is a property of the creature.
+      if (m.acDebuff) {
+        m.acDebuffFor -= dt;
+        if (m.acDebuffFor <= 0) { m.acDebuff = 0; m.acDebuffFor = 0; }
+      }
+      if (m.heldFor > 0) {
+        m.heldFor -= dt;
+        m.vel.set(0, 0, 0);
+        m.attackCooldown = Math.max(m.attackCooldown, 0.4);
+        this._move(ctx, m, dt, terrain);
+        continue;
+      }
 
       this._think(ctx, m, dist, eye, dt);
       this._move(ctx, m, dt, terrain);
@@ -479,7 +589,7 @@ export class MonsterSystem extends System {
 
     switch (m.state) {
       case STATE.IDLE:
-        if (dist < m.aggro) { m.state = STATE.CHASE; break; }
+        if (dist < m.aggro && !this._talkedDown(ctx, m)) { m.state = STATE.CHASE; break; }
         if (m.stateTimer <= 0) {
           m.state = STATE.PATROL;
           m.stateTimer = this.rng.range(3, 8);
@@ -492,7 +602,7 @@ export class MonsterSystem extends System {
         break;
 
       case STATE.PATROL:
-        if (dist < m.aggro) { m.state = STATE.CHASE; break; }
+        if (dist < m.aggro && !this._talkedDown(ctx, m)) { m.state = STATE.CHASE; break; }
         if (m.stateTimer <= 0 || !m.wanderTarget ||
             m.pos.distanceTo(m.wanderTarget) < 1.5) {
           m.state = STATE.IDLE;

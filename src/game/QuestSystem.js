@@ -349,14 +349,30 @@ export class QuestSystem extends System {
       || location === this._where.dungeon;
   }
 
-  /** Credit `n` units of work to every open flag objective set where we are. */
-  _creditPlace(n = 1) {
+  /**
+   * Credit `n` units of work to every open flag objective set where we are.
+   *
+   * `fromClock` is the difference between the two types, and it is the whole
+   * of the difference. A `survive` objective is *measured* in hours — a vigil
+   * kept, a fast held, three days on the glass — so the clock turning is the
+   * work, and the clock pays it. A `flag` objective is a deed: a rite, a door,
+   * a count, a novice walked out. Hours do not do deeds. Crediting them for an
+   * idle hour is what let nine of the campaign's nineteen flag stages close on
+   * waiting alone, `a3_the_glass_gate` — which opens act four — in one.
+   *
+   * So an hour pays a `survive` and nothing else. A deed still needs an act
+   * done in the named place: a kill, a pickup, a conversation, a spell or an
+   * arrival, all of which come through `_creditPlace()` with no clock behind
+   * them and are unaffected.
+   */
+  _creditPlace(n = 1, fromClock = false) {
     if (n <= 0) return;
     for (const [id, q] of [...this.active]) {
       const def = QUESTS[id];
       if (!def || !this._atPlace(def.location)) continue;
       for (const obj of objectivesAtStage(id, q.stage)) {
         if (obj.type !== 'flag' && obj.type !== 'survive') continue;
+        if (fromClock && obj.type === 'flag') continue;
         // A tick can turn the stage or finish the quest outright, which moves
         // the ground under this loop — so re-check before every one.
         if (!this.active.has(id) || q.stage !== obj.stage) break;
@@ -381,7 +397,7 @@ export class QuestSystem extends System {
     // rest of the journal as well.
     const elapsed = Math.min(Math.max(0, hour - this._lastHour), 168);
     this._lastHour = hour;
-    this._creditPlace(elapsed);
+    this._creditPlace(elapsed, true);
   }
 
   /**

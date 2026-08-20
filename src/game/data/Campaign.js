@@ -28,6 +28,21 @@
  * Parallel work lives on `chain`. Act two runs three chains at once and act
  * three runs nine, so `after` is a dependency list rather than a straight line,
  * and the campaign system holds several stages open simultaneously.
+ *
+ * One rule about `collect`, and the spine died on it for a long time. Eleven
+ * stages named a `qi_*` item — the carter's tally, the pan weights, the bell
+ * metal, Wysk's letterbook — and not one of those ids exists in `Items.js`.
+ * The only thing that moves a `collect` counter is `loot:picked`, which
+ * carries the `baseId` of an item the loot system actually made, so a stage
+ * naming an id the catalogue never heard of cannot be closed by any amount of
+ * play. `a1_the_carters_tally` is the *third* stage in act one: driven with
+ * nothing but events the game really emits, the whole eighty-stage spine
+ * finished two of them and stopped, in silence, with a green build.
+ *
+ * So: a `collect` target here must be a real id in `Items.js`. All eleven are
+ * now typed as the work the prose was already describing — a delivery, a
+ * dungeon put down, seven clerks in the second chamber — which is what the
+ * completion lines said was happening anyway.
  */
 
 function deepFreeze(o) {
@@ -215,7 +230,7 @@ stage({
   where: { region: 'millhaven_downs', town: 'town_millhaven' },
   trigger: 'Millhaven has one sergeant and nine men, and the drayman is still missing.',
   after: ['a1_what_the_dogs_left'],
-  objective: { type: 'collect', target: 'qi_carters_tally', text: 'Find the drayman, or what he was carrying.' },
+  objective: { type: 'deliver', target: 'npc_sergeant_bray', text: 'Find the drayman on the Saltmarch road, and put his tally stick in Bray’s hand.' },
   completion: 'The drayman is in the ditch below the road with his tally stick still in his coat and no wound on him anywhere.',
   reward: { xp: 250, gold: 80 },
   journal: 'We found the carter forty feet off the road in the ditch. Two days dead, no wound, no bruise, boots still laced. His tally stick lists eleven crates loaded at Saltmarch. Bray counted seven at the cart and stopped talking for a while.',
@@ -250,7 +265,7 @@ stage({
   where: { region: 'millhaven_downs', town: 'town_millhaven' },
   trigger: 'Roon put the sample in a crucible for an hour and got back exactly what she put in.',
   after: ['a1_four_crates_of_glass'],
-  objective: { type: 'collect', target: 'qi_grey_glass_shard', count: 3, text: 'Bring back three more pieces, and one with a mark on it.' },
+  objective: { type: 'clear', target: 'dun_hobbs_adit', text: 'Bring back three more pieces, and one with a mark on it. The marked ones are coming up out of Hobb’s adit.' },
   completion: 'Three pieces on the bench, one carrying a straight-edged mark that nothing in Millhaven could have cut.',
   reward: { xp: 380, gold: 120, item: 'potion_red' },
   journal: 'Roon kept the sample in the crucible for an hour at forge heat and it came out cold. She wants marked pieces. She also asked us, twice, not to tell the guild in Thornwick until she has written it up properly, which we assume is about credit.',
@@ -303,7 +318,7 @@ stage({
   where: { region: 'millhaven_downs', dungeon: 'dun_the_weeping_stair' },
   trigger: 'Whoever is running the cave keeps books, because whoever is running the cave is running a business.',
   after: ['a1_the_weeping_stair'],
-  objective: { type: 'collect', target: 'qi_choir_tally_book', text: 'Take the cell’s tally book from the second chamber.' },
+  objective: { type: 'kill', target: 'apprentice_mage', count: 7, text: 'Take the cell’s tally book from the second chamber. Seven of them keep it.' },
   completion: 'The book is out of the cave and open on Bray’s table: dates, weights, boat names, and what each man was paid.',
   reward: { xp: 520, gold: 160 },
   journal: 'They keep books. Eleven months of them. Weights in and weights out, boats by name, wages paid in Ledger coin at three times what a night’s fishing pays. At the foot of every page, in the same hand: *sung and stowed*.',
@@ -496,7 +511,7 @@ stage({
   where: { region: 'saltmarch', town: 'town_saltmarch' },
   trigger: 'Saltmarch ships a fifth less salt than its pans make, and has done for a year.',
   after: ['a2_the_queens_refusal'],
-  objective: { type: 'collect', target: 'qi_pan_weights', count: 6, text: 'Weigh six salt pans yourselves and bring the figures in.' },
+  objective: { type: 'deliver', target: 'npc_merrigan_salter', text: 'Weigh six salt pans yourselves and put the six figures in Salter’s hand.' },
   completion: 'Six pans weighed, six figures written down, and every one of them right — which is the problem.',
   reward: { xp: 1400, gold: 400 },
   journal: 'The pans are honest. Every one of the six made what it should. The shortfall happens between the pan and the wharf, in about two miles of causeway, at night, and the Ledger has been assuming it was theft by the pan men because the pan men are easier to sack than to follow.',
@@ -729,7 +744,7 @@ stage({
   where: { region: 'saltmarch', dungeon: 'dun_the_bell_wreck' },
   trigger: 'The Tide’s key is cast into the core of a bell that has been on the bar since before either of us was born.',
   after: ['a3_the_ninefold_seal'],
-  objective: { type: 'collect', target: 'qi_bell_metal', count: 9, text: 'Raise nine hundredweight of bell metal off the Bell Wreck.' },
+  objective: { type: 'clear', target: 'dun_the_bell_wreck', text: 'Raise nine hundredweight of bell metal off the Bell Wreck, and put down what has been ringing it.' },
   completion: 'Nine hundredweight ashore at Saltmarch, and the Bell-Drowned no longer rings the bar at slack water.',
   reward: { xp: 8000, gold: 2000, item: 'potion_water_breathing' },
   journal: 'The bell-hoy went down on the bar sixty years ago carrying the new tide-bell, and Saltmarch has been ringing an old cracked one ever since. The wreck rings at slack water. Everyone in the town has heard it and everyone in the town has an explanation, and none of the explanations survived us going down there.',
@@ -803,7 +818,7 @@ stage({
   where: { region: 'greywater_fen', town: 'town_greywater' },
   trigger: 'The Open Eye does not hand things to people who arrive with warrants. It hands things to people who win the argument.',
   after: ['a3_the_ninefold_seal'],
-  objective: { type: 'collect', target: 'qi_disputation_proof', count: 3, text: 'Assemble three proofs that the rim has already been crossed.' },
+  objective: { type: 'talk', target: 'npc_lay_reader_pask', text: 'Assemble three proofs that the rim has already been crossed. The third is Pask’s signed account.' },
   completion: 'Three proofs in hand: the Millhaven wage book, six pieces of marked glass out of Greywater’s own graves, and Pask’s signed account.',
   reward: { xp: 9500, gold: 2000 },
   journal: 'Vell will not be told anything. He will be shown. Three proofs, he said, and they must be things and not opinions. It took us eleven days and the third one came out of a grave we had helped open two months earlier, which Vell described as *adequate*.',
@@ -914,7 +929,7 @@ stage({
   where: { region: 'netherby_moors', town: 'town_netherby' },
   trigger: 'The Steady Hand can cure almost anything, which makes the thing it cannot cure a professional insult.',
   after: ['a3_the_ninefold_seal'],
-  objective: { type: 'collect', target: 'qi_barrow_moss', count: 5, text: 'Cut five weights of barrow-moss off the Netherby ridge.' },
+  objective: { type: 'kill', target: 'ghoul', count: 5, text: 'Cut five weights of barrow-moss off the Netherby ridge, one opened grave at a time.' },
   completion: 'Five weights cut, from graves, at night, because it grows nowhere else and only on the north face.',
   reward: { xp: 11500, gold: 2600 },
   journal: 'Tallow’s sister-adept has been wasting for two years and the Steady Hand has run out of things to try. The last thing on the list is barrow-moss, which grows on the north face of opened graves and nowhere else, and which the Steady Hand’s own charter forbids its members to gather.',
@@ -1028,7 +1043,12 @@ stage({
     'a3_eye_2_the_disputation', 'a3_quiet_2_the_ninth_sleeper', 'a3_ember_2_the_standing_nine',
     'a3_hand_2_the_long_night', 'a3_gale_2_the_wind_stair', 'a3_dawn_2_what_coll_wants',
   ],
-  objective: { type: 'flag', target: 'a3_wards_opened', text: 'Set all nine keys in the rim wards.' },
+  // Nine keys, nine wards, and the count is load-bearing rather than flavour.
+  // `CampaignSystem._creditPlace` pays a `flag` for any action in the named
+  // place, an idle hour included, so at `count: 1` the stage that opens act
+  // four closed after sixty minutes of standing on the crater floor doing
+  // nothing. One unit per ward is what the fiction always said the work was.
+  objective: { type: 'flag', target: 'a3_wards_opened', count: 9, text: 'Set all nine keys in the rim wards.' },
   completion: 'Eight wards open to their keys. The ninth is already open, and was opened from the crater side.',
   reward: {
     xp: 40000, gold: 9000, item: 'plate_gothic',
@@ -1095,7 +1115,7 @@ stage({
   where: { region: 'duskorn_waste', town: 'town_duskorn', dungeon: 'dun_ossran_vaults' },
   trigger: 'Isabeau Ossran got out of Duskorn with a coat and a dog and left nine generations of records behind.',
   after: ['a4_the_broken_post'],
-  objective: { type: 'collect', target: 'qi_ossran_daybooks', text: 'Bring the Ossran daybooks out of the family vaults.' },
+  objective: { type: 'clear', target: 'dun_ossran_vaults', text: 'Bring the Ossran daybooks out of the family vaults, past whatever has been keeping them.' },
   completion: 'Nine generations of what came out of Duskorn, sorted and dated, including everything sold east in the last four years.',
   reward: { xp: 29000, gold: 6500, item: 'ring_loop' },
   journal: 'The Ossrans have been selling Duskorn to the rest of Caerwen for nine generations and writing down every piece. The last four years of it is a single buyer, paying above the market, through a factor, for anything that came out of the lower city. Isabeau never met him. She met his money.',
@@ -1112,7 +1132,7 @@ stage({
   where: { region: 'saltmarch', town: 'town_saltmarch' },
   trigger: 'The buyer paid in Ledger drafts, and Ledger drafts are cut against a seal register the party has already copied once.',
   after: ['a4_what_isabeau_hid'],
-  objective: { type: 'collect', target: 'qi_seal_register_extract', text: 'Trace the Duskorn drafts back to the office that issued them.' },
+  objective: { type: 'talk', target: 'npc_merrigan_salter', text: 'Sit with Salter and her clerks and trace the Duskorn drafts back to the office that issued them.' },
   completion: 'Every draft traces to one unnamed Thornwick account, opened nine years ago on a palace warrant.',
   reward: { xp: 31000, gold: 7000 },
   journal: 'Merrigan worked through it in one very long evening with three clerks and a great deal of tea. Every draft — Ashford, Millhaven, Greywater, Duskorn — runs back to one account opened nine years ago on a palace warrant, held under no name, and drawn on by one signature that has been very carefully never written out in full.',
@@ -1148,7 +1168,7 @@ stage({
   where: { region: 'thornwick_vale', town: 'town_thornwick' },
   trigger: 'Wysk is at the palace every day from the seventh hour and his rooms are empty until then.',
   after: ['a4_the_liaisons_hand'],
-  objective: { type: 'collect', target: 'qi_wysk_letterbook', text: 'Take Corvane Wysk’s letterbook out of his rooms.' },
+  objective: { type: 'deliver', target: 'npc_tamsin_ashe', text: 'Take Corvane Wysk’s letterbook out of his rooms and carry it to the Prior.' },
   completion: 'The letterbook is out: nine years of correspondence with a correspondent who never signs and never asks a question twice.',
   reward: { xp: 35000, gold: 8000, item: 'wand_paralyzing' },
   journal: 'Forty years of an archivist’s life in three rooms: everything labelled, everything indexed, nothing personal at all. The letterbook is nine years of one correspondence. Wysk asks; the other party answers in one line and never signs. The last entry is four days before Duskorn and reads, in full: *the road east is clear, as discussed.*',
@@ -1408,7 +1428,7 @@ stage({
   where: { region: 'brackwater_isle', dungeon: 'dun_hessas_cut' },
   trigger: 'What she brought out of the Sunder is on a shelf in the sea cut under her hut, where she put it thirty years ago and left it.',
   after: ['a5_old_hessa'],
-  objective: { type: 'collect', target: 'qi_hessas_token', text: 'Bring the token up out of the cut.' },
+  objective: { type: 'clear', target: 'dun_hessas_cut', text: 'Bring the token up off the shelf, and clear the cut on the way — it was dangerous once.' },
   completion: 'A flat grey disc, warm, that has no shadow in lamplight and rings when a door is nearby.',
   reward: { xp: 62000, gold: 12000, item: 'potion_freedom' },
   journal: 'Nothing in the cut is dangerous to us any more. It was, once, to her. The token was on a rock shelf above the tideline exactly where she said, wrapped in oilcloth, still warm — thirty years in a sea cave and still warm. Held up to a lamp it does not cast a shadow. Nobody in the party has mentioned that since the first evening.',

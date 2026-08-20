@@ -2,7 +2,11 @@ import * as THREE from 'three';
 import { System } from '../core/Engine.js';
 import { getMaterialLibrary } from '../render/MaterialLibrary.js';
 import { RNG } from '../core/RNG.js';
-import { REGION_LIST, regionAt } from '../game/data/Regions.js';
+import {
+  REGION_LIST, regionAt, OBELISKS, OBELISK_TOTAL, OBELISK_CACHE, obeliskIn,
+} from '../game/data/Regions.js';
+import { stowInPack } from '../game/AlchemySystem.js';
+import { getItem } from '../game/data/Items.js';
 
 /**
  * The things that make the countryside look inhabited: boulders and outcrops,
@@ -17,6 +21,24 @@ import { REGION_LIST, regionAt } from '../game/data/Regions.js';
 
 const PROP_DENSITY = { low: 0.35, medium: 0.6, high: 1.0, ultra: 1.4 };
 
+/**
+ * How close the party has to come before a clause is legible.
+ *
+ * Sixteen metres is inside the kerbs. The stone is eleven metres tall and can
+ * be sighted from most of a region, so the walk to it is the collectible; the
+ * radius only has to be generous enough that nobody circles a stone they are
+ * plainly standing at.
+ */
+const OBELISK_READ_RADIUS = 16;
+
+/** Imperial numbering, because that is what is cut on the stone. */
+function roman(n) {
+  const table = [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+  let out = '', left = Math.max(0, Math.floor(n));
+  for (const [v, s] of table) while (left >= v) { out += s; left -= v; }
+  return out || 'O';
+}
+
 export class PropSystem extends System {
   static id = 'props';
   static order = 78;
@@ -26,6 +48,12 @@ export class PropSystem extends System {
     this.group = null;
     this.kinds = new Map();
     this._ready = false;
+    /** Every obelisk the world built, with the clause cut on it. */
+    this.obelisks = [];
+    /** Ids of the ones the party has stood at. Saved — see `toJSON`. */
+    this._read = new Set();
+    this._cacheClaimed = false;
+    this._scanTimer = 0;
   }
 
   async init(ctx) {
@@ -252,7 +280,7 @@ export class PropSystem extends System {
    * journal is worse than no landmark, so all nine stand open with their spoil
    * heaped on the *outside*, which is the physical evidence the quest turns on.
    */
-  _landmarkTable() {
+  _baseLandmarkTable() {
     return {
       // "Coastal meadow, sheep, low stone walls." The walls are canon's own
       // three words for this region and it had none of them.
@@ -303,6 +331,31 @@ export class PropSystem extends System {
   }
 
   /**
+   * Hang the Verast Line on the table above.
+   *
+   * Appended rather than authored into each row, and appended *last*, because
+   * the per-region stream is consumed in entry order: put an obelisk in front
+   * of the Cindermoor's circle and the circle moves, which would walk the two
+   * capture shots this file registers off their subjects for no reason. Last
+   * in the list also means every obelisk is sited knowing where that region's
+   * other landmarks already stand, so a stone never lands inside a barrow.
+   *
+   * `required` and `prominent` are what separate a collectible from scatter:
+   * one stone per region has to exist or the inscription can never be finished,
+   * and it has to be *seen* from across a valley or the region becomes a
+   * search grid.
+   */
+  _landmarkTable() {
+    const table = this._baseLandmarkTable();
+    for (const o of OBELISKS) {
+      (table[o.region] ??= []).push({
+        kind: 'obelisk', count: 1, required: true, prominent: true, obelisk: o.id,
+      });
+    }
+    return table;
+  }
+
+  /**
    * Place every region's landmarks and pool their parts.
    *
    * Seeded per region rather than from one running stream, so re-authoring the
@@ -312,6 +365,7 @@ export class PropSystem extends System {
   _buildLandmarks(ctx, lib, terrain, rootRng) {
     this._parts = new Map();
     this.landmarks = [];
+    this.obelisks = [];
     const table = this._landmarkTable();
     const world = terrain.worldSize;
     const towns = ['millhaven', 'thornwickKeep', 'templeRuin', 'goblinCamp', 'lighthouse']
@@ -353,6 +407,14 @@ export class PropSystem extends System {
             };
             kit.build(origin, rng, i);
             this.landmarks.push({ kind: entry.kind, region: region.id, x, z, y: origin.y });
+            if (entry.obelisk) {
+              const def = obeliskIn(region.id);
+              this.obelisks.push({
+                id: entry.obelisk, region: region.id,
+                clause: def?.clause ?? 0, text: def?.text ?? '',
+                x, y: origin.y, z,
+              });
+            }
           }
         }
       }
@@ -376,6 +438,16 @@ export class PropSystem extends System {
     // instances nearest where the hardcoded pair used to stand.
     this.stoneCircle = this._nearestLandmark('circle', 40, -520);
     this.ruins = this._nearestLandmark('ruin', 120, -180);
+
+    // Where the eighteenth clause sends the party. The circle is placed from
+    // the seed like everything else, so the cache is resolved against the ones
+    // the world actually built rather than authored as a coordinate that the
+    // next terrain change would put in a lake. Both circles on the moor answer:
+    // the inscription says "the nine on the black moor" and cannot tell them
+    // apart, so neither should the ground.
+    this.obeliskCaches = this.landmarks
+      .filter((L) => L.kind === OBELISK_CACHE.landmark && L.region === OBELISK_CACHE.region)
+      .map((L) => ({ x: L.x, y: L.y, z: L.z }));
   }
 
   _nearestLandmark(kind, x, z) {
@@ -388,14 +460,33 @@ export class PropSystem extends System {
     return best ? new THREE.Vector3(best.x, best.y, best.z) : null;
   }
 
-  /** Rejection-sample a site that suits the kind and is clear of everything. */
+  /**
+   * Rejection-sample a site that suits the kind and is clear of everything.
+   *
+   * Two behaviours the scatter kinds never needed and the obelisks do.
+   * `prominent` keeps sampling the full budget and returns the *highest*
+   * candidate rather than the first acceptable one, because a survey stone that
+   * has to be found from across a region belongs on the skyline — the Imperium
+   * would have set it there for sighting anyway. `required` falls back to a
+   * relaxed pass that drops the clearance from other landmarks and the height
+   * floor, because a collectible with a missing piece is not a hard collectible,
+   * it is a broken one, and a region can be tight enough (Brackwater, the
+   * Whitemantle) that sixty strict tries come back empty.
+   */
   _findLandmarkSite(terrain, rng, entry, kit, minX, maxX, minZ, maxZ, towns) {
+    const strict = this._sampleSite(terrain, rng, entry, kit, minX, maxX, minZ, maxZ, towns, false);
+    if (strict || !entry.required) return strict;
+    return this._sampleSite(terrain, rng, entry, kit, minX, maxX, minZ, maxZ, towns, true);
+  }
+
+  _sampleSite(terrain, rng, entry, kit, minX, maxX, minZ, maxZ, towns, relaxed) {
+    let best = null, bestH = -Infinity;
     for (let tries = 0; tries < 60; tries++) {
       const x = rng.range(minX, maxX);
       const z = rng.range(minZ, maxZ);
-      if (!this._canPlace(terrain, x, z, kit.maxSlope ?? 0.4)) continue;
+      if (!this._canPlace(terrain, x, z, (kit.maxSlope ?? 0.4) + (relaxed ? 0.3 : 0))) continue;
       const h = terrain.heightAt(x, z);
-      if (h < 1.2) continue;
+      if (h < (relaxed ? 0.4 : 1.2)) continue;
       // A wreck or a drying rack belongs on the tide line; a barrow belongs on
       // a ridge, which is where they were dug so they could be seen.
       if (entry.coastal && !this._nearWater(terrain, x, z, 26)) continue;
@@ -406,13 +497,16 @@ export class PropSystem extends System {
         if ((x - t.x) ** 2 + (z - t.z) ** 2 < 170 * 170) { clear = false; break; }
       }
       if (!clear) continue;
-      for (const L of this.landmarks) {
-        if ((x - L.x) ** 2 + (z - L.z) ** 2 < 120 * 120) { clear = false; break; }
+      if (!relaxed) {
+        for (const L of this.landmarks) {
+          if ((x - L.x) ** 2 + (z - L.z) ** 2 < 120 * 120) { clear = false; break; }
+        }
+        if (!clear) continue;
       }
-      if (!clear) continue;
-      return { x, z };
+      if (!entry.prominent) return { x, z };
+      if (h > bestH) { bestH = h; best = { x, z }; }
     }
-    return null;
+    return best;
   }
 
   _nearWater(terrain, x, z, radius) {
@@ -454,8 +548,36 @@ export class PropSystem extends System {
     const rib = new THREE.TorusGeometry(1, 0.09, 4, 9, Math.PI);
     const stone = this._boulderGeometry(new RNG('landmark-stone'), 1);
 
+    // A square tapered shaft and its pyramidion. Four-sided cylinders rather
+    // than boxes, because the taper is the whole silhouette: a box at this
+    // height reads as a chimney and an obelisk has to read as cut, not built.
+    const shaft = new THREE.CylinderGeometry(0.58, 1, 1, 4);
+    shaft.translate(0, 0.5, 0);
+    const pyramidion = new THREE.ConeGeometry(1, 1, 4);
+    pyramidion.translate(0, 0.5, 0);
+
     const P = (k, g, m, mat) => this._part(k, g, m, mat);
     return {
+      // A stone of the Verast Line: plinth, shaft, cap, and the two kerbs the
+      // survey party left to mark that the ground under it was measured.
+      // Eleven metres and upright — imperial work does not lean, and the whole
+      // point of the collectible is that you can pick one out of a skyline.
+      obelisk: {
+        maxSlope: 0.32,
+        build: (o, rng) => {
+          const hgt = rng.range(9.5, 12.5);
+          const w = rng.range(0.72, 0.92);
+          P('obelisk-plinth', box, granite, this._at(o, 0, -0.15, 0, 0, w * 3.1, 0.7, w * 3.1));
+          P('obelisk-shaft', shaft, sandstone, this._at(o, 0, 0.35, 0, 0, w, hgt, w));
+          P('obelisk-cap', pyramidion, sandstone,
+            this._at(o, 0, 0.35 + hgt, 0, 0, w * 0.62, w * 1.5, w * 0.62));
+          for (const side of [-1, 1]) {
+            P('obelisk-kerb', box, sandstone,
+              this._at(o, side * rng.range(2.2, 3.0), 0.05, rng.range(-2.6, 2.6),
+                rng.range(0, 6.28), 0.9, 0.3, 0.5, rng.range(-0.2, 0.2)));
+          }
+        },
+      },
       // Nine turf mounds with a stone-kerbed mouth and the spoil outside it.
       barrow: {
         maxSlope: 0.30, faceLine: true,
@@ -757,6 +879,144 @@ export class PropSystem extends System {
     }
   }
 
+  // ── the Verast Line ──────────────────────────────────────────────────────
+
+  /**
+   * The obelisk register: what has been read, and whether the cache is open.
+   *
+   * Progress on a world-spanning collectible is player progress, and player
+   * progress does not normally belong in a system that scatters rocks. It lives
+   * here anyway because this is the file that knows where the eighteen stones
+   * are — they are placed from the seed, so nothing else in the game can say
+   * "you are standing at clause nine" without rebuilding the placement — and
+   * because `SaveSystem` picks up any registered system with a `toJSON`, so the
+   * tally persists for free from the moment it exists. A tally that does not
+   * survive a save is not a collectible; it is a toast.
+   */
+  fixedUpdate(dt, ctx) {
+    if (!this._ready || !this.obelisks.length) return;
+    // Nothing to read from inside a dungeon, and the shafts are dug under the
+    // same x/z as the surface, so the distance test alone would be answerable.
+    if (ctx.get('dungeon')?.current) return;
+    this._scanTimer += dt;
+    if (this._scanTimer < 0.25) return;
+    this._scanTimer = 0;
+
+    const pos = ctx.get('player')?.position;
+    if (!pos) return;
+
+    if (this._read.size < OBELISK_TOTAL) {
+      for (const o of this.obelisks) {
+        if (this._read.has(o.id)) continue;
+        if ((pos.x - o.x) ** 2 + (pos.z - o.z) ** 2 > OBELISK_READ_RADIUS ** 2) continue;
+        this._readObelisk(ctx, o);
+        break;   // one stone a scan; two never stand this close together
+      }
+      return;
+    }
+
+    if (this._cacheClaimed) return;
+    for (const site of this.obeliskCaches ?? []) {
+      const r = OBELISK_CACHE.radius;
+      if ((pos.x - site.x) ** 2 + (pos.z - site.z) ** 2 <= r * r) {
+        this._openCache(ctx);
+        return;
+      }
+    }
+  }
+
+  _readObelisk(ctx, o) {
+    this._read.add(o.id);
+    const n = this._read.size;
+    ctx.events.emit('ui:log', { text: `Clause ${roman(o.clause)}: "${o.text}"`, kind: 'quest' });
+    ctx.events.emit('ui:toast', {
+      text: n >= OBELISK_TOTAL
+        ? 'The Verast Line is read entire.'
+        : `A stone of the Verast Line — ${n} of ${OBELISK_TOTAL}.`,
+      kind: 'quest',
+    });
+    // No `props:obelisk` broadcast: nothing subscribes to one yet, and this
+    // tree's event gate is right that an emit into an empty room is a lie about
+    // how a feature is wired. A journal tab reads `obeliskProgress` below.
+    if (n >= OBELISK_TOTAL) {
+      // The eighteenth clause names the place in the prefect's own words; this
+      // line only says that the party has now understood it, because a
+      // collectible that finishes by printing a map marker has taken the
+      // discovery back off the player.
+      ctx.events.emit('ui:log', {
+        text: `The eighteen clauses read as one. The survey ends at ${OBELISK_CACHE.place}.`,
+        kind: 'good',
+      });
+    }
+  }
+
+  /**
+   * Pay out the last chest of the province, once.
+   *
+   * The packs are filled *before* the cache is marked claimed, and a party with
+   * no room for the stone gets the hole left open rather than a warning and an
+   * empty pair of hands. This is the one payout in the game that cannot be
+   * repeated by walking back — eighteen regions bought it — so the failure mode
+   * has to be "come back when you have space", not "it is gone".
+   */
+  _openCache(ctx) {
+    const party = ctx.get('party');
+    const { gold, xp, items } = OBELISK_CACHE.reward;
+    const placed = [];
+    for (const id of items) {
+      const base = getItem(id);
+      if (!base) continue;
+      const item = { ...base, baseId: id, identified: true, broken: false };
+      const holder = (party?.members ?? []).find((m) => stowInPack(m, item));
+      if (!holder) {
+        // Put back whatever already went in, so a second attempt is clean.
+        for (const p of placed) {
+          const i = p.member.inventory.findIndex((e) => e.item === p.item);
+          if (i >= 0) p.member.inventory.splice(i, 1);
+        }
+        ctx.events.emit('ui:log', {
+          text: 'The stone lifts on a chest nobody has a hand free to empty. It waits.',
+          kind: 'warn',
+        });
+        return;
+      }
+      placed.push({ member: holder, item });
+    }
+
+    this._cacheClaimed = true;
+    party?.addGold?.(gold);
+    party?.addExperience?.(xp);
+    ctx.events.emit('ui:log', {
+      text: `The flat stone lifts. Under it: ${gold} gold, in imperial coin nobody has spent for eight hundred years.`,
+      kind: 'loot',
+    });
+    for (const p of placed) {
+      ctx.events.emit('ui:log', { text: `${p.member.name} takes the ${p.item.name}.`, kind: 'loot' });
+    }
+    ctx.get('audio')?.playSfx?.('coin');
+  }
+
+  /** What a journal screen would need to draw the inscription. */
+  get obeliskProgress() {
+    return {
+      read: [...this._read],
+      total: OBELISK_TOTAL,
+      complete: this._read.size >= OBELISK_TOTAL,
+      claimed: this._cacheClaimed,
+    };
+  }
+
+  toJSON() {
+    // Sorted so two saves of the same progress are the same bytes, which is
+    // what makes a round-trip diff mean anything.
+    return { obelisks: [...this._read].sort(), cache: this._cacheClaimed };
+  }
+
+  fromJSON(json) {
+    this._read = new Set(Array.isArray(json?.obelisks) ? json.obelisks : []);
+    this._cacheClaimed = !!json?.cache;
+  }
+
   _registerShots(ctx) {
     const capture = ctx.get('capture');
     const terrain = ctx.get('terrain');
@@ -773,6 +1033,20 @@ export class PropSystem extends System {
           yaw: lookAt(c.x + 22, c.z + 20, c.x, c.z), pitch: -4, fov: 75,
         },
         apply(g) { g.state.worldTime = 16.5 * 3600; },
+      });
+    }
+    // Clause I, in the starting meadow: the first obelisk a party can meet, and
+    // the one the review loop should be looking at when it asks whether an
+    // eleven-metre stone reads as imperial rather than as a chimney.
+    const first = this.obelisks.find((o) => o.clause === 1) ?? this.obelisks[0];
+    if (first) {
+      capture.registerShot('props-obelisk', {
+        description: 'A stone of the Verast Line above the Millhaven downs, morning.',
+        camera: {
+          position: eye(first.x + 15, first.z + 13, 1.7),
+          yaw: lookAt(first.x + 15, first.z + 13, first.x, first.z), pitch: 8, fov: 75,
+        },
+        apply(g) { g.state.worldTime = 8.5 * 3600; },
       });
     }
     if (this.ruins) {
