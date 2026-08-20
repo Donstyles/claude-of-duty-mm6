@@ -371,6 +371,37 @@ def _write_monster_index():
     return len(rows)
 
 
+
+def _write_emblem_index():
+    """Which class badges have been painted.
+
+    `UITextures.classEmblem` drew one of five hard-coded canvas shapes for
+    thirty-two classes, and it sits directly beside an oil-painted portrait on
+    the creation screen, where a flat vector loses that comparison every frame.
+    A promotion is this game's long reward and a distinct badge is most of what
+    sells one. The index is written rather than probed for the reason
+    `_write_item_index` gives: a screen that discovers a missing plate by
+    failing to load it has already paid for the request.
+    """
+    repo = os.path.dirname(os.path.dirname(ROOT))
+    dst = os.path.join(repo, 'src', 'ui', 'emblemPlates.js')
+    names = sorted(os.path.basename(p)[:-4]
+                   for p in glob.glob(os.path.join(ROOT, 'emblems', '*.jpg')))
+    body = '\n'.join(f"  '{n}'," for n in names)
+    with open(dst, 'w') as f:
+        f.write(
+            '/**\n'
+            ' * Which class emblems have been painted.\n'
+            ' *\n'
+            ' * Written by tools/artpack.py, not by hand. A class with no plate\n'
+            ' * keeps the procedural device, which is what every class had.\n'
+            ' */\n'
+            'export const EMBLEM_PLATES = new Set([\n' + body + '\n]);\n\n'
+            "export const EMBLEM_BASE = 'art/emblems/';\n"
+        )
+    return len(names)
+
+
 def _write_interior_index():
     """Which venue interiors exist, and how many variants each kind has.
 
@@ -502,6 +533,7 @@ if __name__ == '__main__':
     _write_interior_index()
     m = pack_monsters()
     _write_monster_index()
+    _write_emblem_index()
     # The school covers sit in the same folder as the spell plates but are
     # opaque framed paintings rather than matted cut-outs, so they take the
     # flat treatment; pack_spells skips them by prefix for the same reason.
