@@ -94,7 +94,17 @@ const dungeons = {};
  *   name    display name
  *   region  region id from CANON.md §3
  *   band    [minLevel, maxLevel] the party should be inside for a fair fight
- *   floors  how far down it goes
+ *   floors  how far down it goes — and the campaign's single cheapest length
+ *           dial, so it is authored rather than defaulted. `tools/floortime.mjs`
+ *           times a floor at 6.8 minutes nominal; the twenty-four campaign
+ *           dungeons averaged 2.2 floors, which is nine hours of dungeon for a
+ *           game costed at twenty. The number is now spent where the fiction
+ *           already said the depth was — nineteen barrows dug into one work is
+ *           seven, a city under a city is eight, a mile of gallery is seven —
+ *           and deliberately not spent on the errands: the Broken Post is one
+ *           coach house and stays one floor, because a distribution that grew
+ *           everything by the same integer would be the twenty hours bought
+ *           with the same floor shown twenty times.
  *   theme   one of DUNGEON_THEMES
  *   boss    { id, name, base } — `base` is a Monsters.js family hint
  *   champions  named encounters that are not the floor boss, if any
@@ -163,7 +173,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_weeping_stair', name: 'The Weeping Stair', region: 'millhaven_downs',
-  band: [3, 7], floors: 2, theme: 'sea-cave',
+  band: [3, 7], floors: 3, theme: 'sea-cave',
   boss: { id: 'boss_precentor_halm', name: 'Precentor Halm', base: 'initiate_mage' },
   monsters: ['bat', 'giant_rat', 'spider', 'bandit', 'apprentice_mage'],
   role: 'campaign',
@@ -192,7 +202,7 @@ dungeon({
 
 dungeon({
   id: 'dun_crown_undercroft', name: 'The Crown Undercroft', region: 'thornwick_vale',
-  band: [14, 18], floors: 2, theme: 'ruin',
+  band: [14, 18], floors: 4, theme: 'ruin',
   boss: { id: 'boss_the_sealed_clerk', name: 'The Sealed Clerk', base: 'wraith' },
   monsters: ['skeleton_knight', 'ghost', 'guardian', 'stone_gargoyle'],
   role: 'campaign',
@@ -203,7 +213,7 @@ dungeon({
 
 dungeon({
   id: 'dun_hollow_stockade', name: 'The Hollow Stockade', region: 'ashford_hollow',
-  band: [6, 10], floors: 1, theme: 'stockade',
+  band: [6, 10], floors: 2, theme: 'stockade',
   boss: { id: 'boss_serjeant_yarrow', name: 'Serjeant-Deserter Yarrow', base: 'brigand' },
   monsters: ['bandit', 'brigand', 'wolf', 'dire_wolf'],
   role: 'campaign',
@@ -221,18 +231,18 @@ dungeon({
 
 dungeon({
   id: 'dun_the_undercut', name: 'The Undercut', region: 'ashford_hollow',
-  band: [13, 17], floors: 3, theme: 'quarry',
+  band: [13, 17], floors: 5, theme: 'quarry',
   boss: { id: 'boss_the_quarry_wight', name: 'The Quarry Wight', base: 'wraith' },
   monsters: ['skeleton', 'skeleton_knight', 'stone_gargoyle', 'earth_elemental', 'cave_troll'],
   role: 'campaign',
-  holds: 'The quarry that built Thornwick, three galleries deep and collapsed on its own night shift. The Deep Stone left its key with the men it could not dig out.',
+  holds: 'The quarry that built Thornwick — three worked galleries, the sump under them and the fall that closed both — collapsed on its own night shift. The Deep Stone left its key with the men it could not dig out.',
 });
 
 // ── Saltmarch — danger 3, tide flats and smugglers ──────────────────────────
 
 dungeon({
   id: 'dun_the_drowned_counting_house', name: 'The Drowned Counting House', region: 'saltmarch',
-  band: [7, 11], floors: 2, theme: 'cistern',
+  band: [7, 11], floors: 3, theme: 'cistern',
   boss: { id: 'boss_channel_master_ruck', name: 'Channel-Master Ruck', base: 'brigand' },
   monsters: ['bandit', 'brigand', 'eel', 'giant_rat', 'green_ooze'],
   role: 'campaign',
@@ -250,7 +260,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_bell_wreck', name: 'The Bell Wreck', region: 'saltmarch',
-  band: [14, 18], floors: 2, theme: 'wreck',
+  band: [14, 18], floors: 4, theme: 'wreck',
   boss: { id: 'boss_the_bell_drowned', name: 'The Bell-Drowned', base: 'sea_serpent' },
   monsters: ['eel', 'giant_eel', 'water_elemental', 'ghost', 'acid_ooze'],
   role: 'campaign',
@@ -279,7 +289,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_standing_nine', name: 'The Standing Nine', region: 'the_cindermoor',
-  band: [19, 23], floors: 2, theme: 'barrow',
+  band: [19, 23], floors: 4, theme: 'barrow',
   boss: { id: 'boss_the_ninth_stone', name: 'The Ninth Stone', base: 'stone_gargoyle' },
   monsters: ['skeleton', 'ghost', 'gargoyle', 'earth_elemental', 'wolf'],
   role: 'campaign',
@@ -290,7 +300,7 @@ dungeon({
 
 dungeon({
   id: 'dun_hessas_cut', name: "Hessa's Cut", region: 'brackwater_isle',
-  band: [12, 16], floors: 1, theme: 'sea-cave',
+  band: [12, 16], floors: 2, theme: 'sea-cave',
   boss: { id: 'boss_the_eel_mother', name: 'The Eel-Mother', base: 'giant_eel' },
   monsters: ['eel', 'giant_eel', 'bat', 'water_elemental'],
   role: 'campaign',
@@ -339,7 +349,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_drowned_chapel', name: 'The Drowned Chapel', region: 'greywater_fen',
-  band: [8, 12], floors: 2, theme: 'chapel',
+  band: [8, 12], floors: 3, theme: 'chapel',
   boss: { id: 'boss_the_lamp_snuffer', name: 'The Lamp-Snuffer', base: 'ghast' },
   monsters: ['zombie', 'ghoul', 'ghost', 'giant_rat', 'plague_rat'],
   role: 'campaign',
@@ -406,7 +416,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_empty_church', name: 'The Empty Church', region: 'fallowmere',
-  band: [30, 34], floors: 3, theme: 'crypt',
+  band: [30, 34], floors: 6, theme: 'crypt',
   boss: { id: 'boss_cantor_of_the_empty_church', name: 'The Cantor of the Empty Church', base: 'master_mage' },
   monsters: ['ghast', 'spectre', 'wraith', 'initiate_mage', 'master_mage'],
   role: 'campaign',
@@ -417,7 +427,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_unlisted_door', name: 'The Unlisted Door', region: 'netherby_moors',
-  band: [15, 19], floors: 1, theme: 'crypt',
+  band: [15, 19], floors: 3, theme: 'crypt',
   boss: { id: 'boss_the_doorkeeper', name: 'The Doorkeeper', base: 'spectre' },
   monsters: ['ghost', 'thief_monster', 'spectre', 'bat'],
   role: 'campaign',
@@ -426,7 +436,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_ninth_barrow', name: 'The Ninth Barrow', region: 'netherby_moors',
-  band: [16, 20], floors: 2, theme: 'barrow',
+  band: [16, 20], floors: 4, theme: 'barrow',
   boss: { id: 'boss_the_ninth_sleeper', name: 'The Ninth Sleeper', base: 'skeleton_lord' },
   monsters: ['skeleton', 'skeleton_knight', 'ghost', 'ghoul', 'wraith'],
   role: 'campaign',
@@ -435,7 +445,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_opened_barrows', name: 'The Opened Barrows', region: 'netherby_moors',
-  band: [26, 31], floors: 3, theme: 'barrow',
+  band: [26, 31], floors: 8, theme: 'barrow',
   boss: { id: 'boss_chorister_nolt', name: 'Chorister Nolt', base: 'lich_monster' },
   monsters: ['skeleton_lord', 'ghast', 'wraith', 'spectre', 'lich_monster'],
   role: 'campaign',
@@ -475,7 +485,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_wind_stair', name: 'The Wind Stair', region: 'the_whitemantle',
-  band: [20, 24], floors: 2, theme: 'ice',
+  band: [20, 24], floors: 3, theme: 'ice',
   boss: { id: 'boss_the_gale_shade', name: 'The Gale-Warden’s Shade', base: 'storm_lord' },
   monsters: ['air_elemental', 'zephyr', 'harpy', 'spectre', 'water_elemental'],
   role: 'campaign',
@@ -542,7 +552,7 @@ dungeon({
 
 dungeon({
   id: 'dun_ossran_vaults', name: 'The Ossran Vaults', region: 'duskorn_waste',
-  band: [26, 30], floors: 2, theme: 'crypt',
+  band: [26, 30], floors: 5, theme: 'crypt',
   boss: { id: 'boss_the_vault_keeper', name: 'The Vault-Keeper', base: 'steel_gargoyle' },
   monsters: ['stone_gargoyle', 'steel_gargoyle', 'guardian', 'spectre', 'ghast'],
   role: 'campaign',
@@ -551,7 +561,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_duskorn_undercity', name: 'The Duskorn Undercity', region: 'duskorn_waste',
-  band: [30, 35], floors: 4, theme: 'undercity',
+  band: [30, 35], floors: 8, theme: 'undercity',
   boss: { id: 'boss_precentor_general_vosk', name: 'Precentor-General Vosk', base: 'master_mage' },
   monsters: ['initiate_mage', 'master_mage', 'wraith', 'ghast', 'steel_gargoyle'],
   role: 'campaign',
@@ -571,7 +581,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_caldera_stair', name: 'The Caldera Stair', region: 'emberhold',
-  band: [30, 34], floors: 3, theme: 'forge',
+  band: [30, 34], floors: 7, theme: 'forge',
   boss: { id: 'boss_forge_cantor_skell', name: 'Forge-Cantor Skell', base: 'inferno_lord' },
   monsters: ['fire_elemental', 'flame_sprite', 'guardian', 'ogre_mage', 'efreeti'],
   role: 'campaign',
@@ -620,7 +630,7 @@ dungeon({
 
 dungeon({
   id: 'dun_verhal_cisterns', name: 'The Verhal Cisterns', region: 'verhal_sands',
-  band: [36, 40], floors: 2, theme: 'cistern',
+  band: [36, 40], floors: 5, theme: 'cistern',
   boss: { id: 'boss_the_cistern_choir', name: 'The Cistern Choir', base: 'master_mage' },
   monsters: ['initiate_mage', 'master_mage', 'water_elemental', 'ghast', 'guardian'],
   role: 'campaign',
@@ -631,7 +641,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_rim_camp', name: 'The Rim Camp', region: 'the_sunder',
-  band: [34, 38], floors: 1, theme: 'glass',
+  band: [34, 38], floors: 2, theme: 'glass',
   boss: { id: 'boss_quartermaster_behn', name: 'Choir-Quartermaster Behn', base: 'master_mage' },
   monsters: ['initiate_mage', 'master_mage', 'brigand', 'guardian'],
   role: 'campaign',
@@ -640,7 +650,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_wound', name: 'The Wound', region: 'the_sunder',
-  band: [36, 40], floors: 3, theme: 'glass',
+  band: [36, 40], floors: 7, theme: 'glass',
   boss: { id: 'boss_the_silent_chorus', name: 'The Silent Chorus', base: 'wraith' },
   monsters: ['spectre', 'wraith', 'guardian', 'master_mage', 'steel_gargoyle'],
   role: 'campaign',
@@ -651,7 +661,7 @@ dungeon({
 
 dungeon({
   id: 'dun_ossra_first_descent', name: 'Ossra Deep: The First Descent', region: 'ossra_deep',
-  band: [37, 41], floors: 3, theme: 'vessel',
+  band: [37, 41], floors: 7, theme: 'vessel',
   boss: { id: 'boss_the_warden_door', name: 'The Warden Door', base: 'guardian' },
   monsters: ['guardian', 'steel_gargoyle', 'wraith', 'master_mage', 'spectre'],
   role: 'campaign',
@@ -660,7 +670,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_long_gallery', name: 'The Long Gallery', region: 'ossra_deep',
-  band: [40, 44], floors: 3, theme: 'vessel',
+  band: [40, 44], floors: 7, theme: 'vessel',
   boss: { id: 'boss_the_nine_voices', name: 'The Nine Voices', base: 'archangel' },
   champions: [{ id: 'boss_the_pale_cantor', name: 'The Pale Cantor', base: 'master_mage' }],
   monsters: ['guardian', 'archangel', 'seraph', 'master_mage', 'steel_gargoyle'],
@@ -670,7 +680,7 @@ dungeon({
 
 dungeon({
   id: 'dun_the_pilots_chamber', name: "The Pilot's Chamber", region: 'ossra_deep',
-  band: [42, 45], floors: 2, theme: 'vessel',
+  band: [42, 45], floors: 3, theme: 'vessel',
   boss: { id: 'boss_the_pilot', name: 'The Pilot', base: 'seraph' },
   monsters: ['seraph', 'archangel', 'guardian', 'steel_gargoyle'],
   role: 'campaign',

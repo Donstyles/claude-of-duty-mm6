@@ -119,16 +119,24 @@ const THEMES = {
  *   room    chamber size in cells (radius, for the two cave grammars)
  *   loops   extra corridors closed after the spanning walk; 0 is a pure tree
  *   grammar which builder draws it — see `_plan`
+ *
+ * The counts here were raised by about seven-tenths against the board they are
+ * thrown at, which `_plan` widened at the same time and for the same reason:
+ * `tools/floortime.mjs` measured a mean campaign floor at 224 walkable cells in
+ * a thirty-cell board — a quarter of it dug — and 6.8 minutes to clear. Walk,
+ * dwell, doors and chests are 60% of that minute and all four scale with the
+ * number of chambers, so this is the one dial that moves them together. It is
+ * not a difficulty change: the monsters per room are untouched.
  */
 const LAYOUTS = {
-  sprawl: { grammar: 'rooms', rooms: [8, 10], room: [3, 6], loops: 1 },
-  warren: { grammar: 'rooms', rooms: [13, 16], room: [2, 4], loops: 3 },
-  halls: { grammar: 'rooms', rooms: [5, 7], room: [5, 9], loops: 1 },
-  spine: { grammar: 'spine', rooms: [8, 11], room: [3, 6], loops: 0 },
-  ring: { grammar: 'ring', rooms: [7, 9], room: [3, 5], loops: 0 },
-  cavern: { grammar: 'cave', rooms: [8, 11], room: [2.2, 4.2], loops: 0 },
-  chasm: { grammar: 'cave', rooms: [4, 5], room: [3.6, 6.4], loops: 0 },
-  grid: { grammar: 'grid', rooms: [8, 12], room: [3, 5], loops: 0 },
+  sprawl: { grammar: 'rooms', rooms: [14, 17], room: [3, 6], loops: 1 },
+  warren: { grammar: 'rooms', rooms: [22, 26], room: [2, 4], loops: 3 },
+  halls: { grammar: 'rooms', rooms: [9, 12], room: [5, 9], loops: 1 },
+  spine: { grammar: 'spine', rooms: [14, 18], room: [3, 6], loops: 0 },
+  ring: { grammar: 'ring', rooms: [12, 15], room: [3, 5], loops: 0 },
+  cavern: { grammar: 'cave', rooms: [14, 18], room: [2.2, 4.2], loops: 0 },
+  chasm: { grammar: 'cave', rooms: [7, 9], room: [3.6, 6.4], loops: 0 },
+  grid: { grammar: 'grid', rooms: [14, 20], room: [3, 5], loops: 0 },
 };
 
 /** Which layout a theme falls back to when the catalogue does not say. */
@@ -598,7 +606,14 @@ export class DungeonSystem extends System {
   _plan(state, index, total, previous) {
     const { rng, look, def } = state;
     const depth = total > 1 ? index / (total - 1) : 0;
-    const size = 22 + Math.round(depth * 8) + (def.level > 24 ? 4 : 0);
+    // The board. It used to run 22–34 cells and the layouts dug a quarter of
+    // it, which is how a campaign floor came out at 224 walkable cells and
+    // 6.8 minutes — a small room with the lights turned down. Widening it to
+    // 30–46 is 1.85× the area for the raised chamber counts in LAYOUTS to
+    // spend; the fill fraction is what stays put, so a warren is still a
+    // warren and a spine is still one gallery, just at the size the fiction
+    // has been claiming for them all along.
+    const size = 30 + Math.round(depth * 10) + (def.level > 24 ? 6 : 0);
     // The act-five recipe is a lattice whatever the catalogue says; everything
     // else takes the authored layout, or its grammar's default if there is none.
     const L = LAYOUTS[look.grammar === 'grid' ? 'grid'
@@ -771,7 +786,11 @@ export class DungeonSystem extends System {
       // The stub back to the gallery.
       if (axis === 'x') carveV(grid, tag, room.cy, side > 0 ? mid + 1 : mid, room.cx, S);
       else carveH(grid, tag, room.cx, side > 0 ? mid + 1 : mid, room.cy, S);
-      cursor += (axis === 'x' ? w : h) + rng.int(1, 3);
+      // Consecutive chambers alternate sides of the gallery and so cannot
+      // collide with each other; advancing by a whole room width between them
+      // spent the nave twice over and left an imperial basilica with four side
+      // chapels in it. Half a room is what the next one on *this* side needs.
+      cursor += Math.ceil((axis === 'x' ? w : h) / 2) + rng.int(1, 3);
     }
     if (!rooms.length) {
       const k = mid;
@@ -793,8 +812,11 @@ export class DungeonSystem extends System {
     const rooms = [];
     // Far enough in that there is a band outside the circuit to hang chambers
     // off: at inset 4 every room on the near sides fell off the board and the
-    // ring came out as a corridor with two rooms on it.
-    const inset = 6 + rng.int(0, 2);
+    // ring came out as a corridor with two rooms on it. A fraction of the board
+    // rather than six flat cells, so that widening the board widens the band
+    // too — otherwise a bigger floor is the same ring with more dead rock
+    // around it, which is the one way this grammar can be made worse.
+    const inset = Math.max(6, Math.round(S * 0.2)) + rng.int(0, 2);
     const a = inset, b = S - 1 - inset;
     for (let k = a; k <= b; k++) {
       for (const [i, j] of [[k, a], [k, b], [a, k], [b, k]]) { grid[j][i] = 1; tag[j][i] = 2; }
@@ -2314,7 +2336,19 @@ export class DungeonSystem extends System {
     if (!mat) {
       // Both come off catalogue textures rather than being flat colours: a
       // crust for the lava, a wet mottle under the water. ARCHITECTURE §6.
-      mat = this.lib.get(kind === 'lava' ? 'rubble' : 'mud', { repeat: 1.6 }).clone();
+      //
+      // Cloned with the source's `userData` lifted out from under it, because
+      // `Material.copy` deep-copies that field through `JSON.stringify` and
+      // above the low tier the forge leaves a render target in there — a cycle,
+      // and a throw. It threw on every hazard dungeon in the catalogue at the
+      // quality this actually ships at, and nothing caught it because the
+      // headless tools all boot at `quality=low`.
+      const src = this.lib.get(kind === 'lava' ? 'rubble' : 'mud', { repeat: 1.6 });
+      const keep = src.userData;
+      src.userData = {};
+      mat = src.clone();
+      src.userData = keep;
+      mat.userData = {};
       mat.color = new THREE.Color(haz.colour);
       mat.roughness = kind === 'lava' ? 0.72 : 0.16;
       mat.metalness = 0;
