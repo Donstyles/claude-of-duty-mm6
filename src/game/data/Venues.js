@@ -198,7 +198,11 @@ venue('town_brackwater', 'guild', { name: 'Guild of the Steady Hand', keeper: 'A
 venue('town_brackwater', 'dock', { name: 'The Slipway', keeper: 'Ferrier Colm', tier: 2 });
 
 venue('town_fallowmere', 'generalstore', { name: 'The Last Shop', keeper: 'Widow Ansel', tier: 2 });
-venue('town_fallowmere', 'temple', { name: 'The Empty Church', keeper: null, tier: 4 });
+// No priest — CANON.md is firm on that, and the rumour mill turns on it. A
+// sexton is not a priest, though, and somebody has been filling nine lamps a
+// night for sixty years. Naming him is what makes the empty church read as
+// abandoned-and-still-tended rather than as an unfinished venue record.
+venue('town_fallowmere', 'temple', { name: 'The Empty Church', keeper: 'Sexton Pell', tier: 4 });
 venue('town_fallowmere', 'tavern', { name: 'The Fallow Arms', keeper: 'Jem Ansel', tier: 2 });
 venue('town_fallowmere', 'dock', { name: 'Fallowmere Jetty', keeper: 'Ferrier Ansel', tier: 1 });
 
@@ -290,7 +294,7 @@ const HOUSEHOLDS = {
   ],
   town_fallowmere: [
     ['Ansel House', 'Widow Ansel', 'farmer'],
-    ['The Sexton’s Cottage', null, null],
+    ['The Sexton’s Cottage', 'Sexton Pell', 'sexton'],
     ['Fallow Cottage', 'Jem Ansel', 'farmer'],
   ],
   town_emberhold: [

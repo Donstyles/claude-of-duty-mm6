@@ -917,6 +917,219 @@ npc({
   desc: 'Extremely reasonable, which is the worst thing about him.',
 });
 
+// ── The port towns, staffed ─────────────────────────────────────────────────
+//
+// A census of the roster found the world getting emptier as the campaign got
+// bigger, which is exactly backwards. Millhaven — the town the party leaves in
+// the first hour — carried eight named people and twenty-nine dialogue topics.
+// Coldwater carried one person and two topics across thirteen venues.
+// Emberhold: one person, two topics, ten venues. Brackwater and Fallowmere the
+// same. Those four are the act-three and act-four island chain, so the back
+// half of a twenty-hour campaign was a set of ports where the player could
+// speak to exactly one person per town and read a sign on everything else.
+//
+// The other half of that measurement is why the fix looks the way it does. Of
+// the 145 venues, 138 name a keeper and only 33 of those keepers existed as a
+// person — so 105 shopkeepers were a string painted on a door. Every NPC below
+// is a keeper `Venues.js` had already named. Nobody new was invented; the
+// people who were already standing behind these counters simply have faces and
+// something to say now, which is cheaper in canon than adding strangers and
+// worth more, because the sign over the door now matches the person under it.
+//
+// None of them gives a quest. That is deliberate: the content gate checks NPC
+// topics against `Quests.js` in both directions, and a name-drop of a quest id
+// that does not exist is how nine of act three's chains silently never opened.
+// These people carry flavour, service routing and canon, and nothing that can
+// dangle.
+
+npc({
+  id: 'npc_skald_vey', name: 'Skald Vey', profession: 'Keeper of the Long Dark',
+  town: 'town_coldwater', location: 'coldwater_sound', portrait: 'townsfolk',
+  look: { build: 'broad', age: 'older', dress: 'furs', palette: 0x5b4a3c },
+  greeting: '"Sit where the lamp reaches. People who sit past the lamp end up talking to themselves."',
+  topics: [
+    { id: 'room', label: 'A Bed', text: '"Beds, food, and the fire until the second bell. After that you bank it yourself."', service: 'town_coldwater_tavern' },
+    { id: 'winter', label: 'The Long Dark', text: '"Four hours of light in the deep of it. The trick is to keep a trade going. Idle men in the dark start believing things."' },
+    { id: 'wardens', label: 'The Warden', text: '"Sturm up at the Gale will trade a grandmaster\'s word for an answer nobody has. He has been waiting a long while and he is in no hurry at all."' },
+  ],
+  desc: 'Names every drink after a boat that sank. There are a great many drinks.',
+});
+
+npc({
+  id: 'npc_harbourmaster_kregg', name: 'Kregg', profession: 'Harbourmaster of Coldwater Sound',
+  town: 'town_coldwater', location: 'coldwater_sound', portrait: 'townsfolk',
+  look: { build: 'lean', age: 'adult', dress: 'oilskin', palette: 0x3f4e58 },
+  greeting: '"Ice on the mooring rings. Whatever you want, want it quickly."',
+  topics: [
+    { id: 'passage', label: 'Passage', text: '"Packets south to Saltmarch, long reach west to Fallowmere. Both cost. The reach costs more because the current is against you the whole way."', service: 'town_coldwater_dock' },
+    { id: 'ice', label: 'The Sound', text: '"It freezes from the head down, so the last water to close is the water you need. That is the sound\'s whole character in one sentence."' },
+    { id: 'ledger', label: 'The Ledger', text: '"They keep the schedule and they keep the warrant, and if you have not got the second you will not see the first."' },
+  ],
+  desc: 'Has not lost a hull in eleven years and mentions it roughly hourly.',
+});
+
+npc({
+  id: 'npc_gerda_tholm', name: 'Gerda Tholm', profession: 'Armourer of Furs and Iron',
+  town: 'town_coldwater', location: 'coldwater_sound', portrait: 'townsfolk',
+  look: { build: 'broad', age: 'adult', dress: 'apron', palette: 0x6b5a48 },
+  greeting: '"Iron over fur, fur over iron. Get it the wrong way round up here and you will only do it once."',
+  topics: [
+    { id: 'buy', label: 'Trade', text: '"Plate that will not take the cold off your ribs, and lining that will. I sell both and I will not sell you one without the other."', service: 'town_coldwater_armourer' },
+    { id: 'cold', label: 'The Cold', text: '"Southern mail goes brittle in the second month. It does not bend, it snaps, and it snaps at the shoulder."' },
+  ],
+  desc: 'Learned the trade in Thornwick and unlearned half of it here.',
+});
+
+npc({
+  id: 'npc_prior_sef', name: 'Prior Sef', profession: 'Prior of the Lamp Against the Night',
+  town: 'town_coldwater', location: 'coldwater_sound', portrait: 'priest',
+  look: { build: 'average', age: 'older', dress: 'robe', palette: 0xb8a074 },
+  greeting: '"The lamp is lit. It is always lit. That is not a miracle, it is a rota."',
+  topics: [
+    { id: 'heal', label: 'Healing', text: '"We take what you can give and we do the work either way. Kneel, and stop apologising."', service: 'town_coldwater_temple' },
+    { id: 'order', label: 'The Order', text: '"Millhaven asks why the font at the Kindled Shrine has been cold for twenty years. We ask the same and get the same silence."' },
+    { id: 'dark', label: 'The Night', text: '"Something out on the ice sings back at the choirs in Duskorn. I have written to say so. Nobody has written back."' },
+  ],
+  desc: 'Keeps the rota herself when the rota falls through, which is most weeks.',
+});
+
+npc({
+  id: 'npc_hrolf_ossran', name: 'Hrolf Ossran', profession: 'Smith of the Whalebone Anvil',
+  town: 'town_coldwater', location: 'coldwater_sound', portrait: 'townsfolk',
+  look: { build: 'broad', age: 'adult', dress: 'apron', palette: 0x574438 },
+  greeting: '"Anvil\'s bone, hammer\'s iron, and I will thank you not to ask which is older."',
+  topics: [
+    { id: 'buy', label: 'Trade', text: '"Harpoon steel. It is meant to go in and stay in, and it does that to most things."', service: 'town_coldwater_weaponsmith' },
+    { id: 'family', label: 'Ossran', text: '"Half the name in this town is Ossran and the other half married one. Isabeau out in the Waste is my cousin. We do not write."' },
+  ],
+  desc: 'Works whalebone into hilts and will explain the grain of it at length.',
+});
+
+npc({
+  id: 'npc_sib_roon', name: 'Sib Roon', profession: 'Keeper of the Sunken Bell',
+  town: 'town_brackwater', location: 'brackwater_isle', portrait: 'townsfolk',
+  look: { build: 'average', age: 'adult', dress: 'commoner', palette: 0x4f5a44 },
+  greeting: '"Eel, eel pie, or eel and a bed. I will not pretend there is a fourth."',
+  topics: [
+    { id: 'room', label: 'A Bed', text: '"Upstairs is dry, which on this island is a boast."', service: 'town_brackwater_tavern' },
+    { id: 'bell', label: 'The Bell', text: '"There was a chapel on the flats before the water took it. On a low spring tide you can still hear the bell turn over. Nobody drinks during it."' },
+    { id: 'hessa', label: 'Old Hessa', text: '"Ninety, and she put four Thornwick duellists on the sand with her hands behind her back. They had come to laugh. They rowed back very quietly."' },
+  ],
+  desc: 'Runs the only room on Brackwater and is fully aware of it.',
+});
+
+npc({
+  id: 'npc_ferrier_colm', name: 'Colm', profession: 'Ferrier of the Slipway',
+  town: 'town_brackwater', location: 'brackwater_isle', portrait: 'townsfolk',
+  look: { build: 'wiry', age: 'adult', dress: 'oilskin', palette: 0x46525c },
+  greeting: '"Tide\'s turning. It does that whether or not you have decided anything."',
+  topics: [
+    { id: 'passage', label: 'Passage', text: '"Saltmarch on the flood, Fallowmere on the ebb, and open water in between with nothing to look at."', service: 'town_brackwater_dock' },
+    { id: 'wreck', label: 'The Packet', text: '"A Ledger packet went down off the head with nothing aboard but ballast and one chest, and the chest was locked and the chest was heavy. The Ledger sent no one to look for it. Sit with that."' },
+  ],
+  desc: 'Rows the channel four times a day and has never once been early.',
+});
+
+npc({
+  id: 'npc_bad_roon', name: 'Bad Roon', profession: 'Eelmonger of Brackwater',
+  town: 'town_brackwater', location: 'brackwater_isle', portrait: 'townsfolk',
+  look: { build: 'lean', age: 'older', dress: 'commoner', palette: 0x5d5340 },
+  greeting: '"They call me Bad Roon because of my brother. Sib is the good one. I am the one with the stock."',
+  topics: [
+    { id: 'buy', label: 'Trade', text: '"Rope, lamp oil, salt, and whatever came off the beach this month. You would be surprised what comes off the beach."', service: 'town_brackwater_generalstore' },
+    { id: 'secrets', label: 'The Island', text: '"Everybody here knows one thing they are not saying. Mine is not for sale and neither is anybody else\'s, but you may buy the rope."' },
+  ],
+  desc: 'Sells salvage without ever using the word.',
+});
+
+npc({
+  id: 'npc_jem_ansel', name: 'Jem Ansel', profession: 'Keeper of the Fallow Arms',
+  town: 'town_fallowmere', location: 'fallowmere', portrait: 'townsfolk',
+  look: { build: 'average', age: 'young', dress: 'commoner', palette: 0x6d6249 },
+  greeting: '"Nine of us on this island and I keep the bar for all nine. It is not hard work."',
+  topics: [
+    { id: 'room', label: 'A Bed', text: '"Take any room. Take two. There is nobody coming."', service: 'town_fallowmere_tavern' },
+    { id: 'island', label: 'Fallowmere', text: '"Forty farms, and the walls of every one of them still standing. Nobody burned anything. They just stopped."' },
+    { id: 'leave', label: 'Leaving', text: '"Mother will not go and I will not go without her, so that is settled and I would rather talk about something else."' },
+  ],
+  desc: 'Young enough to want to leave and stubborn enough not to.',
+});
+
+npc({
+  id: 'npc_ferrier_ansel', name: 'Rual Ansel', profession: 'Ferrier of Fallowmere Jetty',
+  town: 'town_fallowmere', location: 'fallowmere', portrait: 'townsfolk',
+  look: { build: 'broad', age: 'older', dress: 'oilskin', palette: 0x4a5348 },
+  greeting: '"Two sailings a week and I have run both of them empty for six years."',
+  topics: [
+    { id: 'passage', label: 'Passage', text: '"Brackwater on the flood. Coldwater if the reach is kind, and it is not. Emberhold if you have a reason, and you had better."', service: 'town_fallowmere_dock' },
+    { id: 'emberhold', label: 'Emberhold', text: '"You will smell it before you see it. Everyone says that and everyone is right and it does not prepare you."' },
+  ],
+  desc: 'Keeps a boat, a schedule and a jetty for nine people, out of habit.',
+});
+
+npc({
+  id: 'npc_sexton_pell', name: 'Sexton Pell', profession: 'Sexton of the Empty Church',
+  town: 'town_fallowmere', location: 'fallowmere', portrait: 'priest',
+  look: { build: 'wiry', age: 'ancient', dress: 'robe', palette: 0x9a8e70 },
+  greeting: '"There is no priest. There has been no priest since I was a boy. There are still lamps, and I am still the man who fills them."',
+  topics: [
+    { id: 'lamps', label: 'The Lamps', text: '"Every night. Nine lamps, and no night in sixty years without them. Ask why and I will tell you it is a habit. Ask twice and I will tell you the same thing in the same words."' },
+    { id: 'farms', label: 'The Farms', text: '"They went in one season. Not plague — plague leaves you burying people. We buried nobody. That is the part I have never got past."' },
+    { id: 'church', label: 'The Church', text: '"The door has no lock and never had one. That was thought sensible at the time."' },
+  ],
+  desc: 'Fills nine lamps a night in a church with no congregation and no explanation.',
+});
+
+npc({
+  id: 'npc_bellows_kar', name: 'Kar', profession: 'Bellows-wife of the Quenching Trough',
+  town: 'town_emberhold', location: 'emberhold', portrait: 'townsfolk',
+  look: { build: 'broad', age: 'adult', dress: 'apron', palette: 0x7a3f2c },
+  greeting: '"Drink it before the ash settles on it. That is not a saying, it is an instruction."',
+  topics: [
+    { id: 'room', label: 'A Bed', text: '"Beds over the trough. Warm is not the difficulty here. Quiet is."', service: 'town_emberhold_tavern' },
+    { id: 'caldera', label: 'The Caldera', text: '"We live in a cup that was full once. The forges are down where it was hottest because the cutters are not a cautious people."' },
+    { id: 'gallery', label: 'The Sealed Gallery', text: '"The cutters broke through into a gallery that was already hollow, and bricked it up again inside the week. Nobody was paid to brick it up. They just did it."' },
+  ],
+  desc: 'Works the great bellows by day and the bar by night, and is louder at night.',
+});
+
+npc({
+  id: 'npc_forgemaster_duun', name: 'Duun', profession: 'Forge-Master of the Slag Yards',
+  town: 'town_emberhold', location: 'emberhold', portrait: 'knight',
+  look: { build: 'broad', age: 'older', dress: 'apron', palette: 0x6e3524 },
+  greeting: '"Show me your grip. No — that is how you hold a pen. Again."',
+  topics: [
+    { id: 'train', label: 'Drill', text: '"We train the arm that swings the hammer, which is the same arm. I will take you as far as the yards go and then send you on with a name."', service: 'town_emberhold_trainer' },
+    { id: 'smiths', label: 'The Smiths', text: '"Best in Caerwen, and I will say it in front of any Thornwick man you care to fetch."' },
+    { id: 'cult', label: 'The Forge-Cults', text: '"Cult is the mainland\'s word. Ours is shift. We sing because the hammer keeps time and the time keeps men alive."' },
+  ],
+  desc: 'Runs the yards on a rota that has not slipped in thirty years.',
+});
+
+npc({
+  id: 'npc_harbourmaster_sesk', name: 'Sesk', profession: 'Harbourmaster of the Emberhold Mole',
+  town: 'town_emberhold', location: 'emberhold', portrait: 'townsfolk',
+  look: { build: 'lean', age: 'adult', dress: 'oilskin', palette: 0x54453a },
+  greeting: '"Mind the mole. Half of it is stone and half of it is what the mountain sent down, and the halves are not marked."',
+  topics: [
+    { id: 'passage', label: 'Passage', text: '"One packet, west to Fallowmere. There is no second way off this island and I would not sell you one if there were."', service: 'town_emberhold_dock' },
+    { id: 'trade', label: 'The Trade', text: '"Iron out, grain in, and the Ledger takes its cut of both ends. We are not fond of the arrangement. We are fond of the grain."' },
+  ],
+  desc: 'Keeps the only line off Emberhold and knows precisely what that is worth.',
+});
+
+npc({
+  id: 'npc_trader_ghesh', name: 'Ghesh', profession: 'Trader of the Ash Market',
+  town: 'town_emberhold', location: 'emberhold', portrait: 'townsfolk',
+  look: { build: 'average', age: 'adult', dress: 'commoner', palette: 0x6a5334 },
+  greeting: '"Everything here has ash on it. Take that off the price and there is no price left."',
+  topics: [
+    { id: 'buy', label: 'Trade', text: '"Grain off the packet, oil, cord, and cinder-glass the cutters bring up. The glass is worth more on the mainland and I sell it here anyway."', service: 'town_emberhold_generalstore' },
+    { id: 'ash', label: 'The Ash', text: '"Falls on a west wind, which is most winds. You stop seeing it in a month. Your lungs do not."' },
+  ],
+  desc: 'Runs the only market on the island and prices it like a man with competition.',
+});
+
 // ── The campaign's own people ───────────────────────────────────────────────
 //
 // Everyone above is a townsperson who happens to hand out work. Everyone below
