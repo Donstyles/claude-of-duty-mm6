@@ -111,6 +111,118 @@ function arm(id, name, category, skill, ac, tier, value, opts = {}) {
   return armours[id];
 }
 
+// ── Pack footprints ─────────────────────────────────────────────────────────
+
+/**
+ * How many backpack cells a thing takes, and in what shape.
+ *
+ * MM6's backpack is a bin-packing puzzle and that is most of its character: a
+ * pike is a five-cell column, a belt a three-cell strip, a ring a single
+ * square, and deciding what to leave behind is the game. Ours was a
+ * spreadsheet — not one of the 334 catalogue records carried a size, so every
+ * reader fell through to its own guess. There were three of those guesses and
+ * they did not agree: `PartySystem.stow` read `gridW`/`gridH` and so believed
+ * the whole catalogue was 1x1, while the backpack screen and the shop wall
+ * read `w`/`h` and, finding none, ran a twelve-line category heuristic. The
+ * placement layer packed a pack the drawing layer then drew differently.
+ * Sizing the records here settles all three readers at once, because every one
+ * of them already prefers `w`/`h` when the record has them.
+ *
+ * The shapes are not invented. `src/ui/itemPlates.js` carries the measured
+ * width/height of all 141 painted plates, and a footprint is the integer
+ * rectangle (up to 4 x 5) minimising
+ *
+ *     1.2 * |ln(w*h / bulk)|  +  |ln((w/h) / plateAspect)|
+ *
+ * — that is: the bulk its kind deserves, in the proportions the picture
+ * actually has. Bulk is the balance knob and stays a per-kind judgement; the
+ * shape is measured, so a Long Bow whose plate is 0.128 wide-over-tall gets a
+ * 1x4 column rather than the 2x3 block the old heuristic reserved and filled
+ * half of. Two-handed melee is one cell longer than one-handed, which is the
+ * whole reason to think twice about a Great Sword.
+ *
+ * The table below is that solve, baked. It is short enough to read and to
+ * argue with, which a call into the UI's generated art manifest from a data
+ * module would not have been.
+ */
+const KIND_FOOTPRINT = {
+  'weapon:sword': [1, 3], 'weapon:axe': [1, 3], 'weapon:mace': [1, 3],
+  'weapon:blaster': [1, 3], 'weapon:dagger': [1, 2], 'weapon:bow': [1, 4],
+  'weapon:spear': [1, 5], 'weapon:staff': [1, 5],
+  armour: [2, 3], shield: [2, 3], helm: [2, 2], cloak: [2, 2], boots: [2, 2],
+  gauntlets: [1, 2], belt: [3, 1], potion: [1, 2], scroll: [2, 1], wand: [1, 3],
+  amulet: [1, 1], ring: [1, 1], reagent: [1, 1], gem: [1, 1], quest: [1, 1],
+  misc: [1, 1],
+  // Every one of the twenty-two relics is listed below by name; this is only
+  // so a twenty-third added without a plate lands on something sane.
+  artifact: [2, 2],
+};
+
+/**
+ * Where the painted object disagrees with its kind. The number is the plate's
+ * measured aspect, so each line can be checked against `ITEM_PLATE_ASPECT`.
+ *
+ * Two clusters: the small shields, which are painted square and have no
+ * business reserving a kite shield's column, and the relics, which were
+ * painted as set pieces rather than as inventory icons and so lie down where
+ * the common version of the same weapon stands up. The Lance of Oakhallow is a
+ * four-cell horizontal bar because that is how it was drawn; the Staff of
+ * Tharn is a 2x2 block, four cells against a common staff's five, because it
+ * was drawn on the diagonal. Bulk is what balance cares about and it is
+ * unchanged — only the outline follows the brush.
+ */
+const ITEM_FOOTPRINT = {
+  shield_buckler: [2, 2], // 1.0000
+  shield_small: [2, 2], // 1.0000
+  spear_trident: [2, 3], // 0.5581
+  boots_sandals: [3, 1], // 1.4746
+  art_alderquiet: [2, 2], // 0.9905
+  art_assessor: [2, 2], // 1.1468
+  art_barrowclean: [4, 1], // 4.5856
+  art_cindrast_yew: [1, 4], // 0.2561
+  art_factors_coat: [1, 4], // 0.4768
+  art_gullwing_mail: [2, 3], // 0.5696
+  art_magpie: [2, 1], // 1.1039
+  art_null_band: [1, 1], // 1.2902
+  art_oakhallow_lance: [4, 1], // 3.3920
+  art_oathkeep: [2, 2], // 0.8824
+  art_ossran_pendant: [1, 1], // 0.6382
+  art_quernstone: [2, 2], // 0.9639
+  art_recant: [2, 2], // 0.9948
+  art_riven_girdle: [3, 1], // 1.5369
+  art_sallowhide: [2, 3], // 0.6895
+  art_sealed_skin: [2, 3], // 0.3525
+  art_second_arrow: [4, 1], // 3.4674
+  art_small_hours: [1, 2], // 0.4877
+  art_standing_ring: [1, 1], // 1.2579
+  art_tharn_staff: [2, 2], // 0.9918
+  art_the_blank: [2, 2], // 0.6999
+  art_thornwick_harness: [2, 3], // 0.8806
+};
+
+/**
+ * Stamp footprints onto a catalogue bag, then hand it back for freezing.
+ *
+ * Both spellings are written. `w`/`h` is what the backpack, the shop wall and
+ * `ShopSystem.gridSize` look for; `gridW`/`gridH` is what `PartySystem.stow`
+ * and `LootSystem.makeItem`'s defaults look for. One derivation, four readers,
+ * no seam — the pair must never be allowed to drift apart.
+ */
+function shaped(bag) {
+  for (const it of Object.values(bag)) {
+    const kind = it.category === 'weapon' ? `weapon:${it.weaponType}` : it.category;
+    // A two-handed haft is one cell longer than the one-handed version of the
+    // same blade. Spears, staves and bows carry their length in the kind.
+    const twoHanded = it.category === 'weapon' && it.hands === 2
+      && KIND_FOOTPRINT[kind]?.[1] === 3;
+    const base = ITEM_FOOTPRINT[it.id] ?? KIND_FOOTPRINT[kind] ?? [1, 1];
+    const [w, h] = twoHanded && !ITEM_FOOTPRINT[it.id] ? [base[0], base[1] + 1] : base;
+    it.w = w; it.h = h;
+    it.gridW = w; it.gridH = h;
+  }
+  return bag;
+}
+
 // ── Weapons ─────────────────────────────────────────────────────────────────
 
 wpn('sword_long', 'Long Sword', 'sword', 1, 0, 60, { desc: 'The kingdom\'s standard blade. Every guardhouse in Caerwen has a rack of them.' });
@@ -171,7 +283,7 @@ wpn('bow_wyrmhorn', 'Wyrmhorn Bow', 'bow', 6, 12, 4200, { weight: 13, recovery: 
 wpn('blaster_blaster', 'Blaster', 'blaster', 6, 0, 6000, { enchantable: false, droppable: false, desc: 'Lifted out of the wreck under the glass. Nothing in Caerwen resists it.' });
 wpn('blaster_rifle', 'Blaster Rifle', 'blaster', 6, 10, 15000, { hands: 2, enchantable: false, minBand: 6, desc: 'The long-barrelled version. The wreck held racks of them; six are still working.' });
 
-export const WEAPONS = deepFreeze(weapons);
+export const WEAPONS = deepFreeze(shaped(weapons));
 
 // ── Armour, shields and worn gear ───────────────────────────────────────────
 
@@ -255,7 +367,7 @@ arm('ring_band', 'Warded Band', 'ring', null, 2, 3, 450, { resistBonus: { magic:
 arm('ring_loop', 'Goldsmith\'s Loop', 'ring', null, 3, 4, 1250, { statBonus: { luck: 12 }, hp: 20 });
 arm('ring_oathring', 'Oathring', 'ring', null, 4, 5, 3300, { statBonus: { might: 10, endurance: 10 }, desc: 'Sworn on, not worn for show. The Sword Chapter casts one per serjeant and takes it back at the grave.' });
 
-export const ARMOURS = deepFreeze(armours);
+export const ARMOURS = deepFreeze(shaped(armours));
 
 // ── Potions: the MM6 colour ladder ──────────────────────────────────────────
 // Layer 1 potions come straight from a reagent. Layers 2–4 are mixed from two
@@ -327,11 +439,11 @@ for (const attr of ATTRIBUTES) {
   });
 }
 
-export const POTIONS = deepFreeze(potions);
+export const POTIONS = deepFreeze(shaped(potions));
 
 // ── Reagents ────────────────────────────────────────────────────────────────
 
-export const REAGENTS = deepFreeze({
+export const REAGENTS = deepFreeze(shaped({
   bloodhaw_berries: { id: 'bloodhaw_berries', name: 'Bloodhaw Berries', category: 'reagent', makes: 'potion_red', boost: 0, value: 20, weight: 1, biome: 'forest' },
   emberfoot_cap: { id: 'emberfoot_cap', name: 'Emberfoot Cap', category: 'reagent', makes: 'potion_red', boost: 0, value: 25, weight: 1, biome: 'swamp' },
   bellflax: { id: 'bellflax', name: 'Bellflax', category: 'reagent', makes: 'potion_blue', boost: 0, value: 20, weight: 1, biome: 'grass' },
@@ -342,11 +454,11 @@ export const REAGENTS = deepFreeze({
   vial_of_ooze_distillate: { id: 'vial_of_ooze_distillate', name: 'Vial of Ooze Distillate', category: 'reagent', makes: null, boost: 10, value: 500, weight: 1, biome: 'dungeon' },
   vial_of_devil_ichor: { id: 'vial_of_devil_ichor', name: 'Vial of Devil Ichor', category: 'reagent', makes: null, boost: 15, value: 1200, weight: 1, biome: 'dungeon' },
   philosophers_stone: { id: 'philosophers_stone', name: "Philosopher's Stone", category: 'reagent', makes: null, boost: 25, value: 5000, weight: 1, biome: 'dungeon' },
-});
+}));
 
 // ── Gems and valuables ──────────────────────────────────────────────────────
 
-export const GEMS = deepFreeze({
+export const GEMS = deepFreeze(shaped({
   gem_quartz: { id: 'gem_quartz', name: 'Quartz', category: 'gem', value: 50, weight: 1, tier: 1 },
   gem_amethyst: { id: 'gem_amethyst', name: 'Amethyst', category: 'gem', value: 150, weight: 1, tier: 2 },
   gem_opal: { id: 'gem_opal', name: 'Opal', category: 'gem', value: 250, weight: 1, tier: 2 },
@@ -356,7 +468,7 @@ export const GEMS = deepFreeze({
   gem_sapphire: { id: 'gem_sapphire', name: 'Sapphire', category: 'gem', value: 1500, weight: 1, tier: 4 },
   gem_ruby: { id: 'gem_ruby', name: 'Ruby', category: 'gem', value: 2200, weight: 1, tier: 5 },
   gem_diamond: { id: 'gem_diamond', name: 'Diamond', category: 'gem', value: 4000, weight: 1, tier: 5 },
-});
+}));
 
 // ── Wands ───────────────────────────────────────────────────────────────────
 
@@ -389,7 +501,7 @@ wand('wand_incineration', 'Wand of Incineration', 'fire_incinerate', 10, 20, 600
 wand('wand_doom', 'Wand of Doom', 'dark_dragon_breath', 10, 20, 6500, 5);
 wand('wand_death', 'Wand of Death', 'dark_souldrinker', 8, 24, 9000, 6);
 
-export const WANDS = deepFreeze(wands);
+export const WANDS = deepFreeze(shaped(wands));
 
 // ── Scrolls: one per spell, generated so the catalogue can never drift ──────
 
@@ -413,14 +525,14 @@ for (const s of SPELL_LIST) {
     desc: s.desc,
   };
 }
-export const SCROLLS = deepFreeze(scrolls);
+export const SCROLLS = deepFreeze(shaped(scrolls));
 
 // ── Quest items ─────────────────────────────────────────────────────────────
 
 const questItem = (id, name, desc) =>
   ({ id, name, category: 'quest', value: 0, weight: 1, droppable: false, desc });
 
-export const QUEST_ITEMS = deepFreeze({
+export const QUEST_ITEMS = deepFreeze(shaped({
   qi_fletchers_letter: questItem('qi_fletchers_letter', 'The Crown Summons', 'Four lines and a seal, written by a clerk who was clearly in a hurry.'),
   qi_choir_psalter: questItem('qi_choir_psalter', 'Choir Psalter', 'Vellum, unbound, and the notation is not any notation the Concord teaches.'),
   qi_ledger_manifest: questItem('qi_ledger_manifest', 'Ledger Manifest', 'Saltmarch dock records with three cargoes on them that no ship carried.'),
@@ -449,18 +561,18 @@ export const QUEST_ITEMS = deepFreeze({
   qi_holt_antidote: questItem('qi_holt_antidote', 'Antidote of the Holt', 'Four reagents, one poisoned wood, and a very long night of brewing.'),
   qi_black_harness: questItem('qi_black_harness', 'Black Harness', 'It fits whoever puts it on. That is the first warning sign.'),
   qi_hessas_answer: questItem('qi_hessas_answer', "Hessa's Answer", 'One word, sealed in wax. Nobody who has read it will repeat it.'),
-});
+}));
 
 // ── Misc goods ──────────────────────────────────────────────────────────────
 
-export const MISC_ITEMS = deepFreeze({
+export const MISC_ITEMS = deepFreeze(shaped({
   torch: { id: 'torch', name: 'Torch', category: 'misc', value: 5, weight: 1, desc: 'Burns for an hour. Every hole in Caerwen is darker than the last.' },
   lockpicks: { id: 'lockpicks', name: 'Lockpicks', category: 'misc', value: 60, weight: 1, desc: 'Adds five to Disarm Trap attempts on locks.' },
   rope: { id: 'rope', name: 'Coil of Rope', category: 'misc', value: 30, weight: 3 },
   spellbook_blank: { id: 'spellbook_blank', name: 'Blank Spellbook', category: 'misc', value: 200, weight: 2 },
   arrows: { id: 'arrows', name: 'Quiver of Arrows', category: 'misc', value: 20, weight: 2 },
   sunder_alloy: { id: 'sunder_alloy', name: 'Sunder Alloy', category: 'misc', value: 350, weight: 2, desc: 'Bright metal off a hull that fell out of the sky. The Concord pays well and asks nothing.' },
-});
+}));
 
 // ── Enchantments ────────────────────────────────────────────────────────────
 // `effects` is a flat bag the loot system merges onto the item:
@@ -561,7 +673,7 @@ export const SUFFIXES = deepFreeze(suffixes);
 const artifact = (id, name, base, effects, downside, value, desc, fixed = true) =>
   ({ id, name, category: 'artifact', baseItem: base, unique: true, fixed, effects, downside, value, weight: 6, desc });
 
-export const ARTIFACTS = deepFreeze({
+export const ARTIFACTS = deepFreeze(shaped({
   art_oathkeep: artifact('art_oathkeep', 'Oathkeep', 'sword_bastard',
     { damage: 25, attack: 20, stats: { personality: 20 }, resists: { dark: 30 } },
     { stats: { luck: -15 } }, 60000,
@@ -650,7 +762,7 @@ export const ARTIFACTS = deepFreeze({
     { ac: 22, resists: { water: 70 }, waterBreathing: true, waterWalk: true },
     { resists: { fire: -30 } }, 37000,
     'Cindral work, sealed at every seam. The Greywater channels hold no terror in it and the eels find it disappointing.'),
-});
+}));
 
 // ── The merged catalogue ────────────────────────────────────────────────────
 

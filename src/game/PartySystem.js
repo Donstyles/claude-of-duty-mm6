@@ -16,6 +16,22 @@ function makeStartingItem(id) {
 }
 
 /**
+ * A record's footprint in backpack cells, however it spells it.
+ *
+ * `Items.js` writes both spellings on every catalogue record, but a save
+ * written before it did carries neither, and `w`/`h` is the pair the backpack
+ * screen and the shop wall consult. Reading only `gridW`/`gridH` — which is
+ * what this file used to do — meant a pike was stowed as a single square and
+ * then drawn as a five-cell column over the top of whatever came after it.
+ */
+function cells(item) {
+  return {
+    w: Math.max(1, item?.w ?? item?.gridW ?? 1),
+    h: Math.max(1, item?.h ?? item?.gridH ?? 1),
+  };
+}
+
+/**
  * Put an item in the pack in the shape the backpack screen reads.
  *
  * The 14x9 grid stores `{ item, x, y }` wrappers, not bare items — pushing the
@@ -23,14 +39,12 @@ function makeStartingItem(id) {
  * a first fit along the top row is needed here; a starting pack is two things.
  */
 function stow(inventory, item, cols = 14) {
-  const w = Math.max(1, item.gridW ?? 1);
-  const h = Math.max(1, item.gridH ?? 1);
+  const { w, h } = cells(item);
   for (let y = 0; y < 9 - h + 1; y++) {
     for (let x = 0; x < cols - w + 1; x++) {
       const clash = inventory.some((e) => {
-        const ew = Math.max(1, e.item?.gridW ?? 1);
-        const eh = Math.max(1, e.item?.gridH ?? 1);
-        return x < e.x + ew && x + w > e.x && y < e.y + eh && y + h > e.y;
+        const f = cells(e.item);
+        return x < e.x + f.w && x + w > e.x && y < e.y + f.h && y + h > e.y;
       });
       if (!clash) { inventory.push({ item, x, y }); return true; }
     }
