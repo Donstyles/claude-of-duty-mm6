@@ -31,6 +31,18 @@
  *               proves the screen and not the seam between the world and it.
  *   spells      two spells whose entire effect is a change of place did
  *               nothing at all, and a green build said nothing about it.
+ *   physics     sliding along a 60-degree cliff face added upward speed, so a
+ *               party could walk over any town wall in the game. Nothing in
+ *               the suite touched the controller, because it needs a browser —
+ *               except it does not. It needs three modules and a CSS stub.
+ *   input       `attack` and `strafeLeft` were both bound to KeyA, so every
+ *               sidestep to the left swung the party's weapon, and `Enter`
+ *               opened a door AND started turn-based combat. Two entries
+ *               claiming one code is invisible to every other gate.
+ *
+ * The last two run in seconds and were the two cheapest gates available for
+ * eight months. They sat in a scratchpad because `import './touch.css'` throws
+ * in plain Node — one loader hook, and the whole controller is testable.
  */
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -45,6 +57,12 @@ const GATES = [
     why: 'every quest, dungeon, NPC and route id resolves, and the campaign completes' },
   { name: 'scope', slow: false, cmd: 'python3', args: ['tools/scopecheck.py', '--gate'],
     why: 'no panel stylesheet can reach another screen (STYLE.md §11)' },
+  { name: 'physics', slow: false, cmd: 'node',
+    args: ['--import', './tools/null-css.register.mjs', 'tools/phystest.mjs'],
+    why: 'the player cannot leave the world, and the colliders are not empty' },
+  { name: 'input', slow: false, cmd: 'node',
+    args: ['--import', './tools/null-css.register.mjs', 'tools/inputtest.mjs'],
+    why: 'no two actions share a key, and the capture path stays unscaled' },
   { name: 'playtest', slow: true, cmd: 'node', args: ['tools/playtest.mjs'],
     why: 'every door in the town opens the screen it should' },
   { name: 'mobile', slow: true, cmd: 'node', args: ['tools/mobiletest.mjs'],
