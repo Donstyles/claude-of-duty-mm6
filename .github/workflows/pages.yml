@@ -39,11 +39,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx vite build
-      # `enablement: true` turns Pages on the first time this runs, so nobody
-      # has to find the switch in the repository settings.
+      # No `enablement: true`. It was here to spare anybody finding the switch,
+      # and the workflow token cannot reach it:
+      #
+      #   Create Pages site failed.
+      #   Error: Resource not accessible by integration
+      #
+      # Turning Pages on is an admin action and `GITHUB_TOKEN` is not an admin,
+      # so it has to be done once by hand — Settings, Pages, Source: GitHub
+      # Actions. Everything after that is automatic, and this step then finds
+      # the site instead of trying to create it.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
