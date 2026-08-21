@@ -98,7 +98,30 @@ BAYER8 = np.array([
     [15, 47, 7, 39, 13, 45, 5, 37], [63, 31, 55, 23, 61, 29, 53, 21],
 ], dtype=np.float32)
 
-PORTRAIT_TEXEL = 96          # one texel per native game pixel at the largest draw
+# One texel per native game pixel in the PARTY BAR, which is 82 — not 96, the
+# largest box any screen draws a portrait in, which is where this started.
+#
+# The difference is the whole treatment, and it is measurable. `.mm-portrait` is
+# `background-size: cover` in a 53x82 native box, so at the 1280x960 viewport
+# where `--u` is 2.000 the plate is painted into 164 device pixels. A 96-texel
+# grid doubles to a 192 plate, the browser scales that by 0.854 to fit, and a
+# fractional resample averages neighbouring texels together — which is exactly
+# the quantisation, undone on the way to the screen. Measured on the party bar
+# through the audit's window, against MM6's own portrait:
+#
+#     texel 96, plate 192   c95 4.28x   step 1.04x   hf 0.70x
+#     texel 82, plate 164   c95 1.17x   step 1.16x   hf 0.99x
+#
+# 164 is 82 doubled and 82 doubled is the box, so nothing is resampled at all
+# and every texel arrives as a solid 2x2 block. The first capture of this pass
+# shipped 96 and the screen showed a portrait that was merely SOFTER than
+# before — chunkier to look at, no closer to 1998 by any of the three numbers.
+# A plate has to divide the box it is drawn into or the browser undoes the work.
+#
+# The cost, stated: the venue sidebar draws a portrait at 92 native and the
+# guild at 74, so those two upscale and downscale a little and lose some of the
+# hard edge. The party bar is on every screen in the game and they are not.
+PORTRAIT_TEXEL = 82
 PORTRAIT_BITS = (5, 6, 5)    # MM6's own frame buffer
 PORTRAIT_AMP = 0.5
 FIGURE_BITS = (6, 7, 6)
