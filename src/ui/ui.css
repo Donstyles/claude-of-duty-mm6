@@ -77,19 +77,71 @@ html, body {
 
 /* ── boot veil ───────────────────────────────────────────────────────────── */
 
+/* The boot veil's ground.
+ *
+ * For most of this project's life the title screen — the first thing anybody
+ * sees of the game — was one line of CSS: a radial gradient from #22180f to
+ * black. `scenes/title.png` is a dusk landscape painted for this and nothing
+ * else, kept deliberately dark and uncluttered across the upper third so the
+ * title has somewhere to stand.
+ *
+ * The gradient stays underneath it and is the fallback. This is the one plate
+ * in the set that needs no existence check, because a layered `background-image`
+ * already behaves the way an existence check would: a layer that fails to load
+ * paints nothing at all and the layer beneath it shows through untouched, so a
+ * missing file leaves exactly the screen that was here before. That is not what
+ * `base.js:147` does — it *replaces* the whole `background-image` with one
+ * unconditional URL, so a missing file there is a broken background with
+ * nothing behind it.
+ *
+ * Nothing here delays the first frame: a background image blocks neither
+ * parsing nor paint, so the veil comes up on its gradient at once and the
+ * painting arrives underneath the title a moment later. */
 #boot {
   position: absolute;
   inset: 0;
   z-index: 100;
   display: grid;
-  place-items: center;
-  background:
+  /* Not centred any more, and the reason is measured.
+   *
+   * The plate was painted dark and empty across its upper third precisely so a
+   * title could stand there, and the veil's block was landing at 320–577 of 900
+   * — straight across the lit horizon and the town in the valley, which is the
+   * brightest thing in the painting. Measured over the column the text occupies,
+   * mean luminance by band: 0.019 at the top, 0.045 at 150–200, then 0.149 at
+   * 250–300 where the mountains catch the last light, and 0.10 at 300–350. The
+   * subtitle and the loading line were standing on the two worst bands in the
+   * frame.
+   *
+   * Held to the top the block runs about 40–230, which is inside the 0.02–0.05
+   * band with its 95th percentile under 0.10. The fallback gradient gets better
+   * too rather than worse: its one bright spot is at 50% 42%, so moving the text
+   * off that centre lifts every figure on the plain ground as well. */
+  justify-items: center;
+  align-items: start;
+  padding: 4vh 4vw 0;
+  background-color: #000;
+  background-image:
+    url('/art/scenes/title.png'),
     radial-gradient(ellipse at 50% 42%, #22180f 0%, #0b0805 55%, #000 100%);
+  /* Cover, because a title plate letterboxed inside its own veil would be worse
+     than no plate; the painting has margin at every edge for the crop. */
+  background-size: cover, cover;
+  background-position: center center, center center;
+  background-repeat: no-repeat, no-repeat;
   transition: opacity 0.85s ease-out;
 }
 #boot.boot-hidden { opacity: 0; pointer-events: none; }
 
-.boot-inner { text-align: center; width: min(560px, 82vw); }
+/* Wide enough for the title to stay one line.
+ *
+ * At 560px `CLAUDE OF DUTY` broke to `CLAUDE OF / DUTY`, which is a title split
+ * mid-phrase — the same fault §1 names for `Caine the / Blacksmith`, and on the
+ * one string that is the game's name. It needs about 710px at the clamp's top
+ * size; 880 has room and 84vw keeps it inside every window the game runs in. It
+ * also buys back 66 vertical pixels, which is most of what puts the block clear
+ * of the painting's lit horizon. */
+.boot-inner { text-align: center; width: min(880px, 84vw); }
 
 .boot-title {
   font-size: clamp(30px, 5.2vw, 62px);
@@ -102,12 +154,35 @@ html, body {
     0 4px 14px #000;
 }
 
+/* The two quiet lines, both lifted, and both were failing before the painting
+ * arrived rather than because of it.
+ *
+ * Measured on a real capture by the method STYLE.md §6 specifies — the mean
+ * luminance of every pixel the string disturbs against the ground underneath it
+ * — the subtitle stood at 4.10:1 and the loading line at 2.03:1 on the *plain
+ * gradient*, and 2.74:1 and 1.78:1 once the plate was behind them. Both were
+ * already under the floor on the screen this project has shipped for months; a
+ * dusk landscape made a standing fault visible rather than causing one.
+ *
+ * The lift is the fix, not a scrim. A scrim would have to be painted whether or
+ * not the plate loaded, which would darken the fallback screen and break the
+ * one property that makes a layered background safe — that a missing file
+ * changes nothing. Ink that clears on both grounds needs no ground of its own.
+ *
+ * Both also take one hard shadow, the shape §12 allows. It is not decoration:
+ * it gives a pale glyph a dark edge to sit against, so the letterform is
+ * measured as a lobe rather than averaged into its own antialiasing. */
 .boot-sub {
   margin-top: 0.5em;
   font-size: clamp(12px, 1.5vw, 17px);
   letter-spacing: 0.42em;
   text-transform: uppercase;
-  color: var(--ink-dim);
+  /* Not `--ink`, and the difference is 0.4 of a contrast point. At #e8dcc0 the
+   * letterform measured 4.49:1 against the painting — under the floor by a
+   * hundredth, which is still under the floor. This is that same warm ink lifted
+   * until it clears with room to move. */
+  color: #f6eed6;
+  text-shadow: 0 1px 0 #000;
 }
 
 .boot-bar {
@@ -128,16 +203,29 @@ html, body {
   transition: width 0.25s ease-out;
 }
 
+/* The loading line is the one string on the veil that §6 puts on the 3:1 floor
+ * rather than 4.5:1, and that is a classification rather than an excuse: it is
+ * flavour narration for the five seconds a boot takes, and the bar directly
+ * above it states the same fact in the form the player actually reads. It is
+ * redundant text in §6's own sense. It is still lifted well clear of 3:1,
+ * because "redundant" is not "illegible". */
 .boot-status {
   font-size: 13px;
   letter-spacing: 0.1em;
-  color: #8a7c60;
+  color: #dcd2b4;
   font-style: italic;
   min-height: 1.4em;
+  text-shadow: 0 1px 0 #000;
 }
 
+/* The failure path is not redundant with anything — it is the only place a
+ * player is told why the game did not start — so it is lifted furthest. Red is
+ * the darkest hue at full chroma and §6 is honest that no recognisably red ink
+ * reaches 4.5:1 on a lit ground, which is why it also keeps the shadow and why
+ * it is the only line on the veil set upright and ranged left: colour is never
+ * the only carrier of the meaning. */
 .boot-status.boot-error {
-  color: #d9564a;
+  color: #ff8878;
   font-style: normal;
   white-space: pre-wrap;
   text-align: left;

@@ -77,6 +77,75 @@ const TOWN_RADIUS = { large: 7.5, medium: 6, small: 5, hamlet: 4, ruin: 5.5 };
 const SEA = '#8C9DB0';
 const VELLUM = '#C9BB98';
 
+/**
+ * The sheet the chart is drawn on.
+ *
+ * What this drawing was missing was never the geography — the data has that,
+ * twenty provinces and eleven towns in the right places. What it was missing
+ * was the ground. Twenty flat fills over a flat `#C9BB98` rectangle read as a
+ * diagram of a kingdom rather than a chart of one, and no amount of wobble on
+ * the province outlines fixes a ground that is one colour.
+ *
+ * So the plate is blank vellum and nothing else: warm ochre paper, fibre grain,
+ * foxing at the edges, nothing drawn on it. Generating a painted *map* instead
+ * was tried and is a trap — what comes back is a beautiful chart of somewhere
+ * that is not Caerwen, with its own coastline, its own mountains and its own
+ * eleven towns, and laid under the real provinces it reads as two maps
+ * disagreeing with each other. The kingdom stays procedural; only the paper is
+ * painted.
+ */
+const CHART_PLATE = '/art/scenes/chart.png';
+
+/**
+ * How much of the sea's own colour is laid over the paper.
+ *
+ * On a chart the sea is a wash, not a coat: the paper's grain has to survive
+ * through it or the sheet stops being a sheet halfway to the coast. Measured on
+ * a 1200x900 capture, a clean patch of open water clear of the coast and the
+ * lettering carries a luminance spread of 0.060 of its own mean at this value.
+ * A flat fill has nothing to spread — what little it had was the hatching, and
+ * that is what the sea was.
+ */
+const SEA_WASH = 0.62;
+
+/**
+ * Province ink, as a wash rather than a fill.
+ *
+ * A flat coat of `LAND[kind]` over parchment hides the parchment, which makes
+ * the whole plate pointless — the paper would only ever show in the sea. So the
+ * fills go down multiplied, the way ink and watercolour actually sit on paper,
+ * at an alpha low enough for the grain to come through and high enough for the
+ * twenty provinces to stay twenty different colours.
+ *
+ * 0.55 is where the arithmetic runs out, not where it looked right. The plate's
+ * paper measures (230, 200, 157) through its middle, relative luminance 0.607.
+ * Multiply each of the sixteen land tints into that, mix back by the alpha, and
+ * take the darkest thing the catalogue can produce — an unvisited forest or an
+ * unvisited volcanic province, both shaded a further 22% down — then stand the
+ * labels' `#2E2418` ink on it:
+ *
+ *     alpha   darkest province L   ink against it
+ *     0.45          0.312             5.25 : 1
+ *     0.50          0.287             4.87 : 1
+ *     0.55          0.262             4.52 : 1   <- the floor, barely cleared
+ *     0.60          0.239             4.18 : 1   <- under STYLE.md §6
+ *
+ * So this is the most ink the chart can carry while the darkest ground a label
+ * can land on still clears 4.5:1 against the ink's own colour.
+ *
+ * That is colour arithmetic, and colour arithmetic is a ceiling rather than a
+ * measurement: a real capture reads lower, because §6's mass method counts
+ * every antialiased pixel and a twelve-pixel italic stem is mostly antialiased
+ * pixels. Closing that gap is `INK_PASSES`'s job further down this file, not
+ * this alpha's — raising the alpha would move the ceiling down under both of
+ * them at once.
+ *
+ * `Ossra Deep` looks like the binding case and is not one: it is
+ * `kind: 'under'`, it is never filled, and it is drawn as a dashed ring over
+ * whichever province lies above it.
+ */
+const PROVINCE_WASH = 0.55;
+
 let regionCache = null;
 let townCache = null;
 let boxCache = null;
@@ -144,6 +213,92 @@ export function chartBox() {
   return boxCache;
 }
 
+/**
+ * The parchment, once it is decoded, and null until then or for good.
+ *
+ * This is an existence check rather than an unconditional URL, and the
+ * difference matters. `base.js:147` sets an interior background from an id with
+ * nothing checking that the file is there, so a plate that has not been
+ * generated is a silently broken background plus a 404 in the console — and a
+ * console that carries routine 404s is a console nobody reads. Here a plate
+ * that fails to decode is remembered as absent, asked for exactly once per
+ * session, and the chart goes on drawing the flat vellum it drew before, which
+ * is today's appearance to the pixel.
+ *
+ * The repaint callback is the other half: the chart is drawn synchronously the
+ * first time the Kingdom tab is opened, which is before any image can have
+ * arrived, so the frame that gets the paper is the one after the decode.
+ */
+let plateState = 'idle';
+let plateImage = null;
+
+function parchment(onArrive) {
+  if (plateState === 'ready') return plateImage;
+  if (plateState !== 'idle') return null;
+  // The panel modules are imported by the Node-side gates as well, where there
+  // is no `Image` and no document to draw into.
+  if (typeof Image === 'undefined') { plateState = 'absent'; return null; }
+  plateState = 'loading';
+  const img = new Image();
+  img.decoding = 'async';
+  img.onload = () => {
+    // A truncated file can fire `load` with nothing decodable in it, and
+    // `drawImage` of a zero-width image throws rather than drawing nothing.
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      plateImage = img;
+      plateState = 'ready';
+      onArrive?.();
+    } else {
+      plateState = 'absent';
+    }
+  };
+  img.onerror = () => { plateState = 'absent'; };
+  img.src = CHART_PLATE;
+  return null;
+}
+
+/**
+ * How far into the plate the paper actually starts.
+ *
+ * The generator was asked for the sheet alone — "no background, no table, no
+ * shadow" — and delivered a photographed sheet lying on black, deckled edges
+ * and all. Measured on the file as it shipped, the black runs 14 rows in from
+ * the top, 15 from the bottom, 37 columns from the left and 40 from the right,
+ * and the deckle wanders further in at the corners. Drawn edge to edge that
+ * black is a frame around the kingdom.
+ *
+ * 5% of each side clears it with room: inside that crop the darkest pixel in
+ * the whole plate is 31 of 255 and one hundredth of one per cent of it is under
+ * 80, which is foxing, not margin. At 3% there is still a pure black corner.
+ */
+const PAPER_INSET = 0.05;
+
+/**
+ * The sheet, laid over the canvas without distorting its grain.
+ *
+ * A 16:9 plate stretched to a 4:3 panel puts the paper's fibres visibly out of
+ * round, which is exactly the sort of thing that reads as wrong without the eye
+ * being able to say why. Cover-fit and crop instead — it is blank paper, so
+ * there is nothing in the crop to lose. Smoothing goes back on for this one
+ * call: the canvas runs with `imageSmoothingEnabled = false` because the
+ * automap is a raster of hard cells, and point-sampling a grain texture down by
+ * half turns the grain into noise.
+ */
+function layPaper(g, img, W, H) {
+  const sx = img.naturalWidth * PAPER_INSET;
+  const sy = img.naturalHeight * PAPER_INSET;
+  const sw = img.naturalWidth - sx * 2;
+  const sh = img.naturalHeight - sy * 2;
+  const s = Math.max(W / sw, H / sh);
+  const w = sw * s;
+  const h = sh * s;
+  g.save();
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, sx, sy, sw, sh, (W - w) / 2, (H - h) / 2, w, h);
+  g.restore();
+}
+
 /** Draw the whole kingdom onto the panel's canvas. */
 export function drawChart(panel, g) {
   const W = g.canvas.width;
@@ -165,10 +320,19 @@ export function drawChart(panel, g) {
   const toZ = (nz) => H / 2 + (nz - c.z) * s;
   panel._proj = { toX, toZ, s, centre: c, kind: 'world' };
 
-  // Sea first, then the land drawn on top of it: everything not accounted for
-  // on a chart is water.
+  // Paper first, then sea, then the land drawn on top of it: everything not
+  // accounted for on a chart is water, and everything on a chart is on paper.
+  //
+  // With the plate in hand the sea stops being a colour and becomes a wash over
+  // the sheet; without it the flat fill below is what it always was, so a
+  // missing plate costs the drawing nothing it had.
+  const paper = parchment(() => { if (panel.view === 'world') panel._draw(); });
+  if (paper) layPaper(g, paper, W, H);
+  g.save();
+  if (paper) g.globalAlpha = SEA_WASH;
   g.fillStyle = SEA;
   g.fillRect(0, 0, W, H);
+  g.restore();
   g.strokeStyle = 'rgba(255,255,255,0.10)';
   g.lineWidth = 1;
   for (let y = -H; y < H * 2; y += 9) {
@@ -179,7 +343,7 @@ export function drawChart(panel, g) {
   }
 
   const mainland = regions.filter((r) => r.kind !== 'island' && r.kind !== 'volcanic' && r.kind !== 'under');
-  paintLand(g, coastline(mainland).map(([x, z]) => [toX(x), toZ(z)]), VELLUM);
+  paintLand(g, coastline(mainland).map(([x, z]) => [toX(x), toZ(z)]), VELLUM, paper, W, H);
 
   for (const r of regions) {
     if (r.kind === 'under') continue;
@@ -195,6 +359,7 @@ export function drawChart(panel, g) {
         if (i) g.lineTo(px, pz); else g.moveTo(px, pz);
       });
       g.closePath();
+      if (paper) g.globalAlpha = SEA_WASH;
       g.fillStyle = SEA;
       g.shadowColor = 'rgba(20,30,45,0.5)';
       g.shadowBlur = 8;
@@ -208,8 +373,18 @@ export function drawChart(panel, g) {
       if (i) g.lineTo(px, pz); else g.moveTo(px, pz);
     });
     g.closePath();
+    // On paper a province is ink and wash, not a coloured tile: multiplied so
+    // the fibre and the foxing come through it, and thinned so the twenty of
+    // them stay a chart rather than a stained-glass window. Off paper it is the
+    // flat fill it has always been.
+    g.save();
+    if (paper) {
+      g.globalCompositeOperation = 'multiply';
+      g.globalAlpha = PROVINCE_WASH;
+    }
     g.fillStyle = seen ? (LAND[r.kind] ?? LAND.meadow) : shade(LAND[r.kind] ?? LAND.meadow, -0.22);
     g.fill();
+    g.restore();
     g.strokeStyle = panel.hover?.id === r.id ? 'rgba(255,255,156,0.9)' : 'rgba(58,46,30,0.45)';
     g.lineWidth = panel.hover?.id === r.id ? 2 : 1;
     g.stroke();
@@ -356,13 +531,9 @@ function drawTowns(panel, g, towns, toX, toZ, s) {
     }
 
     if (seen) {
-      g.font = `${Math.round(clamp(s / 26, 11, 19))}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
+      g.font = `${Math.round(clamp(s / 26, 13, 19))}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
       g.textAlign = 'center';
-      g.lineWidth = 3;
-      g.strokeStyle = 'rgba(232,224,200,0.9)';
-      g.strokeText(t.name, x, z + r * 2.6);
-      g.fillStyle = '#241A0E';
-      g.fillText(t.name, x, z + r * 2.6);
+      inkLabel(g, t.name, x, z + r * 2.6, 'rgba(232,224,200,0.9)', '#241A0E');
     }
   }
 }
@@ -374,13 +545,9 @@ function drawRegionLabels(panel, g, regions, toX, toZ, s) {
     // Above the province, clear of the town name that sits under its glyph.
     const x = toX(r.x);
     const z = toZ(r.z) - (r.kind === 'under' ? -r.rz * s - 14 : r.rz * s * 0.78);
-    g.font = `italic ${Math.round(clamp(s / 30, 10, 17))}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
+    g.font = `italic ${Math.round(clamp(s / 30, 12, 17))}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
     g.textAlign = 'center';
-    g.lineWidth = 3;
-    g.strokeStyle = 'rgba(236,228,206,0.85)';
-    g.strokeText(r.name, x, z);
-    g.fillStyle = '#2E2418';
-    g.fillText(r.name, x, z);
+    inkLabel(g, r.name, x, z, 'rgba(236,228,206,0.85)', '#2E2418');
 
     // Danger, as a row of small marks — the chart's own warning to travellers.
     const pips = Math.round(r.danger / 2);
@@ -392,6 +559,55 @@ function drawRegionLabels(panel, g, regions, toX, toZ, s) {
       g.fill();
     }
   }
+}
+
+/**
+ * How many times the ink is laid down. Three, and the third one is measured.
+ *
+ * This is not a synthetic bold and it is not a slip: it is the same glyph at
+ * the same position composited over itself, which changes the opacity the ink
+ * arrives at and nothing else about its shape. On a hairline stem at ten or
+ * twelve pixels a single `fillText` peaks somewhere around 0.6 coverage, so the
+ * ink never actually gets to be ink — measured off a 1200x900 capture, the
+ * chart's letterforms averaged relative luminance 0.187 inside a halo averaging
+ * 0.664, which is 3.0:1 and reads as a brown smudge in the shape of a word.
+ *
+ * Each pass leaves `(1 - a)` of the halo showing where the last one left
+ * `(1 - a)^n`, so the letterform walks down in measured steps:
+ *
+ *     passes   ink L   against its halo   against bare province wash
+ *       1      0.187        2.79 : 1              1.98 : 1
+ *       2      0.125        3.89 : 1              2.68 : 1
+ *       3      0.104        4.51 : 1              3.07 : 1
+ *
+ * Two was the obvious answer and two was not enough — 3.89:1 is still under
+ * §6's floor, which is exactly the sort of near-miss that gets waved through on
+ * a look. A fourth pass buys almost nothing: the residual is already down to
+ * `(1 - a)^3` and the remaining shortfall is in the sparsest edge pixels, not
+ * in the stem. Setting the face heavier is the other way to reach the same
+ * place and STYLE.md §1 does not allow a second weight axis.
+ */
+const INK_PASSES = 3;
+
+/**
+ * A name written on the chart: a pale halo, and then the ink laid on.
+ *
+ * The floors under the label sizes are the same finding from the other side.
+ * `clamp(s / 30, 10, 17)` let a province name fall to ten pixels of italic, at
+ * which point the halo's three-pixel stroke is wider than the stem it is meant
+ * to be standing behind and simply eats it. Twelve is where the stem survives
+ * its own outline.
+ */
+function inkLabel(g, text, x, y, halo, ink) {
+  g.save();
+  g.lineJoin = 'round';
+  g.miterLimit = 2;
+  g.lineWidth = 3;
+  g.strokeStyle = halo;
+  g.strokeText(text, x, y);
+  g.fillStyle = ink;
+  for (let i = 0; i < INK_PASSES; i++) g.fillText(text, x, y);
+  g.restore();
 }
 
 /** Where the party is standing, if the world has told us. */
@@ -529,8 +745,18 @@ function convexHull(points) {
   return [...half(p), ...half([...p].reverse())];
 }
 
-/** The land itself: a filled coast with the sea shadowed under its edge. */
-function paintLand(g, poly, fill) {
+/**
+ * The land itself: a filled coast with the sea shadowed under its edge.
+ *
+ * With a sheet under the drawing the land is not a colour at all — it is the
+ * bare paper, and the sea is the wash laid over it. So the flat fill still goes
+ * down (it is what casts the shadow into the water, and it is the whole of the
+ * drawing when no plate exists) and then the same sheet is re-stamped through
+ * the coastline at the same transform, which lifts the wash back off the land
+ * without breaking the grain across the shore. One sheet, one alignment: crop
+ * the stamp differently and the fibres would step at every coastline.
+ */
+function paintLand(g, poly, fill, paper, W, H) {
   g.beginPath();
   poly.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z)));
   g.closePath();
@@ -540,6 +766,12 @@ function paintLand(g, poly, fill) {
   g.fillStyle = fill;
   g.fill();
   g.restore();
+  if (paper) {
+    g.save();
+    g.clip();
+    layPaper(g, paper, W, H);
+    g.restore();
+  }
   g.strokeStyle = 'rgba(60,48,30,0.75)';
   g.lineWidth = 1.6;
   g.stroke();

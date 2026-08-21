@@ -34,7 +34,7 @@ import { el, setChildren, tooltip, tipMarkup, titleCase } from '../widgets.js';
 import { icon } from '../Icons.js';
 import { bookPlate, slotSetting, illumFrame, tabVellum, bonePlate } from '../art/spellbookPaper.js';
 import { MAGIC_SCHOOLS, MASTERY, MASTERY_LABEL, SKILLS, masteryRank } from '../../game/data/Skills.js';
-import { spellsForSchool, canCast, evaluateSpell } from '../../game/data/Spells.js';
+import { spellsForSchool, canCast, evaluateSpell, getSpell } from '../../game/data/Spells.js';
 
 /**
  * The ink a tab's glyph is painted in once its school is the open one.
@@ -206,16 +206,29 @@ export class SpellbookPanel extends Panel {
     this.spellId = null;
     /** Last cell clicked, for spotting a double-click across a page rebuild. */
     this._lastClick = null;
+    /**
+     * The unanswered question, while there is one: `{ spellId, index }`, where
+     * `index` is the party slot the keyboard is resting on. Null the rest of
+     * the time, and cleared when the book shuts — a book reopened on a question
+     * nobody remembers being asked is worse than no question.
+     */
+    this.pick = null;
   }
 
   build(body) {
     this.grid = el('div', { className: 'mm-sb-grid' });
+    // The question shares the grid's box rather than floating over it. A slip
+    // of vellum laid on the page would need a second painted material and a
+    // shadow of its own, and this book is one object under one light; a leaf
+    // that turns to a short list is what a book actually does.
+    this.chooseEl = el('div', { className: 'mm-sb-choose' });
     this.colophonName = el('span', {});
     this.colophonSchool = el('span', { className: 'mm-sb-rank' });
     this.colophonSP = el('span', { className: 'mm-sb-sp' });
 
     const page = el('div', { className: 'mm-sb-page' },
       this.grid,
+      this.chooseEl,
       el('div', { className: 'mm-sb-colophon' },
         this.colophonName, this.colophonSchool, this.colophonSP));
 
@@ -235,7 +248,14 @@ export class SpellbookPanel extends Panel {
 
     this.castBtn = this._plate('cast', 'Cast', 'Cast the readied spell', () => this.castSelected());
     this.quickBtn = this._plate('quick', 'Ready', 'Set as the quick spell', () => this.readySelected());
-    const exit = this._plate('exit', 'Close', 'Close the book', () => this.ui.closePanel());
+    // One plate, two jobs, and it says which one it is doing. A phone has no
+    // Escape key, so a question with no way out of it on a coarse pointer is a
+    // trap; growing a fourth control for that would put two ways to leave the
+    // screen side by side, which is worse than re-cutting the one that is
+    // already there.
+    this.exitBtn = this._plate('exit', 'Close', 'Close the book',
+      () => (this.pick ? this.cancelTarget() : this.ui.closePanel()));
+    const exit = this.exitBtn;
 
     // The whole book — cover cloth, block, leaf, gutter, plait, clasps — is one
     // painted plate behind everything, so every shadow on the screen belongs to
@@ -261,9 +281,11 @@ export class SpellbookPanel extends Panel {
   }
 
   _plate(kind, caption, label, onClick) {
+    const cap = el('span', { className: 'mm-sb-btn-cap', text: caption });
     const button = el('button', { className: 'mm-sb-btn', type: 'button', 'aria-label': label },
       el('span', { className: 'mm-sb-btn-glyph', html: plateGlyph(kind) }),
-      el('span', { className: 'mm-sb-btn-cap', text: caption }));
+      cap);
+    button.capEl = cap;
     button.addEventListener('click', onClick);
     tooltip.attach(button, () => tipMarkup({ title: label }));
     return button;
@@ -272,6 +294,10 @@ export class SpellbookPanel extends Panel {
   onOpen(opts = {}) {
     if (SCHOOL_IDS.has(opts.school)) this.school = opts.school;
     if (opts.spellId) this.spellId = opts.spellId;
+  }
+
+  onClose() {
+    this.pick = null;
   }
 
   // ── state ────────────────────────────────────────────────────────────────
@@ -349,8 +375,187 @@ export class SpellbookPanel extends Panel {
     this.castBtn.classList.toggle('is-off', !this._castable(selected, state, known).ok);
     this.quickBtn.classList.toggle('is-off', !selected);
 
+    this._renderChoice();
+
     // Every prompt in MM6 goes through the one message strip, this one included.
+    if (this.pick) return;
     this.ui.log(selected ? `Select ${selected.name}` : 'Select a spell', 'info');
+  }
+
+  /* ── on whom? ─────────────────────────────────────────────────────────────
+   *
+   * Twelve spells in the book are `single-ally` — the eight cures, First Aid,
+   * Sacrifice, Fate and Stone Fists — and there was no way to answer the
+   * question they ask, nor anywhere for the answer to arrive. Every
+   * cast went through `UISystem.castSpell`, which passes `targetRef = null`
+   * unconditionally, and `SpellSystem` then resolved that to `party.active`.
+   * So Cure Poison could only ever be cast on whoever was highlighted in the
+   * party bar, Raise Dead could not reach a dead character at all unless the
+   * corpse was somehow the active member, and the parity audit read all eight
+   * as inert because its afflicted character was not the highlighted one.
+   *
+   * MM6 answers this by turning the cursor into a target and making the party
+   * bar the list. The party bar belongs to `HUD.js` and its cells cannot be
+   * styled from a panel stylesheet (STYLE.md §11), so the list is drawn on the
+   * page instead — which is the one surface this screen owns, and is where the
+   * question was asked from in the first place.
+   *
+   * Both pointers, and neither of them a hover state: a row is a real
+   * `<button>` carrying a portrait, a name and the thing that is wrong with
+   * that person, one tap or one click is the whole gesture, and on a coarse
+   * pointer the row grows to the 44px the character sheet's skill rows take.
+   */
+
+  /** Whether this spell has to be asked "on whom?" before it can be thrown. */
+  _needsAlly(spell) {
+    const spells = this.ui.ctx?.get?.('spells');
+    // The engine owns the rule; the fallback is for the sample party the
+    // screen draws for a photograph, where there is no engine to ask.
+    return spells?.needsAllyTarget?.(spell) ?? (spell?.target === 'single-ally');
+  }
+
+  /**
+   * Who the question opens on.
+   *
+   * A cure opens on the first person actually carrying something it lifts and
+   * a heal on whoever is furthest from full, so the keyboard path is one
+   * keypress in the common case. It is a suggestion and never a decision —
+   * every row stays live, because "cast Raise Dead on the man who is not dead"
+   * is a mistake the player is allowed to make.
+   */
+  _suggest(spell, members) {
+    const cures = new Set(spell?.cures ?? []);
+    if (cures.size) {
+      const hit = members.find((m) => (m.conditions ?? [])
+        .some((c) => cures.has(c.id) || cures.has('all')));
+      if (hit) return hit.index;
+    }
+    if (spell?.heal) {
+      const hurt = members.filter((m) => m.hp < m.hpMax)
+        .sort((a, b) => (a.hp / a.hpMax) - (b.hp / b.hpMax))[0];
+      if (hurt) return hurt.index;
+    }
+    return this.ui.activeIndex ?? 0;
+  }
+
+  armTarget(spell) {
+    const members = this.ui.members?.() ?? [];
+    if (!members.length) { this.castThrough(spell, null); return; }
+    this.pick = { spellId: spell.id, index: this._suggest(spell, members) };
+    this.ui.log(`Cast ${spell.name} upon whom?`, 'info');
+    this.refresh();
+    // Focus follows the question so the arrow keys and Enter reach the list
+    // without a click first, and so a screen reader is told what changed.
+    const row = this.chooseEl.querySelector('.mm-sb-who.is-on');
+    if (row) requestAnimationFrame(() => row.focus?.({ preventScroll: true }));
+  }
+
+  cancelTarget() {
+    if (!this.pick) return;
+    this.pick = null;
+    this.ui.log('Nobody, then.', 'info');
+    this.refresh();
+  }
+
+  /** Move the resting row without committing to it — the keyboard's path. */
+  _step(delta) {
+    const members = this.ui.members?.() ?? [];
+    if (!this.pick || !members.length) return;
+    const at = members.findIndex((m) => m.index === this.pick.index);
+    const next = members[(((at < 0 ? 0 : at) + delta) % members.length + members.length) % members.length];
+    this.pick.index = next.index;
+    this.refresh();
+    this.chooseEl.querySelector('.mm-sb-who.is-on')?.focus?.({ preventScroll: true });
+  }
+
+  /** A row was clicked, tapped or confirmed: that is the answer, and it casts. */
+  choose(index) {
+    const spell = getSpell(this.pick?.spellId);
+    // Cleared before the cast, not after. Casting syncs the party, which
+    // refreshes this page, and a page that redrew the question mid-cast would
+    // put the list back up over the book the player is about to leave.
+    this.pick = null;
+    if (!spell) { this.refresh(); return; }
+    this.castThrough(spell, index);
+  }
+
+  /**
+   * Cast, carrying the answer.
+   *
+   * `UISystem.castSpell` cannot be used for this: its whole signature is
+   * `(index, spellId)` and it hard-codes the fourth argument of
+   * `SpellSystem.cast` to null, which is the reason the question could not be
+   * answered before. It is not this screen's file to change, so the target
+   * goes to the spell system directly and everything else `castSpell` does —
+   * honour the return value, say so plainly on a refusal, spend nothing on
+   * one, shut the book on a success — is done here in the same order. With no
+   * engine present (the sample party, for a photograph) it falls back to the
+   * interface's own path, which behaves exactly as it always did.
+   */
+  castThrough(spell, targetIndex) {
+    const vm = this.ui.active();
+    if (!vm) return false;
+    const ctx = this.ui.ctx;
+    const spells = ctx?.get?.('spells');
+    if (!spells?.cast || targetIndex === null) return this.ui.castSpell(vm.index, spell.id);
+    let ok = false;
+    try {
+      ok = spells.cast(ctx, vm.index, spell.id, targetIndex);
+    } catch (err) {
+      console.error('[ui] spellbook: cast failed:', err);
+      ok = false;
+    }
+    if (!ok) {
+      this.ui.toast(`${vm.name} cannot cast that.`, 'warn');
+      this.refresh();
+      return false;
+    }
+    this.ui.closePanel();
+    return true;
+  }
+
+  /** Draw the question, or put it away and give the page back to the grid. */
+  _renderChoice() {
+    const on = !!this.pick;
+    this.grid.classList.toggle('is-hidden', on);
+    this.chooseEl.classList.toggle('is-open', on);
+    if (this.exitBtn?.capEl) this.exitBtn.capEl.textContent = on ? 'Cancel' : 'Close';
+    if (!on) { setChildren(this.chooseEl); return; }
+
+    const spell = getSpell(this.pick.spellId);
+    const members = this.ui.members?.() ?? [];
+    const rows = members.map((m) => {
+      const chosen = m.index === this.pick.index;
+      const face = safe(() => this.ui.textures?.portrait?.(m.portraitSpec ?? { classId: m.classId }), null);
+      // The worst thing wrong with this one, by `rules.js`'s own severity
+      // ladder — Cursed is 1 and Eradicated is the top of it. A character
+      // carrying four afflictions has to be described by the one that decides
+      // whether you cast on them, and the order they happen to sit in on the
+      // record is the order they were caught in, which is nobody's ranking.
+      const worst = [...(m.conditions ?? [])]
+        .sort((a, b) => (b.severity ?? 0) - (a.severity ?? 0))[0]?.name;
+      const row = el('button', {
+        className: `mm-sb-who${chosen ? ' is-on' : ''}`,
+        type: 'button',
+        dataset: { member: String(m.index) },
+        'aria-pressed': chosen ? 'true' : 'false',
+      },
+      el('span', {
+        className: 'mm-sb-who-face',
+        style: { backgroundImage: face ? `url("${face}")` : 'none' },
+      }),
+      el('span', { className: 'mm-sb-who-name', text: m.name }),
+      el('span', {
+        className: `mm-sb-who-state${worst ? ' is-ill' : ''}`,
+        text: worst ? `${worst} · ${Math.round(m.hp)}/${Math.round(m.hpMax)}` : `${Math.round(m.hp)}/${Math.round(m.hpMax)}`,
+      }));
+      row.addEventListener('click', () => this.choose(m.index));
+      return row;
+    });
+
+    setChildren(this.chooseEl,
+      el('div', { className: 'mm-sb-who-head', text: `${spell?.name ?? 'The spell'} — upon whom?` }),
+      ...rows);
   }
 
   /**
@@ -442,7 +647,7 @@ export class SpellbookPanel extends Panel {
       const again = this._lastClick?.id === spell.id && now - this._lastClick.at < 420;
       this._lastClick = { id: spell.id, at: now };
       this.select(spell, learned, check);
-      if (again && learned && check.ok) { this.ui.castSpell(vm.index, spell.id); return; }
+      if (again && learned && check.ok) { this._throw(spell); return; }
       // The plaque, for the pointer that cannot hover one out of the page.
       if (coarsePointer()) tooltip.show(this._spellTip(spell, vm, state, learned, check));
     });
@@ -597,6 +802,10 @@ export class SpellbookPanel extends Panel {
   }
 
   castSelected() {
+    // While the question is open the Cast plate answers it with whichever row
+    // the keyboard is resting on, which is what makes the plate reachable to a
+    // player who never touched the list.
+    if (this.pick) { this.choose(this.pick.index); return; }
     const vm = this.ui.active();
     if (!vm) return;
     const spell = spellsForSchool(this.school).find((s) => s.id === this.spellId);
@@ -607,11 +816,31 @@ export class SpellbookPanel extends Panel {
       this.ui.log(`${vm.name}: ${check.reason}.`, 'warn');
       return;
     }
-    this.ui.castSpell(vm.index, spell.id);
+    this._throw(spell);
+  }
+
+  /** Every way of casting from this page funnels through here, so the question
+   *  is asked once and cannot be walked round by the double-click or the key. */
+  _throw(spell) {
+    if (this._needsAlly(spell)) { this.armTarget(spell); return; }
+    this.castThrough(spell, null);
   }
 
   /** Escape is the base class's. The book turns on the numbers and the arrows. */
   onKey(e) {
+    // A question in front of the page takes the keys the page would otherwise
+    // use, or the digit that means "the second of the party" would turn to the
+    // second school and leave the question standing over a different book.
+    if (this.pick) {
+      if (e.key === 'Escape') { this.cancelTarget(); return true; }
+      if (e.key >= '1' && e.key <= '4') { this.choose(Number(e.key) - 1); return true; }
+      if (e.key === 'Enter' || e.key === ' ') { this.choose(this.pick.index); return true; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { this._step(1); return true; }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { this._step(-1); return true; }
+      // Tab still cycles the focus ring the base class manages; the rest of the
+      // numbers are swallowed rather than turning pages behind the question.
+      return e.key >= '5' && e.key <= '9';
+    }
     if (e.key >= '1' && e.key <= '9') {
       this.openSchool(MAGIC_SCHOOLS[Number(e.key) - 1].id);
       return true;

@@ -282,10 +282,34 @@ export class RestPanel extends Panel {
 
   // ── drawing ───────────────────────────────────────────────────────────────
 
+  /**
+   * Which painted landscape the camp band is showing.
+   *
+   * There are four plates, one per season, and the season is not a new idea
+   * invented for them — `_clock()` has read it off the Caerwen calendar since
+   * this screen was written, because the calendar block already prints it. So
+   * the picture and the word `Season` in the clock rows can never disagree, and
+   * nothing here has to roll for anything. (`Math.random()` is banned across the
+   * tree, and a camp that showed a different valley every time the screen was
+   * opened would be worse than one landscape anyway.)
+   *
+   * The URL is set as a custom property rather than as a background, so
+   * `rest.css` decides how it is laid over the procedural plate underneath and
+   * this file only says which one. Written only when it changes: `_update` runs
+   * twice a second while the screen is up.
+   */
+  _setSeasonPlate(season) {
+    const key = SEASON_PLATE[season];
+    if (!key || key === this._plateSeason) return;
+    this._plateSeason = key;
+    this.el?.style.setProperty('--mm-camp-plate', `url("/art/scenes/camp_${key}.png")`);
+  }
+
   _update() {
     if (!this.left) return;
     const camp = this._camp(8);
     const clock = this._clock();
+    this._setSeasonPlate(clock.season);
 
     setChildren(this.left,
       this._restButton(camp),
@@ -418,6 +442,14 @@ export class RestPanel extends Panel {
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 const SEASON_TONE = { Spring: 'mm-t-up', Summer: 'mm-t-gold', Autumn: 'mm-t-golddeep', Winter: 'mm-t-azure' };
+
+/**
+ * The calendar's season, to the plate painted for it. A table rather than a
+ * `toLowerCase()` so that a month added to MONTHS with a season nobody painted
+ * leaves the band on its procedural landscape instead of asking for a file that
+ * does not exist.
+ */
+const SEASON_PLATE = { Spring: 'spring', Summer: 'summer', Autumn: 'autumn', Winter: 'winter' };
 
 /** Difficulty multiplies exposure, which is the one thing a camp can feel. */
 const DIFFICULTY_RISK = { gentle: 0.6, even: 1, hard: 1.45, merciless: 2 };

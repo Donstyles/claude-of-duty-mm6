@@ -214,6 +214,143 @@
     rgba(226, 186, 96, 0.5) 0%, rgba(222, 182, 92, 0.19) 56%, rgba(220, 180, 90, 0) 78%);
 }
 
+/* ── "upon whom?" ─────────────────────────────────────────────────────────── */
+
+/* Twelve spells in the book are cast on one member of the party and there was
+   no way to say which, so they all landed on whoever happened to be highlighted
+   in the party bar. MM6 asks by turning the cursor into a target and making the
+   party bar the list; the party bar is `HUD.js` and no panel stylesheet may
+   reach it (STYLE.md §11), so the list is drawn on the leaf instead — which is
+   the surface this screen owns and the surface the question was asked from.
+
+   It takes the grid's exact box and the grid steps aside for it. No slip, no
+   overlay, no tint: a leaf that turns to a short list needs no new material,
+   and every material this book has is one painted plate behind everything. */
+.mm-panel[data-panel='spellbook'] .mm-sb-grid.is-hidden { visibility: hidden; }
+
+.mm-panel[data-panel='spellbook'] .mm-sb-choose {
+  display: none;
+  position: absolute;
+  left: calc(var(--u) * 32);
+  right: calc(var(--u) * 4);
+  top: calc(var(--u) * 18);
+  height: calc(var(--u) * 268);
+  flex-direction: column;
+  align-items: stretch;
+}
+.mm-panel[data-panel='spellbook'] .mm-sb-choose.is-open { display: flex; }
+
+/* The heading names the spell, because the grid it replaced was the only thing
+   on the page saying which spell this is about. Head step, 14u/17u. */
+.mm-panel[data-panel='spellbook'] .mm-sb-who-head {
+  font-size: calc(var(--u) * 14);
+  line-height: calc(var(--u) * 17);
+  letter-spacing: 0;
+  font-style: italic;
+  color: #4a3208;
+  text-shadow: none;
+  padding: calc(var(--u) * 4) calc(var(--u) * 6) calc(var(--u) * 6);
+}
+
+/* A row is the target, not the name in it: the whole 30u band answers to a
+   click, and the portrait is inside the band rather than beside it.
+
+   The arithmetic, at `--u` 0.8958 on a 932x430 phone. Four rows and a heading
+   have 268u of leaf to sit in. At 30u a row is 26.9px, which is under the 44px
+   a thumb needs; at 49u it is 43.9px and the block comes to 17 + 4x49 = 213u,
+   which still clears 268u with 55u to spare. So unlike the skill rows this
+   inherits its precedent from (`character.css`), nothing has to scroll and
+   nothing has to be traded — the coarse-pointer rule below is free. */
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-who {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 7);
+  height: calc(var(--u) * 30);
+  padding: 0 calc(var(--u) * 6);
+  text-align: left;
+  /* The targeting cursor MM6 puts on the screen while it is waiting for an
+     answer. A coarse pointer never sees it, which is why the row also says
+     what is wrong with the person in words. */
+  cursor: crosshair;
+  /* The browser's focus ring is a hard black rectangle, and a hard black
+     rectangle on cream paper is the exact tell two blind reviewers used to
+     call this interface a web card. It is dropped for the same reason
+     `ui.panels.css` drops it on `.mm-cell`, the party bar's own focusable
+     portrait — and it is safe to drop only because focus and the resting row
+     are the same thing here: arrow keys move the mark, the mark moves the
+     focus, and the mark is legible as red-brown ink and a catch of light. */
+  outline: none;
+}
+
+/* Ink and position carry the state on this page — never a highlight, never a
+   fill. The resting row is the one whose name has gone red-brown, exactly as a
+   selected spell's does, with the same catch of light under it the miniatures
+   get. */
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-who.is-on .mm-sb-who-name { color: #6b1008; }
+/* `::before` rather than `::after`, and the reason is paint order: a positioned
+   pseudo-element painted last would lie over the portrait and put a gold veil
+   across a face. As the first child it goes under everything the row carries,
+   which is where light on paper belongs. */
+.mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-who.is-on::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--u) * 1) calc(var(--u) * 2);
+  background: radial-gradient(closest-side,
+    rgba(226, 186, 96, 0.42) 0%, rgba(222, 182, 92, 0.16) 58%, rgba(220, 180, 90, 0) 80%);
+}
+
+/* The same oval cut the party bar puts a face in, at the size the page can
+   carry. The bitmap is rectangular and masked, so hair is cut by the oval here
+   exactly as it is down there. */
+.mm-panel[data-panel='spellbook'] .mm-sb-who-face {
+  position: relative;
+  flex: none;
+  width: calc(var(--u) * 22);
+  height: calc(var(--u) * 24);
+  background: center 22% / cover no-repeat;
+  clip-path: ellipse(50% 50% at 50% 50%);
+  filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 1.5) calc(var(--u) * 1.6) rgba(64, 46, 24, 0.4));
+}
+
+/* A person's name is upright; what is wrong with them is read rather than
+   named, so it is italic (STYLE.md §1). Body step, 12u/15u. */
+.mm-panel[data-panel='spellbook'] .mm-sb-who-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 15);
+  letter-spacing: 0;
+  font-style: normal;
+  color: #2b1f12;
+  text-shadow: none;
+}
+.mm-panel[data-panel='spellbook'] .mm-sb-who-state {
+  flex: none;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 15);
+  letter-spacing: 0;
+  font-style: italic;
+  color: #5c4a2e;
+  text-shadow: none;
+}
+/* An affliction is the reason the question is being asked, so it is marked in
+   the same red-brown a blocking number is marked in everywhere else. */
+.mm-panel[data-panel='spellbook'] .mm-sb-who-state.is-ill { color: #6b1008; }
+
+@media (pointer: coarse) {
+  /* 49u x 0.8958 = 43.9px, the same figure the character sheet's skill rows
+     take. The type does not move; only the band around it opens. */
+  .mm-panel[data-panel='spellbook'] .mm-sb .mm-sb-who { height: calc(var(--u) * 49); }
+  .mm-panel[data-panel='spellbook'] .mm-sb-who-face {
+    width: calc(var(--u) * 34);
+    height: calc(var(--u) * 38);
+  }
+}
+
 /* ── the illumination ─────────────────────────────────────────────────────── */
 
 /* The school's cover painting in a carved gilt mount: the only framed thing on

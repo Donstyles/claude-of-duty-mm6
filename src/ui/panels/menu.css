@@ -24,9 +24,25 @@
   padding: calc(var(--u) * 8) calc(var(--u) * 16) calc(var(--u) * 8);
   gap: calc(var(--u) * 6);
   justify-content: flex-start;
-  /* A chamber, not a dark rectangle: laid masonry with one pool of light high
-     behind the logo, painted once and stretched over the viewport. */
-  background: var(--tex-menu-cavern) center / 100% 100% no-repeat;
+  /* A chamber, not a dark rectangle.
+   *
+   * Two grounds, in this order: the painted vault (`scenes/menu.png` — a
+   * torchlit stone hall, dark and uncluttered through the centre where the
+   * plaques stand), and under it the procedural masonry `--tex-menu-cavern`
+   * that was the whole of this screen before. The painted one is on top and
+   * opaque, so when it is there it is what you see; when the file is not there
+   * the layer paints nothing and the masonry underneath shows through exactly
+   * as it did — which is why this needs no existence check in JS. Replacing
+   * `background-image` with one unconditional URL, the way `base.js:147` does,
+   * is what turns a missing file into a broken screen.
+   *
+   * `cover` on the plate and `100% 100%` on the texture is deliberate: the
+   * texture is drawn to the viewport's own proportions and wants stretching,
+   * the painting is 16:9 and must not be. */
+  background-image: url('/art/scenes/menu.png'), var(--tex-menu-cavern);
+  background-size: cover, 100% 100%;
+  background-position: center center, center center;
+  background-repeat: no-repeat, no-repeat;
   background-color: #211e18;
 }
 

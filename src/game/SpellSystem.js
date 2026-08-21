@@ -161,14 +161,54 @@ export class SpellSystem extends System {
       case 'view': this._castView(ctx, char, spell, power); break;
       case 'enchant': this._castEnchant(ctx, char, spell, power); break;
       case 'summon': this._castSummon(ctx, char, spell, power); break;
-      case 'aura': this._castAura(ctx, char, spell, power); break;
+      case 'aura': this._castAura(ctx, char, spell, power, targetRef); break;
       default:
         // `instant`: a party-facing enchantment is an aura that happens to have
         // no travel time; everything else resolves on whatever it is aimed at.
-        if (this._isPartyBuff(spell)) this._castAura(ctx, char, spell, power);
-        else this._resolveOnTargets(ctx, char, spell, power, this._defaultTargets(ctx, spell, targetRef));
+        if (this._isPartyBuff(spell)) this._castAura(ctx, char, spell, power, targetRef);
+        else {
+          this._resolveOnTargets(ctx, char, spell, power,
+            this._defaultTargets(ctx, spell, targetRef), targetRef);
+        }
     }
     return true;
+  }
+
+  /**
+   * Does this spell have to be asked "on whom?" before it can land.
+   *
+   * The book asks the question and the interface draws the answer, but the
+   * *rule* is a property of the spell and belongs here rather than in a panel:
+   * a screen that decides for itself which spells need a target is a second
+   * copy of the catalogue, and the two copies disagree the first time somebody
+   * writes an eighth cure. `single-ally` is the whole of the rule — `party`
+   * lands on everyone, `self` on the caster, and everything else is aimed at
+   * something in the world rather than at a member of the party.
+   */
+  needsAllyTarget(spell) {
+    const s = typeof spell === 'string' ? getSpell(spell) : spell;
+    return !!s && s.target === 'single-ally';
+  }
+
+  /**
+   * Which member a party-facing spell lands on.
+   *
+   * `targetRef` is a party slot index or the Character itself — whatever the
+   * picker had to hand. Anything else, including the monster reference every
+   * hostile spell passes through this same argument, resolves to the active
+   * member, which is what the game did before there was any way to choose and
+   * is still what a quick-cast from the bound key means.
+   *
+   * Membership is tested against the live party rather than by duck-typing.
+   * A monster and a Character both answer to `.name` and `.hp`, so a shape
+   * test would happily have healed a goblin.
+   */
+  _allyTarget(ctx, targetRef) {
+    const party = ctx.get('party');
+    if (!party) return null;
+    if (Number.isInteger(targetRef)) return party.get(targetRef) ?? party.active;
+    if (targetRef && party.members?.includes(targetRef)) return targetRef;
+    return party.active;
   }
 
   /** A spell that hangs on the party rather than landing on something. */
@@ -257,7 +297,7 @@ export class SpellSystem extends System {
     this._resolveOnTargets(ctx, char, spell, power, caught);
   }
 
-  _castAura(ctx, char, spell, power) {
+  _castAura(ctx, char, spell, power, targetRef = null) {
     const duration = spell.duration ? spell.duration(power.skill, power.mastery) : 3600;
     const magnitude = spell.magnitude ? spell.magnitude(power.skill, power.mastery) : 0;
     const expires = ctx.state.worldTime + duration;
@@ -270,7 +310,16 @@ export class SpellSystem extends System {
     // Stone Skin and Bless were, mechanically, the same spell as no spell.
     const bonus = this._bonusFrom(spell, magnitude);
     const party = ctx.get('party');
-    for (const m of party?.members ?? []) {
+    // Fate and Stone Fists are `single-ally` in the book and were settling on
+    // all four, which is a level 3 spirit spell doing a level 6 spirit spell's
+    // job for three spell points. `_isPartyBuff` routes them here because they
+    // are enchantments rather than damage, and once here nothing asked who they
+    // were for — the same missing question that left the eight cures firing at
+    // whoever happened to be active.
+    const recipients = spell.target === 'single-ally'
+      ? [this._allyTarget(ctx, targetRef)].filter(Boolean)
+      : (party?.members ?? []);
+    for (const m of recipients) {
       if (m.isDead) continue;
       // One casting replaces the last rather than stacking with it, which is
       // what stops a patient party walking in with nine copies of Bless.
@@ -291,8 +340,11 @@ export class SpellSystem extends System {
       ? ` (${Object.entries(bonus.statBonus).map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${k}`).join(', ')})`
       : bonus.acBonus ? ` (+${bonus.acBonus} armour class)`
       : bonus.resistBonus ? ` (+${Object.values(bonus.resistBonus)[0]} resistance)` : '';
+    const on = spell.target === 'single-ally'
+      ? (recipients[0] ? ` settles on ${recipients[0].name}` : ' finds nobody to settle on')
+      : ' settles over the party';
     ctx.events.emit('ui:log', {
-      text: `${spell.name} settles over the party${note}.`, kind: 'buff',
+      text: `${spell.name}${on}${note}.`, kind: 'buff',
     });
   }
 
@@ -577,17 +629,7 @@ export class SpellSystem extends System {
         return true;
       }
 
-      case 'telekinesis': {
-        const reach = spell.magnitude?.(power.skill, power.mastery) ?? 10;
-        const grabbed = ctx.get('props')?.openNearest?.(ctx, ctx.get('player')?.position, reach)
-          ?? ctx.get('loot')?.pullNearest?.(ctx, ctx.get('player')?.position, reach);
-        ctx.events.emit('ui:log', {
-          text: grabbed ? 'An unseen hand works the latch.'
-                        : `Nothing within ${Math.round(reach)} paces will move.`,
-          kind: grabbed ? 'spell' : 'warn',
-        });
-        return true;
-      }
+      case 'telekinesis': this.telekinesis(ctx, power, spell); return true;
 
       case 'dispel': return false;   // resolved by `_castView`, which knows the targets
 
@@ -599,6 +641,137 @@ export class SpellSystem extends System {
       // light / reveal / detect-life / water-walk / fly are timed party states.
       default: return false;
     }
+  }
+
+  /* ══════════════════════════ the unseen hand ════════════════════════════
+   *
+   * Telekinesis called `props.openNearest()` and then `loot.pullNearest()`,
+   * and NEITHER METHOD HAS EVER EXISTED — not on `PropSystem`, not on
+   * `LootSystem`, not anywhere in the tree. Both calls are optional
+   * (`?.()`), so both evaluated to `undefined`, `grabbed` was always falsy,
+   * and a level 9 earth spell costing twelve points answered every cast with
+   * `Nothing within 50 paces will move.` It reads like the spell working and
+   * finding nothing, which is why it survived: the failure wrote a sentence
+   * that a player would believe.
+   *
+   * What the world actually offers, and what this uses instead:
+   *
+   * Loose loot is a `LootSystem` drop with a 2.2 m pickup radius, claimed by
+   * that system's own `fixedUpdate`. So the hand does the one thing a hand
+   * does — it MOVES the object — and puts it at the party's feet, inside that
+   * radius. `LootSystem.fixedUpdate` then claims it through the one path that
+   * pays gold into the purse, files an item into a pack and emits
+   * `loot:picked`, which is the event a `collect` quest objective listens for.
+   * Nothing about pickup is reimplemented here; it is called with a zero step
+   * so the claim lands on the cast rather than a frame later, which is what
+   * makes this spell's own log line true when it is written.
+   *
+   * A dungeon's chests and doors are plain records that `DungeonSystem` reads
+   * every frame — `_driveChests` tests `chest.locked` and `chest.trap`,
+   * `_driveDoors` and `_pick` test `door.locked` and `door.trap` — so working
+   * a fastening from across the room is writing those two fields, exactly as
+   * this system already drives a monster by writing the `speed` and `state`
+   * that `MonsterSystem` re-reads. The lock turns and any needle in the plate
+   * springs harmlessly with the party twenty metres away, which is the
+   * sentence in the spell's own description: "including out of a trap's
+   * reach."
+   *
+   * What it still does NOT do is tip the chest's contents out at range. That
+   * payout — treasure roll, quest items, the dungeon's one prize — lives
+   * inside `DungeonSystem._driveChests` (src/world/DungeonSystem.js:2317),
+   * behind a two-metre proximity test and an `interact` press, and there is no
+   * seam to call it through. Copying it here would be a second, drifting
+   * implementation of the treasure rules; the honest fix is a
+   * `DungeonSystem.openChest(ctx, chest)` split out of that method, and it is
+   * not this file's to make.
+   */
+
+  /**
+   * Reach out and work something at a distance.
+   *
+   * @returns {{kind: string|null, what: string, distance: number, count: number}}
+   *   what the hand found, and how far away it was — the return value is the
+   *   spell's whole observable result, so a test can assert on metres rather
+   *   than on a sentence in the message strip.
+   */
+  telekinesis(ctx, power = {}, spell = getSpell('earth_telekinesis')) {
+    // Reach is the spell's `magnitude`, which is the one number in its record
+    // that grows with skill: ten paces plus two a point.
+    const reach = spell?.magnitude?.(power.skill ?? 0, power.mastery) ?? 10;
+    const at = ctx.get('player')?.position;
+    const miss = { kind: null, what: '', distance: 0, count: 0 };
+    if (!at) return miss;
+
+    const away = (o) => Math.hypot((o.x ?? 0) - at.x, (o.y ?? at.y) - at.y, (o.z ?? 0) - at.z);
+
+    // Loose loot first. The party would sweep it up by walking over it in any
+    // case, so pulling one coin a cast is only tedium — the hand takes what it
+    // can hold, which is everything inside its reach.
+    const loot = ctx.get('loot');
+    const inReach = (loot?.drops ?? [])
+      .map((d) => ({ d, dist: away(d.mesh?.position ?? d.pos ?? {}) }))
+      .filter((e) => e.dist <= reach);
+    if (inReach.length) {
+      const furthest = inReach.reduce((a, b) => (b.dist > a.dist ? b : a));
+      for (const { d } of inReach) {
+        d.pos.set(at.x, at.y, at.z);
+        d.mesh?.position.set(at.x, at.y, at.z);
+      }
+      try { loot.fixedUpdate(0, ctx); } catch { /* a bodiless drop waits a frame */ }
+      ctx.get('particles')?.burst?.('sparkle', ctx.get('player')?.eye?.(), 18,
+        { color: spell?.vfx?.color });
+      ctx.events.emit('ui:log', {
+        text: `An unseen hand gathers ${inReach.length === 1 ? 'it' : `${inReach.length} things`}`
+          + ` in from ${Math.round(furthest.dist)} paces.`,
+        kind: 'spell',
+      });
+      return {
+        kind: 'loot', what: inReach.length === 1 ? 'a drop' : `${inReach.length} drops`,
+        distance: furthest.dist, count: inReach.length,
+      };
+    }
+
+    // Then the fastenings, nearest first. A chest outranks a door because the
+    // chest is what the party crossed the room for.
+    const dungeon = ctx.get('dungeon');
+    const built = dungeon?.current ? dungeon.built?.get(dungeon.current) : null;
+    const nearest = (list, usable) => (list ?? [])
+      .filter(usable)
+      .map((o) => ({ o, dist: away(o) }))
+      .filter((e) => e.dist <= reach)
+      .sort((a, b) => a.dist - b.dist)[0] ?? null;
+
+    const chest = nearest(built?.chests, (c) => !c.open && (c.locked || c.trap));
+    const door = chest ? null
+      : nearest(built?.doors, (d) => (!d.secret || d.found) && (d.locked || d.trap));
+    const found = chest ?? door;
+    if (found) {
+      const o = found.o;
+      const wasTrapped = !!o.trap;
+      const wasLocked = !!o.locked;
+      o.trap = 0;
+      o.locked = false;
+      // A door that slides stays where the hand left it; one on a hinge is
+      // pulled shut again by `_driveDoors` the moment the party is not beside
+      // it, so opening it from here would be a frame of theatre. The lock is
+      // the part that keeps.
+      if (door && o.slides) { o.target = 1; o.closeAt = ctx.state.elapsed + 9; }
+      ctx.get('particles')?.burst?.('sparkle',
+        new THREE.Vector3(o.x, (o.y ?? at.y) + 0.6, o.z), 14, { color: spell?.vfx?.color });
+      const noun = chest ? 'chest' : 'door';
+      const did = [wasLocked ? 'the lock turns' : null,
+        wasTrapped ? 'a needle springs on empty air' : null].filter(Boolean).join(' and ');
+      ctx.events.emit('ui:log', {
+        text: `An unseen hand reaches the ${noun} ${Math.round(found.dist)} paces off; ${did}.`,
+        kind: 'spell',
+      });
+      return { kind: noun, what: did, distance: found.dist, count: 1 };
+    }
+
+    ctx.events.emit('ui:log', {
+      text: `Nothing within ${Math.round(reach)} paces will move.`, kind: 'warn',
+    });
+    return miss;
   }
 
   /** Strip timed magic from the party and from everything caught in the blast. */
@@ -624,22 +797,63 @@ export class SpellSystem extends System {
 
   // ── resolution ───────────────────────────────────────────────────────────
 
-  _resolveOnTargets(ctx, char, spell, power, targets) {
+  /**
+   * `targetRef` is threaded this far for one reason: the ally spells.
+   *
+   * Eight cures and two heals in the book are `single-ally`, and both branches
+   * below used to read `[party.active]` with no way to say otherwise —
+   * `UISystem.castSpell` passes `targetRef = null` unconditionally and there
+   * was no picker to pass anything else. So Cure Poison could only ever be
+   * cast on whoever was highlighted in the party bar, and the audit read all
+   * eight as inert because the harness's afflicted character was not that one.
+   * The argument was never the problem; the fact that nothing could set it was.
+   */
+  _resolveOnTargets(ctx, char, spell, power, targets, targetRef = null) {
     const party = ctx.get('party');
+
+    /**
+     * Three spells in the book are about the undead and say so in a tag, and
+     * the tag was being read in one place only — `_afflict`, one creature at a
+     * time, with a message strip line apiece. Cast Turn Undead into a room of
+     * six goblins and the strip filled with six identical refusals, which is
+     * the interface shouting about a rule the player already knows.
+     *
+     * Worse, Destroy Undead's own note says it "deals nothing at all to the
+     * living" and nothing anywhere enforced that: it was a 2d8-per-skill light
+     * nuke usable on anything that moved, at level 2 for five points. The tag
+     * is the spell's subject matter, so it decides who is in the room before
+     * either the condition or the damage below is worked out, and it says so
+     * once rather than once per creature.
+     */
+    let list = targets;
+    if (spell.tags?.includes('undead') && !spell.utility) {
+      list = targets.filter((t) => t?.def?.flags?.undead);
+      if (targets.length && !list.length) {
+        ctx.events.emit('ui:log', {
+          text: `${spell.name} finds nothing dead enough to touch.`, kind: 'warn',
+        });
+        return;
+      }
+    }
 
     // A control spell lands its condition whether or not it also does damage:
     // Poison Spray does both, Paralyze does only the second.
     if (spell.condition && MONSTER_STATUS[spell.condition]) {
-      for (const t of targets) this._afflict(ctx, t, spell, power);
+      for (const t of list) this._afflict(ctx, t, spell, power);
     }
 
     if (spell.damage) {
       const spec = spell.damage(power.skill, power.mastery);
-      for (const t of targets) {
+      // "Against undead the damage is doubled again" is Destroy Undead's own
+      // note, and the only spell it can apply to is one aimed at the undead in
+      // the first place — so the tag that chose the targets sets the multiplier.
+      const consecrated = spell.tags?.includes('undead') ? 2 : 1;
+      for (const t of list) {
         if (!t?.alive) continue;
         const roll = damageRoll(spec, this.rng, { targetHP: t.hp });
         const resist = t.def?.resists?.[spec.type] ?? 0;
         const applied = applyResistance(roll.amount, resist, 0, power.skill, this.rng.next());
+        applied.amount = Math.round(applied.amount * consecrated);
         ctx.get('monsters')?.damage(ctx, t, applied.amount, spec.type);
         ctx.get('particles')?.burst?.(this._particleFor(spell),
           t.pos.clone().setY(t.pos.y + 0.9), 16, { color: spell.vfx?.color });
@@ -649,12 +863,60 @@ export class SpellSystem extends System {
           kind: 'spell',
         });
       }
-      return;
+      // No `return` here either. Soul Reave carries a `damage` AND a `heal` and
+      // says in its own description that it "drains the life out of everything
+      // in sight and pours it into the party"; returning after the damage meant
+      // the pouring never happened, so a fifty-point level 11 spell was an
+      // expensive Inferno. It is the only entry in the book shaped that way, as
+      // Divine Intervention is the only one carrying a `heal` and a `cures`,
+      // and both were lost to the same one-word habit.
+    }
+
+    // Curing runs before healing, and the order is load-bearing for exactly one
+    // spell. Divine Intervention is the only entry in the book carrying both a
+    // `heal` and a `cures`, and the healing branch skips anyone who `isDead` —
+    // so with the healing first it restored the three survivors and left the
+    // corpse a corpse with its own resurrection queued behind it. It also used
+    // to `return` after healing, which meant the curing half never ran at all:
+    // fifty spell points for three heals and no lifted affliction, and nothing
+    // to see in a log or a stack trace.
+    if (spell.cures) {
+      const targetsToCure = spell.target === 'party'
+        ? party?.members ?? []
+        : [this._allyTarget(ctx, targetRef)];
+      let lifted = 0;
+      let who = null;
+      for (const m of targetsToCure) {
+        if (!m) continue;
+        // `cures: ['all']` is Divine Intervention's way of saying "everything",
+        // not the id of a condition. Read literally it looked for an affliction
+        // named "all" and of course found none on anybody.
+        const list = spell.cures.includes('all') ? [...m.conditions] : spell.cures;
+        for (const cond of list) if (m.removeCondition(cond)) { lifted++; who = m; }
+      }
+      ctx.get('particles')?.burst?.('heal', ctx.get('player').eye(), 16);
+      // A cure that says nothing reads as a dud spell, which is how a player
+      // learns not to prepare it. Say what happened either way — and now that
+      // the spell can be aimed, say whose afflictions came off, or a player who
+      // picked the wrong portrait has no way to find that out.
+      const on = who && spell.target !== 'party' ? ` from ${who.name}` : '';
+      ctx.events.emit('ui:log', {
+        text: lifted ? `${spell.name} lifts ${lifted} affliction${lifted > 1 ? 's' : ''}${on}.`
+                     : `${spell.name} finds nothing to lift.`,
+        kind: lifted ? 'heal' : 'info',
+      });
     }
 
     if (spell.heal) {
       const amount = spell.heal(power.skill, power.mastery);
-      const healed = spell.target === 'party' ? party?.members ?? [] : [party?.active];
+      // A spell that damages and heals in the same breath is a drain, and its
+      // `target` describes where the damage lands rather than who gets the
+      // life back. Soul Reave pours it into the party — all of them — so
+      // reading `target: 'area'` as "heal whoever is highlighted" would have
+      // handed a four-person party one person's worth of a fifty-point spell.
+      const healed = spell.target === 'party' || spell.damage
+        ? party?.members ?? []
+        : [this._allyTarget(ctx, targetRef)];
       for (const m of healed) {
         if (!m || m.isDead) continue;
         const got = m.heal(typeof amount === 'number' ? amount : amount.avg ?? 0);
@@ -663,24 +925,6 @@ export class SpellSystem extends System {
         }
       }
       ctx.get('particles')?.burst?.('heal', ctx.get('player').eye(), 20);
-      return;
-    }
-
-    if (spell.cures) {
-      const targetsToCure = spell.target === 'party' ? party?.members ?? [] : [party?.active];
-      let lifted = 0;
-      for (const m of targetsToCure) {
-        if (!m) continue;
-        for (const cond of spell.cures) if (m.removeCondition(cond)) lifted++;
-      }
-      ctx.get('particles')?.burst?.('heal', ctx.get('player').eye(), 16);
-      // A cure that says nothing reads as a dud spell, which is how a player
-      // learns not to prepare it. Say what happened either way.
-      ctx.events.emit('ui:log', {
-        text: lifted ? `${spell.name} lifts ${lifted} affliction${lifted > 1 ? 's' : ''}.`
-                     : `${spell.name} finds nothing to lift.`,
-        kind: lifted ? 'heal' : 'info',
-      });
     }
   }
 
@@ -705,7 +949,27 @@ export class SpellSystem extends System {
       });
       return false;
     }
-    if (NEEDS_A_MIND.has(spell.condition) && (m.def?.flags?.mindless || m.def?.flags?.undead)) {
+    /**
+     * Turn Undead was the one spell in the book that could not land on
+     * anything, and it took two rules that are each right on their own.
+     *
+     * The first refuses a spell tagged `undead` any target that is not undead,
+     * so `The Goblin is not dead enough for Turn Undead` — correct. The second
+     * refuses a fear effect anything mindless or undead, so
+     * `The Skeleton has no mind to reach` — also correct, and it is what keeps
+     * Mass Fear off a skeleton, which is the asymmetry the whole Mind school is
+     * built around. Put together they left exactly nothing for the spell to
+     * touch: every creature in the world failed one clause or the other, both
+     * failures read as a considered rule in the message strip, and a level 4
+     * spirit spell was an animation and five points.
+     *
+     * `undeadOnly` resolves it, because the line above has already proved this
+     * target IS undead. Turn Undead does not argue with a mind — there is none
+     * — it argues with whatever is holding the corpse up, and the resistance
+     * roll below is where that argument is had.
+     */
+    if (!undeadOnly && NEEDS_A_MIND.has(spell.condition)
+        && (m.def?.flags?.mindless || m.def?.flags?.undead)) {
       ctx.events.emit('ui:log', { text: `The ${m.def.name} has no mind to reach.`, kind: 'warn' });
       return false;
     }
@@ -720,7 +984,27 @@ export class SpellSystem extends System {
       return false;
     }
 
-    const seconds = (rule.base + rule.perSkill * power.skill) * (DURATION_MULT[power.mastery] ?? 1);
+    /**
+     * How long it holds, and where that number is allowed to come from.
+     *
+     * Ten of the eleven control spells state a `duration` in the catalogue and
+     * the eleventh, Poison Spray, does not — so `MONSTER_STATUS` carries a
+     * seconds-scale fallback for that one case. It was being used for all
+     * eleven, and the two answers are not close: Turn Undead at skill 10 and
+     * master rank is 22 minutes by the book and was 42 seconds in the world.
+     *
+     * That is worse than a balance slip, because the *spellbook already quotes
+     * the book's number*. `_spellTip` prints `Duration` straight out of
+     * `spell.duration(...)`, so the plaque promised twenty-two minutes while
+     * the engine gave forty-two seconds, and the screen was the honest half.
+     * The data wins here for the same reason it wins everywhere else in this
+     * file: anything that looks like a rule in this system is a bug.
+     * `duration()` folds `DURATION_MULT` in itself, which is why only the
+     * fallback applies it.
+     */
+    const seconds = spell.duration
+      ? spell.duration(power.skill, power.mastery)
+      : (rule.base + rule.perSkill * power.skill) * (DURATION_MULT[power.mastery] ?? 1);
     const prev = this._status.get(m);
     this._status.set(m, {
       id: spell.condition, rule,
@@ -860,13 +1144,24 @@ export class SpellSystem extends System {
     ).normalize();
   }
 
-  _aimedMonster(ctx, player, monsters, range) {
+  /**
+   * `accept` exists for the three spells that are about the undead.
+   *
+   * Without it the aim landed on whatever was nearest and in front, which for
+   * Destroy Undead and Control Undead was as often as not a goblin — and the
+   * spell then refused it, correctly, having already been paid for. Aiming is
+   * a convenience the player gets when they have not named a target, so it
+   * should skip past what the spell is not allowed to touch rather than lock
+   * on to it. Naming a target explicitly still overrides all of this.
+   */
+  _aimedMonster(ctx, player, monsters, range, accept = null) {
     if (!monsters) return null;
     const origin = player.eye();
     const dir = this._lookDir(player);
     let best = null, bestScore = -Infinity;
     for (const m of monsters.monsters) {
       if (!m.alive) continue;
+      if (accept && !accept(m)) continue;
       const to = m.pos.clone().setY(m.pos.y + (m.def.height ?? 1.6) * 0.5).sub(origin);
       const dist = to.length();
       if (dist > range) continue;
@@ -891,9 +1186,12 @@ export class SpellSystem extends System {
     const monsters = ctx.get('monsters');
     const range = spell.range || 60;
 
+    const accept = spell.tags?.includes('undead') && !spell.utility
+      ? (m) => !!m.def?.flags?.undead : null;
+
     switch (spell.target) {
       case 'single-enemy': {
-        const m = this._aimedMonster(ctx, player, monsters, range);
+        const m = this._aimedMonster(ctx, player, monsters, range, accept);
         if (!m) ctx.events.emit('ui:log', { text: `${spell.name} finds no target.`, kind: 'warn' });
         return m ? [m] : [];
       }

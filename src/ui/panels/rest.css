@@ -32,8 +32,45 @@
 .mm-panel[data-panel='rest'] .mm-rest { inset: calc(var(--u) * 12) calc(var(--u) * 14); }
 
 /* The landscape plate gives up height to the camp plaque below it: the screen
-   has to fit inside the viewport exactly, with nothing running under the bar. */
-.mm-panel[data-panel='rest'] .mm-rest-plate { height: calc(var(--u) * 74); }
+   has to fit inside the viewport exactly, with nothing running under the bar.
+ *
+ * Two grounds in the band, and which one you see depends on what has been
+ * painted. On top, `scenes/camp_<season>.png` — four landscapes, one per season,
+ * chosen by `rest.js` from the calendar the clock rows already print. Under it,
+ * `--tex-landscape`, which is the procedural plate this screen has always had:
+ * three `lineTo` ridges and some triangle pines, published from `UITextures.js`
+ * under a docstring that calls it "the photographic landscape plate".
+ *
+ * Layered rather than replaced, and that is the whole safety argument. A
+ * `background-image` layer that 404s paints nothing and lets the layer beneath
+ * it through, so a season nobody has painted yet leaves the ridges and the pines
+ * standing exactly as they stand today. `base.js:147` sets one unconditional URL
+ * with nothing under it, and a missing file there is a broken image; there is
+ * nothing to break here.
+ *
+ * The two sizes are different kinds of thing and are meant to be. The texture is
+ * drawn to this band's own proportions and wants stretching to fit; the painting
+ * is 16:9 and must not be. The band is about 612 × 74 native pixels — 8.3 : 1 —
+ * so a plate scaled to its width shows a horizontal slice about a fifth of the
+ * painting's height, and 42% rather than dead centre is what puts the horizon
+ * and the treeline into that slice instead of the sky.
+ *
+ * 116% rather than `cover`, and that is a crop rather than a zoom. Three of the
+ * four seasons are painted edge to edge; `camp_autumn.png` came back matted, a
+ * painting sitting on a pale grey mount 77 pixels wide on each side of a 1376
+ * pixel plate — 5.6% — which reads at this size as two white bars at the ends of
+ * the band. Measured that way rather than guessed at: the plate's own edges
+ * average 227 of 255 against a picture averaging 101. At 116% the box crops 6.9%
+ * off each side, which clears the mount with room, and the other three lose a
+ * strip of open country nobody will miss. The vertical mount never mattered —
+ * the slice starts a third of the way down and the mount ends at a tenth. */
+.mm-panel[data-panel='rest'] .mm-rest-plate {
+  height: calc(var(--u) * 74);
+  background-image: var(--mm-camp-plate, none), var(--tex-landscape);
+  background-size: 116% auto, 100% 100%;
+  background-position: center 42%, center center;
+  background-repeat: no-repeat, no-repeat;
+}
 
 .mm-panel[data-panel='rest'] .mm-rest-cols {
   gap: calc(var(--u) * 12);
