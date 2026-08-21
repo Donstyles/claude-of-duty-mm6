@@ -1848,8 +1848,11 @@
    *   | `.mm-panel-side` right | 9 px | 68 px | 50 px of a 133 px sidebar screen under the island: the conversation panel lost its right-hand third |
    *   | `.mm-panel` left | 7 px | 66 px | the quest book's GIVEN BY row ran under the island on the other short edge |
    *
-   * `tools/phonemenu.mjs` is the measurement: 31 clipped or covered elements
-   * across four screens before, 0 after. The right-hand figures are not new
+   * `tools/phonemenu.mjs` is the measurement, on the ink rather than on the
+   * boxes: 29 clipped or covered runs of text across four of the seven screens
+   * on a 14 Pro Max and 27 on a 13 mini, before; 0 on both, after. At the same
+   * two viewports with no insets, and on a 1024 × 768 desktop, it is 0 either
+   * way — the fix cannot reach a device that has no island. The figures are not new
    * numbers — they are exactly the pillars' own edges, so each panel abuts the
    * stone it abuts on a desktop and the relationship the frame was drawn with
    * is restored rather than adjusted.

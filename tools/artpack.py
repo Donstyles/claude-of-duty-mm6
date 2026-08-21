@@ -161,29 +161,38 @@ def _hard_double(im, factor=UPSCALE):
     return im.resize((w * factor, h * factor), Image.NEAREST)
 
 
-def pack_portraits(texel=PORTRAIT_TEXEL, quality=95):
-    """Party, speaker and death portraits: raw -> quantised texel grid -> plate.
+# JPEG cannot hold a palette, and the portraits ship as JPEG.
+#
+# Measured across the set at the audit's 36x52 window, against MM6's own 378:
+#
+#     the quantised plate, lossless   c95  467   1.24x   <- what the pass makes
+#     the same plate as JPEG q95      c95 1681   4.45x
+#                          q98        c95 1456   3.85x
+#                          q100       c95  881   2.33x   (2.1 MB for the set)
+#
+# The DCT puts a continuum back under every flat block and no quality setting
+# buys it back at a sane size. What DOES survive JPEG untouched is the
+# structure: `step` and `hf` read the same to three decimals either way, which
+# is why the shipped portrait still LOOKS like a 1998 bitmap — the banding, the
+# dither and the hard 2x2 texels are all still there, with sub-threshold noise
+# laid over them. Side by side at 3x the two are indistinguishable.
+#
+# The lossless plate would be strictly better on both counts — c95 1.24x
+# instead of 4.45x, and 0.63 MB for the set against the JPEGs' 0.85 MB, because
+# a hard-doubled quantised image is exactly what PNG's filters are for. It is
+# not written by default because nothing would load it: `UITextures.js` builds
+# every portrait URL as `art/portraits/<name>.jpg` in three places
+# (`PORTRAIT_PLATES._probe`, `PORTRAIT_PLATES.pick`, `tombstonePlate`), and
+# `vite.config.js` deliberately keeps `*.plate.png` in the build — so writing
+# them anyway would put 45 files nobody asks for onto a phone over mobile data.
+#
+# To take the upgrade: change those three `.jpg` to `.plate.png`, set this to
+# True, and re-run `python3 tools/artpack.py portraits`. Both halves or neither.
+WRITE_PORTRAIT_PNG = False
 
-    Two files per portrait, and the second one is a handoff rather than waste.
 
-      <name>.jpg        what `UITextures.PORTRAIT_PLATES` asks for today.
-      <name>.plate.png  the same image, losslessly.
-
-    JPEG cannot hold a palette. Measured on `m-knight`: the quantised grid has
-    154 distinct colours in the audit window, and the SAME image round-tripped
-    through JPEG reads 1622 at q95 and 447 at q100 — the DCT puts a continuum
-    back under every flat block. It costs nothing visible (the two are
-    indistinguishable side by side at 3x, because the banding and the dither are
-    structure and structure is what JPEG keeps) but it does mean the colour
-    number cannot be measured off the shipped .jpg.
-    The PNG is 12 KB against the JPEG's 14 KB at q95 — losslessly SMALLER,
-    because a hard-doubled quantised image is exactly what PNG's filters are for.
-    So the .plate.png is the file this stage would rather ship, and the three
-    string literals that would ship it live in `src/ui/UITextures.js`
-    (`PORTRAIT_PLATES._probe`, `PORTRAIT_PLATES.pick`, `tombstonePlate`), which
-    this pass does not own. Writing it now means that change is one line and not
-    a regeneration.
-    """
+def pack_portraits(texel=PORTRAIT_TEXEL, quality=95, png=WRITE_PORTRAIT_PNG):
+    """Party, speaker and death portraits: raw -> quantised texel grid -> plate."""
     out = 0
     for src in sorted(glob.glob(os.path.join(ROOT, 'portraits', '*.png'))):
         # Skip our own output, or a second run packs the plates into plates —
@@ -194,7 +203,8 @@ def pack_portraits(texel=PORTRAIT_TEXEL, quality=95):
                        dtype=np.float32)
         im = _hard_double(Image.fromarray(
             retro(a, PORTRAIT_BITS, PORTRAIT_AMP).astype(np.uint8), 'RGB'))
-        im.save(src[:-4] + '.plate.png', 'PNG', optimize=True)
+        if png:
+            im.save(src[:-4] + '.plate.png', 'PNG', optimize=True)
         # subsampling=0 (4:4:4), not the 4:2:2 this used to take: chroma
         # subsampling averages colour across exactly the 2x2 blocks the retro
         # pass just built, which is the one thing that must not be averaged.
