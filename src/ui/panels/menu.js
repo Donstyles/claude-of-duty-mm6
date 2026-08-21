@@ -2,6 +2,7 @@ import './menu.css';
 import { Panel } from './base.js';
 import { el, setChildren, fmt, ellipsis, tooltip, tipMarkup } from '../widgets.js';
 import { icon } from '../Icons.js';
+import { byPointer } from '../../input/pointer.js';
 
 /**
  * The game menu: the six plaques, and everything behind them.
@@ -188,7 +189,10 @@ export class MenuPanel extends Panel {
       }
       grid.appendChild(b);
     }
-    return [grid, el('div', { className: 'mm-menu-hint', text: 'Escape returns to the game' })];
+    return [grid, el('div', {
+      className: 'mm-menu-hint',
+      text: byPointer('Escape returns to the game', 'The Exit oval returns to the game'),
+    })];
   }
 
   // ── save and load ─────────────────────────────────────────────────────────
@@ -529,7 +533,12 @@ export class MenuPanel extends Panel {
         el('span', { className: 'mm-ctrl-keys' }, ...keys.map((k) => el('kbd', { text: k })))));
     }
     return [
-      this._pageHead('Controls', 'Read from the live bindings. The mouse looks around while the pointer is locked; click the view to take it.'),
+      this._pageHead('Controls', byPointer(
+        'Read from the live bindings. The mouse looks around while the pointer is '
+        + 'locked; click the view to take it.',
+        'Read from the live bindings. The left of the view is a thumbstick, the '
+        + 'right turns the party, and a tap interacts.',
+      )),
       list,
       this._backRow(),
     ];

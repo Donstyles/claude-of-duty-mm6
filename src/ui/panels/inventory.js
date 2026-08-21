@@ -1,6 +1,7 @@
 import './inventory.css';
 import { Panel, itemFootprint, itemSprite } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, clamp } from '../widgets.js';
+import { byPointer, isCoarsePointer } from '../../input/pointer.js';
 import { getClass } from '../../game/data/Classes.js';
 import { getItem } from '../../game/data/Items.js';
 import { handsFor } from '../../game/rules.js';
@@ -10,7 +11,13 @@ const GRID_COLS = 14;
 const GRID_ROWS = 9;
 /** Native MM6 pixels per backpack cell (REFERENCE §3.4). */
 const CELL = 32;
-/** Under this a press is a click that keeps carrying; over it, it is a drag. */
+/**
+ * Where a press stops being a press and becomes a drag, in CSS pixels.
+ *
+ * Under it, a mouse press is a click that keeps carrying and a finger's is a
+ * tap; over it, both are a drag. One number for both, because a thumb that
+ * wanders six pixels meant to move the item just as much as a mouse that did.
+ */
 const DRAG_SLOP = 6;
 
 /**
@@ -94,8 +101,26 @@ const GENERIC = {
  * labelled box, and an empty one stays invisible until you pick up something
  * that could fill it.
  *
- * Carrying works the way the game does. Press an item and it leaves the page to
- * follow the cursor; press again to set it down; right-click to put it back.
+ * ── carrying, on two devices that have different hands ───────────────────────
+ *
+ * One code path, `pointerdown`/`pointermove`/`pointerup`, because the seam
+ * between a mouse path and a touch path is exactly where this project's bugs
+ * live. What differs is not the plumbing but the grammar, and it has to:
+ *
+ *   · A **mouse** works MM6's way. Press an item and it leaves the page to
+ *     follow the cursor; press again to set it down; right-click to put it
+ *     back. A press that travels is also a drag, so both idioms work.
+ *   · A **finger** has no second button and no hover, so it cannot use that
+ *     grammar at all: a tap that lifted would stick the item to a player who
+ *     only meant to drink it, and there would be nothing left for "use". So a
+ *     finger moves an item by dragging it, does the obvious thing to it by
+ *     tapping, and asks what it is by pressing and holding — which is the same
+ *     three gestures MM6 gives a mouse, mapped onto the hardware that exists.
+ *
+ * The lift is therefore deferred on a coarse pointer and immediate on a fine
+ * one, and that is the only branch in the file. Everything downstream — the
+ * ghost, the cell snapping, the drop resolution — is shared.
+ *
  * Nothing leaves the pack until a drop actually lands, so an interrupted
  * carry — a closed screen, a swapped character, a stray Escape — cannot lose an
  * item.
@@ -116,8 +141,13 @@ export class InventoryPanel extends Panel {
     this.ghost = null;
     /** While this stands, hover names keep off the message strip. */
     this._quietUntil = 0;
-    this._onMove = (e) => this._track(e.clientX, e.clientY);
-    this._onUp = (e) => this._release(e);
+    /** The one press in flight: `{ id, touch, item, src, rect, x, y, lifted }`. */
+    this._press = null;
+    /** The pointer id `this.el` is holding capture on, if any. */
+    this._captured = null;
+    this._listening = false;
+    this._onMove = (e) => this._pointerMove(e);
+    this._onUp = (e) => this._pointerUp(e);
     this._onKeyCapture = (e) => this._key(e);
   }
 
@@ -141,8 +171,13 @@ export class InventoryPanel extends Panel {
     this.ownerEl = el('div', { className: 'mm-inv-owner' });
     tooltip.attach(this.ownerEl, () => tipMarkup({
       title: 'Whose pack this is',
-      flavour: 'Tab turns to the next of the four, and so does their portrait on the bar below. '
-        + 'Nothing crosses between packs: what you are holding goes back before the page turns.',
+      // A phone has no Tab key, so it is told about the control it does have.
+      flavour: byPointer(
+        'Tab turns to the next of the four, and so does their portrait on the bar below. '
+          + 'Nothing crosses between packs: what you are holding goes back before the page turns.',
+        'Tap any of the four on the bar below to open that pack. '
+          + 'Nothing crosses between packs: what you are holding goes back before the page turns.',
+      ),
     }));
 
     // A stone-inset pill: `mm-engraved` is the house's one recess treatment,
@@ -192,12 +227,17 @@ export class InventoryPanel extends Panel {
       this.figShadow, this.nicheFigure, this.contact, this.light, this.slotHost, this.glass));
 
     // Right-click is the game's "put it back", so the browser menu never gets
-    // it, and a left press anywhere resolves whatever is on the cursor.
+    // it, and a primary press anywhere resolves whatever is on the cursor.
+    //
+    // `pointerdown` rather than `mousedown`: a phone synthesises mouse events
+    // from a tap inconsistently and never during a drag, so a screen listening
+    // for them is a screen a finger cannot operate. One event family serves
+    // both devices and `e.button` still separates the mouse's two.
     for (const host of [body, side]) {
       host.addEventListener('contextmenu', (e) => e.preventDefault());
-      host.addEventListener('mousedown', (e) => {
+      host.addEventListener('pointerdown', (e) => {
         if (e.button === 2) this._cancel();
-        else if (e.button === 0 && this.held) this._dropAt(e.clientX, e.clientY);
+        else if (this.held && e.isPrimary) this._dropAt(e.clientX, e.clientY);
       });
     }
   }
@@ -225,17 +265,26 @@ export class InventoryPanel extends Panel {
     // the window, so this is the only place a held item can be put back without
     // the screen closing out from under it.
     window.addEventListener('keydown', this._onKeyCapture, true);
+
+    // A finger has no cursor to find things with, and cannot see a plaque until
+    // it has already guessed the gesture that opens one — so the pack states
+    // its own grammar once, in the one channel MM6 has for saying anything
+    // (STYLE.md §5: an imperative, sentence case, with a stop). A mouse needs
+    // no telling: it hovers, and the plaque it hovers names both buttons.
+    if (isCoarsePointer()) this._say('Drag to move an item, tap to use it, press and hold to look.');
   }
 
   onClose() {
     window.removeEventListener('keydown', this._onKeyCapture, true);
     this._endCarry();
+    this._endPress();
     this.inspecting = false;
     this.ui.hud?.setMessage?.('');
   }
 
   dispose() {
     this._endCarry();
+    this._endPress();
     window.removeEventListener('keydown', this._onKeyCapture, true);
     super.dispose();
   }
@@ -326,21 +375,169 @@ export class InventoryPanel extends Panel {
   }
 
   _bindItem(node, item, src) {
-    node.addEventListener('mousedown', (e) => {
-      if (e.button === 2) {
-        e.stopPropagation();
-        if (this.held) this._cancel();
-        else this._use(item, src);
-        return;
-      }
-      if (e.button !== 0) return;
-      if (this.inspecting) { e.stopPropagation(); this._appraise(item); return; }
-      // While carrying, the press belongs to the zone underneath: let it bubble.
-      if (!this.held) { e.stopPropagation(); this._lift(item, src, e, node); }
+    node.addEventListener('pointerdown', (e) => this._itemDown(e, item, src, node));
+    // Hover names are a mouse's business. A finger resting on an item is asking
+    // for the plaque, not writing the strip, and the compatibility `mouseenter`
+    // a tap synthesises would put the name there for a gesture nobody made.
+    node.addEventListener('pointerenter', (e) => {
+      if (e.pointerType === 'mouse') this._hover(this._name(item));
     });
-    node.addEventListener('mouseenter', () => this._hover(this._name(item)));
-    node.addEventListener('mouseleave', () => this._hover(''));
+    node.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse') this._hover('');
+    });
     tooltip.attach(node, () => this._tip(item, src));
+  }
+
+  /**
+   * A press landing on an item, from a mouse, a finger or a stylus.
+   *
+   * The branch is on `e.pointerType` and not on the media query, because the
+   * question is what made THIS press: an iPad with a trackpad attached should
+   * get the mouse's grammar from the trackpad and the finger's from the glass,
+   * in the same session, on the same screen.
+   */
+  _itemDown(e, item, src, node) {
+    if (e.button === 2) {
+      e.stopPropagation();
+      if (this.held) this._cancel();
+      else this._use(item, src);
+      return;
+    }
+    // A mouse's middle and side buttons are not gestures this screen has.
+    if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if (this.inspecting) { e.stopPropagation(); this._appraise(item); return; }
+    // While carrying, the press belongs to the zone underneath: let it bubble.
+    if (this.held) return;
+    e.stopPropagation();
+
+    this._press = {
+      id: e.pointerId,
+      touch: e.pointerType !== 'mouse',
+      item,
+      src,
+      // The sprite's box as it stands NOW. A deferred lift happens after the
+      // pack has been redrawn at least once, and by then this node is gone.
+      rect: node.getBoundingClientRect(),
+      x: e.clientX,
+      y: e.clientY,
+      lifted: false,
+    };
+    this._capture(e);
+    this._listen();
+    // A mouse lifts on the press, because MM6's pack is click-to-carry and a
+    // desktop player expects the item on the cursor before they have moved it.
+    // A finger cannot: the tap has to stay free for the action, so the lift
+    // waits until the press has travelled far enough to be a drag.
+    if (!this._press.touch) {
+      this._press.lifted = true;
+      this._lift(item, src, { x: e.clientX, y: e.clientY }, this._press.rect);
+    }
+  }
+
+  /**
+   * Hold the pointer on something that will still be here when it lifts.
+   *
+   * Not the sprite the press landed on: lifting an item redraws the pack, so
+   * that element — and the implicit capture the browser gave it — is gone a
+   * frame later, after which a finger sliding off the panel stops reporting and
+   * the item is stuck to the screen with no way to put it down. Capture
+   * retargets by element and not by geometry, so the panel body serves for
+   * drops over the sidebar too.
+   */
+  _capture(e) {
+    if (!this.el?.setPointerCapture) return;
+    try {
+      this.el.setPointerCapture(e.pointerId);
+      this._captured = e.pointerId;
+    } catch { /* the pointer ended before we could claim it */ }
+  }
+
+  /**
+   * Window listeners, not element ones, and shared by the press and the carry.
+   *
+   * A carry outlives its press on a mouse — click to lift, release, and the
+   * item follows the cursor with no button down — so the two lifetimes overlap
+   * and neither may tear the other's listeners off. `_unlisten` refuses while
+   * either is live.
+   */
+  _listen() {
+    if (this._listening) return;
+    this._listening = true;
+    window.addEventListener('pointermove', this._onMove);
+    window.addEventListener('pointerup', this._onUp);
+    window.addEventListener('pointercancel', this._onUp);
+  }
+
+  _unlisten() {
+    if (!this._listening || this._press || this.held) return;
+    this._listening = false;
+    window.removeEventListener('pointermove', this._onMove);
+    window.removeEventListener('pointerup', this._onUp);
+    window.removeEventListener('pointercancel', this._onUp);
+  }
+
+  _pointerMove(e) {
+    const p = this._press;
+    if (p && e.pointerId === p.id && !p.lifted
+      && Math.hypot(e.clientX - p.x, e.clientY - p.y) >= DRAG_SLOP) {
+      p.lifted = true;
+      // Lifted from where the finger LANDED, not from here. The grab offset is
+      // whatever was under it when it came down; taking it a slop-width later
+      // shifts every drop by a fifth of a cell, which is enough to land one
+      // cell short of the bottle being aimed at — and a drop on a free cell is
+      // a move rather than a mixture.
+      this._lift(p.item, p.src, { x: p.x, y: p.y }, p.rect);
+    }
+    if (this.held) this._track(e.clientX, e.clientY);
+  }
+
+  _pointerUp(e) {
+    const p = this._press;
+    // No press of ours in flight: a mouse carrying an item puts it down on the
+    // next press, not on this release.
+    if (!p || e.pointerId !== p.id) return;
+    const cancelled = e.type === 'pointercancel';
+    const moved = Math.hypot(e.clientX - p.x, e.clientY - p.y);
+    // Asked, rather than pressed: the plaque was standing and the finger was
+    // reading it. Doing the item's action as well on the way out is how a
+    // player loses a potion to a question. Read as state and not as elapsed
+    // time — see `answeredHold` in ../widgets.js for why that distinction is
+    // the difference between a tap that works and one that silently does not.
+    const asked = p.touch && !p.lifted && tooltip.answeredHold;
+    this._endPress();
+
+    if (cancelled) {
+      // The gesture was taken away from us mid-carry. Put the item back rather
+      // than leave it on the cursor — nothing left the pack, so nothing is lost.
+      if (this.held) { this._endCarry(); this.refresh(); }
+      return;
+    }
+    if (p.lifted) {
+      if (p.touch) {
+        this._dropAt(e.clientX, e.clientY);
+        // A refused drop — no room, or a piece this class cannot wear — leaves
+        // the item on the cursor. That is right for a mouse, which is still
+        // carrying it and can try again, and wrong for a finger that has
+        // already left the glass: the sprite would hang there answering to
+        // nothing. The refusal has already said why on the strip; the carry
+        // ends without disturbing it, and nothing left the pack to begin with.
+        if (this.held) { this._endCarry(); this.refresh(); }
+      // A mouse press that never travelled is a pick-up that keeps carrying,
+      // which is MM6's pack; one that travelled is a drag, and it lands here.
+      } else if (moved >= DRAG_SLOP) this._dropAt(e.clientX, e.clientY);
+      return;
+    }
+    if (p.touch && !asked && moved < DRAG_SLOP) this._use(p.item, p.src);
+  }
+
+  /** Let go of the press: capture, listeners and the record of it. */
+  _endPress() {
+    if (this._captured != null) {
+      try { this.el?.releasePointerCapture(this._captured); } catch { /* already gone */ }
+      this._captured = null;
+    }
+    this._press = null;
+    this._unlisten();
   }
 
   // ── the message strip ─────────────────────────────────────────────────────
@@ -371,10 +568,16 @@ export class InventoryPanel extends Panel {
 
   // ── carrying ──────────────────────────────────────────────────────────────
 
-  _lift(item, src, e, node) {
+  /**
+   * Take the item onto the cursor.
+   *
+   * `at` and `rect` are passed in rather than read from an event, because a
+   * deferred lift happens on a `pointermove` whose coordinates are already a
+   * slop-width past the grab and against a sprite the redraw has replaced.
+   */
+  _lift(item, src, at, rect) {
     const cell = this._cellPx();
     const fp = itemFootprint(item);
-    const r = node.getBoundingClientRect();
     const fromGrid = src.from === 'grid' && cell > 0;
     this.held = {
       ...src,
@@ -382,10 +585,10 @@ export class InventoryPanel extends Panel {
       owner: this.ui.activeIndex,
       // Keep the grab point under the cursor for a pack item; anything lifted
       // off the figure has no cell geometry, so it hangs from its middle.
-      gx: fromGrid ? (e.clientX - r.left) / cell : fp.w / 2,
-      gy: fromGrid ? (e.clientY - r.top) / cell : fp.h / 2,
-      fromX: e.clientX,
-      fromY: e.clientY,
+      gx: fromGrid ? (at.x - rect.left) / cell : fp.w / 2,
+      gy: fromGrid ? (at.y - rect.top) / cell : fp.h / 2,
+      fromX: at.x,
+      fromY: at.y,
     };
     this.ui.drag = this.held;
     this.ghost = this._sprite(item, nu(fp.w * CELL - 3), nu(fp.h * CELL - 3), 'mm-item mm-inv-ghost');
@@ -395,9 +598,8 @@ export class InventoryPanel extends Panel {
     // still reach it and no other screen's ever can.
     this.ghost.dataset.panel = 'inventory';
     this.ui.root?.appendChild(this.ghost);
-    window.addEventListener('mousemove', this._onMove);
-    window.addEventListener('mouseup', this._onUp);
-    this._track(e.clientX, e.clientY);
+    this._listen();
+    this._track(at.x, at.y);
     this._hover(this._name(item));
     this.refresh();
   }
@@ -423,13 +625,6 @@ export class InventoryPanel extends Panel {
       this.ghost.style.top = `${y - held.gy * unit}px`;
       this.ghost.classList.remove('is-bad');
     }
-  }
-
-  _release(e) {
-    if (!this.held) return;
-    const moved = Math.hypot(e.clientX - this.held.fromX, e.clientY - this.held.fromY);
-    // Press and release on the spot is a pick-up, not a drag: keep carrying.
-    if (moved >= DRAG_SLOP) this._dropAt(e.clientX, e.clientY);
   }
 
   /**
@@ -516,7 +711,7 @@ export class InventoryPanel extends Panel {
     this.refresh();
   }
 
-  /** Eat the click this mouseup is about to raise, once. */
+  /** Eat the click this release is about to raise, once. */
   _swallowClick() {
     const stop = (e) => {
       e.stopPropagation();
@@ -532,12 +727,11 @@ export class InventoryPanel extends Panel {
    *  about itself has already been written there. */
   _endCarry() {
     if (!this.held) return;
-    window.removeEventListener('mousemove', this._onMove);
-    window.removeEventListener('mouseup', this._onUp);
     this.ghost?.remove();
     this.ghost = null;
     this.held = null;
     this.ui.drag = null;
+    this._unlisten();
   }
 
   /** Abandon whatever the cursor is doing without touching the pack. */
@@ -678,7 +872,15 @@ export class InventoryPanel extends Panel {
     this.refresh();
   }
 
-  /** Right-click with an empty hand: the obvious thing for the item's state. */
+  /**
+   * The obvious thing for the item's state, whatever asked for it: a
+   * right-click with an empty hand on a mouse, a tap on a finger.
+   *
+   * One method for both, deliberately. The two devices reach it by different
+   * gestures because they have different hardware, and that is the last place
+   * they are allowed to differ — the moment "what a tap does" and "what a
+   * right-click does" are written twice they start to disagree.
+   */
   _use(item, src) {
     if (item.broken || item.identified === false) { this._appraise(item); return; }
     if (src.from === 'equip') {
@@ -776,11 +978,23 @@ export class InventoryPanel extends Panel {
       if (!check.ok) lines.push(`<span class="mm-t-down">${check.why}</span>`);
     }
 
-    const footer = item.broken ? 'Right-click to attempt a repair'
-      : unknown ? 'Right-click to appraise'
-        : src.from === 'equip' ? 'Click to lift · right-click to stow'
-          : slot ? 'Click to lift · drop on the figure to wear'
-            : 'Click to lift · right-click to use';
+    // The footer names a gesture, so it has two correct forms and exactly one
+    // of them is true on the device in the player's hand. Not a word swap:
+    // a mouse has a second button, so the pack lifts on a click and acts on a
+    // right-click; a finger has none, so it moves on a drag and acts on a tap.
+    // The two readings sit beside each other here rather than in a table, so
+    // the phrasing can be judged as English. `byPointer` is the only thing that
+    // decides which (../../input/pointer.js).
+    const footer = item.broken
+      ? byPointer('Right-click to attempt a repair', 'Tap to attempt a repair')
+      : unknown
+        ? byPointer('Right-click to appraise', 'Tap to appraise')
+        : src.from === 'equip'
+          ? byPointer('Click to lift · right-click to stow', 'Drag to move · tap to stow')
+          : slot
+            ? byPointer('Click to lift · drop on the figure to wear',
+              'Tap to wear · drag onto the figure to place it')
+            : byPointer('Click to lift · right-click to use', 'Drag to move · tap to use');
 
     // The tooltip is `position: fixed` at the document root, so a panel file
     // cannot style it without repainting every tooltip in the game (STYLE.md

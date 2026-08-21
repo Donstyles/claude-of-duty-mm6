@@ -952,7 +952,20 @@ export class UISystem extends System {
     this._syncParty(true);
   }
 
-  /** Drop an item from the pack onto the painted figure to equip it. */
+  /**
+   * Drop an item from the pack onto the painted figure to equip it.
+   *
+   * **Nothing calls this.** Its only caller was `Panel.buildNiche`'s HTML5
+   * `drop` handler, which could never fire — there is no `draggable` anywhere
+   * in the tree and a touchscreen has no such API at all — and which has been
+   * removed. The live path is the backpack's: `inventory.js` resolves a drop by
+   * geometry and calls `equipItem` with the slot it landed on, which is the one
+   * that checks the class list, the two-handed rule and the pack entry.
+   *
+   * Kept because `ui.drag` is still the published "something is on the cursor"
+   * state and a screen that grows its own figure will want a way in. Do not
+   * revive it from a `drop` event; hand it a pointer path.
+   */
   equipDragged(index, drag) {
     if (!drag?.item) return false;
     const slot = drag.item.slot ?? drag.item.category;
@@ -1033,6 +1046,15 @@ export class UISystem extends System {
     const c = this._target(index);
     if (!c || !entry) return false;
     const item = entry.item;
+    // Resolved against the character's own array first, and refused if it is
+    // not there. Drinking then failing to splice pours the bottle and leaves
+    // it full — a free potion, reported as a success, with nothing on screen
+    // to say so. `_packEntry` explains how the two lists come to differ.
+    const mine = this._packEntry(c, entry, item);
+    if (!mine) {
+      this.toast(`${item?.name ?? 'That'} is not in this pack.`, 'warn');
+      return false;
+    }
     if (item.category === 'potion') {
       // Nothing in a bottle reaches a corpse — the whole of the temple's
       // resurrection fee rests on that, and Divine Restoration says so itself.
@@ -1045,8 +1067,7 @@ export class UISystem extends System {
         this.toast(`${c.name} ${out.note}.`, 'warn');
         return false;
       }
-      const i = c.inventory.indexOf(entry);
-      if (i >= 0) c.inventory.splice(i, 1);
+      c.inventory.splice(c.inventory.indexOf(mine), 1);
       this.log(`${c.name} drinks the ${item.name} — ${out.note}.`, out.kind);
     } else {
       this.log(`${c.name} examines the ${item.name}.`, 'info');
@@ -1212,6 +1233,45 @@ export class UISystem extends System {
     return { note: 'holds something nobody here knows how to drink', kind: 'warn', consumed: false };
   }
 
+  /**
+   * The pack entry a screen's action is really about, as THIS character's own
+   * array knows it.
+   *
+   * Every screen binds its sprites against a VIEW MODEL, and the view model is
+   * rebuilt from the party on a tick. Nine times out of ten `vm.inventory` and
+   * `character.inventory` are the same array and the entry handed back here is
+   * the identical object; the tenth time — a pack replaced wholesale between
+   * two syncs, a hireling holding a pane, a screen drawn a beat before the
+   * party changed — it is a different object that looks exactly like it.
+   *
+   * What that costs is not a refusal, which would at least be visible. It is a
+   * FAKE SUCCESS, and the two ways it lands are both silent:
+   *
+   *   · `indexOf(entry)` returns -1, the splice is skipped, and `equipItem`
+   *     goes on to write the item into the slot — so the piece is worn AND
+   *     still in the pack. The player has duplicated it.
+   *   · `moveItemToGrid` writes `entry.x = gx` onto an object nothing draws,
+   *     reports true, and the item does not move.
+   *
+   * Both were live, and both were found by a touch harness aiming at the pack
+   * a beat after it was rewritten — which is exactly the shape a phone hits
+   * during play. `_tryMix` had already been bitten by this and grown its own
+   * three-step chain (see below); this is that chain, once, for the four
+   * callers that all needed it.
+   *
+   * The fallbacks are in order of how much they prove: the same object, then
+   * the same item, then the same cell. Anything looser would start matching
+   * the wrong stack.
+   */
+  _packEntry(c, entry, item) {
+    const inv = c?.inventory;
+    if (!Array.isArray(inv) || !inv.length) return null;
+    return inv.find((e) => e === entry)
+      ?? (item ? inv.find((e) => e.item === item) : undefined)
+      ?? (entry && Number.isFinite(entry.x) ? inv.find((e) => e.x === entry.x && e.y === entry.y) : undefined)
+      ?? null;
+  }
+
   /** Move an item into an equipment slot, swapping whatever was there. */
   equipItem(index, drag, slotId) {
     const c = this._target(index);
@@ -1225,10 +1285,17 @@ export class UISystem extends System {
       this.toast(`${item.name} does not go there.`, 'warn');
       return false;
     }
+    // Resolved BEFORE anything is written, and refused rather than half-done:
+    // taking the item out of the pack is not an afterthought to putting it on,
+    // it is the other half of the same move.
+    const mine = drag.from === 'grid' ? this._packEntry(c, drag.entry, item) : null;
+    if (drag.from === 'grid' && !mine) {
+      this.toast(`${item.name} is not in this pack.`, 'warn');
+      return false;
+    }
     const previous = c.equipment[slotId] ?? null;
     if (drag.from === 'grid') {
-      const i = c.inventory.indexOf(drag.entry);
-      if (i >= 0) c.inventory.splice(i, 1);
+      c.inventory.splice(c.inventory.indexOf(mine), 1);
     } else if (drag.from === 'equip' && drag.slot !== slotId) {
       delete c.equipment[drag.slot];
     }
@@ -1247,15 +1314,26 @@ export class UISystem extends System {
     const fp = itemFootprint(item);
     const gx = Math.max(0, Math.min(cols - fp.w, x));
     const gy = Math.max(0, Math.min(rows - fp.h, y));
-    const ignore = drag.from === 'grid' ? drag.entry : null;
-    if (!this._gridFree(c.inventory, gx, gy, fp.w, fp.h, ignore)) {
-      if (this._tryMix(c, drag, gx, gy, ignore)) return true;
+    // The entry as this character's array knows it — see `_packEntry`. Writing
+    // `x`/`y` onto an entry nothing draws reports a move that never happened,
+    // which is the hardest possible failure to notice from the outside.
+    const mine = drag.from === 'grid' ? this._packEntry(c, drag.entry, item) : null;
+    if (!this._gridFree(c.inventory, gx, gy, fp.w, fp.h, mine)) {
+      if (this._tryMix(c, drag, gx, gy, mine)) return true;
       this.toast('No room in the pack there.', 'warn');
       return false;
     }
     if (drag.from === 'grid') {
-      drag.entry.x = gx;
-      drag.entry.y = gy;
+      // The occupied-cell branch above is checked first deliberately: a drop
+      // onto another bottle is a mixture and `_tryMix` resolves the pair its
+      // own way. This refusal is only for the plain move, and only once even
+      // the cell fallback has failed to find the entry.
+      if (!mine) {
+        this.toast(`${item.name} is not in this pack.`, 'warn');
+        return false;
+      }
+      mine.x = gx;
+      mine.y = gy;
     } else {
       delete c.equipment[drag.slot];
       c.inventory.push({ item, x: gx, y: gy });
@@ -1302,10 +1380,10 @@ export class UISystem extends System {
     //
     // The same seam as `index` addressing the view models where `mix` wants a
     // party index, written into this method's own docstring one screen up, and
-    // then walked into again in its object-identity form.
-    const mine = c.inventory.find((e) => e === drag.entry)
-      ?? c.inventory.find((e) => e.item === drag.item)
-      ?? c.inventory.find((e) => e.x === drag.entry.x && e.y === drag.entry.y);
+    // then walked into again in its object-identity form. The chain that fixed
+    // it is `_packEntry` now, because `equipItem` and `moveItemToGrid` were
+    // walking into it too — each in its own silent way.
+    const mine = this._packEntry(c, drag.entry, drag.item);
     if (!mine) return false;
 
     const under = c.inventory.find((e) => {

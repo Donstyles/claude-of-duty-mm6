@@ -49,6 +49,30 @@ const VENUE_INTERIOR = new Map(Object.values(VENUES).map((v) => [v.id, v.kind]))
 function hashIndex(key, n) {
   return n > 0 ? hashSeed(String(key)) % n : 0;
 }
+
+/**
+ * Resolve a repo-relative art path against the document.
+ *
+ * The game is published to GitHub Pages under a project subpath —
+ * `/claude-of-duty-mm6/` — which is the whole reason `vite.config.js` sets a
+ * relative `base`. Every plate index in the tree is written relative for the
+ * same reason (`INTERIOR_BASE`, `ITEM_PLATE_BASE`, `PORTRAIT_PLATES.base`), and
+ * `UITextures.artUrl` resolves them the same way this does.
+ *
+ * A **root-absolute** url is the one form that survives the dev server and dies
+ * on the deployed site: `/art/interiors/house_2.jpg` asks
+ * `donstyles.github.io` for a file that only exists under the project path, gets
+ * a 404, and CSS drops the layer without raising anything. That is why the shop
+ * and the house read as a black hole on a phone while the character sheet —
+ * whose granite is a canvas, not a file — was fine.
+ */
+function artUrl(path) {
+  try {
+    return new URL(path, document.baseURI).href;
+  } catch {
+    return path;
+  }
+}
 const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 // ── base ────────────────────────────────────────────────────────────────────
@@ -175,7 +199,10 @@ export class Panel {
     }
     const which = variants[hashIndex(opts?.venue ?? kind, variants.length)];
     const file = which === 1 ? kind : `${kind}_${which}`;
-    this.el.style.backgroundImage = `url("/${INTERIOR_BASE}${file}.jpg")`;
+    // `artUrl`, not a leading slash: `INTERIOR_BASE` is relative on purpose and
+    // the slash turned it into a request the deployed site cannot answer. See
+    // the note on `artUrl` above — this one character was the black viewport.
+    this.el.style.backgroundImage = `url("${artUrl(`${INTERIOR_BASE}${file}.jpg`)}")`;
     this.el.classList.add('has-interior');
   }
 
@@ -195,7 +222,28 @@ export class Panel {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 
-  /** The equipment niche: a painted figure in dark stone, plus the glass. */
+  /**
+   * The equipment niche: a painted figure in dark stone, plus the glass.
+   *
+   * ── the drop zone that was never a drop zone ─────────────────────────────
+   *
+   * This used to bind `dragover` / `dragleave` / `drop` on `.mm-niche-drop` and
+   * call `ui.equipDragged` from them. Not one of those three can ever have
+   * fired: HTML5 drag-and-drop only starts from an element carrying
+   * `draggable`, there is no `draggable` and no `dragstart` anywhere in this
+   * tree, and on a touchscreen the whole API does not exist at all. So the
+   * niche looked like it accepted a dropped item, in a file every screen reads,
+   * while the only working drop path in the game — the backpack's, which
+   * resolves by geometry in `./inventory.js` — sat somewhere else and looked
+   * exactly the same from the outside.
+   *
+   * That is this project's signature bug in miniature: two things that look
+   * alike and disagree, one of them dead. It is deleted rather than ported,
+   * because porting it would give a screen with nothing to lift a place to
+   * drop it. The element stays — the stylesheet paints it — and any screen that
+   * wants a live niche drop should hand its presses to a pointer path the way
+   * the backpack does, not revive this one.
+   */
   buildNiche(side) {
     this.nicheFigure = el('div', { className: 'mm-niche-figure' });
     this.nicheDrop = el('div', { className: 'mm-niche-drop' });
@@ -203,20 +251,6 @@ export class Panel {
       this.nicheFigure,
       el('div', { className: 'mm-niche-glass' }),
       this.nicheDrop));
-    this.nicheDrop.addEventListener('dragover', (e) => {
-      if (!this.ui.drag) return;
-      e.preventDefault();
-      this.nicheDrop.classList.add('is-hot');
-    });
-    this.nicheDrop.addEventListener('dragleave', () => this.nicheDrop.classList.remove('is-hot'));
-    this.nicheDrop.addEventListener('drop', (e) => {
-      e.preventDefault();
-      this.nicheDrop.classList.remove('is-hot');
-      const drag = this.ui.drag;
-      if (drag) this.ui.equipDragged(this.ui.activeIndex, drag);
-      this.ui.drag = null;
-      this.refresh();
-    });
   }
 
   refreshNiche() {

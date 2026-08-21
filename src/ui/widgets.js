@@ -178,9 +178,39 @@ export function roleLine(profession) {
 // ── tooltip ─────────────────────────────────────────────────────────────────
 
 /**
+ * How long a finger has to rest on something before it is asking about it
+ * rather than pressing it. 480 ms is MM6's own right-button plaque timing to
+ * within a frame and sits comfortably inside `DRAG_SLOP`'s window: a drag has
+ * left the item long before this fires, and a tap is gone long before it too.
+ */
+export const PRESS_HOLD_MS = 480;
+/** How far the finger may wander and still be resting rather than dragging. */
+const HOLD_SLOP = 10;
+
+/**
  * One ornate tooltip for the whole interface. It follows the cursor after a
  * short delay, flips at the viewport edges, and takes either an HTML string or
  * a function returning one (so item stats are computed only when shown).
+ *
+ * ── the plaque on a phone ────────────────────────────────────────────────────
+ *
+ * A mouse hovers and a finger cannot, so on a touch device this component was
+ * simply absent: everything the game has to say about an item, a spell, a fare
+ * or a price footnote lives here (STYLE.md §12) and none of it could be
+ * reached. Worse than absent, in fact — iOS synthesises `mouseenter` and
+ * `mousedown` from the same tap, so the hover timer below was started and
+ * cancelled by one finger, which is indistinguishable from a tooltip that
+ * decided not to appear.
+ *
+ * So a coarse pointer gets MM6's own gesture for the same thing: press and
+ * hold, which is the right button held down. It shows while the finger rests
+ * and goes when the finger lifts, exactly as the right-click plaque does.
+ *
+ * The cancel is bound on `window`, not on the target, and that is load-bearing:
+ * a panel is free to rebuild the element under the finger mid-gesture (the
+ * backpack does, the moment a drag lifts an item), and a per-target `pointerup`
+ * on a node that no longer exists never arrives. The timer would then fire into
+ * the middle of a drag with a plaque about an item that has moved.
  */
 class TooltipManager {
   constructor() {
@@ -190,7 +220,19 @@ class TooltipManager {
     this._x = 0;
     this._y = 0;
     this._visible = false;
+    this._hold = null;
+    /** Did the last press-and-hold actually put a plaque up? See `answeredHold`. */
+    this._answered = false;
     this._onMove = (e) => { this._x = e.clientX; this._y = e.clientY; if (this._visible) this._place(); };
+    this._onHoldMove = (e) => {
+      const h = this._hold;
+      if (!h || e.pointerId !== h.id) return;
+      if (Math.hypot(e.clientX - h.x, e.clientY - h.y) > HOLD_SLOP) this._endHold();
+    };
+    this._onHoldEnd = (e) => {
+      if (this._hold && e.pointerId !== this._hold.id) return;
+      this._endHold();
+    };
   }
 
   mount(parent) {
@@ -198,9 +240,15 @@ class TooltipManager {
     this.el = el('div', { className: 'mm-tooltip', role: 'tooltip' });
     (parent ?? document.body).appendChild(this.el);
     window.addEventListener('mousemove', this._onMove, { passive: true });
+    window.addEventListener('pointermove', this._onHoldMove, { passive: true, capture: true });
+    window.addEventListener('pointerup', this._onHoldEnd, true);
+    window.addEventListener('pointercancel', this._onHoldEnd, true);
   }
 
-  /** Bind a target so hovering it shows `content` (string or () => string). */
+  /**
+   * Bind a target so resting on it shows `content` (string or () => string):
+   * hovering it with a mouse, pressing and holding it with a finger.
+   */
   attach(target, content) {
     if (!target) return target;
     target.addEventListener('mouseenter', (e) => {
@@ -214,7 +262,54 @@ class TooltipManager {
     const leave = () => { clearTimeout(this._timer); this.hide(); };
     target.addEventListener('mouseleave', leave);
     target.addEventListener('mousedown', leave);
+    // A mouse's own `pointerdown` is left to the `mousedown` path above, so the
+    // desktop behaviour is byte-for-byte what it was.
+    target.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;
+      this._endHold();
+      this._answered = false;
+      this._x = e.clientX; this._y = e.clientY;
+      this._hold = {
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        timer: window.setTimeout(() => {
+          const html = typeof content === 'function' ? content() : content;
+          if (html) this.show(html);
+        }, PRESS_HOLD_MS),
+      };
+    });
     return target;
+  }
+
+  /**
+   * Was the finger that just lifted asking a question rather than pressing?
+   *
+   * True only while the plaque it raised was actually standing. A screen needs
+   * this because the two gestures share one press: a tap does the thing, a
+   * press and hold explains it, and the release that ends a hold must not also
+   * do the thing — that is how a player loses a potion to a question.
+   *
+   * A STATE, deliberately, and not a stopwatch. The tempting version compares
+   * the release's timestamp against `PRESS_HOLD_MS`, which is right until the
+   * main thread stalls: the plaque's own timer misses its slot, nothing appears,
+   * and the arithmetic still says "asked" — so the tap silently does nothing and
+   * the player is told nothing. Asking what actually happened cannot fail that
+   * way; if no plaque came up, the press was a tap and is treated as one.
+   *
+   * Read from the window's CAPTURE phase, which is where `_onHoldEnd` sits, so
+   * it is already settled by the time a panel's own bubble-phase `pointerup`
+   * handler looks at it.
+   */
+  get answeredHold() { return this._answered; }
+
+  /** Drop an armed or standing press-and-hold. */
+  _endHold() {
+    if (!this._hold) return;
+    clearTimeout(this._hold.timer);
+    this._hold = null;
+    this._answered = this._visible;
+    this.hide();
   }
 
   show(html) {
@@ -247,6 +342,11 @@ class TooltipManager {
 
   dispose() {
     window.removeEventListener('mousemove', this._onMove);
+    window.removeEventListener('pointermove', this._onHoldMove, true);
+    window.removeEventListener('pointerup', this._onHoldEnd, true);
+    window.removeEventListener('pointercancel', this._onHoldEnd, true);
+    clearTimeout(this._hold?.timer);
+    this._hold = null;
     this.el?.remove();
     this.el = null;
   }

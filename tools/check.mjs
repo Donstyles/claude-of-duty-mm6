@@ -81,6 +81,15 @@
  *               SILENT on that device, and twenty gates were green, because
  *               not one of them read `missing`.
  *
+ *   touch       every gate that touched the backpack drove a MOUSE, and the
+ *               game is played on a phone. `drag` passed while all four touch
+ *               behaviours were broken: a touch drag emits no `mousemove` at
+ *               all, and the pack carried and dropped on `window.mousemove` /
+ *               `window.mouseup`. Worse, mobile Chromium synthesises
+ *               `mousedown` from a tap — so the one mouse event a phone does
+ *               send was enough to pick an item up, and nothing was ever sent
+ *               to put it down. The item stuck to the finger.
+ *
  * Note what `content` and `seam` each do NOT do. `content` checks that ids
  * RESOLVE: that a quest naming an NPC names one who exists. It never checks
  * that a FIELD exists, so it was green through all eleven. `seam` is the other
@@ -170,6 +179,8 @@ const GATES = [
     why: 'no shader asks for more textures at once than a phone will give it' },
   { name: 'boot', slow: true, cmd: 'node', args: ['tools/boottest.mjs'],
     why: 'every subsystem loads — including the one that makes the sound' },
+  { name: 'touch', slow: true, cmd: 'node', args: ['tools/touchtest.mjs'],
+    why: 'the backpack answers to a finger' },
 ];
 
 function run(gate) {

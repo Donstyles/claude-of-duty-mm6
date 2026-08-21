@@ -5,6 +5,7 @@ import { icon } from '../Icons.js';
 import { WORLD_SIZE } from '../../game/data/Regions.js';
 import { VENUE_KINDS, venuesInTown } from '../../game/data/Venues.js';
 import { chartRegions, chartTowns, chartBox, drawChart, chartHover } from './map.chart.js';
+import { lower, pointerWords } from '../../input/pointer.js';
 
 /**
  * The Maps book: the local automap and the chart of Caerwen.
@@ -173,7 +174,7 @@ export class MapPanel extends Panel {
     this.noteBtn.addEventListener('click', () => this._toggleNoting());
     tooltip.attach(this.noteBtn, () => tipMarkup({
       title: 'Mark the map',
-      lines: [{ k: 'Then', v: 'click where it matters' }],
+      lines: [{ k: 'Then', v: `${lower(pointerWords().select)} where it matters` }],
       flavour: 'A note stays where you left it, and travels with the party.',
     }));
 

@@ -35,6 +35,7 @@ import {
   STAT_CEILING, statBase, statFloor, stepCost, promotionChain, skillsAtMastery,
   learnableSkills, skillNote, classNote,
 } from '../../game/PartyCreation.js';
+import { lower, pointerWords, selectHint } from '../../input/pointer.js';
 
 /** What a point of each statistic actually buys a first-level adventurer. */
 const ATTRIBUTE_NOTE = {
@@ -594,7 +595,11 @@ export class CreatePanel extends Panel {
       ],
       flavour: skillNote(skillId),
       footer: fixed ? 'Costs none of your two picks.'
-        : cap ? (chosen ? 'Click to give the pick back.' : 'Click to spend a pick on it.') : '',
+        : cap
+          ? (chosen
+            ? `${selectHint('give the pick back')}.`
+            : `${selectHint('spend a pick on it')}.`)
+          : '',
     });
   }
 
@@ -618,7 +623,7 @@ export class CreatePanel extends Panel {
         gm.length ? `<b class="mm-t-gold">Grandmaster</b> — ${gm.join(', ')}` : null,
         master.length ? `<b class="mm-t-gold">Master</b> — ${master.join(', ')}` : null,
       ],
-      footer: 'Click to give this profession to the column being edited.',
+      footer: `${selectHint('give this profession to the column being edited')}.`,
     });
   }
 
@@ -635,7 +640,8 @@ export class CreatePanel extends Panel {
         { k: 'Past 30', v: '5 points each' },
       ],
       flavour: 'Selling a statistic back pays the same tariff, which is how a spike is funded — within what the profession will tolerate.',
-      footer: `The stepper works on ${ATTRIBUTE_LABEL[slot.cursor]}; click another line to point it elsewhere.`,
+      footer: `The stepper works on ${ATTRIBUTE_LABEL[slot.cursor]}; `
+        + `${lower(pointerWords().select)} another line to point it elsewhere.`,
     });
   }
 

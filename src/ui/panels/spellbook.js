@@ -35,6 +35,7 @@ import { icon } from '../Icons.js';
 import { bookPlate, slotSetting, illumFrame, tabVellum, bonePlate } from '../art/spellbookPaper.js';
 import { MAGIC_SCHOOLS, MASTERY, MASTERY_LABEL, SKILLS, masteryRank } from '../../game/data/Skills.js';
 import { spellsForSchool, canCast, evaluateSpell, getSpell } from '../../game/data/Spells.js';
+import { byPointer } from '../../input/pointer.js';
 
 /**
  * The ink a tab's glyph is painted in once its school is the open one.
@@ -740,7 +741,9 @@ export class SpellbookPanel extends Panel {
       flavour: [spell.desc, spell.notes].filter(Boolean).join(' '),
       footer: !learned
         ? `${vm?.name ?? 'This character'} has not learned it`
-        : check.ok ? 'Click to ready · double-click to cast' : sentence(check.reason),
+        : check.ok
+          ? byPointer('Click to ready · double-click to cast', 'Tap to ready · double-tap to cast')
+          : sentence(check.reason),
     });
   }
 
