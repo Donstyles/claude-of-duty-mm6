@@ -95,6 +95,12 @@ export class Engine {
       cascades: 4,
       anisotropy: 16,
       exposure: 1.0,
+      // Pretend the GPU reports this many fragment texture units. 0 = ask it.
+      // Only `?units=N` sets this, and only so a machine with 32 can compile
+      // and photograph what a machine with 16 gets.
+      textureUnits: 0,
+      /** Set in `_initRenderer` from the measured budget — never passed in. */
+      leanTerrain: false,
       // Quality tier: 'low' | 'medium' | 'high' | 'ultra'
       quality: 'ultra',
       // Gameplay
@@ -210,28 +216,49 @@ export class Engine {
 
     // What this GPU will actually let a shader sample.
     //
-    // The terrain binds eight custom samplers — splat, region, two horizon
-    // maps, albedo, normal, ORM, height — on top of everything three.js's own
-    // standard material wants, and every shadow map is a texture unit too. A
-    // desktop reports 32 fragment texture units and never notices. iOS Safari
-    // commonly reports 16, and over that limit the program does not link:
-    // three.js logs a shader error and the mesh is simply never drawn.
+    // The terrain splat is the largest fragment program in the game and it is
+    // large in the one currency that has a hard ceiling. Twenty samplers:
+    // splat, region, two horizon maps, and four PBR sets of albedo, normal,
+    // ORM and height. Every shadow map and the environment probe is a unit on
+    // top of that. A desktop reports 32 fragment texture units and never
+    // notices. iOS Safari reports 16, and over that limit the program does not
+    // link — three.js logs a shader error and the mesh is simply never drawn.
     //
-    // Which is what an iPhone 14 Pro Max showed — the sky, the sea at y=0, the
+    // Which is what an iPhone 14 Pro Max showed: the sky, the sea at y=0, the
     // town's buildings floating on it, and no ground at all, because the
     // ground was the one thing whose shader had failed. Nothing threw that a
-    // player could see. Headless Chromium reports 32, so no gate here has ever
+    // player could see. Headless Chromium reports 32, so no gate here had ever
     // been in a position to notice.
     //
-    // The budget is read rather than assumed, and the shadow cascades are what
-    // gives way: they are the cheapest units to buy back and the least missed.
+    // Dropping the cascades from four to two was the first attempt and it was
+    // not close: it buys two units against an overdraft of at least six. What
+    // has to give is the terrain shader itself, so the budget is measured here
+    // and `leanTerrain` says which of its two forms to compile. `?units=N`
+    // forces the number, so a desktop and every gate can run the phone's path.
     const gl = renderer.getContext();
-    const units = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) || 16;
-    this.caps = { textureUnits: units, maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE) };
-    if (units <= 16 && this.config.cascades > 2) {
-      console.info(`[Engine] ${units} texture units — dropping shadow cascades `
-        + `${this.config.cascades} → 2 so the terrain shader can link`);
-      this.config.cascades = 2;
+    const real = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) || 16;
+    const units = this.config.textureUnits || real;
+    // What three.js binds before the terrain gets a say: the environment probe,
+    // one shadow map per cascade, and the point-light shadows a torch-lit town
+    // puts in the same program. Eight is measured rather than guessed —
+    // `tools/samplertest.mjs` counts the ACTIVE samplers in every linked
+    // program, which is the same number the driver checks against this limit.
+    const RESERVED = 8;
+    const budget = Math.max(0, units - RESERVED);
+    this.caps = {
+      textureUnits: units,
+      reportedUnits: real,
+      samplerBudget: budget,
+      maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+    };
+    // 20 is what the full splat costs. Below that the lean form compiles: it
+    // keeps all four materials, the grade, the tear, the region and the baked
+    // horizon, and gives up the normal, ORM and height maps — 8 samplers.
+    this.config.leanTerrain = budget < 20;
+    if (this.config.leanTerrain) {
+      console.info(`[Engine] ${units} texture units (${budget} after three.js) — `
+        + 'compiling the lean terrain splat');
+      if (this.config.cascades > 2) this.config.cascades = 2;
     }
 
     renderer.shadowMap.enabled = this.config.shadows;

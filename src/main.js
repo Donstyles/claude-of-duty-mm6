@@ -168,9 +168,14 @@ async function main() {
           + `  buffer ${r?.domElement?.width}x${r?.domElement?.height}`,
         `quality ${eng?.config?.quality}  cascades ${eng?.config?.cascades}`
           + `  shadows ${eng?.config?.shadows}`,
-        `texture units ${eng?.caps?.textureUnits}  max texture ${eng?.caps?.maxTexture}`,
+        `texture units ${eng?.caps?.textureUnits}  budget ${eng?.caps?.samplerBudget}`
+          + `  max texture ${eng?.caps?.maxTexture}`,
+        `terrain splat ${eng?.config?.leanTerrain ? 'lean (8 samplers)' : 'full (20 samplers)'}`,
         `draws ${info?.calls ?? '?'}  tris ${info?.triangles ?? '?'}`,
-        `terrain visible ${visible}`,
+        `terrain visible ${visible}  ground y ${terrain?.heightAt?.(
+          window.__GAME?.ctx?.camera?.position?.x ?? 0,
+          window.__GAME?.ctx?.camera?.position?.z ?? 0,
+        )?.toFixed?.(1)}  cam y ${(window.__GAME?.ctx?.camera?.position?.y ?? 0).toFixed(1)}`,
         shaderErrors.length ? `SHADER: ${shaderErrors[0]}` : 'no shader errors',
       ].join('\n');
     };
@@ -182,6 +187,10 @@ async function main() {
     quality: params.get('quality') ?? (coarse ? 'high' : 'ultra'),
     shadows: params.get('shadows') !== '0',
     pixelRatioCap,
+    // `?units=16` makes a desktop compile the phone's shaders. Without it the
+    // only machine that could reproduce the failure was the one in the user's
+    // pocket, with no console attached to it.
+    textureUnits: Number(params.get('units')) || 0,
   });
 
   // Android, launched from the browser rather than the home screen: take

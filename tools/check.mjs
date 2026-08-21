@@ -60,6 +60,18 @@
  *               catalogue — nineteen of fifty-five — threw on entry at the
  *               shipping tier, and all nine other gates were green.
  *
+ *   samplers    an iPhone showed the sky, the sea and the town's buildings
+ *               floating on it, with no ground anywhere. The terrain splat
+ *               samples twenty textures and three.js adds the environment
+ *               probe and a shadow map per cascade to the same program; iOS
+ *               Safari allows sixteen for the whole program and over that the
+ *               program does not link. three.js logs it to a console no phone
+ *               has open and draws everything else. Nineteen gates were green,
+ *               and every one of them ran on a machine reporting 32 units. The
+ *               fix is a lean splat at eight samplers; the gate counts the
+ *               ACTIVE samplers in every linked program, which is the same
+ *               number on any machine.
+ *
  * Note what `content` and `seam` each do NOT do. `content` checks that ids
  * RESOLVE: that a quest naming an NPC names one who exists. It never checks
  * that a FIELD exists, so it was green through all eleven. `seam` is the other
@@ -145,6 +157,8 @@ const GATES = [
     why: 'the sidebar arch has ground on it, and still does after a walk' },
   { name: 'monsters', slow: true, cmd: 'node', args: ['tools/monstertest.mjs'],
     why: 'every creature has a surface, and moves when it strikes and when it dies' },
+  { name: 'samplers', slow: true, cmd: 'node', args: ['tools/samplertest.mjs'],
+    why: 'no shader asks for more textures at once than a phone will give it' },
 ];
 
 function run(gate) {

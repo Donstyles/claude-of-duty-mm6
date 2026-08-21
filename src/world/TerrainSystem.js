@@ -283,6 +283,31 @@ export class TerrainSystem extends System {
     const names = ['grass', 'dirt', 'rock', 'sand'];
     const sets = names.map((n) => lib?.getTextures?.(n) ?? null);
 
+    /**
+     * Whether to compile the splat that fits in a phone's sampler budget.
+     *
+     * The full form wants twenty samplers and iOS Safari allows sixteen for
+     * the whole program, environment probe and shadow maps included. Over the
+     * limit the program does not link, and the failure is silent in the worst
+     * way: three.js logs to a console nobody on a phone can open and carries
+     * on drawing every other mesh, so the player gets a sea with a town
+     * floating on it and no ground.
+     *
+     * The lean form gives up the three maps whose absence costs least at arm's
+     * length on a 6.7-inch screen — normal, ORM and height, twelve samplers —
+     * and keeps everything that carries the art direction: four graded
+     * materials, the torn grass/earth boundary, the mud lip, triplanar rock,
+     * the region's snow and peat and sun-bleach, and the baked eight-direction
+     * horizon that puts landform shadow on the hills. Eight samplers.
+     *
+     * The height blend survives the loss of its height maps because what it
+     * needs is per-layer variation, not that specific variation: two octaves
+     * of the same world-space noise the tear already uses stand in, and the
+     * boundary still breaks into fingers rather than a curve.
+     */
+    const lean = !!ctx.config?.leanTerrain;
+    this._lean = lean;
+
     const material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       roughness: 1.0,
@@ -322,6 +347,11 @@ export class TerrainSystem extends System {
     };
     for (let i = 0; i < 4; i++) {
       uniforms[`uAlbedo${i}`] = { value: sets[i]?.map ?? null };
+      // The lean form declares none of these, and an undeclared uniform whose
+      // value is a texture is not free: three.js skips binding it, but the
+      // texture stays resident on a GPU that has less memory than the one
+      // which could have afforded to sample it.
+      if (lean) continue;
       uniforms[`uNormal${i}`] = { value: sets[i]?.normalMap ?? null };
       uniforms[`uOrm${i}`] = { value: sets[i]?.ormMap ?? null };
       uniforms[`uHeight${i}`] = { value: sets[i]?.heightMap ?? null };
@@ -385,9 +415,11 @@ export class TerrainSystem extends System {
           }
 
           uniform sampler2D uAlbedo0, uAlbedo1, uAlbedo2, uAlbedo3;
+          ${lean ? '' : `
           uniform sampler2D uNormal0, uNormal1, uNormal2, uNormal3;
           uniform sampler2D uOrm0, uOrm1, uOrm2, uOrm3;
           uniform sampler2D uHeight0, uHeight1, uHeight2, uHeight3;
+          `}
 
           /**
            * Expand a layer's own contrast about its mean, then grade it.
@@ -487,12 +519,26 @@ export class TerrainSystem extends System {
           vec3 rockZ = texture2D(uAlbedo2, uv2z).rgb;
           vec3 rockTri = mix(rockX, rockZ, abs(gnorm.z) / max(abs(gnorm.x) + abs(gnorm.z), 1e-4));
 
+          ${lean ? `
+          // No height maps to blend by, so the variation is synthesised at
+          // each layer's own tiling frequency. What heightBlend needs is a
+          // per-layer field that differs between neighbours, not the specific
+          // displacement of that material — the boundary still tears into
+          // islands and fingers, which is the whole point of the operation.
+          vec4 hh = vec4(
+            tNoise(uv0 * 3.0),
+            tNoise(uv1 * 3.0 + 5.31),
+            tNoise(uv2 * 3.0 + 11.77),
+            tNoise(uv3 * 3.0 + 23.09)
+          );
+          ` : `
           vec4 hh = vec4(
             texture2D(uHeight0, uv0).r,
             texture2D(uHeight1, uv1).r,
             texture2D(uHeight2, uv2).r,
             texture2D(uHeight3, uv3).r
           );
+          `}
           vec4 bw = heightBlend(sw, hh);
 
           // Each layer is graded on its own before the blend, so a boundary
@@ -564,19 +610,33 @@ export class TerrainSystem extends System {
           diffuseColor = vec4(albedo, opacity);
         `)
         .replace('#include <roughnessmap_fragment>', `
+          ${lean ? `
+          // No ORM set. Ground is rough by definition and the material's own
+          // roughness is already 1.0; what actually reads on screen is the wet
+          // and snow modulation below, which is regional and stays.
+          vec3 orm = vec3(1.0);
+          float roughnessFactor = roughness;
+          ` : `
           vec3 orm =
               texture2D(uOrm0, uv0).rgb * bw.x
             + texture2D(uOrm1, uv1).rgb * bw.y
             + texture2D(uOrm2, uv2).rgb * bw.z
             + texture2D(uOrm3, uv3).rgb * bw.w;
           float roughnessFactor = roughness * clamp(orm.g, 0.06, 1.0);
+          `}
           // Wet ground holds a sheen; snow does not. Without this the two
           // would be colour swaps and nothing more, which is the trap this
           // whole pass exists to avoid.
           roughnessFactor = mix(roughnessFactor, 0.42, clamp(gTerrainWet * 1.3, 0.0, 0.55));
           roughnessFactor = mix(roughnessFactor, 0.93, gTerrainSnow * 0.9);
         `)
-        .replace('#include <normal_fragment_maps>', `
+        // The lean form leaves this chunk as three.js wrote it — the material
+        // carries no normalMap, so it expands to nothing. Four tangent-space
+        // normal maps are four samplers, and the terrain's shape at a phone's
+        // viewing distance is carried by its geometry and its landform
+        // shadowing rather than by per-texel bump, which makes this the
+        // cheapest of the three cuts to look at.
+        .replace('#include <normal_fragment_maps>', lean ? '#include <normal_fragment_maps>' : `
           vec3 tn =
               texture2D(uNormal0, uv0).xyz * bw.x
             + texture2D(uNormal1, uv1).xyz * bw.y
@@ -603,7 +663,11 @@ export class TerrainSystem extends System {
         `);
     };
 
-    material.customProgramCacheKey = () => `terrain-splat-${this._splatReady ? 1 : 0}`;
+    // `lean` is in the key because it changes the SOURCE, and three.js caches
+    // compiled programs by this string. Two materials that differ only in a
+    // flag the key does not mention share one program, and the second one
+    // silently gets the first one's shader.
+    material.customProgramCacheKey = () => `terrain-splat-${this._splatReady ? 1 : 0}-${lean ? 'lean' : 'full'}`;
     return material;
   }
 
