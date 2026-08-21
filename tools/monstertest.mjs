@@ -443,7 +443,12 @@ async function probe({ ids, plated, sample, clock, windupAt, strikeAt, throwAt, 
         height: m.def.height,
         recovery: m.recovery,
         parts: m.built.rig.length,
-        hidePlate: want.has(m.def.family),
+        // Its own hide if one was painted, else its family's — the same
+        // preference `MonsterGen.plateKeyFor` applies. Asking only about the
+        // family made this read as "no plate" for every creature that now has
+        // one of its own.
+        hidePlate: want.has(m.def.id) || want.has(m.def.family),
+        ownPlate: want.has(m.def.id),
         hideBound: bound(m),
         hideSize: mat?.map?.image ? [mat.map.image.width, mat.map.image.height] : null,
         palette: pal,
@@ -517,15 +522,17 @@ function report(rows, missing, pageErrors, plated, quiet) {
   const hidden = rows.filter((r) => r.hideBound).length;
   const awaiting = rows.filter((r) => !r.hidePlate).length;
   const families = new Set(rows.map((r) => r.family));
+  const own = rows.filter((r) => r.ownPlate).length;
 
   console.log(`\n[monstertest] ${rows.length} monsters built, ${missing.length} failed to spawn`);
   console.log(`[monstertest] rig moves between idle and strike: ${moved}/${rows.length}`);
   console.log(`[monstertest] rig moves on death:                ${died}/${rows.length}`);
   console.log(`[monstertest] rig moves on a ranged throw:       ${threw}/${shooters.length} that have one`);
   console.log(`[monstertest] hide texture bound:                ${hidden}/${rows.length}`
-    + `  (${plated.length}/${families.size} family plates packed)`);
+    + `  (${plated.length} plates: ${own} its own, ${rows.length - own} borrowed`
+    + ` from ${families.size} families)`);
   if (awaiting) {
-    console.log(`[monstertest] ${awaiting} monsters fall back to flat colour — their family hide is not packed yet.`);
+    console.log(`[monstertest] ${awaiting} monsters fall back to flat colour — neither their own hide nor their family's is packed.`);
     console.log('[monstertest] That is the designed fallback, not a failure. See tools/artpack.py.');
   }
 
