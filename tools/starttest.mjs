@@ -253,5 +253,48 @@ console.log('\nstarting over — what a second party inherits');
   ok(armed, 'still carrying its opening kit through the reset');
 }
 
+// ── hunger ──────────────────────────────────────────────────────────────────
+//
+// A capture showed the food counter at 2 on the morning of day one and 0 by
+// noon, from a start of 7 — which would mean a ration every two hours against
+// a rule that says eight. That turned out to be an artefact of eighty-eight
+// shots sharing one session and each pushing the clock, but the only way to
+// know that is to bill a known number of hours and count.
+console.log('\nhunger — a ration is eight hours');
+{
+  const events = new EventBus();
+  const systems = new Map();
+  const party = new PartySystem();
+  systems.set('party', party);
+  const ctx = ctxOf(systems, events);
+  await party.init(ctx);
+
+  const start = party.food;
+  const tick = (toHours) => {
+    ctx.state.worldTime = toHours * 3600;
+    // `fixedUpdate`, not `update`. The first version of this called `update`,
+    // which PartySystem does not define — so nothing ticked, food never moved,
+    // and two of the four checks below failed for a reason that had nothing to
+    // do with hunger. A harness that calls the wrong method reports the same
+    // thing as a rule that does not work.
+    party.fixedUpdate(0.016, ctx);
+  };
+  tick(0);
+  ok(party.food === start, 'the first tick bills nothing', `${start} → ${party.food}`);
+
+  tick(8);
+  ok(party.food === start - 1, 'eight hours is one ration', `${start} → ${party.food}`);
+
+  tick(24);
+  ok(party.food === start - 3, 'a full day is three', `${start} → ${party.food} after 24 h`);
+
+  // The cap exists so a clock jumped by a shot or a save cannot empty the pack
+  // between two rendered frames.
+  const before = party.food;
+  tick(24 + 24 * 30);
+  ok(party.food >= before - 4, 'a month forced onto the clock bills at most four',
+    `${before} → ${party.food}`);
+}
+
 console.log(`\n${failures ? `${failures} FAILED` : 'all clear'}`);
 process.exit(failures);
