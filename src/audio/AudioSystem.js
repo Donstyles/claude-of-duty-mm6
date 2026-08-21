@@ -378,7 +378,21 @@ export class AudioSystem extends System {
 
     const pitch = opts.pitch ?? (0.93 + this.rng.next() * 0.14);
     const recipe = SFX[id] ?? SFX.hit;
-    try { recipe(ac, dest, now, gain, pitch, this.rng); } catch { /* a bad recipe must not stop the frame */ }
+    try {
+      recipe(ac, dest, now, gain, pitch, this.rng);
+    } catch (err) {
+      // A bad recipe must not stop the frame — but it must not be invisible
+      // either. The bare `catch {}` this replaces is why a sound effect that
+      // threw on every call was indistinguishable from one that played: the
+      // game stayed up, nothing appeared anywhere, and no gate could tell the
+      // difference because no gate was listening. Muted after the first, so a
+      // per-frame footstep cannot flood the console.
+      this._badSfx ??= new Set();
+      if (!this._badSfx.has(id)) {
+        this._badSfx.add(id);
+        console.error(`[audio] sfx "${id}" threw (further occurrences muted):`, err);
+      }
+    }
   }
 
   /**

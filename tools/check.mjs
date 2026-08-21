@@ -90,6 +90,17 @@
  *               send was enough to pick an item up, and nothing was ever sent
  *               to put it down. The item stuck to the finger.
  *
+ *   sound       `boot` proves the audio system LOADED. That is a different
+ *               claim from "the game makes a noise", and only one of the two
+ *               was ever checked — which is the same gap that let the owner
+ *               play silently on a phone while every gate was green. This one
+ *               hangs a tap on the game's own master bus and reads the peak
+ *               while each family is triggered through the public API. Its
+ *               first two versions both reported silence for every transient
+ *               and passed the one continuous drone, because a software
+ *               rasteriser starves the main thread and a 150 ms sound falls
+ *               between two processed blocks.
+ *
  * Note what `content` and `seam` each do NOT do. `content` checks that ids
  * RESOLVE: that a quest naming an NPC names one who exists. It never checks
  * that a FIELD exists, so it was green through all eleven. `seam` is the other
@@ -183,6 +194,8 @@ const GATES = [
     why: 'the backpack answers to a finger' },
   { name: 'faces-drawn', slow: true, cmd: 'node', args: ['tools/portraittest.mjs'],
     why: 'the four in the bar are the painted plates, and are not being smoothed' },
+  { name: 'sound', slow: true, cmd: 'node', args: ['tools/soundtest.mjs'],
+    why: 'the game is audible — measured on its own master bus, not asserted' },
 ];
 
 function run(gate) {
