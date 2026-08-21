@@ -72,6 +72,15 @@
  *               ACTIVE samplers in every linked program, which is the same
  *               number on any machine.
  *
+ *   boot        `main.js` imports each system in a try/catch and pushes the
+ *               failures onto `window.__GAME.missing`, which is the right
+ *               design — a broken dungeon module should not cost the player
+ *               the whole game — and which turns a crash into a line in a
+ *               console no phone has open. The owner's debug overlay read
+ *               "Running without AudioSystem": the game had been shipping
+ *               SILENT on that device, and twenty gates were green, because
+ *               not one of them read `missing`.
+ *
  * Note what `content` and `seam` each do NOT do. `content` checks that ids
  * RESOLVE: that a quest naming an NPC names one who exists. It never checks
  * that a FIELD exists, so it was green through all eleven. `seam` is the other
@@ -159,6 +168,8 @@ const GATES = [
     why: 'every creature has a surface, and moves when it strikes and when it dies' },
   { name: 'samplers', slow: true, cmd: 'node', args: ['tools/samplertest.mjs'],
     why: 'no shader asks for more textures at once than a phone will give it' },
+  { name: 'boot', slow: true, cmd: 'node', args: ['tools/boottest.mjs'],
+    why: 'every subsystem loads — including the one that makes the sound' },
 ];
 
 function run(gate) {

@@ -939,6 +939,19 @@ export class VegetationSystem extends System {
       for (const lvl of bin.levels) {
         const mesh = lvl.mesh;
         mesh.count = lvl.count;
+        // An InstancedMesh holding nothing is still a draw call. `count = 0`
+        // reaches `drawElementsInstanced(…, 0)`: the GPU draws no triangles
+        // and the driver still validates the whole pipeline state, which on a
+        // mobile tile renderer is most of what a draw actually costs. Every
+        // variant carries four LOD meshes and only the levels the camera is
+        // standing in front of hold anything, so most of them are empty most
+        // of the time — and `frustumCulled` is off here, so nothing else was
+        // going to skip them.
+        //
+        // The understory below already does exactly this. The trees did not:
+        // one of two lists that look alike disagreeing with the other, which
+        // is this repository's most common bug by a distance.
+        mesh.visible = lvl.count > 0;
         if (lvl.count > 0) {
           mesh.instanceMatrix.needsUpdate = true;
           mesh.instanceColor.needsUpdate = true;
@@ -949,6 +962,7 @@ export class VegetationSystem extends System {
     }
     if (imp) {
       imp.mesh.count = impCount;
+      imp.mesh.visible = impCount > 0;
       if (impCount > 0) {
         imp.mesh.instanceMatrix.needsUpdate = true;
         imp.mesh.instanceColor.needsUpdate = true;
@@ -1465,6 +1479,7 @@ export class VegetationSystem extends System {
     }
 
     g.mesh.count = n;
+    g.mesh.visible = n > 0;
     g.mesh.instanceMatrix.needsUpdate = true;
     g.mesh.instanceColor.needsUpdate = true;
     g.fade.needsUpdate = true;

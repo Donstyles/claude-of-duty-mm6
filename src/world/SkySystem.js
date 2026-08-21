@@ -975,7 +975,32 @@ export class SkySystem extends System {
 
   async init(ctx) {
     this._ctx = ctx;
-    this._q = QUALITY[ctx.config?.quality] ?? QUALITY.high;
+    // A copy, not the shared tier record — the shadow extent is overridden
+    // below and QUALITY is module-level, so mutating it in place would leak
+    // one run's phone setting into the next run's desktop.
+    const tier = QUALITY[ctx.config?.quality] ?? QUALITY.high;
+    /**
+     * How far the sun's shadow box reaches, and why a phone gets a smaller one.
+     *
+     * The box is square and centred a little ahead of the camera, so `high`'s
+     * 150 covers 300 m of world. Every mesh inside it is re-drawn into the
+     * shadow map whether or not the camera can see it — and measured on the
+     * phone profile, Millhaven submitted 308 draws a frame to the shadow map
+     * and NOT ONE to the camera, because the party was on the road with the
+     * town behind them. The NPCs did the same, 154 to nothing. That is the
+     * larger half of a 596-draw frame spent on shadows for things nobody was
+     * looking at, and draw calls are what a mobile tile renderer actually
+     * pays for.
+     *
+     * Shrinking the box is not only a concession. The map is a fixed 3072
+     * texels across it, so 150 gives 10 texels per metre and a fence post is
+     * two of them — the far half of that box was never resolving anything.
+     * At 80 the same map gives 19 texels per metre, so contact shadows get
+     * SHARPER while the caster count falls with the square of the radius.
+     * What is lost is a shadow cast by something more than 80 m away, which
+     * at this scale is a hill edge, and the terrain does not cast at all.
+     */
+    this._q = { ...tier, shadowExtent: ctx.config?.shadowExtent || tier.shadowExtent };
 
     // Someone else may own lighting later; if so, do not fight them for it.
     this._ownsLighting = !ctx.get('lighting');

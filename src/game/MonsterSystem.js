@@ -78,6 +78,14 @@ export function behaviourFor(def) {
 const MAX_ACTIVE = { low: 24, medium: 40, high: 70, ultra: 100 };
 const SIM_RADIUS = 220;       // metres — beyond this a monster is frozen
 /**
+ * Beyond this a creature is not drawn either. See `fixedUpdate`.
+ *
+ * Deliberately larger than `SIM_RADIUS` rather than equal to it: if the two
+ * matched, a creature would stop moving and disappear on the same step, and
+ * the eye catches a simultaneous pair where it would miss either alone.
+ */
+const DRAW_RADIUS = SIM_RADIUS * 1.2;
+/**
  * How far above or below the party a creature can stand and still be on the
  * party's floor.
  *
@@ -543,6 +551,32 @@ export class MonsterSystem extends System {
       }
 
       const distSq = m.pos.distanceToSquared(eye);
+
+      // "Nobody can see them anyway" — and yet they were all being drawn.
+      //
+      // The line below froze distant creatures and the sentence justifying it
+      // was already written; what nobody had done was tell the RENDERER the
+      // same thing. Camps wake at 420 m and are only torn down at 520, so a
+      // populated hillside kept a few dozen frozen creatures standing in the
+      // scene graph, each one six or seven meshes, each mesh a draw call. On
+      // the phone profile the monsters submitted more draws to the camera than
+      // anything except the ground.
+      //
+      // The cut is one and a fifth of the simulation radius, so a creature
+      // vanishes a little AFTER it stops moving rather than at the same
+      // instant — the pop never coincides with the freeze, which is the pair
+      // an eye would catch. At 260 m a 1.8 m creature is a shade over four
+      // pixels on a 932-wide phone screen, which is what makes this a saving
+      // rather than a compromise.
+      //
+      // Indoors the radius means nothing — a whole dungeon fits inside it
+      // several times — so only creatures standing on the outdoor heightfield
+      // are hidden this way. `_atHand` below is what answers the same question
+      // for an interior, and it answers it by floor rather than by distance.
+      if (!Number.isFinite(m.indoorY)) {
+        m.group.visible = distSq <= DRAW_RADIUS * DRAW_RADIUS;
+      }
+
       // Freeze distant monsters entirely — this is what keeps a populated
       // world affordable, and nobody can see them anyway.
       if (distSq > SIM_RADIUS * SIM_RADIUS) continue;

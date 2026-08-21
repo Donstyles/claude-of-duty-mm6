@@ -47,31 +47,79 @@ const FLAVOUR = {
   CaptureSystem: 'Ready.',
 };
 
+/**
+ * Every system is its own chunk, and a chunk is a network request.
+ *
+ * `import.meta.glob` compiles each manifest path to a dynamic import, so
+ * `./audio/AudioSystem.js` ships as `assets/AudioSystem-Dw4Pr4g.js` and is
+ * fetched when this loop reaches it. On a desk that always works. On a phone
+ * one request out of forty can simply not arrive — a tunnel, a handover, a
+ * moment of nothing — and a dynamic import that fails rejects once and stays
+ * rejected. The system is pushed onto `missing` and the game plays without it
+ * for the rest of the session.
+ *
+ * Which is what an iPhone reported, in the one line under the shader error
+ * everybody was looking at: "Running without AudioSystem." The game had been
+ * played silent, and nothing on this machine could reproduce it, because on
+ * this machine the request always arrives.
+ *
+ * So a failed load is tried again rather than accepted first time. Three
+ * attempts at 250 ms and 750 ms: long enough to outlast a handover, short
+ * enough that three of them are invisible inside a boot that takes seconds.
+ * A module that throws while EVALUATING will fail all three identically and
+ * cost 1 second, which is the right price for the case that is actually a bug.
+ */
+const LOAD_RETRY_MS = [250, 750];
+
 async function loadSystems(engine) {
   const missing = [];
+  /** Why each one failed, kept for the `?debug=1` overlay to read out loud. */
+  const errors = [];
   for (const entry of SYSTEM_MANIFEST) {
     const loader = MODULES[entry.path];
     if (!loader) {
       missing.push(entry.export ?? entry.path);
+      errors.push(`${entry.path}: no loader — not matched by the glob`);
       continue;
     }
-    try {
-      const mod = await loader();
-      const Ctor = entry.export ? mod[entry.export] : mod.default;
-      if (typeof Ctor !== 'function') {
-        missing.push(`${entry.export ?? 'default'} (not exported by ${entry.path})`);
-        continue;
+    let lastErr = null;
+    let added = false;
+    for (let attempt = 0; attempt <= LOAD_RETRY_MS.length && !added; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, LOAD_RETRY_MS[attempt - 1]));
       }
-      engine.add(new Ctor(...(entry.args ?? [])));
-    } catch (err) {
-      console.error(`[boot] could not load ${entry.path}:`, err);
+      try {
+        const mod = await loader();
+        const Ctor = entry.export ? mod[entry.export] : mod.default;
+        if (typeof Ctor !== 'function') {
+          // Not worth retrying: the module arrived and does not contain what
+          // the manifest says it contains. That is a source error, and the
+          // network will not fix it on the second ask.
+          missing.push(`${entry.export ?? 'default'} (not exported by ${entry.path})`);
+          errors.push(`${entry.path}: no export named ${entry.export ?? 'default'}`);
+          lastErr = null;
+          break;
+        }
+        engine.add(new Ctor(...(entry.args ?? [])));
+        added = true;
+        if (attempt > 0) {
+          console.warn(`[boot] ${entry.path} arrived on attempt ${attempt + 1}`);
+        }
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (!added && lastErr) {
+      console.error(`[boot] could not load ${entry.path} after `
+        + `${LOAD_RETRY_MS.length + 1} attempts:`, lastErr);
       missing.push(entry.export ?? entry.path);
+      errors.push(`${entry.path}: ${String(lastErr?.message ?? lastErr).slice(0, 160)}`);
     }
   }
   if (missing.length) {
     console.warn(`[boot] ${missing.length} subsystem(s) unavailable:`, missing);
   }
-  return missing;
+  return { missing, errors };
 }
 
 /**
@@ -172,6 +220,9 @@ async function main() {
           + `  max texture ${eng?.caps?.maxTexture}`,
         `terrain splat ${eng?.config?.leanTerrain ? 'lean (8 samplers)' : 'full (20 samplers)'}`,
         `draws ${info?.calls ?? '?'}  tris ${info?.triangles ?? '?'}`,
+        window.__GAME?.missing?.length
+          ? `MISSING: ${window.__GAME.missing.join(', ')}\n  ${(window.__GAME.bootErrors ?? []).join('\n  ')}`
+          : 'every subsystem loaded',
         `terrain visible ${visible}  ground y ${terrain?.heightAt?.(
           window.__GAME?.ctx?.camera?.position?.x ?? 0,
           window.__GAME?.ctx?.camera?.position?.z ?? 0,
@@ -191,6 +242,15 @@ async function main() {
     // only machine that could reproduce the failure was the one in the user's
     // pocket, with no console attached to it.
     textureUnits: Number(params.get('units')) || 0,
+    // A phone draws the sun's shadow over 160 m of world rather than 300.
+    // See `SkySystem.init` — the far half of the larger box was resolving
+    // nothing at 10 texels a metre, and it was costing more draw calls than
+    // everything the camera could actually see put together.
+    shadowExtent: Number(params.get('shadowExtent')) || (coarse ? 80 : 0),
+    // A capture is software-rendered and slow. Leaving the scaler on means it
+    // drops to its floor within a couple of seconds, and every screen the art
+    // review is done from is softer than the one a player sees.
+    adaptive: !params.has('capture'),
   });
 
   // Android, launched from the browser rather than the home screen: take
@@ -241,7 +301,12 @@ async function main() {
 
   try {
     setProgress(0.05, 'Assembling the engine…');
-    window.__GAME.missing = await loadSystems(engine);
+    const load = await loadSystems(engine);
+    window.__GAME.missing = load.missing;
+    // Kept beside the list, because "AudioSystem is missing" is a symptom and
+    // the reason is what tells anybody which of the two possible causes it is:
+    // a request that did not arrive, or a module that would not evaluate.
+    window.__GAME.bootErrors = load.errors;
 
     const lost = window.__GAME.missing.filter((m) => ESSENTIAL.has(String(m).split(' ')[0]));
     if (lost.length) {

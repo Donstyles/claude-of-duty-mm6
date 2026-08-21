@@ -21,11 +21,46 @@ import { regionAt } from '../game/data/Regions.js';
  * projection to stop cliff textures from smearing.
  */
 
-const CHUNKS = 16;                        // per side
-const CHUNK_SIZE = WORLD_SIZE / CHUNKS;   // metres
-const CHUNK_VERTS = 33;                   // at LOD 0 — 32 quads per side
-const LOD_LEVELS = 4;
+/**
+ * The grid: eight chunks a side rather than sixteen, and twice the vertices in
+ * each.
+ *
+ * Vertex spacing is unchanged — 2048 m over 8 chunks of 65 verts is the same
+ * 4 m a side as 16 chunks of 33 — so the ground has exactly the shape it had.
+ * What changes is the number of DRAW CALLS, and on a phone that is the number
+ * that matters.
+ *
+ * Measured on the phone profile: the terrain submitted 240 draws a frame, more
+ * than anything else in the world. The reason is arithmetic, not a bug. The
+ * world is 2048 m across, the camera's far plane is 4000 m, and a 75-degree
+ * frustum at that range is wider than the kingdom — so almost every chunk in
+ * the grid passes the frustum test, every frame, from anywhere. Chunk LOD was
+ * already dropping their triangles (94k across all 240), and triangles were
+ * never the problem: a mobile tile renderer pays per-draw state validation on
+ * the CPU, and 240 of those at sixty frames a second is 14,400 validations a
+ * second before a triangle is submitted.
+ *
+ * Quartering the grid quarters that, and costs the LOD its fine granularity: a
+ * 256 m chunk must pick one level for its whole span where four 128 m chunks
+ * could pick four. A fifth LOD level pays that back at the far end, where the
+ * chunks that lost the most are.
+ */
+const CHUNKS = 8;                         // per side
+const CHUNK_SIZE = WORLD_SIZE / CHUNKS;   // metres — 256
+const CHUNK_VERTS = 65;                   // at LOD 0 — 64 quads per side, 4 m each
+const LOD_LEVELS = 5;
 const SKIRT_DEPTH = 14;
+
+/**
+ * Distance in metres at which a chunk drops to the next LOD.
+ *
+ * Absolute, not a multiple of `CHUNK_SIZE`, which is what they used to be. Tied
+ * to the chunk size they would have doubled along with it, holding LOD 0 out to
+ * 563 m and quadrupling the triangle count the grid change was meant to leave
+ * alone. These are the distances the sixteen-chunk grid actually used, so the
+ * ground carries the same detail at the same range as before.
+ */
+const LOD_DISTANCE = [282, 576, 1152, 1800];
 
 /**
  * Metres of world covered by one tile of each layer's texture.
@@ -858,9 +893,39 @@ export class TerrainSystem extends System {
 
   /** Index buffers for each LOD, plus the skirt ring, built once and shared. */
   _buildLodIndices() {
+    const base = CHUNK_VERTS * CHUNK_VERTS;
+
+    /** The border vertices of one level, walked once round, no repeats. */
+    const ringFor = (step) => {
+      const n = (CHUNK_VERTS - 1) / step;
+      const at = (x, z) => (z * step) * CHUNK_VERTS + (x * step);
+      const ring = [];
+      for (let x = 0; x <= n; x++) ring.push(at(x, 0));
+      for (let z = 1; z <= n; z++) ring.push(at(n, z));
+      for (let x = n - 1; x >= 0; x--) ring.push(at(x, n));
+      for (let z = n - 1; z >= 1; z--) ring.push(at(0, z));
+      return ring;
+    };
+
+    // Skirt vertices are built once, from the FINEST ring, so a coarse level
+    // has to look its border vertex up in that ring rather than assume its own
+    // position in it.
+    //
+    // That assumption was the old code, and it was wrong in a way nothing
+    // caught: level 1's ring[i] is vertex 2i, while skirt slot i sits under
+    // vertex i — so every skirt quad above LOD 0 joined a border vertex to a
+    // point beneath a DIFFERENT border vertex, and the curtain was woven
+    // across itself. It survived every review because a skirt hangs fourteen
+    // metres straight down and is only ever seen edge-on, where a crumpled one
+    // and a correct one look alike. A fifth level would have widened the
+    // mismatch to sixteen vertices, which is where it stops being invisible.
+    const skirtSlot = new Map();
+    const fine = ringFor(1);
+    for (let i = 0; i < fine.length; i++) skirtSlot.set(fine[i], i);
+
     const levels = [];
     for (let l = 0; l < LOD_LEVELS; l++) {
-      const step = 1 << l;                         // 1, 2, 4, 8
+      const step = 1 << l;                         // 1, 2, 4, 8, 16
       const n = (CHUNK_VERTS - 1) / step;          // quads per side
       const idx = [];
       const at = (x, z) => (z * step) * CHUNK_VERTS + (x * step);
@@ -872,17 +937,12 @@ export class TerrainSystem extends System {
       }
       // Skirt: a ring of vertices dropped below the border, appended after the
       // grid. Hides the seam wherever a neighbour chose a coarser level.
-      const base = CHUNK_VERTS * CHUNK_VERTS;
-      const ring = [];
-      for (let x = 0; x < CHUNK_VERTS; x += step) ring.push(at(x / step, 0));
-      for (let z = step; z < CHUNK_VERTS; z += step) ring.push(at(n, z / step));
-      for (let x = CHUNK_VERTS - 1 - step; x >= 0; x -= step) ring.push(at(x / step, n));
-      for (let z = CHUNK_VERTS - 1 - step; z > 0; z -= step) ring.push(at(0, z / step));
+      const ring = ringFor(step);
       for (let i = 0; i < ring.length; i++) {
         const a = ring[i];
         const b = ring[(i + 1) % ring.length];
-        const sa = base + i;
-        const sb = base + ((i + 1) % ring.length);
+        const sa = base + skirtSlot.get(a);
+        const sb = base + skirtSlot.get(b);
         idx.push(a, sa, b, b, sa, sb);
       }
       levels.push({ index: new Uint32Array(idx), ring, count: idx.length });
@@ -1080,9 +1140,12 @@ export class TerrainSystem extends System {
     for (const chunk of this.chunks) {
       const d = chunk.centre.distanceTo(cam);
       let level = 0;
-      if (d > CHUNK_SIZE * 2.2) level = 1;
-      if (d > CHUNK_SIZE * 4.5) level = 2;
-      if (d > CHUNK_SIZE * 9.0) level = 3;
+      // A chunk is 256 m across now, so its centre can be a long way from its
+      // near corner. Measure from the corner nearest the camera, not the
+      // centre, or the ground directly under the party drops to LOD 1 the
+      // moment they walk into the far half of a chunk.
+      const near = Math.max(0, d - CHUNK_SIZE * 0.71);
+      for (let l = 0; l < LOD_DISTANCE.length; l++) if (near > LOD_DISTANCE[l]) level = l + 1;
       if (level === chunk.level) continue;
       chunk.level = level;
       chunk.geom.setIndex(new THREE.BufferAttribute(chunk.lodIndex[level].index, 1));

@@ -93,6 +93,9 @@ export class Engine {
       shadows: true,
       shadowMapSize: 2048,
       cascades: 4,
+      // Half-width of the sun's shadow box, in metres. 0 = whatever the
+      // quality tier says. `SkySystem` explains why a phone overrides it.
+      shadowExtent: 0,
       anisotropy: 16,
       exposure: 1.0,
       // Pretend the GPU reports this many fragment texture units. 0 = ask it.
@@ -101,6 +104,11 @@ export class Engine {
       textureUnits: 0,
       /** Set in `_initRenderer` from the measured budget — never passed in. */
       leanTerrain: false,
+      // Let `_adaptResolution` move the cap at runtime. Off during a capture:
+      // a headless run is software-rendered and slow, so the scaler drops it
+      // to the floor and every screenshot the review is done from comes out
+      // softer than what a player is looking at.
+      adaptive: true,
       // Quality tier: 'low' | 'medium' | 'high' | 'ultra'
       quality: 'ultra',
       // Gameplay
@@ -331,28 +339,94 @@ export class Engine {
    * headroom, because a scaler that climbs the moment it can spends its life
    * oscillating between two resolutions, and the flicker of that is worse than
    * simply being one step lower.
+   *
+   * ── what it measures, and what it used to ─────────────────────────────────
+   *
+   * This was handed `performance.now() - t0` around `tick()` — the CPU time
+   * spent inside the frame. That is not the frame rate and on a phone it is
+   * not even correlated with it. WebGL commands are queued and return, so a
+   * GPU drowning in fill and draw calls shows up as a SHORT cpu figure, and a
+   * short figure is exactly what the recovery branch was watching for. The
+   * scaler therefore climbed on the devices that could least afford it: the
+   * owner's iPhone reported `cap 1.5`, having walked UP from the 1.25 it
+   * starts at, while the frame rate was being described as abysmal.
+   *
+   * The honest number is the interval between frames, which is what the player
+   * actually sees, and `tick` already computes it as `perf.frameMs`.
+   *
+   * ── and why the thresholds are relative ───────────────────────────────────
+   *
+   * Absolute ones cannot work once the right quantity is measured. A device
+   * holding a perfect sixty is at 16.7 ms, so `median < 13` — the old recovery
+   * test — is unreachable behind vsync at 60 Hz, and the cap could never climb
+   * back. It is also wrong on a 120 Hz panel, where a perfect frame is 8.3 ms
+   * and 13 would be a third of the refreshes missed.
+   *
+   * So the display's own period is learned instead: the best median this
+   * session is what the panel does when nothing is in the way. Everything is
+   * measured against that, which makes the whole thing calibration-free in the
+   * sense STYLE.md §0 means — a ratio between two numbers from the same device.
+   *
+   * The learned ceiling is the other half. A step up that is immediately
+   * followed by a step down is proof the device cannot hold that resolution,
+   * and remembering it is what stops the pair repeating for the rest of the
+   * session.
    */
   _adaptResolution(frameMs) {
-    const f = this._fps ??= { samples: [], cooldown: 0, floor: 0.75 };
+    if (this.config.adaptive === false) return;
+    const device = window.devicePixelRatio || 1;
+    const f = this._fps ??= {
+      samples: [], cooldown: 0, floor: 0.75,
+      /** Best median seen — the display's period once it has been observed. */
+      best: Infinity,
+      /** Windows in a row that looked comfortable. */
+      steady: 0,
+      /** Highest cap this device has proved it can hold. */
+      ceiling: Math.min(device, 2),
+      /** Set on the window a step up happened, so a fall can blame it. */
+      justRose: 0,
+    };
     f.samples.push(frameMs);
     if (f.samples.length < 60) return;
 
     const median = f.samples.slice().sort((a, b) => a - b)[30];
     f.samples.length = 0;
+    // 4 ms floors the learned period at 250 fps: a browser that reports a
+    // nonsense interval once must not become the standard everything else is
+    // judged against.
+    if (median > 4) f.best = Math.min(f.best, median);
     if (f.cooldown > 0) { f.cooldown -= 1; return; }
 
     const cap = this.config.pixelRatioCap;
-    const device = window.devicePixelRatio || 1;
-    // 22 ms is about 45 fps: comfortably short of the 16.7 ms a phone will
-    // rarely hold with a scene this size, and far enough from 33 ms that the
-    // step happens before it is unpleasant rather than after.
-    if (median > 22 && cap > f.floor) {
+    const target = Number.isFinite(f.best) ? f.best : 16.7;
+
+    // A third of the refreshes missed. On a 60 Hz panel that is 22.5 ms, which
+    // is where the absolute threshold used to sit — the number was right, it
+    // was being compared against the wrong measurement.
+    if (median > target * 1.35 && cap > f.floor) {
       this.config.pixelRatioCap = Math.max(f.floor, cap - 0.25);
+      f.steady = 0;
       f.cooldown = 4;
+      // If this fall arrived within two windows of a rise, that rise was the
+      // cause: never try that step again.
+      if (f.justRose > 0) f.ceiling = Math.min(f.ceiling, cap - 0.25);
+      f.justRose = 0;
       this._applyPixelRatio();
-    } else if (median < 13 && cap < Math.min(device, 2)) {
-      this.config.pixelRatioCap = Math.min(Math.min(device, 2), cap + 0.25);
-      f.cooldown = 20;
+      return;
+    }
+
+    if (f.justRose > 0) f.justRose -= 1;
+
+    // Comfortable means within a tenth of what this panel does at its best —
+    // near enough to vsync that there is headroom to spend.
+    if (median <= target * 1.10) f.steady += 1;
+    else f.steady = 0;
+
+    if (f.steady >= 8 && cap + 0.25 <= Math.min(f.ceiling, device, 2)) {
+      this.config.pixelRatioCap = cap + 0.25;
+      f.steady = 0;
+      f.cooldown = 8;
+      f.justRose = 2;
       this._applyPixelRatio();
     }
   }
@@ -378,9 +452,12 @@ export class Engine {
     this._lastTime = performance.now();
     const loop = (now) => {
       this._rafId = requestAnimationFrame(loop);
-      const t0 = performance.now();
       this.tick(now);
-      this._adaptResolution(performance.now() - t0);
+      // The INTERVAL between frames, not the CPU time inside one. See
+      // `_adaptResolution`: WebGL returns before the GPU has drawn anything,
+      // so a frame that is drowning the GPU reads as a short one on the CPU,
+      // and the scaler read that as headroom to spend.
+      this._adaptResolution(this.perf.frameMs);
     };
     this._rafId = requestAnimationFrame(loop);
   }
