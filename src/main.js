@@ -122,9 +122,66 @@ async function main() {
   // default. `?quality=medium` and `?quality=low` are there for a weaker
   // handset, and both are checked by the tier work in CRITIQUE.md.
   const coarse = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
+  //
+  // And a phone starts at a lower RESOLUTION, not just a lower tier. The tiers
+  // were split with care and the one number that scales every fragment the GPU
+  // touches was left outside them at 2 — so a 14 Pro Max, which reports a
+  // device pixel ratio of 3, was rendering 1864x860 every frame with shadows
+  // and post processing over the top. That is 1.6 megapixels on a handset.
+  //
+  // 1.25 is where it begins, not where it stays: `Engine._adaptResolution`
+  // measures the median frame time and moves the cap in both directions, so a
+  // phone that can hold sixty at a higher resolution climbs back up to it and
+  // one that cannot keeps falling. Starting low and climbing is the right way
+  // round — the alternative is every player watching it stutter for a few
+  // seconds before it works out that it should not be.
+  // `?debug=1` — what this device actually is, on the screen.
+  //
+  // An iPhone showed no terrain and there was no way to find out why: Safari's
+  // console needs a Mac on a cable, and the one thing that would have answered
+  // it in a second — how many texture units the GPU reports — is a single call
+  // nobody could make. So it goes on the screen when asked, along with any
+  // shader that failed to compile, which is the failure that hides best
+  // because three.js logs it and carries on drawing everything else.
+  if (params.has('debug')) {
+    const box = document.createElement('pre');
+    box.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9999;margin:0;padding:8px 10px;'
+      + 'font:11px/1.45 ui-monospace,Menlo,monospace;color:#e8e2d4;background:rgba(8,10,14,.86);'
+      + 'border:1px solid #6a5c3e;border-radius:6px;max-width:70vw;white-space:pre-wrap;'
+      + 'pointer-events:none;text-shadow:0 1px 0 #000';
+    document.body.appendChild(box);
+    const shaderErrors = [];
+    const realError = console.error.bind(console);
+    console.error = (...a) => {
+      const t = a.map(String).join(' ');
+      if (/shader|program|GLSL|WebGL/i.test(t)) shaderErrors.push(t.slice(0, 200));
+      realError(...a);
+    };
+    const paint = () => {
+      const eng = window.__GAME?.engine;
+      const r = eng?.renderer;
+      const info = r?.info?.render;
+      const terrain = window.__GAME?.ctx?.get?.('terrain');
+      const visible = terrain?.group?.visible ?? terrain?.mesh?.visible ?? null;
+      box.textContent = [
+        `dpr ${window.devicePixelRatio}  cap ${eng?.config?.pixelRatioCap}`
+          + `  buffer ${r?.domElement?.width}x${r?.domElement?.height}`,
+        `quality ${eng?.config?.quality}  cascades ${eng?.config?.cascades}`
+          + `  shadows ${eng?.config?.shadows}`,
+        `texture units ${eng?.caps?.textureUnits}  max texture ${eng?.caps?.maxTexture}`,
+        `draws ${info?.calls ?? '?'}  tris ${info?.triangles ?? '?'}`,
+        `terrain visible ${visible}`,
+        shaderErrors.length ? `SHADER: ${shaderErrors[0]}` : 'no shader errors',
+      ].join('\n');
+    };
+    setInterval(paint, 500);
+  }
+
+  const pixelRatioCap = Number(params.get('dpr')) || (coarse ? 1.25 : 2);
   const engine = new Engine(canvas, {
     quality: params.get('quality') ?? (coarse ? 'high' : 'ultra'),
     shadows: params.get('shadows') !== '0',
+    pixelRatioCap,
   });
 
   // Android, launched from the browser rather than the home screen: take

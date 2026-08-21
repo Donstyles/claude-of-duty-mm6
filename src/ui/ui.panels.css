@@ -1815,4 +1815,21 @@
    * left one is the 3-D view's business. */
   .mm-ui .mm-sidebar { right: var(--safe-r); }
   .mm-ui .mm-side-field { right: calc(var(--u) * 10 - var(--safe-r)); }
+
+  /* And the two columns have to come with it.
+   *
+   * They are the painted stone pillars that draw the sidebar's edges, and they
+   * are siblings of it rather than children — absolutely positioned against
+   * the frame, not against the panel they frame. So the sidebar moved inboard
+   * by the inset above and the pillars stayed where they were: `is-mid`, which
+   * marks the sidebar's LEFT edge, ended up 59 px inside it, drawn straight
+   * over the automap and the book spines, and `is-right` sat under the island
+   * it was supposed to stop at.
+   *
+   * That is what an iPhone 14 Pro Max actually showed — a stone column down
+   * the middle of the minimap — while every gate was green, because headless
+   * Chromium reports no insets and so nothing here had ever been asked the
+   * question. `tools/mobiletest.mjs` injects the real figures now. */
+  .mm-ui .mm-column.is-mid { right: calc(var(--u) * 158 + var(--safe-r)); }
+  .mm-ui .mm-column.is-right { right: var(--safe-r); }
 }

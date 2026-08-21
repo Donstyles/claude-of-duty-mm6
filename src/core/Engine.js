@@ -78,6 +78,17 @@ export class Engine {
     this.canvas = canvas;
     this.config = {
       // Rendering
+      //
+      // The cap is the single biggest lever on a phone and it was a constant.
+      // The quality tiers were carefully split — ultra's 4096 shadow map
+      // against high's 3072, bloom and grass density and monster counts — and
+      // the one number that scales EVERY fragment the GPU touches sat outside
+      // all of it at 2.
+      //
+      // An iPhone 14 Pro Max reports devicePixelRatio 3. Capped at 2 that is
+      // 1864x860, 1.6 megapixels, every frame, with shadows and post
+      // processing on top. `_adaptResolution` below moves this at runtime, so
+      // this is only where it starts.
       pixelRatioCap: 2,
       shadows: true,
       shadowMapSize: 2048,
@@ -197,6 +208,32 @@ export class Engine {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = this.config.exposure;
 
+    // What this GPU will actually let a shader sample.
+    //
+    // The terrain binds eight custom samplers — splat, region, two horizon
+    // maps, albedo, normal, ORM, height — on top of everything three.js's own
+    // standard material wants, and every shadow map is a texture unit too. A
+    // desktop reports 32 fragment texture units and never notices. iOS Safari
+    // commonly reports 16, and over that limit the program does not link:
+    // three.js logs a shader error and the mesh is simply never drawn.
+    //
+    // Which is what an iPhone 14 Pro Max showed — the sky, the sea at y=0, the
+    // town's buildings floating on it, and no ground at all, because the
+    // ground was the one thing whose shader had failed. Nothing threw that a
+    // player could see. Headless Chromium reports 32, so no gate here has ever
+    // been in a position to notice.
+    //
+    // The budget is read rather than assumed, and the shadow cascades are what
+    // gives way: they are the cheapest units to buy back and the least missed.
+    const gl = renderer.getContext();
+    const units = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) || 16;
+    this.caps = { textureUnits: units, maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE) };
+    if (units <= 16 && this.config.cascades > 2) {
+      console.info(`[Engine] ${units} texture units — dropping shadow cascades `
+        + `${this.config.cascades} → 2 so the terrain shader can link`);
+      this.config.cascades = 2;
+    }
+
     renderer.shadowMap.enabled = this.config.shadows;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.shadowMap.autoUpdate = true;
@@ -248,13 +285,75 @@ export class Engine {
     this.events.emit('engine:ready', this.ctx);
   }
 
+  /**
+   * Trade resolution for frame rate, by measuring rather than by guessing.
+   *
+   * Picking a cap per device class is a guess, and a wrong guess is worse than
+   * none: core counts and memory hints do not predict mobile GPU throughput,
+   * which is the reasoning `main.js` already gives for not guessing the tier.
+   * The same argument applies here and points somewhere better — the frame
+   * time is the actual answer, it costs nothing to read, and it is right on
+   * hardware nobody has tested.
+   *
+   * A median over sixty frames, not a mean: one long frame from a texture
+   * upload or a garbage collection should not drop the resolution of the whole
+   * session, and a median ignores it.
+   *
+   * Asymmetric on purpose. Falling is fast, because a player suffering at
+   * twenty frames wants it fixed now; recovery is slow and demands real
+   * headroom, because a scaler that climbs the moment it can spends its life
+   * oscillating between two resolutions, and the flicker of that is worse than
+   * simply being one step lower.
+   */
+  _adaptResolution(frameMs) {
+    const f = this._fps ??= { samples: [], cooldown: 0, floor: 0.75 };
+    f.samples.push(frameMs);
+    if (f.samples.length < 60) return;
+
+    const median = f.samples.slice().sort((a, b) => a - b)[30];
+    f.samples.length = 0;
+    if (f.cooldown > 0) { f.cooldown -= 1; return; }
+
+    const cap = this.config.pixelRatioCap;
+    const device = window.devicePixelRatio || 1;
+    // 22 ms is about 45 fps: comfortably short of the 16.7 ms a phone will
+    // rarely hold with a scene this size, and far enough from 33 ms that the
+    // step happens before it is unpleasant rather than after.
+    if (median > 22 && cap > f.floor) {
+      this.config.pixelRatioCap = Math.max(f.floor, cap - 0.25);
+      f.cooldown = 4;
+      this._applyPixelRatio();
+    } else if (median < 13 && cap < Math.min(device, 2)) {
+      this.config.pixelRatioCap = Math.min(Math.min(device, 2), cap + 0.25);
+      f.cooldown = 20;
+      this._applyPixelRatio();
+    }
+  }
+
+  /** Push the cap at the renderer and at anything sampling alongside it. */
+  _applyPixelRatio() {
+    const r = Math.min(window.devicePixelRatio || 1, this.config.pixelRatioCap);
+    this.renderer.setPixelRatio(r);
+    // The composer keeps its own copy and renders at it; leaving it behind
+    // means the post chain carries on at the old resolution and the saving is
+    // only partly real.
+    this.ctx.get?.('postfx')?.composer?.setPixelRatio?.(r);
+    this.renderer.setSize(this._lastW || window.innerWidth, this._lastH || window.innerHeight, false);
+    // No event here. The one thing that has to follow the ratio is the post
+    // chain, and it is told directly above — which is what `eventcheck` asks
+    // for: an emit nobody hears is a mechanism that does not happen, and the
+    // honest version of "somebody might want this later" is a method call now.
+  }
+
   start() {
     if (this._running) return;
     this._running = true;
     this._lastTime = performance.now();
     const loop = (now) => {
       this._rafId = requestAnimationFrame(loop);
+      const t0 = performance.now();
       this.tick(now);
+      this._adaptResolution(performance.now() - t0);
     };
     this._rafId = requestAnimationFrame(loop);
   }
@@ -359,7 +458,7 @@ export class Engine {
     this._lastH = h;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.config.pixelRatioCap));
+    this._applyPixelRatio();
     this.renderer.setSize(w, h, false);
     for (const sys of this._ordered) {
       try { sys.resize(w, h, this.ctx); }

@@ -192,6 +192,76 @@ try {
   ok(D.coarse === false, 'reports a fine pointer');
   ok(D.veil === 'none', 'rotate veil hidden', D.veil);
   await desk.close();
+
+  // ── the island ────────────────────────────────────────────────────────────
+  //
+  // `--safe-t/r/b/l` were declared in `ui.css`, documented with a paragraph
+  // about how you lose a button under a notch, and read by NOTHING — all four
+  // occurrences in the file were their own definitions. So on a phone with an
+  // island the chrome was laid out across the full width while the hardware
+  // ate 59 px of it: the sidebar's outer column landed under the island, its
+  // contents squeezed left of a pillar that should have been at the screen
+  // edge, and the party bar ran to a right edge that was not there.
+  //
+  // Headless Chromium reports no insets, which is exactly why this went
+  // unnoticed through every run of this file. They are injected here — the
+  // real figures for a 14 Pro Max held in landscape — so the layout is asked
+  // the question the hardware asks it.
+  const notch = await browser.newContext({
+    viewport: { width: 932, height: 430 }, deviceScaleFactor: 3,
+    isMobile: true, hasTouch: true,
+  });
+  const np = await notch.newPage();
+  await np.addInitScript(() => {
+    const css = ':root{--safe-t:0px;--safe-r:59px;--safe-b:21px;--safe-l:59px}';
+    addEventListener('DOMContentLoaded', () => {
+      const st = document.createElement('style');
+      st.textContent = css;
+      document.head.appendChild(st);
+    });
+  });
+  await np.goto(`http://127.0.0.1:${port}/?quality=low`, { waitUntil: 'domcontentloaded' });
+  await np.waitForFunction(() => window.__GAME?.ready === true, undefined, { timeout: 180000 });
+  await new Promise((r) => setTimeout(r, 3000));
+
+  const N = await np.evaluate(() => {
+    const R = (sel) => {
+      const n = document.querySelector(sel);
+      if (!n) return null;
+      const b = n.getBoundingClientRect();
+      return { x: +b.x.toFixed(0), r: +(b.x + b.width).toFixed(0), w: +b.width.toFixed(0) };
+    };
+    const root = R('#ui-root');
+    const field = R('.mm-side-field');
+    const cols = [...document.querySelectorAll('.mm-column')]
+      .map((n) => +n.getBoundingClientRect().x.toFixed(0));
+    // Against the ARCH, not the marble field. The field is deliberately pushed
+    // out past the sidebar so the marble still runs to the glass — "borderless
+    // survives" — so the right-hand pillar standing on it is the design, not a
+    // fault. What is a fault is a pillar over the automap, which is what the
+    // phone actually showed.
+    const arch = R('.mm-arch');
+    const over = arch ? cols.filter((x) => x > arch.x + 2 && x < arch.r - 2) : [];
+    // And nothing a thumb needs may sit under the island.
+    const touch = [...document.querySelectorAll('.mm-touch, .mm-touch *, [class*="touch-btn"]')]
+      .map((n) => n.getBoundingClientRect())
+      .filter((b) => b.width > 8 && b.height > 8);
+    const underLeft = touch.filter((b) => b.x < 59).length;
+    const underRight = touch.filter((b) => b.x + b.width > innerWidth - 59).length;
+    return { root, side: R('.mm-sidebar'), field, arch, cols, over, underLeft, underRight, vw: innerWidth };
+  });
+  console.log('\niPhone 14 Pro Max landscape, with the island (59px insets)');
+  // `#ui-root` is deliberately full-bleed — the painted chrome runs to the
+  // glass, and losing that is what makes a phone game look like a web page in
+  // a box. What must respect the island is each control, which is how
+  // `ui.panels.css` does it.
+  ok(N.side && N.side.r <= N.vw - 58, 'the sidebar ends inside the safe area',
+    `right edge ${N.side?.r} of ${N.vw}`);
+  ok(N.over.length === 0, 'no column is drawn over the automap',
+    N.over.length ? `columns at ${N.over} inside the arch ${N.arch.x}..${N.arch.r}` : 'clear');
+  ok(N.underLeft === 0 && N.underRight === 0, 'no touch control sits under the island',
+    `${N.underLeft} left, ${N.underRight} right`);
+  await notch.close();
 } finally {
   await browser.close();
   try { process.kill(-server.pid, 'SIGTERM'); } catch { server.kill(); }
