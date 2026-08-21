@@ -4232,7 +4232,7 @@ export class UITextures {
   /** The painted gravestone that replaces a dead character's portrait. */
   tombstonePlate() {
     return PORTRAIT_PLATES.has('tombstone')
-      ? artUrl(`${PORTRAIT_PLATES.base}tombstone.jpg`)
+      ? artUrl(`${PORTRAIT_PLATES.base}tombstone.plate.png`)
       : null;
   }
 
@@ -5022,7 +5022,7 @@ const PORTRAIT_PLATES = {
     if (typeof Image !== 'function') return;
     const img = new Image();
     img.onerror = () => { this.available.delete(name); };
-    img.src = artUrl(`${this.base}${name}.jpg`);
+    img.src = artUrl(`${this.base}${name}.plate.png`);
   },
 
   /** Which of a role's faces this sitter wears, fixed by a hash of their key. */
@@ -5076,7 +5076,7 @@ const PORTRAIT_PLATES = {
   /** Which plate suits this character, as a URL. */
   pick(spec = {}) {
     const name = this.name(spec);
-    return name ? artUrl(`${this.base}${name}.jpg`) : null;
+    return name ? artUrl(`${this.base}${name}.plate.png`) : null;
   },
 };
 

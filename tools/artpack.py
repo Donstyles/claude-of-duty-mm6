@@ -211,7 +211,7 @@ def _hard_double(im, factor=UPSCALE):
 #
 # To take the upgrade: change those three `.jpg` to `.plate.png`, set this to
 # True, and re-run `python3 tools/artpack.py portraits`. Both halves or neither.
-WRITE_PORTRAIT_PNG = False
+WRITE_PORTRAIT_PNG = True   # taken: see the three call sites in UITextures.js
 
 
 def pack_portraits(texel=PORTRAIT_TEXEL, quality=95, png=WRITE_PORTRAIT_PNG):

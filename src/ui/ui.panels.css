@@ -626,6 +626,20 @@
   background-size: cover;
   background-position: 50% 22%;
   border-radius: 50%;
+  /* Keep the texel edges hard.
+   *
+   * The plate is quantised to a 1998 colour ladder and hard-doubled, and the
+   * browser's default smooth scaling blends every one of those texels with its
+   * neighbour on the way to the screen — which puts back exactly the continuum
+   * the quantisation was there to remove. Measured on the party bar, the
+   * high-frequency ratio went the WRONG WAY under smooth scaling: 1.09x of
+   * MM6's to 0.75x, while the plate itself sat at 0.99x on colour depth. The
+   * treatment was landing in the file and being undone on the glass.
+   *
+   * `pixelated` is also what MM6 itself did, because a 1998 blitter had no
+   * choice. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;   /* Firefox spells it this way */
   /* The bitmap is rectangular and simply masked by the oval, so hair and
      headdresses are visibly cut off by the ring. */
   clip-path: ellipse(50% 50% at 50% 50%);

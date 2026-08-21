@@ -181,6 +181,8 @@ const GATES = [
     why: 'every subsystem loads — including the one that makes the sound' },
   { name: 'touch', slow: true, cmd: 'node', args: ['tools/touchtest.mjs'],
     why: 'the backpack answers to a finger' },
+  { name: 'faces-drawn', slow: true, cmd: 'node', args: ['tools/portraittest.mjs'],
+    why: 'the four in the bar are the painted plates, and are not being smoothed' },
 ];
 
 function run(gate) {
