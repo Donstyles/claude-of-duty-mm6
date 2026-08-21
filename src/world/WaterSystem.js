@@ -30,6 +30,9 @@ export class WaterSystem extends System {
     this._reflect = null;
     this._reflectCam = null;
     this._enabled = true;
+    /** Refresh the reflection on alternate frames. Set for a phone in `init`. */
+    this._halfRate = false;
+    this._frame = 0;
   }
 
   async init(ctx) {
@@ -47,6 +50,13 @@ export class WaterSystem extends System {
         generateMipmaps: false,
       });
       this._reflectCam = new THREE.PerspectiveCamera();
+      // A phone gets `high`, and `high` is where the reflection starts. It
+      // keeps it — halved in rate rather than switched off, because the
+      // Fresnel term makes the reflection most of what water LOOKS like at a
+      // grazing angle, and a sea without one reads as painted plastic.
+      this._halfRate = ctx.config.pixelRatioCap <= 1.5
+        || (typeof window !== 'undefined'
+          && !!window.matchMedia?.('(pointer: coarse)')?.matches);
     }
 
     this.material = this._buildMaterial(ctx);
@@ -228,16 +238,70 @@ export class WaterSystem extends System {
     this.mesh.position.x = ctx.camera.position.x;
     this.mesh.position.z = ctx.camera.position.z;
 
-    if (this._reflect) this._renderReflection(ctx);
+    // 3. A phone refreshes the reflection on alternate frames.
+    //
+    // The mirrored world changes at walking pace and the target is 256 pixels
+    // square, mixed in behind a Fresnel term and a moving ripple normal. A
+    // frame of staleness in that is not findable; half the cost of the second
+    // scene pass is. Deliberately a frame COUNT and not a timer — at a steady
+    // sixty it is every other frame, and if the frame rate falls the
+    // reflection thins out along with everything else, which is the direction
+    // it should move.
+    //
+    // Desktops keep it every frame: the whole reason `_reflect` exists at
+    // `high` and `ultra` and not below is that those tiers have the budget.
+    this._frame = (this._frame ?? 0) + 1;
+    if (this._reflect && (!this._halfRate || (this._frame & 1) === 0)) {
+      this._renderReflection(ctx);
+    }
   }
 
   /**
    * Mirror the camera through the water plane and re-render. Skipped when the
    * camera is below the surface, where the reflection is not visible anyway.
+   *
+   * ── this is the second half of every frame ───────────────────────────────
+   *
+   * `tools/drawtest.mjs` reported `the scene is submitted 2.00 times a frame`,
+   * and this is the other one. A planar reflection is a full re-render of the
+   * world from a mirrored camera, so its cost is not "a render target" — it is
+   * everything the frame already cost, again. Measured on the phone profile:
+   * 236 draw calls, of which 118 were this.
+   *
+   * Three things narrow it, and none of them costs a visible pixel.
    */
   _renderReflection(ctx) {
     const cam = ctx.camera;
     if (cam.position.y < this.level + 0.2) return;
+
+    // 1. Nothing underground has a sea in it.
+    //
+    // A dungeon floor is sealed — the sky is not in it and neither is the
+    // horizon — so the mirrored camera renders a room the player cannot see
+    // reflected in water that is not there. Most of a twenty-hour campaign is
+    // spent down here, which makes this the largest of the three by playing
+    // time even though it is the smallest by lines.
+    if (ctx.get('dungeon')?.current) return;
+
+    // 2. A guard that currently costs nothing, and is here anyway.
+    //
+    // `renderer.shadowMap.autoUpdate` is on, so in principle every render of
+    // the scene rebuilds every shadow map — including this one, which throws
+    // the result into a 256-pixel square mixed in at a Fresnel weight.
+    //
+    // Measured, it does not, and the reason is an accident of ordering rather
+    // than a decision: this runs inside `update()`, and three.js only rebuilds
+    // the maps once per frame regardless. The honest numbers, counted with
+    // `onBeforeShadow` rather than with `renderer.info`, are 122 shadow draws
+    // a frame both with this line and without it.
+    //
+    // It stays because the thing making it free is not written down anywhere
+    // else, and a reordering of the frame would quietly double the shadow cost
+    // with nothing to catch it. A no-op with a reason beats an invariant
+    // nobody knows they are holding.
+    const renderer = ctx.renderer;
+    const autoShadow = renderer.shadowMap.autoUpdate;
+    renderer.shadowMap.autoUpdate = false;
 
     const rc = this._reflectCam;
     rc.copy(cam);
@@ -248,12 +312,13 @@ export class WaterSystem extends System {
     rc.updateProjectionMatrix();
 
     this.mesh.visible = false;
-    const prevTarget = ctx.renderer.getRenderTarget();
-    ctx.renderer.setRenderTarget(this._reflect);
-    ctx.renderer.clear();
-    ctx.renderer.render(ctx.scene, rc);
-    ctx.renderer.setRenderTarget(prevTarget);
+    const prevTarget = renderer.getRenderTarget();
+    renderer.setRenderTarget(this._reflect);
+    renderer.clear();
+    renderer.render(ctx.scene, rc);
+    renderer.setRenderTarget(prevTarget);
     this.mesh.visible = true;
+    renderer.shadowMap.autoUpdate = autoShadow;
   }
 
 

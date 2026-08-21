@@ -173,11 +173,26 @@ async function look(page, query) {
 
 function report(title, r) {
   console.log(`\n${title}`);
-  console.log(`  ${r.calls} draw calls, ${(r.tris / 1000).toFixed(0)}k triangles`
-    + `  ·  ${r.mainDraws.toFixed(0)} submitted to the camera,`
-    + ` ${r.shadowDraws.toFixed(0)} to the shadow map, per frame`);
-  console.log(`  the scene is submitted ${r.passes.toFixed(2)} times a frame`
-    + ` — every one of those re-renders every shadow map`);
+  // The hook total is the headline, and `renderer.info` is the footnote.
+  //
+  // `Engine.tick` calls `info.reset()` AFTER every system's `update()` and
+  // before the render pipeline — so anything a system draws during its own
+  // update is wiped from the count before the frame is counted. The water's
+  // planar reflection is exactly that: a full re-render of the world, and
+  // `info.calls` has never seen one draw of it.
+  //
+  // Which means the engine's own counter, the debug overlay that prints it and
+  // every "draw calls" figure this project has quoted were all UNDERCOUNTS.
+  // Not wrong as a comparison — the same number measured the same way before
+  // and after a change is still a valid ratio — but wrong as an answer to
+  // "what does a frame cost". `onBeforeRender` and `onBeforeShadow` fire once
+  // per submitted draw wherever in the frame it happens, so they are the total.
+  const total = r.mainDraws + r.shadowDraws;
+  console.log(`  ${total.toFixed(0)} draws a frame  ·  ${r.mainDraws.toFixed(0)} to the camera,`
+    + ` ${r.shadowDraws.toFixed(0)} to the shadow map`);
+  console.log(`  (renderer.info says ${r.calls}, ${(r.tris / 1000).toFixed(0)}k triangles —`
+    + ` it is reset after update(), so it cannot see the water reflection)`);
+  console.log(`  the scene is submitted ${r.passes.toFixed(2)} times a frame`);
   console.log(`  shadows ${r.shadows}, cascades ${r.cascades}, splat ${r.lean ? 'lean' : 'full'}`
     + `, smaa ${r.smaa}, ~${r.postDraws.toFixed(0)} post quads`);
   console.log(`  ${'owner'.padEnd(28)}${'camera'.padStart(9)}${'shadow'.padStart(9)}${'total'.padStart(8)}`);
@@ -208,10 +223,13 @@ try {
   const off = await look(page, 'quality=high&units=16&shadows=0');
   report('the same phone with the shadow passes off', off);
 
-  const perPass = on.calls / Math.max(1, off.calls);
-  console.log(`\nthe shadow map costs ${(on.calls - off.calls)} draw calls a frame`
-    + ` — a ${perPass.toFixed(2)}x multiplier on the whole scene, not an addition to it`);
-  console.log(`the scene itself is ${off.calls} draws of ${off.drawables} objects`);
+  const onTotal = on.mainDraws + on.shadowDraws;
+  const offTotal = off.mainDraws + off.shadowDraws;
+  console.log(`\nthe shadow map costs ${on.shadowDraws.toFixed(0)} draws a frame`
+    + ` — a ${(onTotal / Math.max(1, offTotal)).toFixed(2)}x multiplier on the whole scene,`
+    + ' not an addition to it');
+  console.log(`the scene itself is ${offTotal.toFixed(0)} draws, `
+    + `${on.passes.toFixed(2)} submissions a frame`);
   await page.close();
 } finally {
   await browser.close();
