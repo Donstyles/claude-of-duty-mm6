@@ -137,6 +137,8 @@ const GATES = [
     why: 'the game boots clean at the tier it ships at, and hazard dungeons build there' },
   { name: 'drops', slow: true, cmd: 'node', args: ['tools/droptest.mjs'],
     why: 'loot dropped on a dungeon floor is close enough to pick up' },
+  { name: 'drag', slow: true, cmd: 'node', args: ['tools/dragtest.mjs'],
+    why: 'an item dropped on an item reaches the character\'s own pack, not a copy of it' },
   { name: 'night', slow: true, cmd: 'node', args: ['tools/nighttest.mjs'],
     why: 'a torch and the Torch Light spell actually put light into the world' },
   { name: 'automap', slow: true, cmd: 'node', args: ['tools/maptest.mjs'],

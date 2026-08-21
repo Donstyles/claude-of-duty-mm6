@@ -1290,18 +1290,42 @@ export class UISystem extends System {
     const alchemy = this.ctx?.get('alchemy');
     if (!alchemy?.preview) return false;
 
+    // The dragged entry, as THIS character's array knows it.
+    //
+    // `inventory.js` binds its sprites against `vm.inventory` — the view
+    // model's copy — so what arrives here is an entry object that looks
+    // exactly like the character's and is not it. `AlchemySystem.mix` finds
+    // its ingredients with `inv.indexOf(a)`, which returned -1 every time and
+    // refused with "That is not in this pack", while this method returned true
+    // regardless. So the drop reported success, the toast never fired, and
+    // nothing whatsoever happened — the hardest possible shape to notice.
+    //
+    // The same seam as `index` addressing the view models where `mix` wants a
+    // party index, written into this method's own docstring one screen up, and
+    // then walked into again in its object-identity form.
+    const mine = c.inventory.find((e) => e === drag.entry)
+      ?? c.inventory.find((e) => e.item === drag.item)
+      ?? c.inventory.find((e) => e.x === drag.entry.x && e.y === drag.entry.y);
+    if (!mine) return false;
+
     const under = c.inventory.find((e) => {
-      if (e === ignore) return false;
+      if (e === ignore || e === mine) return false;
       const f = itemFootprint(e.item);
       return gx >= e.x && gy >= e.y && gx < e.x + f.w && gy < e.y + f.h;
     });
-    if (!under || under === drag.entry) return false;
-    if (!alchemy.preview(c, drag.item, under.item).verb) return false;
+    if (!under) return false;
+    if (!alchemy.preview(c, mine.item, under.item).verb) return false;
 
     const partyIndex = this.ctx?.get('party')?.members?.indexOf(c) ?? -1;
     if (partyIndex < 0) return false;
 
-    alchemy.mix(partyIndex, drag.entry, under);
+    // And report what actually happened, not that it was attempted. `mix`
+    // refuses a mixture the mixer's rank cannot reach, and a refusal has to
+    // fall through to the caller's "no room there" rather than be swallowed as
+    // a success that moved nothing.
+    const before = c.inventory.length;
+    alchemy.mix(partyIndex, mine, under);
+    if (c.inventory.length === before) return false;
     this._syncParty(true);
     return true;
   }

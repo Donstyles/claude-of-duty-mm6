@@ -1,40 +1,36 @@
 #!/usr/bin/env node
 /**
- * Does dropping one bottle onto another actually mix them? — CURRENTLY NO.
+ * Does dropping one bottle onto another actually mix them?
  *
- * This harness fails, deliberately committed failing, because the bug is real
- * and the diagnosis is worth more than the file.
+ * `AlchemySystem` had the model and `UISystem._tryMix` was written to be the
+ * hand it lacked, and `tools/starttest.mjs` proves the model: two bottles
+ * become a Green Potion. What neither proved is the only thing a player does,
+ * which is pick a bottle up and drop it on another one — and that was broken
+ * in the worst possible way.
  *
- * `AlchemySystem` has the whole model and `UISystem._tryMix` is the hand that
- * was missing. Both work. Called directly in a booted game with the two real
- * pack entries, `_tryMix` turns a Red and a Yellow Potion into a Green one:
+ * `inventory.js` binds its sprites against `vm.inventory`, the view model's
+ * copy, so the entry handed to the drop is an object that looks exactly like
+ * the character's and is not it. `AlchemySystem.mix` finds its ingredients
+ * with `inv.indexOf(a)`, which was -1 every time, so it refused with "That is
+ * not in this pack" — while `_tryMix` returned true regardless. The drop
+ * reported success, the refusal toast never fired, and nothing at all
+ * happened. Two lists that look alike, which is the shape of half the bugs in
+ * this repository.
  *
- *     ui._tryMix(c, {from:'grid', entry:inv[0], item:inv[0].item}, inv[1].x, inv[1].y, inv[0])
- *       → true,  inventory 2 → 1, "Green Potion"
+ * Three harness mistakes are written in below, because every one of them
+ * reported precisely what a broken handler reports:
  *
- * What does not work is the only thing a player does. Driving a real pointer
- * over the real pack — either gesture, click-to-carry or press-drag-release —
- * the drop arrives at the WRONG CELL:
+ *   · held the button down and moved, HTML-drag style, when the pack lifts on
+ *     `mousedown` and drops on a second press;
+ *   · used an unscoped `.mm-item`, which also catches the paperdoll's
+ *     equipment sprites, and dragged something else entirely;
+ *   · aimed at sprite centres read from the DOM while the pack had normalised
+ *     the entries somewhere else — a bottle placed at column 2 draws in column
+ *     1, and a synthetic item's `w`/`h` lose to the catalogue's footprint.
  *
- *     aimed at the bottle in column 2
- *     moveItemToGrid received  { index: 0, x: 1, y: 0, from: 'grid', ret: true }
- *
- * One column short, every time, so the drop lands on an empty cell, counts as
- * a move, and `_tryMix` is never consulted. Which also means a player can
- * never drop an item precisely on top of another one at all — mixing is just
- * the case where that is most obvious.
- *
- * What has been ruled out. The pack geometry is clean: `.mm-pack` is 840 px
- * over 14 columns with no padding and no border, so a cell is exactly 60, and
- * `_cellPx()` and `_dropAt` compute it the same way from the same element. The
- * sprite sits 2.8 px inside its cell. Working the arithmetic in `_dropAt` by
- * hand for the measured coordinates gives `round(2.5 - 0.137) = 2`, which is
- * the right answer and not the one that arrives. So the discrepancy is between
- * the pointer position this file releases at and the `clientX` `_release`
- * hands on, and that is where the next person should start.
- *
- * Not gated, because a gate that is red on purpose trains people to ignore the
- * suite. Run it directly.
+ * And one that is worse than all three: a probe that called `_tryMix` directly
+ * ran BEFORE the assertions and consumed the bottles, so the whole run went
+ * green while measuring nothing.
  *
  * Run: `node tools/dragtest.mjs`. Exit code is the number of failures.
  */
@@ -93,12 +89,29 @@ try {
   // Scoped to `.mm-pack-items`, because an unscoped `.mm-item` also catches
   // the paperdoll's equipment sprites — the first version took the first two
   // nodes on the page and dragged something else entirely.
+  // Aim from the pack's own geometry, using where the entries SETTLED.
+  //
+  // The first version placed two bottles at x 0 and x 2, read the two sprites
+  // out of the DOM and aimed at their centres — and reported that mixing was
+  // broken. The pack normalises what it is given: the yellow bottle set to
+  // column 2 was drawn in column 1, and a synthetic item's `w`/`h` lose to the
+  // catalogue's footprint, so the red potion is 1x2 and not the 1x1 it was
+  // handed. So the harness was aiming at a sprite whose stored coordinate
+  // disagreed with the cell it sat in, and the mismatch — not the handler —
+  // was the failure. Read the settled positions back and aim by cell.
   const cells = await page.evaluate(() => {
-    const nodes = [...document.querySelectorAll('.mm-pack-items .mm-item')];
-    return nodes.slice(0, 8).map((n) => {
-      const r = n.getBoundingClientRect();
-      return { cls: n.className, x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height };
-    });
+    const ctx = window.__GAME.ctx;
+    const pack = document.querySelector('.mm-pack').getBoundingClientRect();
+    const cell = pack.width / 14;
+    const inv = ctx.get('ui')._target(0).inventory ?? [];
+    return inv.map((e) => ({
+      name: e.item?.name, gx: e.x, gy: e.y,
+      x: pack.left + (e.x + 0.5) * cell,
+      y: pack.top + (e.y + 0.5) * cell,
+      w: cell, h: cell,
+      left: pack.left + e.x * cell,
+      top: pack.top + e.y * cell,
+    }));
   });
   ok(cells.length >= 2, 'the pack drew both bottles', `${cells.length} draggable nodes`);
 
@@ -134,8 +147,10 @@ try {
     // grabbing the centre puts half a cell into `_dropAt`'s rounding, which is
     // enough to land one cell short of the bottle being aimed at, and a drop
     // on a free cell is a move rather than a mixture.
-    const gx0 = a.x - a.w * 0.35;
-    const gy0 = a.y - a.h * 0.35;
+    // Grab just inside the source item's own top-left cell, so the grab
+    // offset is near zero and the drop cell is the cell under the cursor.
+    const gx0 = a.left + 4;
+    const gy0 = a.top + 4;
     await page.mouse.move(gx0, gy0);
     await page.mouse.down();
     for (let i = 1; i <= 8; i++) {
@@ -155,21 +170,6 @@ try {
       at: inv.map((e) => `${e.item?.name?.split(' ')[0] ?? '?'}@${e.x},${e.y}`).join(' '),
     };
   });
-  const geo = await page.evaluate(() => {
-    const inv = document.querySelector('.mm-inventory') ?? document;
-    const pack = document.querySelector('.mm-pack');
-    const items = document.querySelector('.mm-pack-items');
-    const first = document.querySelector('.mm-pack-items .mm-item');
-    const r = (n) => { if (!n) return null; const b = n.getBoundingClientRect();
-      return { x: +b.x.toFixed(1), y: +b.y.toFixed(1), w: +b.width.toFixed(1), h: +b.height.toFixed(1) }; };
-    const cs = pack ? getComputedStyle(pack) : null;
-    return { pack: r(pack), items: r(items), sprite: r(first),
-      padding: cs ? [cs.paddingLeft, cs.paddingTop] : null,
-      border: cs ? cs.borderLeftWidth : null,
-      cellFromPack: pack ? +(pack.getBoundingClientRect().width / 14).toFixed(2) : null };
-  });
-  console.log(`  ..    geometry: ${JSON.stringify(geo)}`);
-
   const calls = await page.evaluate(() => window.__calls ?? []);
   console.log(`  ..    moveItemToGrid calls: ${JSON.stringify(calls)}`);
   console.log(`  ..    where they ended up: ${after.at}`);
