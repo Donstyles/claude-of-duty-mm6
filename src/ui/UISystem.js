@@ -1459,8 +1459,33 @@ export class UISystem extends System {
     return { ...map.party, yaw: -yaw };
   }
 
+  /**
+   * Has the party walked off the sheet?
+   *
+   * The survey is anchored on wherever the party stood when it was drawn and
+   * then cached, and the only thing that threw it away was
+   * `player:enteredRegion`. A region is 1024 m square and the sheet covers
+   * 1000 x 641, so a party can cross its own region without ever leaving it:
+   * `mapParty` clamps them to the grid edge, the arch draws the corner of a
+   * survey centred somewhere else, and the automap goes black while they are
+   * standing on open ground. Measured — 400 m of walking took the explored
+   * cells around the party from 1680 of 1681 to 284 of 861.
+   *
+   * Re-surveying at three tenths rather than at the edge is hysteresis: it
+   * keeps the party comfortably inside the drawn area instead of redrawing
+   * every few steps once they reach the rim.
+   */
+  _mapStale() {
+    const p = this.ctx?.get('player')?.position;
+    const m = this._map;
+    if (!p || !m?.span) return false;
+    return Math.abs(p.x - (m.origin.x + m.span / 2)) > m.span * 0.3
+      || Math.abs(p.z - (m.origin.z + m.spanY / 2)) > m.spanY * 0.3;
+  }
+
   /** Build (and cache) the automap for the current area. */
   mapData() {
+    if (this._map && this._mapStale()) this._map = null;
     if (this._map) {
       this._map.party = this.mapParty();
       return this._map;

@@ -137,6 +137,8 @@ const GATES = [
     why: 'the game boots clean at the tier it ships at, and hazard dungeons build there' },
   { name: 'drops', slow: true, cmd: 'node', args: ['tools/droptest.mjs'],
     why: 'loot dropped on a dungeon floor is close enough to pick up' },
+  { name: 'automap', slow: true, cmd: 'node', args: ['tools/maptest.mjs'],
+    why: 'the sidebar arch has ground on it, and still does after a walk' },
   { name: 'monsters', slow: true, cmd: 'node', args: ['tools/monstertest.mjs'],
     why: 'every creature has a surface, and moves when it strikes and when it dies' },
 ];
