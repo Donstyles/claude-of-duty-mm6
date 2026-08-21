@@ -96,6 +96,9 @@ export class Engine {
       // Half-width of the sun's shadow box, in metres. 0 = whatever the
       // quality tier says. `SkySystem` explains why a phone overrides it.
       shadowExtent: 0,
+      // 'auto' = whatever the quality tier says; 'off' = no SMAA pass at all.
+      // `PostFXSystem` explains why a phone sets this.
+      postAA: 'auto',
       anisotropy: 16,
       exposure: 1.0,
       // Pretend the GPU reports this many fragment texture units. 0 = ask it.

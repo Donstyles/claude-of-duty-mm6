@@ -219,6 +219,12 @@ async function main() {
         `texture units ${eng?.caps?.textureUnits}  budget ${eng?.caps?.samplerBudget}`
           + `  max texture ${eng?.caps?.maxTexture}`,
         `terrain splat ${eng?.config?.leanTerrain ? 'lean (8 samplers)' : 'full (20 samplers)'}`,
+        // The two numbers that decide whether a phone can hold sixty, on the
+        // screen of the phone in question. `fps` is measured from the interval
+        // between frames — the same number the resolution scaler now reads,
+        // and the one the player is actually experiencing.
+        `${(eng?.perf?.fps ?? 0).toFixed(0)} fps  ${(eng?.perf?.frameMs ?? 0).toFixed(1)} ms`
+          + `  cpu ${(eng?.perf?.cpuMs ?? 0).toFixed(1)} ms`,
         `draws ${info?.calls ?? '?'}  tris ${info?.triangles ?? '?'}`,
         window.__GAME?.missing?.length
           ? `MISSING: ${window.__GAME.missing.join(', ')}\n  ${(window.__GAME.bootErrors ?? []).join('\n  ')}`
@@ -251,6 +257,10 @@ async function main() {
     // drops to its floor within a couple of seconds, and every screen the art
     // review is done from is softer than the one a player sees.
     adaptive: !params.has('capture'),
+    // No SMAA on a phone: three full-resolution passes against a scene pass of
+    // one, buying anti-aliasing the panel's own upscale is already doing. See
+    // `PostFXSystem.init`. `?postAA=auto` puts it back for a comparison.
+    postAA: params.get('postAA') ?? (coarse ? 'off' : 'auto'),
   });
 
   // Android, launched from the browser rather than the home screen: take

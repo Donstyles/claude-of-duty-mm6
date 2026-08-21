@@ -103,6 +103,8 @@ export class PostFXSystem extends System {
   constructor() {
     super();
     this.composer = null;
+    /** Whether the SMAA pass was actually added — read by `tools/drawtest`. */
+    this.smaa = false;
     this.enabled = true;
     this._damage = 0;
   }
@@ -142,8 +144,24 @@ export class PostFXSystem extends System {
     this.composer.addPass(new OutputPass());
     ctx.get('sky')?.setPreTonemap?.(true);
 
-    if (q.smaa) {
+    // SMAA is three FULL-RESOLUTION passes — edge detection, blending weights,
+    // neighbourhood blending — on top of a scene pass that is one. At the
+    // phone's 0.63 megapixels that is 1.9 megapixels of extra fill against
+    // 0.63 of actual world, so the anti-aliasing was costing three times what
+    // drawing the game cost.
+    //
+    // And it buys least exactly there. A phone renders at a pixel ratio well
+    // under its device ratio and the panel upscales the result, and that
+    // upscale is itself a low-pass — it softens the stair-steps SMAA exists to
+    // find. MM6's own look is crisp and slightly aliased; this is one of the
+    // rare places where the cheaper choice is also the more faithful one.
+    //
+    // A device decision rather than a tier one, because `high` is what a phone
+    // gets AND what a modest desktop asks for, and a desktop at 1.0 device
+    // ratio has none of the upscale that makes this safe.
+    if (q.smaa && ctx.config.postAA !== 'off') {
       this.composer.addPass(new SMAAPass(size.x, size.y));
+      this.smaa = true;
     }
 
     // Hand the Engine our pipeline in place of its direct render.

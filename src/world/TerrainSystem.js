@@ -49,7 +49,17 @@ const CHUNKS = 8;                         // per side
 const CHUNK_SIZE = WORLD_SIZE / CHUNKS;   // metres — 256
 const CHUNK_VERTS = 65;                   // at LOD 0 — 64 quads per side, 4 m each
 const LOD_LEVELS = 5;
-const SKIRT_DEPTH = 14;
+/**
+ * How far the crack-hiding skirt hangs below a chunk's border.
+ *
+ * It has to be at least the height error between two neighbouring levels, or
+ * the crack it exists to hide shows through as a hole to the sky. Fourteen was
+ * sized for a four-level ladder on 128 m chunks; the levels are five now and
+ * the chunks 256 m, so the coarsest samples the ground every 64 m and can miss
+ * a ridge by more than that. Deeper costs a few triangles of area that are
+ * only ever seen edge-on.
+ */
+const SKIRT_DEPTH = 24;
 
 /**
  * Distance in metres at which a chunk drops to the next LOD.

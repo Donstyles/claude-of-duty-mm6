@@ -29,16 +29,16 @@
  * SwiftShader's frame times mean nothing about an A16, so no clock is read.
  * Draw counts are the same integer on every GPU.
  *
- * Run it holding the capture lock, and build inside the same lock:
+ * Run: `node tools/drawtest.mjs`. It builds its own tree first.
  *
- *   flock -w 1800 /tmp/mm6-capture.lock \
- *     bash -c 'npx vite build --logLevel error && node tools/drawtest.mjs'
- *
- * This serves `dist/`, and every other agent's `npm run check` rewrites `dist/`
- * with new content-hashed chunks. Without the lock the two `look()` calls
- * either side of the shadow comparison can come from DIFFERENT TREES, which is
- * the class of invalid evidence this project has already thrown away two
- * review rounds to.
+ * Into `dist-check-perf/`, not `dist/`, and that is not tidiness. Several
+ * agents work in this checkout at once and every `npm run check` rewrites
+ * `dist/` with fresh content-hashed chunks — so a measurement serving `dist/`
+ * can have the two `look()` calls either side of the shadow comparison come
+ * from DIFFERENT TREES. That is the class of invalid evidence this project has
+ * already thrown away two review rounds to, and the capture lock only avoids
+ * it by making everyone else wait, which with four agents running means
+ * waiting for all of them. A private output directory needs no lock at all.
  */
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -48,8 +48,18 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const port = 5253;
 
-const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort', '--host', '127.0.0.1'],
-  { cwd: ROOT, stdio: 'ignore', detached: true });
+const OUT = 'dist-check-perf';
+
+/** Build into our own directory, so nobody else's build can move under us. */
+await new Promise((resolve, reject) => {
+  const p = spawn('npx', ['vite', 'build', '--outDir', OUT, '--emptyOutDir', '--logLevel', 'error'],
+    { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
+  p.on('exit', (c) => (c === 0 ? resolve() : reject(new Error(`vite build exited ${c}`))));
+});
+
+const server = spawn('npx', ['vite', 'preview', '--outDir', OUT,
+  '--port', String(port), '--strictPort', '--host', '127.0.0.1'],
+{ cwd: ROOT, stdio: 'ignore', detached: true });
 await new Promise((r) => setTimeout(r, 6000));
 
 const browser = await chromium.launch({
@@ -150,6 +160,12 @@ async function look(page, query) {
       shadows: eng.config.shadows,
       cascades: eng.config.cascades,
       lean: eng.config.leanTerrain,
+      // Everything `info.calls` counts that the scene hooks did not: the
+      // composer's fullscreen quads. Bloom is a dozen of them at falling
+      // resolutions and SMAA is three at full, and none of them is in the
+      // scene graph, so the per-owner table above is blind to all of it.
+      smaa: window.__GAME.ctx?.get?.('postfx')?.smaa ?? null,
+      postDraws: Math.max(0, info.calls - (sum('main') + sum('shadow')) / Math.max(1, passes / frames)),
       rows,
     };
   }, FRAMES);
@@ -162,7 +178,8 @@ function report(title, r) {
     + ` ${r.shadowDraws.toFixed(0)} to the shadow map, per frame`);
   console.log(`  the scene is submitted ${r.passes.toFixed(2)} times a frame`
     + ` — every one of those re-renders every shadow map`);
-  console.log(`  shadows ${r.shadows}, cascades ${r.cascades}, splat ${r.lean ? 'lean' : 'full'}`);
+  console.log(`  shadows ${r.shadows}, cascades ${r.cascades}, splat ${r.lean ? 'lean' : 'full'}`
+    + `, smaa ${r.smaa}, ~${r.postDraws.toFixed(0)} post quads`);
   console.log(`  ${'owner'.padEnd(28)}${'camera'.padStart(9)}${'shadow'.padStart(9)}${'total'.padStart(8)}`);
   for (const o of r.rows.slice(0, 14)) {
     if (o.main + o.shadow < 0.5) break;
@@ -172,7 +189,17 @@ function report(title, r) {
 }
 
 try {
-  const page = await browser.newPage({ viewport: { width: 932, height: 430 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+  // `isMobile` and `hasTouch` are what matter: they make `(pointer: coarse)`
+  // match, which is how `main.js` picks the phone's quality tier, shadow
+  // extent and post stack. The device scale factor is deliberately 1 and not
+  // the 3 a 14 Pro Max reports — a draw call is a draw call at any resolution,
+  // and asking a software renderer for a 2796x1290 backing store made the boot
+  // take longer than the harness would wait for. Fill rate is `perftest`'s
+  // question; this file's question is how many times the scene is submitted.
+  const page = await browser.newPage({
+    viewport: { width: 932, height: 430 }, deviceScaleFactor: 1,
+    isMobile: true, hasTouch: true,
+  });
   page.setDefaultTimeout(180000);
 
   const on = await look(page, 'quality=high&units=16');
