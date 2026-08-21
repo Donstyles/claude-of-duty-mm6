@@ -8,6 +8,7 @@ import {
 } from './data/NPCs.js';
 import { VENUE_KINDS, venuesInTown } from './data/Venues.js';
 import { experienceForLevel, trainingCost, charSkillEffect } from './rules.js';
+import { hashSeed } from '../core/RNG.js';
 
 /**
  * Townsfolk and the services they run.
@@ -23,6 +24,26 @@ import { experienceForLevel, trainingCost, charSkillEffect } from './rules.js';
  */
 
 const TALK_RADIUS = 4.0;
+
+/**
+ * Where a door's keeper stands, relative to the doorway.
+ *
+ * They used to stand *in* it. `town.doors[].position` is the point the party
+ * walks to in order to go inside — `BuildingGen` puts it on the centreline of a
+ * 1.05 m opening, 0.4 m clear of the wall — and every keeper was spawned on it
+ * exactly, so the storekeep, the smith and the priest were each planted in the
+ * middle of their own front door with the dark of the opening behind them. A
+ * shopkeeper does not block their own shop, and a player walking up to a door
+ * should see a door.
+ *
+ * So: one pace along the frontage and a hand's breadth out from the wall, which
+ * is where somebody minding a shop front actually stands. `SIDE` clears the
+ * opening's own half-width (0.525 m) plus the figure's shoulders with room to
+ * spare, and both offsets stay well inside `TALK_RADIUS`, so the keeper is
+ * still the person you talk to when you are at their door.
+ */
+const POST_SIDE = 1.15;
+const POST_OUT = 0.35;
 
 /**
  * How a keeper dresses when the roster does not say.
@@ -213,13 +234,15 @@ export class NPCSystem extends System {
 
     await this._loadMaterials(ctx);
 
-    // Put a keeper on the door of every named building.
+    // Put a keeper beside the door of every named building — beside it, never
+    // in it. See `POST_SIDE` above for why that is a fix and not a preference.
     const townId = town.townId ?? town.id ?? null;
     this._used = new Set();
     for (const door of town.doors ?? []) {
       const who = this._npcForDoor(door, townId);
       if (!who) continue;
-      this._spawn(ctx, who, door.position, door.name, terrain);
+      const post = this._postBeside(door, town);
+      this._spawn(ctx, who, post.at, door.name, terrain, post.facing);
     }
 
     // A few unattached townsfolk wandering the square — this town's, and
@@ -786,7 +809,58 @@ export class NPCSystem extends System {
     return g;
   }
 
-  _spawn(ctx, who, position, buildingName, terrain) {
+  /**
+   * A standing place beside a doorway, and which way to look from it.
+   *
+   * The door record carries no facing — `TownSystem` stores `{ name, type,
+   * position }` and nothing else — but it does not need to. The door sits on
+   * the front wall's centreline, so the line from the building's own centre out
+   * through the door *is* the frontage normal, and the perpendicular of that is
+   * the wall. Nearest building rather than a name match, because a town lays
+   * out several houses with the same name and only one of them is this one.
+   *
+   * Which side is a hash of the building's name, not a roll: a keeper who
+   * changed shoulders between two visits would be a bug the player can see, and
+   * the same hash gives the same answer across a save and across a rebuild.
+   *
+   * If the town has no buildings to measure against — a harness that stands up
+   * `NPCSystem` on its own — the doorway is returned unchanged. Guessing a
+   * direction with nothing to check it against could put somebody inside a wall,
+   * which is worse than the thing being fixed.
+   */
+  _postBeside(door, town) {
+    const p = door.position;
+    let best = null;
+    let bestD = Infinity;
+    for (const b of town.buildings ?? []) {
+      const m = b?.mesh?.position;
+      if (!m) continue;
+      const d = (m.x - p.x) ** 2 + (m.z - p.z) ** 2;
+      if (d < bestD) { bestD = d; best = m; }
+    }
+    if (!best) return { at: p, facing: null };
+
+    let ox = p.x - best.x;
+    let oz = p.z - best.z;
+    const len = Math.hypot(ox, oz);
+    if (len < 1e-3) return { at: p, facing: null };
+    ox /= len; oz /= len;
+
+    const side = hashSeed(`keeper-post:${door.name ?? door.type ?? 'door'}`) % 2 ? 1 : -1;
+    return {
+      at: new THREE.Vector3(
+        p.x - oz * POST_SIDE * side + ox * POST_OUT,
+        p.y,
+        p.z + ox * POST_SIDE * side + oz * POST_OUT,
+      ),
+      // Out into the street, with their back to their own wall. `fixedUpdate`
+      // turns them towards the party from 18 m; this is how they stand until
+      // somebody is worth turning for.
+      facing: Math.atan2(-ox, -oz),
+    };
+  }
+
+  _spawn(ctx, who, position, buildingName, terrain, facing = null) {
     // `who` is either a catalogue id or the `{ id, def }` pair `_npcForDoor`
     // returns, which is how a keeper the sign names but the roster does not
     // gets a body without having to be written into `NPCs.js` twice.
@@ -796,6 +870,7 @@ export class NPCSystem extends System {
     const figure = this._buildFigure(def, npcId);
     const y = terrain?.heightAt?.(position.x, position.z) ?? position.y;
     figure.position.set(position.x, y, position.z);
+    if (facing !== null) figure.rotation.y = facing;
     this.group.add(figure);
 
     const npc = {

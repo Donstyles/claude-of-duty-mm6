@@ -1832,4 +1832,43 @@
    * question. `tools/mobiletest.mjs` injects the real figures now. */
   .mm-ui .mm-column.is-mid { right: calc(var(--u) * 158 + var(--safe-r)); }
   .mm-ui .mm-column.is-right { right: var(--safe-r); }
+
+  /* And the screens have to come with them, which is the half that was missed.
+   *
+   * The sidebar and both right-hand pillars moved inboard by the inset above.
+   * `.mm-panel` and `.mm-panel-side` did not, because they are positioned
+   * against the frame like the pillars are and nothing here said so — so on a
+   * real 14 Pro Max every open screen was still drawn to a right edge 59 px
+   * further out than the chrome that frames it. Measured at 932 × 430 with the
+   * island's own insets, before this rule:
+   *
+   *   | edge | drawn at | should be | consequence |
+   *   | --- | --- | --- | --- |
+   *   | `.mm-panel` right | 154 px from the glass | 213 px | the middle pillar stands 46 px INSIDE the page, blanking a letter wherever it crosses — `Provisio ers`, `The Le ge`, and the quest book's fourth tab reading `…ds` from behind it |
+   *   | `.mm-panel-side` right | 9 px | 68 px | 50 px of a 133 px sidebar screen under the island: the conversation panel lost its right-hand third |
+   *   | `.mm-panel` left | 7 px | 66 px | the quest book's GIVEN BY row ran under the island on the other short edge |
+   *
+   * `tools/phonemenu.mjs` is the measurement: 31 clipped or covered elements
+   * across four screens before, 0 after. The right-hand figures are not new
+   * numbers — they are exactly the pillars' own edges, so each panel abuts the
+   * stone it abuts on a desktop and the relationship the frame was drawn with
+   * is restored rather than adjusted.
+   *
+   * The strip of 3-D view this opens on the left is under the island by
+   * construction — that is what the inset means — so nothing visible is lost
+   * there, and the left pillar is deliberately left at the glass so the painted
+   * frame still bleeds edge to edge.
+   *
+   * Party creation is excluded by name, not by accident. It is the one screen
+   * that takes the whole frame rather than the viewport rectangle, and it says
+   * so in `create.css` with `left: 0; right: 0` at (0,2,0) — the same weight as
+   * `.mm-ui .mm-panel`. A panel's own sheet is emitted BEFORE this one, so a
+   * tie here would be won by this file and creation would silently lose its
+   * full bleed on every phone. `:not()` settles it by specificity instead of by
+   * emission order, which STYLE.md §11 asks for in as many words. */
+  .mm-ui .mm-panel:not([data-panel='create']) {
+    left: calc(var(--u) * 8 + var(--safe-l));
+    right: calc(var(--side-w) + var(--safe-r));
+  }
+  .mm-ui .mm-panel-side { right: calc(var(--u) * 10 + var(--safe-r)); }
 }

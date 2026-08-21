@@ -288,8 +288,16 @@ export class ShopPanel extends Panel {
     // shop can also be opened straight from a menu or from the capture harness,
     // and a trade screen without its room is a much poorer thing. Painting it
     // here as well means every route in gets the forge, or the still.
-    this.el.style.backgroundImage = `url("/art/interiors/${shop.type}.jpg")`;
-    this.el.classList.add('has-interior');
+    //
+    // Through `_applyInterior` rather than a url built here, and that is not
+    // tidying. The hand-built one was root-absolute — `/art/interiors/…` — which
+    // resolves against the domain root and 404s on the deployed site, where the
+    // game lives under a project subpath; that one leading slash is why an
+    // iPhone showed a black viewport with the counter's text floating on it. It
+    // also skipped `INTERIOR_VARIANTS`, so a shop type whose plate had not been
+    // painted asked for a file that was never there, and skipped the variant
+    // hash, so all six general stores in Caerwen were one room.
+    this._applyInterior({ interior: shop.type, venue: shop.id });
 
     this.venueEl.textContent = shop.name;
     this.portraitEl.style.backgroundImage = `url("${T.portrait(shop.portrait)}")`;

@@ -4,6 +4,7 @@ import { el, setChildren, tooltip, tipMarkup, fmt, goldOval, labelRow, attribute
 import { icon } from '../Icons.js';
 import { enterLine } from './dialogue.js';
 import { TownServices } from '../../game/TownServices.js';
+import { INTERIOR_BASE } from '../interiorPlates.js';
 import { hashSeed } from '../../core/RNG.js';
 
 /**
@@ -107,7 +108,13 @@ export class ServicesPanel extends Panel {
     // flash entirely — including from the capture harness, which photographs
     // shortly after opening.
     this._warm = [];
-    for (const kind of ['bank', 'temple', 'tavern']) this._preload(`/art/interiors/${kind}.jpg`);
+    // Relative, and resolved against the document by `_preload`. Written with a
+    // leading slash it asked the domain root for a file that only exists under
+    // the deployed project subpath, so on the phone these three warmed nothing
+    // and cost three 404s — the same one-character defect that left the room
+    // itself black. `INTERIOR_BASE` is the index `artpack.py` writes and is
+    // relative for exactly this reason.
+    for (const kind of ['bank', 'temple', 'tavern']) this._preload(`${INTERIOR_BASE}${kind}.jpg`);
     // The keeper's face is a painted plate and arrives the same way, so warm
     // every role the three buildings can ask for. There are more of them than
     // there were — three roles became three short lists — but they are 256 px
@@ -148,11 +155,18 @@ export class ServicesPanel extends Panel {
     return this._model;
   }
 
-  /** Hold a decoded copy of a plate so the first frame that needs it has it. */
+  /**
+   * Hold a decoded copy of a plate so the first frame that needs it has it.
+   *
+   * The url is resolved against the document, which is what makes a relative
+   * plate path mean the same thing on the dev server at `/` and on the deployed
+   * site under `/claude-of-duty-mm6/`. Portrait urls arrive already absolute
+   * (`UITextures.artUrl` does the same thing) and pass through unchanged.
+   */
   _preload(src) {
     if (!src) return;
     const img = new Image();
-    img.src = src;
+    try { img.src = new URL(src, document.baseURI).href; } catch { img.src = src; }
     this._warm.push(img);
   }
 

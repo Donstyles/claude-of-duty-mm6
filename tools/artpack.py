@@ -7,9 +7,11 @@ small plates the game actually loads, which are committed.
 
 Two treatments:
 
-  portraits  512 -> 256 JPEG. Shown at ~92x110 in the party bar, so 256 is
-             already generous; JPEG because there is no transparency and the
-             background is a flat studio navy that compresses to nothing.
+  portraits  512 -> a 96x96 texel grid, quantised (see `retro`), hard-doubled
+             to a 192 plate. Drawn at 82 native pixels in the party bar and 92
+             in a venue sidebar, so 96 texels is one texel per game pixel —
+             MM6's own density — and the doubling is what carries a hard pixel
+             edge through to the screen.
 
   spells     1024 -> 176 PNG with an alpha matte. MM6's spellbook miniatures
              sit directly on the parchment page with soft, feathered edges and
@@ -19,11 +21,17 @@ Two treatments:
              falloff then guarantees nothing reaches the plate edge hard, which
              is what would otherwise betray the miniatures as pasted rectangles.
 
-  python3 tools/artpack.py
+  python3 tools/artpack.py                 every stage
+  python3 tools/artpack.py portraits figures
+                                           only those stages
+
+Stage selection exists because a full run rewrites 600-odd plates and lands a
+600-file diff on whoever is working next door. Name the stages you changed.
 """
 import glob
 import math
 import os
+import sys
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
@@ -31,12 +39,166 @@ from PIL import Image, ImageDraw, ImageFilter
 ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'public', 'art')
 
 
-def pack_portraits(size=256, quality=88):
+# ── the retro pass ──────────────────────────────────────────────────────────
+#
+# The owner's note was "portrait and paper dolls need a filter to look retro",
+# and `tools/retroaudit.py` is the measurement under it. Against MM6's own
+# bitmaps, recovered at native 640x480 from the reference captures and read
+# through a 36x52 window:
+#
+#                          colours/95%      step        hf
+#     MM6 portrait              378       0.0684      0.113
+#     ours, before             1705       0.0857      0.103
+#     MM6 paper doll            446       0.1183      0.454
+#     ours, before             1424       0.1009      0.121
+#
+# So the gap was never local contrast — `step` was already at or above MM6's on
+# both — and it was not sharpness either. It was **colour depth**: our art
+# arrives as 24-bit painting with a distinct value under almost every pixel,
+# where a 1998 asset repeats itself. Nothing else in the three numbers was more
+# than 30% out. That is why what follows is mostly a quantiser and only barely a
+# dither: a heavy dither would have driven `step` and `hf` PAST the reference to
+# fix a number that was never the problem, and that is what "reads as damaged"
+# looks like in practice.
+#
+# Two knobs, both tuned by sweeping them against those figures rather than
+# picked for feel (the sweep is in the docstring of `retro`):
+#
+#   bits   the colour ladder. Portraits take R5G6B5 — literally MM6's own frame
+#          buffer, which is why REFERENCE.md §0 records its art sitting on a
+#          32-step ladder in red and blue and a 64-step one in green. The
+#          figures take R6G7B6, one bit finer in every channel, because our
+#          figure art carries more variation per texel than our portrait art
+#          does and the same ladder over-collapses it by 3.4x.
+#
+#   amp    ordered-dither amplitude, as a fraction of one ladder step. Its job
+#          is to break the contour lines quantisation leaves across a slow
+#          gradient — the studio navy behind a portrait is one long ramp and
+#          bands into onion rings without it. Above about 1.0 the dither stops
+#          being a texture and starts being a visible checkerboard.
+#
+# Nothing here is random. The dither is an 8x8 Bayer matrix indexed by pixel
+# position, so two runs of this file produce byte-identical plates; the project
+# uses a seeded RNG everywhere and never Math.random, and a build step has no
+# business being the exception.
+#
+# NOTE this is deliberately confined to the character art — party portraits,
+# speaker portraits and the paper-doll bodies. REFERENCE.md §1 rules out
+# "deliberate 640x480 pixelation ... no 16-bit banding" and it is right to, but
+# it is ruling it out for the WORLD: those were the limits MM6's renderer was
+# fighting. A portrait bitmap is not the renderer. It is a piece of 1998 art
+# that MM6 shipped quantised on purpose, and it is the one place where matching
+# the limitation is matching the artwork. UI chrome, interiors, item sprites,
+# spell miniatures and creature hides are untouched.
+
+BAYER8 = np.array([
+    [0, 32, 8, 40, 2, 34, 10, 42], [48, 16, 56, 24, 50, 18, 58, 26],
+    [12, 44, 4, 36, 14, 46, 6, 38], [60, 28, 52, 20, 62, 30, 54, 22],
+    [3, 35, 11, 43, 1, 33, 9, 41], [51, 19, 59, 27, 49, 17, 57, 25],
+    [15, 47, 7, 39, 13, 45, 5, 37], [63, 31, 55, 23, 61, 29, 53, 21],
+], dtype=np.float32)
+
+PORTRAIT_TEXEL = 96          # one texel per native game pixel at the largest draw
+PORTRAIT_BITS = (5, 6, 5)    # MM6's own frame buffer
+PORTRAIT_AMP = 0.5
+FIGURE_BITS = (6, 7, 6)
+FIGURE_AMP = 0.9
+UPSCALE = 2                  # texels are two plate pixels, so an edge stays an edge
+
+
+def _dither(h, w):
+    """The 8x8 Bayer field, centred on zero, as a deterministic function of x/y."""
+    return (BAYER8[np.arange(h) % 8][:, np.arange(w) % 8] + 0.5) / 64.0 - 0.5
+
+
+def retro(rgb, bits, amp):
+    """Quantise to a fixed colour ladder, ordered-dithered. Float in, float out.
+
+    The dither is added BEFORE rounding and scaled to one ladder step, which is
+    the whole trick: a pixel sitting halfway between two ladder values lands on
+    the lower one in half the positions of the 8x8 cell and the upper one in
+    the other half, so the eye integrates the average and the gradient survives
+    a palette it could not otherwise fit through.
+
+    Measured on the eight portraits and eighteen figure plates, against MM6
+    (ratios are ours/theirs, 1.00 is a match):
+
+        portraits, R5G6B5   amp 0.0   c95 1.22x   step 1.28x   hf 0.90x
+                            amp 0.5   c95 1.25x   step 1.29x   hf 0.91x
+                            amp 1.3   c95 1.39x   step 1.30x   hf 0.92x
+                   R4G5B4   amp 0.5   c95 0.35x   step 1.29x   hf 0.91x
+        figures,   R6G7B6   amp 0.9   c95 1.01x   step 0.86x   hf 0.28x
+                   R5G6B5   amp 0.9   c95 0.30x   step 0.86x   hf 0.29x
+
+    `hf` on the figures cannot be closed and should not be chased. There is
+    exactly one paper doll in the reference set — the same chain-mailed knight
+    in five captures — and mail is per-pixel texture, so 0.454 is a statement
+    about his armour as much as about 1998. Our knight wears a smooth surcoat.
+    Dithering until a surcoat is as busy as mail would be adding noise to move
+    a number, which is the opposite of the job.
+    """
+    h, w, _ = rgb.shape
+    t = _dither(h, w)
+    out = np.empty_like(rgb)
+    for c, b in enumerate(bits):
+        n = (1 << b) - 1
+        step = 255.0 / n
+        out[..., c] = np.clip(np.round((rgb[..., c] + t * amp * step) * n / 255.0), 0, n) * step
+    return out
+
+
+def _hard_double(im, factor=UPSCALE):
+    """Nearest-neighbour, so each texel becomes a solid block with a hard edge.
+
+    Without this the plate would BE the texel grid, and the browser would draw
+    it into a box that is rarely an exact multiple — bilinear, and the quantised
+    edges arrive as a blur. Doubling first means the smallest feature is two
+    plate pixels wide, which survives the trip to a real screen: at the 1280x960
+    viewport where `--u` is exactly 2.000, a portrait texel lands on a solid
+    2x2 block of device pixels, which is MM6 at 2x nearest.
+    """
+    w, h = im.size
+    return im.resize((w * factor, h * factor), Image.NEAREST)
+
+
+def pack_portraits(texel=PORTRAIT_TEXEL, quality=95):
+    """Party, speaker and death portraits: raw -> quantised texel grid -> plate.
+
+    Two files per portrait, and the second one is a handoff rather than waste.
+
+      <name>.jpg        what `UITextures.PORTRAIT_PLATES` asks for today.
+      <name>.plate.png  the same image, losslessly.
+
+    JPEG cannot hold a palette. Measured on `m-knight`: the quantised grid has
+    154 distinct colours in the audit window, and the SAME image round-tripped
+    through JPEG reads 1622 at q95 and 447 at q100 — the DCT puts a continuum
+    back under every flat block. It costs nothing visible (the two are
+    indistinguishable side by side at 3x, because the banding and the dither are
+    structure and structure is what JPEG keeps) but it does mean the colour
+    number cannot be measured off the shipped .jpg.
+    The PNG is 12 KB against the JPEG's 14 KB at q95 — losslessly SMALLER,
+    because a hard-doubled quantised image is exactly what PNG's filters are for.
+    So the .plate.png is the file this stage would rather ship, and the three
+    string literals that would ship it live in `src/ui/UITextures.js`
+    (`PORTRAIT_PLATES._probe`, `PORTRAIT_PLATES.pick`, `tombstonePlate`), which
+    this pass does not own. Writing it now means that change is one line and not
+    a regeneration.
+    """
     out = 0
     for src in sorted(glob.glob(os.path.join(ROOT, 'portraits', '*.png'))):
-        dst = src[:-4] + '.jpg'
-        im = Image.open(src).convert('RGB').resize((size, size), Image.LANCZOS)
-        im.save(dst, 'JPEG', quality=quality, optimize=True, subsampling=1)
+        # Skip our own output, or a second run packs the plates into plates —
+        # `figures/*.plate.plate.png` is what that looks like when it happens.
+        if src.endswith('.plate.png'):
+            continue
+        a = np.asarray(Image.open(src).convert('RGB').resize((texel, texel), Image.LANCZOS),
+                       dtype=np.float32)
+        im = _hard_double(Image.fromarray(
+            retro(a, PORTRAIT_BITS, PORTRAIT_AMP).astype(np.uint8), 'RGB'))
+        im.save(src[:-4] + '.plate.png', 'PNG', optimize=True)
+        # subsampling=0 (4:4:4), not the 4:2:2 this used to take: chroma
+        # subsampling averages colour across exactly the 2x2 blocks the retro
+        # pass just built, which is the one thing that must not be averaged.
+        im.save(src[:-4] + '.jpg', 'JPEG', quality=quality, optimize=True, subsampling=0)
         out += 1
     return out
 
@@ -131,8 +293,25 @@ def pack_figures(width=320, feather=0.012):
     They are composited over a procedurally painted stone niche that has to keep
     matching the panel, which is why they carry alpha instead of shipping their
     own background.
+
+    The plate is 320 wide and `inventory.js` draws it at 160 native pixels, so
+    the texel grid is half the plate and the retro pass runs there before the
+    hard doubling — a body quantised at 320 would have the browser average its
+    texels back into a continuum on the way to a 160-pixel box, which is the
+    same trap `retro`'s note describes and measures at c95 2.85x instead of
+    1.01x. The alpha rides the same grid: an edge softened at texel resolution
+    is a 1998 masked bitmap, an edge softened at plate resolution is a modern
+    cut-out.
+
+    Plates land one pixel taller than they used to (574, not 573) because the
+    texel grid has to be a whole number. `inventory.js` pins the figure to the
+    bottom of the niche off its own `PLATE.h = 573`, so the body sits half a
+    native pixel higher than before. That is a fifth of a millimetre and the
+    slot boxes are unaffected — they are placed from `FIG.ox/oy`, not from the
+    file.
     """
     out = 0
+    tw = width // UPSCALE
     for src in sorted(glob.glob(os.path.join(ROOT, 'figures', '*.png'))):
         # Skip our own output, or a second run packs the plates into plates.
         if src.endswith('.plate.png'):
@@ -149,8 +328,10 @@ def pack_figures(width=320, feather=0.012):
         alpha = soft * _side_falloff(h, w, feather)
 
         rgba = np.dstack([a, alpha * 255.0]).astype(np.uint8)
-        im = Image.fromarray(rgba, 'RGBA')
-        im = im.resize((width, max(1, round(width * h / w))), Image.LANCZOS)
+        im = Image.fromarray(rgba, 'RGBA').resize((tw, max(1, round(tw * h / w))), Image.LANCZOS)
+        t = np.asarray(im, dtype=np.float32)
+        t[..., :3] = retro(t[..., :3], FIGURE_BITS, FIGURE_AMP)
+        im = _hard_double(Image.fromarray(t.astype(np.uint8), 'RGBA'))
         im.save(os.path.join(ROOT, 'figures', os.path.basename(src)[:-4] + '.plate.png'),
                 'PNG', optimize=True)
         out += 1
@@ -524,32 +705,61 @@ def pack_flat(sub, size, quality=86, only=None):
     return out
 
 
-if __name__ == '__main__':
-    p = pack_portraits()
+def _stage_spells():
     s, suspect = pack_spells()
-    f = pack_figures()
-    t = pack_items()
+    for name, cover in suspect:
+        print(f'  ?  {name}: matte kept {cover:.0%} of the frame - check it')
+    return f'{s} spell plates'
+
+
+def _stage_interiors():
     i = pack_flat('interiors', 960)
     _write_interior_index()
+    return f'{i} interiors'
+
+
+def _stage_monsters():
     m = pack_monsters()
     _write_monster_index()
+    return f'{m} creature hides'
+
+
+def _stage_emblems():
+    e = pack_flat('emblems', 192)
     _write_emblem_index()
+    return f'{e} emblems'
+
+
+# Every stage that can be run on its own, in the order a full run takes them.
+# Named rather than positional because the point is to be able to say "I changed
+# the portraits" and rewrite fifty-one files instead of six hundred.
+STAGES = {
+    'portraits': lambda: f'{pack_portraits()} portraits',
+    'spells': _stage_spells,
+    'figures': lambda: f'{pack_figures()} figures',
+    'items': lambda: f'{pack_items()} item sprites',
+    'interiors': _stage_interiors,
+    'monsters': _stage_monsters,
+    # Painted first, indexed second: the index is a directory listing of the
+    # .jpg files this line writes, so the old order described the run before.
+    'emblems': _stage_emblems,
     # The school covers sit in the same folder as the spell plates but are
     # opaque framed paintings rather than matted cut-outs, so they take the
     # flat treatment; pack_spells skips them by prefix for the same reason.
-    c = pack_flat('spells', 448, only='cover_')
+    'covers': lambda: f'{pack_flat("spells", 448, only="cover_")} school covers',
     # The four screens that had no art at all — title, menu, kingdom chart and
     # the rest screen's seasons. Full-bleed 16:9 paintings drawn behind a
     # panel, so they take the same flat treatment as the interiors and want
     # more width than any of them: a backdrop is the one image in this project
     # that is looked at across the whole screen rather than inside a box.
-    n = pack_flat('scenes', 1600)
-    # Class heraldry. Small, and drawn beside a painted portrait on the
-    # creation screen, which is what made the five hard-coded canvas shapes it
-    # replaces so hard to look at.
-    e = pack_flat('emblems', 192)
-    print(f'[artpack] {p} portraits, {s} spell plates, {c} school covers, '
-          f'{i} interiors, {f} figures, {t} item sprites, {n} scenes, {e} emblems, '
-          f'{m} creature hides')
-    for name, cover in suspect:
-        print(f'  ?  {name}: matte kept {cover:.0%} of the frame - check it')
+    'scenes': lambda: f'{pack_flat("scenes", 1600)} scenes',
+}
+
+
+if __name__ == '__main__':
+    want = [a for a in sys.argv[1:] if not a.startswith('-')] or list(STAGES)
+    unknown = [w for w in want if w not in STAGES]
+    if unknown:
+        raise SystemExit(f'[artpack] unknown stage(s) {unknown}; have {list(STAGES)}')
+    done = [STAGES[w]() for w in want]
+    print(f'[artpack] {", ".join(done)}')
