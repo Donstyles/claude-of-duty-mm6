@@ -66,12 +66,35 @@ function hashIndex(key, n) {
  * and the house read as a black hole on a phone while the character sheet —
  * whose granite is a canvas, not a file — was fine.
  */
-function artUrl(path) {
+export function artUrl(path) {
   try {
     return new URL(path, document.baseURI).href;
   } catch {
     return path;
   }
+}
+
+/**
+ * A painted full-screen scene, by name, with the extension that actually ships.
+ *
+ * Four of these — the title, the main menu, the world chart and the four camps
+ * — were asked for as `/art/scenes/<name>.png`, and they have never once been
+ * served. Two separate reasons, either of which alone was fatal:
+ *
+ *  · the leading slash, exactly as `artUrl` above describes; and
+ *  · the extension. `dropArtRaws` in `vite.config.js` deletes every `.png`
+ *    under `dist/art/` that is not a `*.plate.png`, and `.gitignore` keeps the
+ *    generator's `.png` raws out of the repository entirely. Only the `.jpg`
+ *    is committed and only the `.jpg` is deployed. Confirmed against the live
+ *    host: `…/art/scenes/title.png` is a 404 and `…/art/scenes/title.jpg` is a
+ *    200.
+ *
+ * So the title screen and the main menu have been running on their fallback
+ * layers in every build this game has ever produced, on every device. Nothing
+ * threw, because a `background-image` layer that 404s is simply dropped.
+ */
+export function sceneUrl(name) {
+  return artUrl(`art/scenes/${name}.jpg`);
 }
 const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 

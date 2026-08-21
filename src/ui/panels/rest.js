@@ -1,5 +1,5 @@
 import './rest.css';
-import { Panel } from './base.js';
+import { Panel, sceneUrl } from './base.js';
 import { el, setChildren, tooltip, tipMarkup, engraved, labelRow, clamp } from '../widgets.js';
 
 /**
@@ -302,7 +302,7 @@ export class RestPanel extends Panel {
     const key = SEASON_PLATE[season];
     if (!key || key === this._plateSeason) return;
     this._plateSeason = key;
-    this.el?.style.setProperty('--mm-camp-plate', `url("/art/scenes/camp_${key}.png")`);
+    this.el?.style.setProperty('--mm-camp-plate', `url("${sceneUrl(`camp_${key}`)}")`);
   }
 
   _update() {

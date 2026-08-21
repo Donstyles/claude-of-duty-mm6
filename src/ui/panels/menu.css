@@ -39,7 +39,7 @@
    * `cover` on the plate and `100% 100%` on the texture is deliberate: the
    * texture is drawn to the viewport's own proportions and wants stretching,
    * the painting is 16:9 and must not be. */
-  background-image: url('/art/scenes/menu.png'), var(--tex-menu-cavern);
+  background-image: url('/art/scenes/menu.jpg'), var(--tex-menu-cavern);
   background-size: cover, 100% 100%;
   background-position: center center, center center;
   background-repeat: no-repeat, no-repeat;

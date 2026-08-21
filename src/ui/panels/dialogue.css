@@ -190,11 +190,25 @@
   flex: 1;
   min-height: 0;
   width: 100%;
-  margin-top: calc(var(--u) * 14);
+  /* 14u to 9u above, 9u to 8u between.
+   *
+   * A house sidebar carries SIX topics where the four other venue screens
+   * carry four or five, and at 932x430 the sixth ran under the brass exit
+   * oval — measured, the oval's top at 280.4 px with the last option's box
+   * past it, so `Take Service` was half-hidden behind the brass. Same shape
+   * as the training hall's overlap that STYLE.md §13 records as closed in
+   * round 12, and the same remedy: reclaim the margin above and take the
+   * gap down one step.
+   *
+   * 8u and no lower. §8 requires the gap INSIDE the list to stay smaller
+   * than the one separating it from the identity block above, and below 8u
+   * the touch targets start to merge — which on a phone means opening the
+   * wrong topic. */
+  margin-top: calc(var(--u) * 9);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(var(--u) * 9);
+  gap: calc(var(--u) * 8);
   overflow-y: auto;
   scrollbar-width: none;
 }

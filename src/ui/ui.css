@@ -122,7 +122,7 @@ html, body {
   padding: 4vh 4vw 0;
   background-color: #000;
   background-image:
-    url('/art/scenes/title.png'),
+    url('/art/scenes/title.jpg'),
     radial-gradient(ellipse at 50% 42%, #22180f 0%, #0b0805 55%, #000 100%);
   /* Cover, because a title plate letterboxed inside its own veil would be worse
      than no plate; the painting has margin at every edge for the crop. */

@@ -1,4 +1,5 @@
 import { clamp } from '../widgets.js';
+import { sceneUrl } from './base.js';
 import { REGIONS, TOWNS, WORLD_SIZE } from '../../game/data/Regions.js';
 
 /**
@@ -94,7 +95,7 @@ const VELLUM = '#C9BB98';
  * disagreeing with each other. The kingdom stays procedural; only the paper is
  * painted.
  */
-const CHART_PLATE = '/art/scenes/chart.png';
+const CHART_PLATE = sceneUrl('chart');
 
 /**
  * How much of the sea's own colour is laid over the paper.
