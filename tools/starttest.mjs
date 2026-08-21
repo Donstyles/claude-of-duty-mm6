@@ -182,5 +182,76 @@ console.log('\nmixing — two bottles that answer to each other');
   }
 }
 
+// ── starting over ───────────────────────────────────────────────────────────
+//
+// "New Game" rolled a party and did nothing else, so the second company
+// inherited the first one's gold, quest flags, campaign act, bank balance,
+// guild memberships, opened chests, position and clock. Everything except the
+// four people. This plays a world, snapshots it, starts over, and diffs.
+console.log('\nstarting over — what a second party inherits');
+{
+  const { SaveSystem } = await import('../src/game/SaveSystem.js');
+  const { QuestSystem } = await import('../src/game/QuestSystem.js');
+  const { CampaignSystem } = await import('../src/game/CampaignSystem.js');
+
+  const store = new Map();
+  globalThis.localStorage ??= {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+
+  const events = new EventBus();
+  const systems = new Map();
+  const ctx = ctxOf(systems, events);
+  ctx.engine = { systems };
+
+  const party = new PartySystem();
+  const quests = new QuestSystem();
+  const campaign = new CampaignSystem();
+  const save = new SaveSystem();
+  for (const [id, sys] of [['party', party], ['quests', quests], ['campaign', campaign], ['save', save]]) {
+    systems.set(id, sys);
+  }
+  for (const sys of systems.values()) await sys.init?.(ctx);
+  events.emit('engine:ready', ctx);
+
+  // Play: money, a flag, an act, a clock.
+  party.gold = 12318;
+  party.food = 3;
+  quests.flags?.add?.('the_carters_tally');
+  campaign.state.act = 3;
+  ctx.state.worldTime = 86400 * 11;
+  const played = {
+    gold: party.gold, food: party.food,
+    flags: quests.flags?.size ?? 0, act: campaign.state.act,
+    day: Math.floor(ctx.state.worldTime / 86400),
+  };
+  console.log(`  ..    the first company left behind             `
+    + `${played.gold} gold, ${played.food} food, ${played.flags} flag(s), act ${played.act}, day ${played.day}`);
+
+  const model = new PartyCreation(new RNG(11));
+  model.resetParty();
+  const second = model.build();
+  const reset = save.newGame(ctx, second);
+  ok(reset, 'newGame had a pristine snapshot to restore');
+
+  const now = {
+    gold: party.gold, food: party.food,
+    flags: quests.flags?.size ?? 0, act: campaign.state.act,
+    day: Math.floor(ctx.state.worldTime / 86400),
+  };
+  ok(now.gold !== played.gold, "the second company does not inherit the first's purse",
+    `${played.gold} → ${now.gold} gold`);
+  ok(now.flags === 0, 'nor its quest flags', `${played.flags} → ${now.flags}`);
+  ok(now.act < played.act, 'nor its place in the campaign', `act ${played.act} → ${now.act}`);
+  ok(now.day < played.day, 'nor the calendar', `day ${played.day} → ${now.day}`);
+  ok(party.members.length === 4 && party.members[0] !== undefined
+    && party.members[0].name === second[0].name,
+    'and it is the newly rolled party standing there', party.members.map((m) => m.name).join(', '));
+  const armed = party.members.every((c) => (c.inventory ?? []).length >= 2);
+  ok(armed, 'still carrying its opening kit through the reset');
+}
+
 console.log(`\n${failures ? `${failures} FAILED` : 'all clear'}`);
 process.exit(failures);

@@ -33,6 +33,48 @@ export class SaveSystem extends System {
 
     ctx.events.on('ui:save', ({ slot }) => this.save(ctx, slot ?? 'quick'));
     ctx.events.on('ui:load', ({ slot }) => this.load(ctx, slot ?? 'quick'));
+
+    // What the world looks like before anybody has touched it.
+    //
+    // "New Game" opened the party roller and did nothing else, so a second
+    // party inherited the first one's gold, quest flags, campaign act, bank
+    // balance, guild memberships, opened chests, position and clock — while
+    // the screen it was started from promised "a new party starts again at
+    // Millhaven with nothing but its rolls" and "anything not written to a
+    // slot is lost". Both sentences were false, which is worse than the bug.
+    //
+    // The reset is a restore rather than a list of things to clear, and that
+    // is the whole point: `restore` already walks every registered system's
+    // `fromJSON`, so a system added next month resets correctly without
+    // anybody remembering this file exists. A hand-written reset is a list
+    // that goes stale the first time somebody adds a counter.
+    //
+    // Taken on `engine:ready`, which fires after every system's `init` and
+    // before the first frame — the only moment at which "pristine" is true.
+    ctx.events.once?.('engine:ready', () => {
+      try {
+        this._pristine = JSON.stringify(this.serialise(ctx));
+      } catch (err) {
+        console.error('[save] could not snapshot a pristine world:', err);
+      }
+    });
+  }
+
+  /**
+   * Throw the played world away and put a freshly rolled party in it.
+   *
+   * Returns false if there is no pristine snapshot — better to refuse than to
+   * half-reset, because a party that keeps act three's flags and loses its
+   * gold is a worse state than either end.
+   */
+  newGame(ctx, members) {
+    if (!this._pristine) return false;
+    const ok = this.restore(ctx, JSON.parse(this._pristine));
+    if (!ok) return false;
+    this.playtime = 0;
+    if (members?.length) ctx.get('party')?.setParty?.(members);
+    ctx.events.emit('ui:log', { text: 'A new company takes the road out of Millhaven.', kind: 'good' });
+    return true;
   }
 
   /**

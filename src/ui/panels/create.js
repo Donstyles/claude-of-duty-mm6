@@ -682,8 +682,20 @@ export class CreatePanel extends Panel {
     // then hand-rolled the `party:created` the system already emits, which is
     // the tell: two copies of one contract, and the half that mattered — the
     // kit — lived only in the copy nobody called.
-    if (party) party.setParty(members);
-    else this.ctx?.events?.emit('party:created', { members: members.map((m) => m.toJSON()) });
+    //
+    // And `newGame` before that, when there is a played world to throw away.
+    // Rolling a party was the whole of "New Game", so the second company
+    // inherited the first one's gold, quest flags, campaign act, bank balance,
+    // guild memberships and position — starting the game over left everything
+    // except the four people doing it. `SaveSystem.newGame` restores the
+    // pristine snapshot it took at `engine:ready` and seats the new party in
+    // it; if it has no snapshot it refuses, and this falls back to what the
+    // screen has always done rather than half-resetting.
+    const save = this.ctx?.get('save');
+    if (!save?.newGame?.(this.ctx, members)) {
+      if (party) party.setParty(members);
+      else this.ctx?.events?.emit('party:created', { members: members.map((m) => m.toJSON()) });
+    }
     // The interface re-reads the party ten times a second anyway; pushing it
     // now means the bar under the closing screen is already the new party.
     this.ui._syncParty?.(true);
