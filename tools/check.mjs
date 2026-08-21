@@ -101,6 +101,16 @@
  *               rasteriser starves the main thread and a 150 ms sound falls
  *               between two processed blocks.
  *
+ *   lod         the terrain grid went from sixteen chunks a side to eight, and
+ *               a 256 m chunk picks one detail level where four 128 m chunks
+ *               picked four. A switch that snaps is invisible in a screenshot
+ *               and obvious the moment the camera moves, and every check on
+ *               the change had been a still frame. This one walks, reads the
+ *               terrain's own per-chunk level to learn which steps switched,
+ *               and compares those steps against the ones that did not — two
+ *               populations from the same walk, so no threshold is picked by
+ *               hand.
+ *
  * Note what `content` and `seam` each do NOT do. `content` checks that ids
  * RESOLVE: that a quest naming an NPC names one who exists. It never checks
  * that a FIELD exists, so it was green through all eleven. `seam` is the other
@@ -196,6 +206,8 @@ const GATES = [
     why: 'the four in the bar are the painted plates, and are not being smoothed' },
   { name: 'sound', slow: true, cmd: 'node', args: ['tools/soundtest.mjs'],
     why: 'the game is audible — measured on its own master bus, not asserted' },
+  { name: 'lod', slow: true, cmd: 'node', args: ['tools/lodtest.mjs'],
+    why: 'the ground holds its shape while you walk over it' },
 ];
 
 function run(gate) {
