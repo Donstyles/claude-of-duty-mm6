@@ -66,6 +66,10 @@ export class SpellSystem extends System {
     this.inFlight = [];
     /** Persistent party-wide effects: light, water walk, fly, wards. */
     this.partyEffects = new Map();
+    /** Seconds of real time a lit torch has left to burn. */
+    this._torchBurn = 0;
+    this._lamp = null;
+    this._glow = null;
     this._group = null;
     /** Towns the party has stood in. Town Portal will only open onto these. */
     this.visitedTowns = new Set();
@@ -1213,7 +1217,136 @@ export class SpellSystem extends System {
 
   // ── frame ────────────────────────────────────────────────────────────────
 
+  /**
+   * The lamp the party carries, and the reason there was none.
+   *
+   * Torch Light is a first-level spell whose whole content is `utility:
+   * 'light'` and a magnitude the description calls a radius — "a hovering
+   * flame lights the party's way, radius and burn time both grow with skill".
+   * Nothing in the tree read `utility`. The spell cast, the buff landed, the
+   * embers played, the sheet showed it running, and not one photon reached the
+   * scene. The only `case 'light':` in this file is a school switch picking a
+   * particle recipe, which is what made it look answered.
+   *
+   * The torch in the pack was the same story from the other end: every party
+   * starts with one, every general store sells them, and no code anywhere
+   * turns one into light.
+   *
+   * Which together meant the world had no light source of any kind after dark.
+   * Measured across a day at one spot, the viewport is 58-68% pure black
+   * between eight and ten in the evening with a median luminance of 2 to 5 —
+   * that is not a dark night, it is a black screen, and there was nothing the
+   * player could do about it.
+   *
+   * A torch is dimmer and shorter-reaching than the spell, because the spell
+   * should be worth learning; and it burns while it is lit, so a torch is a
+   * consumable rather than a permanent sun.
+   */
+  _driveLamp(dt, ctx) {
+    const player = ctx.get('player');
+    if (!player?.position) return;
+
+    if (!this._lamp) {
+      this._lamp = new THREE.PointLight(0xffb060, 0, 1, 2);
+      this._lamp.castShadow = false;
+      this._group?.add(this._lamp);
+      // A point light alone is not a torch.
+      //
+      // The first version placed one and nothing else, and measured against a
+      // 900x700 outdoor frame at ten at night it moved the median luminance
+      // from 5 to 5: it lit a puddle at the party's feet and left the view a
+      // black rectangle. In a first-person game a carried light has to lift
+      // what you are looking AT, which is fifty metres of ground, and no
+      // inverse-square falloff from a point at your belt does that.
+      //
+      // So the lamp is a pair: the point light for the pool of warm light and
+      // its shadows, and a fill for the fact that you are holding a fire and
+      // can see. The fill is added rather than written into the sky's own
+      // ambient, which `SkySystem` rewrites from its keyframes every frame —
+      // and those keyframes are a tuned decision about how dark this world's
+      // night is, which is not this file's to overrule. What is this file's
+      // business is that the player has a way to answer it.
+      this._glow = new THREE.AmbientLight(0xffc890, 0);
+      this._group?.add(this._glow);
+    }
+
+    // The spell first: its magnitude is the radius its own description
+    // promises, so a trained caster lights more ground than an apprentice.
+    const lit = this.partyEffects.get('fire_torch_light');
+    let range = 0;
+    let power = 0;
+    if (lit) {
+      range = 10 + (lit.magnitude ?? 3) * 2.2;
+      power = 9;
+    } else if (this._torchBurn > 0) {
+      range = 11;
+      power = 5;
+    }
+
+    // A carried torch, if nobody has the spell up. Lighting one spends it, so
+    // the pack's torch is a night's grace and not a permanent lamp.
+    if (!lit) {
+      if (this._torchBurn > 0) this._torchBurn -= dt;
+      else if (this._wantTorch(ctx)) this._lightTorch(ctx);
+    }
+
+    this._lamp.position.set(player.position.x, player.position.y + 0.6, player.position.z);
+
+    // Striking a light is instant; a light going out fades.
+    //
+    // The first version eased both ways at `dt * 3`, which is wrong twice
+    // over. It is frame-rate coupled — the same fade takes four times longer
+    // at fifteen frames a second than at sixty — and it made lighting a torch
+    // a slow dawn, when the whole point of the action is that the dark ends
+    // now. Measured in the capture harness it had reached intensity 1.8 of 5
+    // three seconds after the torch was struck.
+    //
+    // So the rise snaps and only the fall is eased, on an exponential with a
+    // real time constant, which behaves the same at any frame rate.
+    const fall = 1 - Math.exp(-dt / 0.35);
+    // The fill tracks the pool, at a fraction tuned by measurement: enough to
+    // make the ground read, not so much that night stops being night.
+    const fill = power * 0.085;
+    if (power > this._lamp.intensity) {
+      this._lamp.intensity = power;
+      this._lamp.distance = Math.max(1, range);
+      this._glow.intensity = fill;
+    } else {
+      this._lamp.intensity += (power - this._lamp.intensity) * fall;
+      this._lamp.distance += (Math.max(1, range) - this._lamp.distance) * fall;
+      this._glow.intensity += (fill - this._glow.intensity) * fall;
+    }
+  }
+
+  /** Dark enough to want one, and nobody is already carrying a light. */
+  _wantTorch(ctx) {
+    if (ctx.get('dungeon')?.isInside?.(ctx.get('player').position)) return true;
+    const hour = ((ctx.state.worldTime ?? 0) / 3600) % 24;
+    return hour >= 19.5 || hour < 5.5;
+  }
+
+  /** Spend a torch out of somebody's pack and burn it for an hour of world time. */
+  _lightTorch(ctx) {
+    const party = ctx.get('party');
+    for (const char of party?.members ?? []) {
+      const at = (char.inventory ?? []).findIndex(
+        (e) => (e.item?.baseId ?? e.item?.id ?? e.baseId ?? e.id) === 'torch',
+      );
+      if (at < 0) continue;
+      char.inventory.splice(at, 1);
+      char.refresh?.();
+      // An hour of world time, which at the sky's own drift is a real night's
+      // worth of walking rather than a few minutes of it.
+      this._torchBurn = 3600 / 45;
+      ctx.events.emit('ui:log', { text: `${char.name} lights a torch.`, kind: 'info' });
+      return true;
+    }
+    return false;
+  }
+
   fixedUpdate(dt, ctx) {
+    this._driveLamp(dt, ctx);
+
     // Quick-cast on the bound key.
     if (ctx.input.actionPressed('quickCast') && !ctx.state.modal) {
       const party = ctx.get('party');

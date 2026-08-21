@@ -137,6 +137,8 @@ const GATES = [
     why: 'the game boots clean at the tier it ships at, and hazard dungeons build there' },
   { name: 'drops', slow: true, cmd: 'node', args: ['tools/droptest.mjs'],
     why: 'loot dropped on a dungeon floor is close enough to pick up' },
+  { name: 'night', slow: true, cmd: 'node', args: ['tools/nighttest.mjs'],
+    why: 'a torch and the Torch Light spell actually put light into the world' },
   { name: 'automap', slow: true, cmd: 'node', args: ['tools/maptest.mjs'],
     why: 'the sidebar arch has ground on it, and still does after a walk' },
   { name: 'monsters', slow: true, cmd: 'node', args: ['tools/monstertest.mjs'],
