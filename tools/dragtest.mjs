@@ -77,6 +77,15 @@ try {
       { item: make('potion_red', 'Red Potion'), x: 0, y: 0 },
       { item: make('potion_yellow', 'Yellow Potion'), x: 2, y: 0 },
     ];
+    // Rebuild the view model BEFORE the screen is drawn.
+    //
+    // The pack binds its sprites against `vm.inventory`, which `_syncParty`
+    // copies from the character on a tick. Replacing `char.inventory` above
+    // and opening the panel without this draws the PREVIOUS array's sprites —
+    // so the harness dragged an entry the character no longer had, and only
+    // passed at all through `_tryMix`'s positional fallback. A gate that
+    // passes through a fallback is a gate that is not testing the path.
+    ctx.get('ui')?.refreshParty?.();
     ctx.get('ui')?.selectMember?.(0);
     ctx.get('ui')?.openPanel?.('inventory');
     return { before: char.inventory.length, names: char.inventory.map((e) => e.item.name) };
