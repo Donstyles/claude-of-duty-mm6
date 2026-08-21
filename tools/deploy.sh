@@ -40,6 +40,9 @@ echo "[deploy] $(du -sh "$STAGE" | cut -f1) to publish, $(find "$STAGE" -type f 
 rm -rf "$WORK"
 git worktree add -f --detach "$WORK" HEAD >/dev/null 2>&1
 cd "$WORK"
+# `-B`-style: a leftover `publish` from an interrupted run must not stop the
+# next deploy. The branch is scratch, recreated from nothing every time.
+git branch -D publish >/dev/null 2>&1 || true
 git checkout -q --orphan publish
 git rm -rq --cached . >/dev/null 2>&1 || true
 find "$WORK" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
