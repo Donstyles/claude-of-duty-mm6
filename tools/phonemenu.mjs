@@ -548,6 +548,13 @@ try {
     await tp.waitForFunction(() => window.__GAME?.ready === true, null, { timeout: 240000 });
     await tp.waitForTimeout(3000);
     process.stdout.write('[phonemenu] touch overlay pass: ready\n');
+    // Both directions, because a rule that hides the controls is only correct
+    // if they come back. A stuck overlay and a dead one look identical in a
+    // screenshot of an open menu.
+    await tp.evaluate(() => window.__GAME.ctx.get('ui').closePanel());
+    await tp.waitForTimeout(400);
+    const idle = await tp.evaluate(auditInPage);
+    touch.push({ screen: 'no panel open', visible: idle.touchVisible, hits: 0, wantVisible: true });
     for (const s of SCREENS) {
       await tp.evaluate((id) => {
         const ui = window.__GAME.ctx.get('ui');
@@ -597,10 +604,13 @@ try {
     console.log(`  ${''.padEnd(31)} reads: ${r.compass.sample}`);
   }
 
-  console.log('\ntouch overlay while a screen is open (932x430 + island, no capture)');
+  console.log('\ntouch overlay (932x430 + island, no capture): down while a screen is open, back up after');
   for (const t of touch) {
-    console.log(`  ${t.screen.padEnd(18)} overlay ${t.visible === null ? 'absent' : t.visible ? 'VISIBLE' : 'hidden'}`
+    const state = t.visible === null ? 'absent' : t.visible ? 'up' : 'down';
+    const want = t.wantVisible ? 'up' : 'down';
+    console.log(`  ${(t.wantVisible ? state === want : state === want) ? 'ok  ' : 'FAIL'} ${t.screen.padEnd(18)} overlay ${state}`
       + `${t.hits ? `  — covers ${t.hits} element(s)` : ''}`);
+    if (state !== want) total += 1;
   }
 
   if (VERBOSE) {

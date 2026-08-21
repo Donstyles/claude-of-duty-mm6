@@ -30,6 +30,31 @@
 
 #tc-root.is-hidden { display: none; }
 
+/* The same fact, said again in CSS, because the JS version has a precondition.
+ *
+ * `TouchInput.endFrame` sets `is-hidden` from `input.uiCaptured`, which
+ * `UISystem.openPanel` sets — so the controls come down when a screen opens.
+ * That is true only while frames are still being delivered: it is a per-frame
+ * toggle, and a stalled loop, a `visibilitychange` on the way back from a home
+ * gesture, or a screen opened during a boot that has not started ticking yet
+ * all leave the last painted state standing. The owner photographed dark
+ * rounded controls sitting on top of open menus on a real 14 Pro Max;
+ * `tools/phonemenu.mjs` reports the overlay correctly hidden on all seven
+ * screens at that exact viewport, so whatever they hit is not in the toggle's
+ * ordinary path.
+ *
+ * `has-panel` is on `.mm-ui` for exactly as long as a panel owns the screen
+ * (`UISystem.openPanel`/`closePanel`), so this is the same statement with no
+ * frame in it. `:has()` rather than a sibling combinator because the order is
+ * not what it looks like: on a coarse pointer `TouchInput` arms inside the
+ * Engine's constructor and appends `#tc-root` to `#ui-root` BEFORE `UISystem`
+ * has built `.mm-ui`, so the overlay is the EARLIER sibling and `~` would never
+ * match.
+ *
+ * The subject of the selector is `#tc-root`, so this cannot reach any other
+ * screen — the guarantee the whole file is written for. */
+#ui-root:has(.mm-ui.has-panel) #tc-root { display: none; }
+
 /* The play field: the 3-D view, measured from the chrome by TouchInput and
    published as these four insets. Controls never leave it — the sidebar and
    the party bar are already full of buttons. */
