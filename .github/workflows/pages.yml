@@ -1,0 +1,59 @@
+# Publish the game so it can be installed from a phone's home screen.
+#
+# The build is a static site — the browser loads files and never calls a
+# generator — so Pages is the whole of what it needs. `vite.config.js` sets a
+# RELATIVE base, which is what makes it work under a project subpath like
+# /claude-of-duty-mm6/ rather than only at a domain root.
+#
+# What ships is the committed art only. The generator's raws are gitignored, so
+# a runner never has them, and `dropArtRaws` in the Vite config removes any
+# that a developer's machine would otherwise have copied out of `public/` —
+# 798 MB against 66 MB, which on a phone over mobile data is the difference
+# between installing this and giving up on it.
+name: pages
+
+on:
+  push:
+    branches: [claude/mm6-rpg-threejs-428svd]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and let a running one finish rather than cancelling it
+# half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx vite build
+      # `enablement: true` turns Pages on the first time this runs, so nobody
+      # has to find the switch in the repository settings.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
