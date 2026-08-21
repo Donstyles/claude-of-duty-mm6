@@ -47,8 +47,17 @@ const browser = await chromium.launch({
 
 /** Walk the composer and price every pass in megapixels. */
 async function measure(label, query, phone) {
+  // A device scale factor of 1, not the 3 a 14 Pro Max reports.
+  //
+  // The headline here is a RATIO — megapixels shaded over megapixels of one
+  // scene frame — and every term in it scales with the buffer: the bloom mips
+  // are fractions of the frame, the grade and output passes are the frame. So
+  // the ratio is identical at any resolution, and asking a software rasteriser
+  // for a 2796x1290 backing store with two other agents' browser fleets on the
+  // machine got the page killed outright. `isMobile` is what actually matters,
+  // because it is what picks the phone's tier and post stack.
   const page = await browser.newPage(phone
-    ? { viewport: { width: 932, height: 430 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }
+    ? { viewport: { width: 932, height: 430 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true }
     : { viewport: { width: 1600, height: 900 } });
   page.setDefaultTimeout(180000);
   try {
@@ -127,14 +136,42 @@ function report(title, r) {
     + `${`${r.equiv.toFixed(2)}x`.padStart(8)} of one scene frame`);
 }
 
+/**
+ * Retry a measurement whose page died under WebGL context pressure.
+ *
+ * Chromium caps the number of live WebGL contexts across the browser and
+ * evicts the oldest when a new one asks. With other agents running their own
+ * browser fleets in this checkout — thirty Chromium processes were up when
+ * this file was written — a freshly booted page can have its context taken
+ * away mid-run, and Playwright reports that as "Target page, context or
+ * browser has been closed". Memory was never the problem: 10.6 GB was free.
+ *
+ * That is an environment failure and not a finding, so it is retried rather
+ * than reported. It is NOT swallowed: the last error is rethrown if every
+ * attempt dies, because a page that cannot boot at all is a finding.
+ */
+async function measureRetry(label, query, phone, tries = 3) {
+  let last = null;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await measure(label, query, phone);
+    } catch (err) {
+      last = err;
+      console.log(`  ..    ${label} attempt ${i + 1} lost its page, retrying`);
+      await new Promise((r) => setTimeout(r, 8000 * (i + 1)));
+    }
+  }
+  throw last;
+}
+
 try {
-  const phone = await measure('phone', 'quality=high&units=16', true);
+  const phone = await measureRetry('phone', 'quality=high&units=16', true);
   report('an iPhone 14 Pro Max frame', phone);
 
-  const noBloom = await measure('phone, no bloom', 'quality=medium&units=16', true);
+  const noBloom = await measureRetry('phone, no bloom', 'quality=medium&units=16', true);
   report('the same phone at `medium` (bloom on, smaa off) for comparison', noBloom);
 
-  const desk = await measure('desktop', 'quality=ultra', false);
+  const desk = await measureRetry('desktop', 'quality=ultra', false);
   report('a desktop frame', desk);
 
   console.log(`\nthe phone shades ${phone.equiv.toFixed(2)} frames of fragments per frame drawn.`);
