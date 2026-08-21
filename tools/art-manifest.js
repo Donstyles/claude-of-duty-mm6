@@ -400,21 +400,45 @@ const HIDE_STYLE =
   + 'even illumination so it can be lit by the renderer. Fine surface detail '
   + 'at close range, in the style of a game texture map.';
 
+function hideFor(id, def) {
+  const feats = (def.visual?.features ?? []).join(', ');
+  return {
+    id: `monsters/${id}`,
+    prompt: `The skin surface of a ${def.name}: ${def.desc ?? ''} `
+      + `${feats ? `Its surface shows ${feats}. ` : ''}`
+      + `A ${def.visual?.bodyPlan ?? 'creature'}. ${HIDE_STYLE}`,
+    aspect: '1:1',
+  };
+}
+
 export function monsterHides(MONSTERS) {
   const seen = new Map();
   for (const def of Object.values(MONSTERS)) {
     if (!seen.has(def.family)) seen.set(def.family, def);
   }
-  return [...seen.entries()].map(([family, def]) => {
-    const feats = (def.visual?.features ?? []).join(', ');
-    return {
-      id: `monsters/${family}`,
-      prompt: `The skin surface of a ${def.name}: ${def.desc ?? ''} `
-        + `${feats ? `Its surface shows ${feats}. ` : ''}`
-        + `A ${def.visual?.bodyPlan ?? 'creature'}. ${HIDE_STYLE}`,
-      aspect: '1:1',
-    };
-  });
+  return [...seen.entries()].map(([family, def]) => hideFor(family, def));
+}
+
+/**
+ * And then one for each creature that is not its family's first rung.
+ *
+ * The family hide was the right first move and is still the fallback: thirty-
+ * three surfaces for ninety-nine creatures, because the tiers of a family are
+ * authored as palette swaps of one silhouette and a shared hide keeps the
+ * ladder reading as a ladder. But a Goblin, a Goblin Shaman and a Goblin King
+ * are not the same animal wearing the same skin at three brightnesses, and
+ * seventy-five of the ninety-nine were borrowing.
+ *
+ * The prompt is built from each creature's OWN `visual.features` and its own
+ * description, so the difference between the rungs is whatever the bestiary
+ * already says it is rather than something invented here. Where a record has
+ * nothing distinctive to say, its hide comes out close to its family's, which
+ * is the correct outcome and not a wasted plate.
+ */
+export function monsterTierHides(MONSTERS) {
+  return Object.values(MONSTERS)
+    .filter((def) => def.id !== def.family)
+    .map((def) => hideFor(def.id, def));
 }
 
 /**
@@ -563,7 +587,7 @@ import { CLASSES } from '../src/game/data/Classes.js';
 
 export const SPELL_ART = spellPlates(SPELLS);
 export const ITEM_ART = itemPlates(ITEMS);
-export const MONSTER_ART = monsterHides(MONSTERS);
+export const MONSTER_ART = [...monsterHides(MONSTERS), ...monsterTierHides(MONSTERS)];
 export const EMBLEM_ART = classEmblems(CLASSES);
 
 export const ALL = [

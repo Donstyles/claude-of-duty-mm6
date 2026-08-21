@@ -52,18 +52,18 @@ let _hideLoader = null;
  * decide whether to correct the palette colour for it before the texture is
  * anywhere near being loaded.
  */
-function bindHide(mat, family) {
-  const url = family ? monsterPlateUrl(family) : null;
+function bindHide(mat, key) {
+  const url = key ? monsterPlateUrl(key) : null;
   // `TextureLoader` reaches for `document.createElement('img')`. The bestiary
   // is imported by node-side gates that have no DOM, and a creature is never
   // built in one — but a guard costs a line and a thrown constructor costs a
   // gate.
   if (!url || typeof document === 'undefined') return false;
 
-  let rec = _hides.get(family);
+  let rec = _hides.get(key);
   if (!rec) {
     rec = { tex: null, failed: false, waiting: [] };
-    _hides.set(family, rec);
+    _hides.set(key, rec);
     _hideLoader ??= new THREE.TextureLoader();
     _hideLoader.load(url, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;   // it is an albedo, not data
@@ -116,14 +116,50 @@ export function disposeHides() {
  */
 const _lift = new Map();
 
-function familyLift(family, mean) {
+/**
+ * Which plate a creature wears: its own if one was painted, else its family's.
+ *
+ * The family hide came first and is still the floor — thirty-three surfaces
+ * for ninety-nine creatures, on the reasoning that the tiers of a family are
+ * authored as palette swaps of one silhouette. That reasoning holds for the
+ * silhouette and rather less for the skin: a Goblin, a Goblin Shaman and a
+ * Goblin King are not one animal at three brightnesses. Seventy-five of the
+ * ninety-nine now have their own, and the fallback means a family that never
+ * gets one is exactly as it was.
+ */
+function plateKeyFor(def) {
+  return def?.id && monsterPlateUrl(def.id) ? def.id : def?.family;
+}
+
+function meanFor(def) {
+  return MONSTER_PLATE_MEAN[plateKeyFor(def)] ?? null;
+}
+
+/**
+ * One scalar per family, and it stays per family now that the means differ.
+ *
+ * The lift exists so no material channel clips — a clip shifts the hue, and
+ * the hue is the palette's whole job. Sharing it across the family is what
+ * keeps the three tiers proportionally separated instead of converging on
+ * whichever of them happened to clamp hardest; the pass that measured this
+ * found per-monster clamping took Skeleton and Skeleton Knight from 0.166
+ * apart in linear RGB to 0.005, which is two rungs of a three-rung ladder
+ * becoming one colour.
+ *
+ * What changes with per-tier plates is only the divisor: the peak is taken
+ * over each member against ITS OWN hide's mean rather than one shared mean, so
+ * the guarantee still covers every member of the family.
+ */
+function familyLift(family) {
   let k = _lift.get(family);
   if (k !== undefined) return k;
   const c = new THREE.Color();
   let peak = 0;
   for (const id of MONSTER_FAMILIES[family] ?? []) {
-    const hex = MONSTERS[id]?.visual?.palette?.primary;
-    if (hex === undefined) continue;
+    const def = MONSTERS[id];
+    const hex = def?.visual?.palette?.primary;
+    const mean = meanFor(def);
+    if (hex === undefined || !mean) continue;
     c.setHex(hex);
     peak = Math.max(peak, c.r / mean[0], c.g / mean[1], c.b / mean[2]);
   }
@@ -662,8 +698,8 @@ export function buildMonster(def, rng) {
   // The means live in `src/ui/monsterPlates.js` beside the index, measured off
   // the plates themselves. Guessing them would put this in the same class as
   // the "1.42× darker" figure STYLE.md §0 spends a page retracting.
-  if (bindHide(skin, def.family)) {
-    const mean = MONSTER_PLATE_MEAN[def.family];
+  if (bindHide(skin, plateKeyFor(def))) {
+    const mean = meanFor(def);
     if (mean) {
       const c = skin.color;
       c.setRGB(c.r / Math.max(mean[0], 0.01), c.g / Math.max(mean[1], 0.01), c.b / Math.max(mean[2], 0.01));
@@ -671,7 +707,7 @@ export function buildMonster(def, rng) {
       // shifts the hue, and the hue is the palette's whole job. See
       // `familyLift` for why the scalar belongs to the family rather than to
       // this creature.
-      c.multiplyScalar(familyLift(def.family, mean));
+      c.multiplyScalar(familyLift(def.family));
     }
   }
 
