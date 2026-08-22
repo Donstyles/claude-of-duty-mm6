@@ -1147,12 +1147,19 @@ FRAME_LINE_R = 12             # a drawn frame up to 24 raw pixels thick
 # render's backdrop, seen through nothing and seen through glass — so this is a
 # list of names and has to be.
 #
-# It is also load-bearing rather than merely cosmetic: twelve tinted potions
-# share these three plates, and `base.js:itemSprite` paints the liquid as
-# `.mm-item-fill` MASKED BY THE PLATE'S OWN ALPHA — "the painted bottle is
-# opaque through the belly", in that file's own words, written when the tint
-# was moved in front of the glass for exactly this reason. Punch the belly out
-# and all twelve potions become wire outlines with nothing in them.
+# It is also load-bearing rather than merely cosmetic. Counted in the tree
+# rather than remembered: `Items.js` holds 22 potions, every one of them falls
+# through `base.js:ITEM_FAMILY` to `_potion_round`, and 11 of them carry a
+# `POTION_TINT`. `base.js:itemSprite` paints that liquid as `.mm-item-fill`
+# MASKED BY THE PLATE'S OWN ALPHA — "the painted bottle is opaque through the
+# belly", in that file's own words, written when the tint was moved in front of
+# the glass for exactly this reason. Punch the belly out and eleven potions
+# become wire outlines with nothing in them.
+#
+# `_potion_flat` and `_potion_tall` are packed and nothing resolves to them
+# today — the family fallback names only `_potion_round`. They stay on the list
+# anyway: the raws are drawn, the plates ship, and the day an item points at one
+# the belly has to already be opaque.
 #
 # Looked at before deciding, not assumed: `_potion_round` reads 16.2% retained
 # backdrop and `_potion_flat` 15.1%, both of it the glass; `_potion_tall` reads
