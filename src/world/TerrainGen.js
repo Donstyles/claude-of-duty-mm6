@@ -617,10 +617,13 @@ function flattenDisc(data, wx, wz, radius, targetHeight, strength, skipRoad = fa
  * so the cut face comes out as bare rock and earth rather than as lawn draped
  * over a step.
  *
- * Fifty-five discs of 6 m are 1.4 hectares of a 4.19 km² field — 0.33% of the
- * map — and cost about nine thousand samples, against the twenty-five million
- * `computeHorizon` already spends. It is not measurable in the build time and
- * it adds no geometry at all: same grid, same chunks, same draw calls.
+ * Measured against the field built without it: **4,511 of 263,169 samples move
+ * — 1.71% of the map — by 0.80 m on average and 7.64 m at the deepest cut, and
+ * not one sample crosses the waterline in either direction**, so the coastline,
+ * the lakes and `WaterSystem` are untouched. The pass costs about nine thousand
+ * samples against the twenty-five million `computeHorizon` already spends, so
+ * it does not show up in the build time; and it adds no geometry whatever —
+ * same grid, same chunk count, same draw calls.
  */
 function cutDoorPorches(data) {
   for (const d of DUNGEON_LIST) {

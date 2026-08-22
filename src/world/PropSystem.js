@@ -459,29 +459,40 @@ export class PropSystem extends System {
    *
    * Nothing here knows where the towns are — only five of the eleven have a
    * terrain landmark and none of the far ones is built — so the approach is
-   * taken from the ground instead: sample sixteen bearings at thirty metres and
-   * keep the one that drops furthest. A door sited against a hillside has one
+   * taken from the ground instead: sample sixteen bearings and keep the one
+   * where the ground stands lowest. A door sited against a hillside has one
    * open side by construction, and that open side is the way a party arrives
    * and the way it leaves. Deriving it rather than storing it also means the
    * marks follow the door if the catalogue ever re-sites it.
    *
-   * Returns null where the ground falls away on every side — a knoll, where
-   * there is no line to mark and marking one would be a lie.
+   * Two details that were each worth a measurement.
+   *
+   * **Lowest, not steepest-falling.** The first version asked which way the
+   * ground *drops* two metres, and lost twelve of the fifty-five: a door on a
+   * level shelf with a headwall behind it has a perfectly clear way out and no
+   * fall at all in it. Taking the minimum instead of the descent finds the way
+   * out at every one of them, and on 53 of 55 the direction it picks is the one
+   * facing away from the higher ground — which is the check that matters.
+   *
+   * **Fifty-five metres, not thirty.** `TerrainGen` levels a porch whose blend
+   * reaches 17 m, so a ring sampled at thirty is still half inside the pad this
+   * function is trying to see past. Fifty-five is clear of it.
+   *
+   * Returns null only where the ring varies by under a metre and a half — truly
+   * isotropic ground, where there is no line to mark and marking one is a lie.
    */
-  _approachBearing(terrain, x, z, radius = 30) {
-    const h0 = terrain.heightAt(x, z);
-    let best = null;
+  _approachBearing(terrain, x, z, radius = 55) {
+    let low = null, high = -Infinity;
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * Math.PI * 2;
       const px = x + Math.sin(a) * radius;
       const pz = z + Math.cos(a) * radius;
       if (terrain.isWater(px, pz)) continue;
-      const drop = h0 - terrain.heightAt(px, pz);
-      if (!best || drop > best.drop) best = { a, drop };
+      const h = terrain.heightAt(px, pz);
+      if (!low || h < low.h) low = { a, h };
+      if (h > high) high = h;
     }
-    // Two metres over thirty is a 4° fall — below that the ground is flat
-    // enough that no direction is the way out and the door is on open ground.
-    return best && best.drop > 2 ? best.a : null;
+    return low && (high - low.h) > 1.5 ? low.a : null;
   }
 
   /**
@@ -509,16 +520,21 @@ export class PropSystem extends System {
    *     that came out of it piled beside it, and it is the one detail that says
    *     *dug* rather than *found* at a hundred metres.
    *
-   * Cost, because ARCHITECTURE §8 asks and geometry is never free: six
-   * instances a door, all of them into part pools that already exist
-   * (`granite-post` from the stone circle and the barrow mouths, `milestone`
-   * from the Thornwick road, `barrow-spoil` from Netherby). Five boxes at
-   * twelve triangles and one seven-sided cone at fourteen is **74 triangles a
-   * door, 4,070 for all fifty-five, and no new draw call at all** — the parts
-   * merge into instanced meshes the world was already submitting. A boulder
-   * would have been the obvious choice for a waymark and would have cost 80
-   * triangles each, sixteen times as much, for a silhouette that reads worse
-   * at the distance these are meant to be read from.
+   * Cost, because ARCHITECTURE §8 asks and geometry is never free. Every mark
+   * goes into a part pool that already exists — `granite-post` from the stone
+   * circle and the barrow mouths, `milestone` from the Thornwick road,
+   * `barrow-spoil` from Netherby — so all of it merges into instanced meshes
+   * the world was already submitting. Counted against the seed this ships at:
+   *
+   *   all 55 doors marked · 121 waystones · 110 piers · 39 spoil heaps
+   *   = 270 instances, **3,318 triangles, and no new draw call at all**
+   *
+   * (Fewer than 6 × 55: a waystone that would stand in a river or across a road
+   * is dropped and its neighbours still mark the line.) A boulder was the
+   * obvious choice for a waymark and would have cost 80 triangles apiece
+   * against a box's twelve — twenty thousand triangles instead of three — for a
+   * silhouette that reads worse at the distance these are meant to be read
+   * from. The phone frame is 273 draw calls; this adds none of them.
    */
   _markDungeonApproaches(ctx, terrain, towns, rng) {
     const doors = ctx.get('dungeon')?.entrances;
@@ -530,9 +546,19 @@ export class PropSystem extends System {
     // and every mark here merges into a mesh the world was already drawing.
     // A pool that is empty because its region table was emptied simply drops
     // its own mark — none of the three is load-bearing on its own.
-    const pier = this._parts.get('granite-post');
-    const way = this._parts.get('milestone') ?? this._parts.get('obelisk-kerb');
-    const spoil = this._parts.get('barrow-spoil');
+    const pool = (...keys) => {
+      for (const k of keys) {
+        const p = this._parts.get(k);
+        if (p) return { key: k, geom: p.geom, mat: p.mat };
+      }
+      return null;
+    };
+    const pier = pool('granite-post');
+    // Named by the pool it lands in and not by what it is for: writing these
+    // into a fresh `milestone` key when the Thornwick road has none would mint
+    // an InstancedMesh of its own, which is one draw call bought for nothing.
+    const way = pool('milestone', 'obelisk-kerb', 'ruin-block');
+    const spoil = pool('barrow-spoil');
 
     // A waymark inside a town's skirts is street furniture, not a signpost.
     const clearOfTowns = (x, z) => !towns.some((t) => (x - t.x) ** 2 + (z - t.z) ** 2 < 150 * 150);
@@ -550,7 +576,7 @@ export class PropSystem extends System {
           const wz = door.z + cos * d + rng.range(-2.2, 2.2);
           if (!this._canPlace(terrain, wx, wz, 0.5) || !clearOfTowns(wx, wz)) continue;
           const o = { x: wx, z: wz, y: terrain.heightAt(wx, wz), yaw: 0 };
-          this._part('milestone', way.geom, way.mat,
+          this._part(way.key, way.geom, way.mat,
             this._at(o, 0, -0.2, 0, rng.range(0, 6.28),
               0.5, rng.range(1.2, 1.6), 0.36, rng.range(-0.06, 0.06)));
         }
@@ -565,7 +591,7 @@ export class PropSystem extends System {
           const pz = door.z + cos * 2.6 - sin * side * 3.4;
           if (!this._canPlace(terrain, px, pz, 0.62)) continue;
           const o = { x: px, z: pz, y: terrain.heightAt(px, pz), yaw: bearing };
-          this._part('granite-post', pier.geom, pier.mat,
+          this._part(pier.key, pier.geom, pier.mat,
             this._at(o, 0, -0.3, 0, 0, 0.95, rng.range(2.9, 3.5), 0.62, side * 0.045));
         }
       }
@@ -577,7 +603,7 @@ export class PropSystem extends System {
         const sz = door.z + cos * 7.5 + sin * 5.5;
         if (this._canPlace(terrain, sx, sz, 0.6)) {
           const o = { x: sx, z: sz, y: terrain.heightAt(sx, sz), yaw: 0 };
-          this._part('barrow-spoil', spoil.geom, spoil.mat,
+          this._part(spoil.key, spoil.geom, spoil.mat,
             this._at(o, 0, -0.3, 0, 0,
               rng.range(1.5, 2.2), rng.range(0.7, 1.1), rng.range(1.5, 2.2)));
         }

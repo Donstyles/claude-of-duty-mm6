@@ -96,7 +96,7 @@ function parseArgs(argv) {
   const o = {
     walk: null, out: 'shots/approach', every: 25, width: 1200, height: 900,
     json: null, near: 90, time: 10.5, quiet: false, span: 320, quality: 'medium',
-    site: null, step: 12, port: 5341, compare: null,
+    site: null, step: 12, port: 5341, compare: null, relief: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -865,7 +865,18 @@ async function walk(opts) {
     null, { timeout: 300000, polling: 500 });
   const bootErr = await page.evaluate(() => window.__GAME.error);
   if (bootErr) throw new Error(`boot failed: ${bootErr}`);
-  await page.waitForFunction(() => !!window.__CAPTURE, null, { timeout: 30000 });
+  // A degraded boot is the failure that looks like a hang: `ready` goes true
+  // with a subsystem missing, and the wait below then times out on a global
+  // that is never going to appear. Say which one.
+  await page.waitForFunction(() => !!window.__CAPTURE, null, { timeout: 120000 })
+    .catch(async () => {
+      const diag = await page.evaluate(() => ({
+        missing: window.__GAME?.missing ?? [], errs: window.__GAME?.bootErrors ?? [],
+        systems: [...(window.__GAME?.ctx?.engine?.systems?.keys?.() ?? [])],
+      }));
+      throw new Error(`window.__CAPTURE never appeared.\n  missing: ${diag.missing.join(', ') || '(none)'}`
+        + `\n  bootErrors: ${diag.errs.join('\n    ') || '(none)'}\n  systems: ${diag.systems.join(', ')}`);
+    });
   await page.evaluate(() => window.__CAPTURE.setHUDVisible(false));
   await page.evaluate((t) => window.__CAPTURE.setTimeOfDay(t), opts.time);
   await page.evaluate(() => window.__CAPTURE.setWeather('clear'));
@@ -1020,8 +1031,37 @@ function compare(a, b) {
   return L.join('\n');
 }
 
+/**
+ * The field as a relief map, with every door and every channel head on it.
+ *
+ * Numbers 2 and 3 are about where things stand relative to the shape of the
+ * ground, and a distribution cannot show that. This writes a raw greyscale
+ * relief plus two coordinate lists, and `tools/relief.py` paints them — kept
+ * apart so the heavy lifting stays in the language that already has the
+ * heightfield and the drawing stays in the one that already has PIL.
+ */
+async function reliefDump(file, sites) {
+  const out = Buffer.alloc(GRID * GRID);
+  let lo = Infinity, hi = -Infinity;
+  for (const h of terrain.heights) { if (h < lo) lo = h; if (h > hi) hi = h; }
+  for (let i = 0; i < terrain.heights.length; i++) {
+    out[i] = Math.max(0, Math.min(255, Math.round(255 * (terrain.heights[i] - lo) / (hi - lo))));
+  }
+  const m = measure({ near: 90 }, sites);
+  await writeFile(file, out);
+  await writeFile(file + '.json', JSON.stringify({
+    grid: GRID, cell: CELL, half: HALF, lo, hi, sea: SEA_LEVEL,
+    doors: m.rows.map((r) => ({ x: r.x, z: r.z, name: r.name, index: r.index })),
+    heads: m.heads.map((h) => ({ x: h.x, z: h.z })),
+    towns: m.towns.filter((t) => t.built).map((t) => ({ x: t.x, z: t.z, name: t.name })),
+  }, null, 1));
+  console.log(`[approach] relief → ${file} (+ .json)`);
+}
+
 const opts = parseArgs(process.argv.slice(2));
-if (opts.compare) {
+if (opts.relief) {
+  await reliefDump(path.resolve(ROOT, opts.relief), null);
+} else if (opts.compare) {
   const [f1, f2] = String(opts.compare).split(',');
   const { readFile } = await import('node:fs/promises');
   const a = JSON.parse(await readFile(path.resolve(ROOT, f1), 'utf8'));
