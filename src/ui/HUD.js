@@ -823,7 +823,23 @@ export class HUD {
       // and it is drawn no longer.
       g.restore();
 
-      this._drawPartyArrow(g, W, cx, cy, party.yaw ?? 0);
+      // `this._yaw`, not `party.yaw` — the same input the dungeon arrow takes.
+      //
+      // `UISystem.mapParty()` returns `yaw: -yaw`, already negated for the
+      // Maps page's own frame, and `_drawPartyArrow` negates what it is given.
+      // Two negations on the surface and one underground, so the arrow on the
+      // sidebar map turned the WRONG WAY — mirrored about the north-south axis,
+      // reading NW while the compass beside it read SW. The owner: "Arrow on
+      // minimap doesn't relate to party direction correctly."
+      //
+      // `_drawPartyArrow`'s own comment already argued for one arrow, "because
+      // the surface map and the dungeon floor both need it and a second copy is
+      // how the two start pointing different ways". One copy of the DRAWING was
+      // not enough; they were being handed two different inputs. It also fixes
+      // a second difference nobody had noticed — `this._yaw` is smoothed at
+      // 12 Hz and `party.yaw` is not, so the surface arrow snapped while the
+      // dungeon arrow eased.
+      this._drawPartyArrow(g, W, cx, cy, this._yaw);
     }
     g.restore();
   }
