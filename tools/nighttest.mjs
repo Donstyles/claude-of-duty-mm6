@@ -56,7 +56,7 @@ const browser = await chromium.launch({
   executablePath: CHROME, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
 const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
-page.setDefaultTimeout(180000);
+page.setDefaultTimeout(480000);
 
 let failures = 0;
 const rows = [];
@@ -64,7 +64,10 @@ const lights = [];
 
 try {
   await page.goto(`http://127.0.0.1:${port}/?quality=high&capture=1`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.__GAME?.ready === true, undefined, { timeout: 180000 });
+  // 480s, matching the rest of the suite. At 180s this timed out waiting for
+// boot with six agents' browsers on the machine — a load failure reported as
+// a lighting failure, which is the worst kind of red.
+  await page.waitForFunction(() => window.__GAME?.ready === true, undefined, { timeout: 480000 });
   await page.waitForTimeout(2500);
 
   for (const hour of [0, 3, 6, 8, 12, 16, 18, 20, 21, 22]) {

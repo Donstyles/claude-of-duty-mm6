@@ -69,17 +69,20 @@ try {
   await page.waitForTimeout(4000);
 
   const r = await page.evaluate(async () => {
+    const eng = window.__GAME.engine ?? window.__GAME.ctx?.engine;
     const ctx = window.__GAME.ctx;
-    const THREE = window.THREE ?? ctx.THREE;
-    const terrain = ctx.get('terrain');
-    const renderer = ctx.renderer;
-    if (!THREE || !terrain || !renderer) return { err: 'no THREE / terrain / renderer' };
+    const terrain = ctx?.get?.('terrain');
+    const renderer = eng?.renderer;
+    if (!terrain || !renderer) {
+      return { err: `terrain ${!!terrain}, renderer ${!!renderer}` };
+    }
 
-    // The four ORM maps are on the material's own uniforms on the full path.
-    const mat = terrain.material ?? terrain._material
-      ?? terrain.chunks?.[0]?.mesh?.material ?? terrain.mesh?.material;
-    const u = mat?.userData?.uniforms ?? mat?.uniforms;
-    if (!u) return { err: 'terrain material exposes no uniforms' };
+    // `TerrainSystem` keeps the splat's uniform block on itself and merges it
+    // into the shader from `onBeforeCompile`, so `_uniforms` is the handle —
+    // the material's own `uniforms` does not exist until the first compile and
+    // `userData` never carries it.
+    const u = terrain._uniforms;
+    if (!u) return { err: 'terrain exposes no _uniforms' };
 
     const maps = [];
     for (let i = 0; i < 4; i++) {
@@ -88,36 +91,35 @@ try {
     }
     if (!maps.length) return { err: 'no uOrm textures bound — is this the lean path?' };
 
-    // Read a texture back by drawing it to a small render target with a
-    // pass-through shader. `readRenderTargetPixels` is the only route to CPU;
-    // sampling at 128x128 with a mip-biased lod would lie about the mean, so
-    // this draws at the target's own size and averages every texel it gets.
-    const SIZE = 256;
-    const rt = new THREE.WebGLRenderTarget(SIZE, SIZE, {
-      format: THREE.RGBAFormat, type: THREE.UnsignedByteType,
-      colorSpace: THREE.NoColorSpace,
-      minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
-    });
-    const quad = new THREE.Mesh(
-      new THREE.PlaneGeometry(2, 2),
-      new THREE.ShaderMaterial({
-        uniforms: { t: { value: null } },
-        vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-        fragmentShader: 'uniform sampler2D t; varying vec2 v; void main(){ gl_FragColor = vec4(texture2D(t, v).rgb, 1.0); }',
-      }),
-    );
-    const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    const scene = new THREE.Scene();
-    scene.add(quad);
-
-    const prevTarget = renderer.getRenderTarget();
-    const buf = new Uint8Array(SIZE * SIZE * 4);
+    // Read straight off the GL texture rather than through three.js.
+    //
+    // There is no `window.THREE` in a built bundle, so there is no way to
+    // construct a render target and a pass-through material from in here. What
+    // there is, is the texture itself: three.js keeps the GL handle in its
+    // property cache, and an RGBA8 texture is colour-renderable, so it can be
+    // hung on a framebuffer and read with `readPixels`. That reads level 0
+    // exactly — no filtering, no mip bias, no resample — which is what a mean
+    // has to be taken over.
+    const gl = renderer.getContext();
+    const fb = gl.createFramebuffer();
+    const prevFb = gl.getParameter(gl.FRAMEBUFFER_BINDING);
     const out = [];
     for (const { i, tex } of maps) {
-      quad.material.uniforms.t.value = tex;
-      renderer.setRenderTarget(rt);
-      renderer.render(scene, cam);
-      renderer.readRenderTargetPixels(rt, 0, 0, SIZE, SIZE, buf);
+      const props = renderer.properties.get(tex);
+      const handle = props?.__webglTexture;
+      if (!handle) { out.push({ layer: i, err: 'not uploaded' }); continue; }
+      const w = tex.image?.width ?? 0;
+      const h = tex.image?.height ?? 0;
+      if (!w || !h) { out.push({ layer: i, err: 'no image size' }); continue; }
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, handle, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        out.push({ layer: i, err: 'framebuffer incomplete' });
+        continue;
+      }
+      const buf = new Uint8Array(w * h * 4);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
       let sum = 0; let lo = 255; let hi = 0;
       for (let p = 0; p < buf.length; p += 4) {
         const v = buf[p];                       // R = occlusion
@@ -126,10 +128,12 @@ try {
         if (v > hi) hi = v;
       }
       const n = buf.length / 4;
-      out.push({ layer: i, mean: sum / n / 255, min: lo / 255, max: hi / 255 });
+      out.push({
+        layer: i, size: `${w}x${h}`, mean: sum / n / 255, min: lo / 255, max: hi / 255,
+      });
     }
-    renderer.setRenderTarget(prevTarget);
-    rt.dispose(); quad.geometry.dispose(); quad.material.dispose();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, prevFb);
+    gl.deleteFramebuffer(fb);
 
     return { out, names: terrain._layerNames ?? terrain.layerNames ?? null };
   });
