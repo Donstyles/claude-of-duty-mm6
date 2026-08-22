@@ -129,6 +129,16 @@
  *               `seam` cannot catch it because the field RESOLVES — it is
  *               simply never asked.
  *
+ *   move        "movement feels floaty" — and there was no glide at all: stop
+ *               distance measured 0.000 m at every frame rate. The floatiness
+ *               was the LOOK. A pointer delta is an already-integrated quantity
+ *               and it was being read inside `fixedUpdate`, which runs up to
+ *               five times a frame — so one hand sweep turned the party 75.6
+ *               degrees at 60 fps and 378.2 at 12, a factor of five. On a
+ *               120 Hz phone the opposite: half the frames run no fixed step
+ *               at all, so half the samples were cleared unread. This gate
+ *               sweeps at 60, 30, 20, 12 and 8 and requires one answer.
+ *
  * Note what `content` and `seam` each do NOT do. `content` checks that ids
  * RESOLVE: that a quest naming an NPC names one who exists. It never checks
  * that a FIELD exists, so it was green through all eleven. `seam` is the other
@@ -198,6 +208,9 @@ const GATES = [
   { name: 'input', slow: false, cmd: 'node',
     args: ['--import', './tools/null-css.register.mjs', 'tools/inputtest.mjs'],
     why: 'no two actions share a key, and the capture path stays unscaled' },
+  { name: 'move', slow: false, cmd: 'node',
+    args: ['--import', './tools/null-css.register.mjs', 'tools/movetest.mjs'],
+    why: 'one hand sweep turns the party the same distance at any frame rate' },
   { name: 'playtest', slow: true, cmd: 'node', args: ['tools/playtest.mjs'],
     why: 'every door in the town opens the screen it should' },
   { name: 'mobile', slow: true, cmd: 'node', args: ['tools/mobiletest.mjs'],
@@ -224,6 +237,8 @@ const GATES = [
     why: 'the backpack answers to a finger' },
   { name: 'faces-drawn', slow: true, cmd: 'node', args: ['tools/portraittest.mjs'],
     why: 'the four in the bar are the painted plates, and are not being smoothed' },
+  { name: 'steps', slow: true, cmd: 'node', args: ['tools/steptest.mjs'],
+    why: 'the feet keep time with the legs, and the ground picks the sound' },
   { name: 'sound', slow: true, cmd: 'node', args: ['tools/soundtest.mjs'],
     why: 'the game is audible — measured on its own master bus, not asserted' },
   { name: 'figures', slow: true, cmd: 'node', args: ['tools/figuretest.mjs'],

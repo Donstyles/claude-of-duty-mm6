@@ -30,6 +30,31 @@ import { AmbienceDirector, ambientEvent } from './Ambience.js';
 /** Ambience for a region kind, when nothing more specific is known. */
 const KIND_AMBIENCE = { town: 'amb-town', dungeon: 'amb-dungeon', outdoor: 'amb-plains' };
 
+/**
+ * The gait, and why it is not `speed / stride`.
+ *
+ * The party crosses ground at 6.2 m/s at a walk and 11.5 at a run, because
+ * MM6's does and because the map is drawn at 1:100 (see `PlayerSystem`'s
+ * `LEAGUE_SCALE`). A literal 0.75 m human stride under 6.2 m/s is eight
+ * footfalls a second, which is a sewing machine and not a person. What the ear
+ * actually judges is CADENCE, so the stride is the thing that stretches: it
+ * grows with pace, from a short one at a creep to a long one at a dead run, and
+ * the cadence that falls out stays inside the band a person walks and runs in.
+ *
+ *     creep 2.6 m/s → 2.05 m → 1.3 /s      walk 6.2 m/s → 2.68 m → 2.3 /s
+ *     run  11.5 m/s → 3.60 m → 3.2 /s
+ *
+ * Real people walk at about 1.9 footfalls a second and run at about 3.
+ */
+const STRIDE_SLOW = 1.6;
+const STRIDE_FAST = 3.6;
+/** The pace `STRIDE_FAST` belongs to — PlayerSystem's `RUN_SPEED`. */
+const STRIDE_TOP_SPEED = 11.5;
+/** Below this the party is shuffling, not walking, and makes no noise. */
+const FOOT_MIN_SPEED = 0.6;
+/** No two footfalls closer together than this, whatever the arithmetic says. */
+const FOOT_MIN_GAP = 0.11;
+
 export class AudioSystem extends System {
   static id = 'audio';
   static order = 300;
@@ -50,8 +75,14 @@ export class AudioSystem extends System {
     this._fwd = new THREE.Vector3();
     this._delta = new THREE.Vector3();
     this._lastPos = new THREE.Vector3();
-    this._walked = 0;
     this._surface = 'dirt';
+    /** Gait phase, 0..1; a footfall lands each time it crosses 1. */
+    this._footPhase = 0;
+    this._footLeft = false;
+    /** Ground actually covered, m/s, low-passed. See `_footsteps`. */
+    this._footSpeed = 0;
+    this._footGap = 0;
+    this._footMoving = false;
     this._indoors = false;
     this._pending = { track: 'wilderness', variant: null, ambience: 'amb-plains' };
     this._variant = null;
@@ -289,9 +320,15 @@ export class AudioSystem extends System {
     on('shop:open', () => this.playSfx('ui-open'));
     on('save:written', () => this.playSfx('click'));
 
-    // Footsteps are driven from movement rather than from an animation, because
-    // there is no animation — the party is a camera on legs.
-    on('player:moved', ({ position }) => this._footsteps(position));
+    // Footsteps are NOT wired here. They used to hang off `player:moved`, and
+    // that event is a region report on a 0.4 s throttle, not a stride: the
+    // accumulator behind it could only ever fire once per delivery, so the
+    // cadence was pinned at 2.5 footfalls a second no matter how fast the party
+    // was going. Measured on a real walk across the map before this changed:
+    // 1.62 steps/s over a 2.57 m stride at a walk, and — because the throttle
+    // is a ceiling and not a floor — 0.87 steps/s over a 4.80 m stride at a
+    // RUN. Running made the feet slower. See `_footsteps`, driven from
+    // `update` where the frame's own dt is available.
   }
 
   /** Region names contain their variant key; 'The Whitemantle' → 'whitemantle'. */
@@ -323,24 +360,94 @@ export class AudioSystem extends System {
     } catch { /* a convolver mid-render may refuse; it will be right next time */ }
   }
 
-  _footsteps(position) {
-    if (!this.ready || !position) return;
-    this._delta.copy(position).sub(this._lastPos);
-    this._lastPos.copy(position);
-    const step = this._delta.length();
-    if (step > 8 || step <= 0) return;      // a teleport, not a stride
-    this._walked += step;
-    if (this._walked < 1.65) return;
-    this._walked = 0;
-    // Ask the terrain what we are standing on; underground it is always stone.
-    let surface = 'stone';
-    if (!this.ctx?.get('dungeon')?.current) {
-      const biome = this.ctx?.get('terrain')?.biomeAt?.(position.x, position.z);
-      surface = BIOME_SURFACE[biome] ?? 'dirt';
-      if (this.ctx?.get('terrain')?.isWater?.(position.x, position.z)) surface = 'water';
+  /**
+   * Footfalls, driven from the frame rather than from an event.
+   *
+   * There is no walk animation to hang these on — the party is a camera on
+   * legs — so the gait is integrated here from the ground speed the player
+   * system is actually carrying. A phase accumulator rather than a distance
+   * accumulator, because the thing a listener judges is the interval between
+   * two footfalls, and that is a time.
+   *
+   * Silent off the ground, silent while swimming, and silent while standing
+   * still — which includes standing still with a wall in front of you, because
+   * the speed here is GROUND ACTUALLY COVERED and not the velocity the party
+   * asked for. Walking into a door frame should not sound like walking, and
+   * `velocity` says 6.2 m/s the whole time you are leaning on it.
+   *
+   * That covered distance is low-passed over a tenth of a second, which is the
+   * one subtlety worth stating: `update` runs per RENDERED frame and the
+   * simulation is fixed at 60 Hz, so on a 120 Hz display half the frames have
+   * moved the party nowhere at all and on a 20 Hz one a single frame carries
+   * three steps' worth. Raw displacement over `dt` reads as a stop and a
+   * sprint alternately; smoothed, it reads as the pace.
+   */
+  _footsteps(dt, ctx) {
+    const player = ctx.get('player');
+    const pos = player?.position;
+    if (!pos) return;
+
+    this._delta.copy(pos).sub(this._lastPos);
+    this._lastPos.copy(pos);
+    this._delta.y = 0;
+    // A teleport is not a stride. Re-anchor and take the next frame as the
+    // first of the new journey.
+    if (this._delta.lengthSq() > 64) { this._footMoving = false; this._footSpeed = 0; return; }
+
+    const inst = this._delta.length() / Math.max(1e-4, dt);
+    const k = 1 - Math.exp(-dt / 0.1);
+    this._footSpeed += (inst - this._footSpeed) * k;
+
+    if (player.isSwimming || player.isFlying || player.grounded === false) {
+      this._footMoving = false;
+      return;
     }
-    this._surface = surface;
-    this.playSfx(`step-${surface}`, { volume: 0.55 });
+    if (this._footSpeed < FOOT_MIN_SPEED) { this._footMoving = false; return; }
+
+    this._footGap = Math.max(0, (this._footGap ?? 0) - dt);
+
+    const stride = STRIDE_SLOW
+      + (STRIDE_FAST - STRIDE_SLOW) * Math.min(1, this._footSpeed / STRIDE_TOP_SPEED);
+    const cadence = this._footSpeed / stride;
+
+    // Starting from rest puts a footfall under the first frame of movement
+    // rather than a gait-period later, which is what makes the party feel like
+    // it left rather than drifted. It is gated on a FLAG and not on the phase
+    // being zero, which is the same thing for exactly one frame and then is
+    // not: the phase is ~0 immediately after every footfall too, so reading it
+    // as "at rest" fired a step every frame and pinned the cadence at whatever
+    // `FOOT_MIN_GAP` allowed — measured at 8.6 a second, walking and running
+    // alike.
+    if (!this._footMoving) { this._footMoving = true; this._footPhase = 1; }
+    else this._footPhase += cadence * dt;
+    if (this._footPhase < 1) return;
+    // One footfall per frame at most: a 100 ms hitch must not empty a magazine.
+    this._footPhase -= 1;
+    if (this._footPhase > 1) this._footPhase = 1;
+
+    // And never two closer than a gait allows, whatever the arithmetic above
+    // says — a thumb flicked on and off the stick would otherwise fire the
+    // from-rest footfall on every flick.
+    if (this._footGap > 0) return;
+    this._footGap = FOOT_MIN_GAP;
+
+    this._surface = this._surfaceAt(pos, player);
+    // Feet are not a metronome: the trailing foot lands softer than the leading
+    // one, and alternating the gain is the whole of that at no cost. The pitch
+    // jitter `playSfx` already adds does the rest.
+    this._footLeft = !this._footLeft;
+    this.playSfx(`step-${this._surface}`, { volume: this._footLeft ? 0.55 : 0.47 });
+  }
+
+  /** What the party is standing on. Underground it is always stone. */
+  _surfaceAt(pos, player) {
+    if (this.ctx?.get('dungeon')?.current) return 'stone';
+    // The player's own water state beats the terrain's: wading through a ford
+    // is a splash whether or not the heightfield calls that tile water.
+    if (player?.isWading) return 'water';
+    const terrain = this.ctx?.get('terrain');
+    if (terrain?.isWater?.(pos.x, pos.z)) return 'water';
+    return BIOME_SURFACE[terrain?.biomeAt?.(pos.x, pos.z)] ?? 'dirt';
   }
 
   // ── public contract ───────────────────────────────────────────────────────
@@ -459,6 +566,8 @@ export class AudioSystem extends System {
       this._queued = null;
       this._nextNoteAt = Math.max(this._nextNoteAt, now + 0.05);
     }
+
+    this._footsteps(dt, ctx);
 
     const hour = ((ctx.state?.worldTime ?? 0) / 3600) % 24;
     this.composer.night = hour < 5.5 || hour >= 20;

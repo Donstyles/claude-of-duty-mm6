@@ -290,6 +290,27 @@ export class Input {
   keyPressed(code) { return this.pressed.has(code); }
 
   /**
+   * How hard the movement control is being pushed, 0..1 — or 0 when a key
+   * rather than a stick is what is moving the party.
+   *
+   * A key is pressed or it is not, so it has no throw to report and the caller
+   * keeps whatever pace it chose. A thumb on a stick does have one, and
+   * `action()` cannot carry it: it answers a boolean, so before this existed
+   * every deflection past the 20% dead zone bought the same walking speed and
+   * every deflection past 86% bought the same run. Measured on the real stick
+   * maths, that is exactly two speeds across its whole travel — and since a
+   * thumb rests on the rim, the phone ran everywhere and could not walk.
+   *
+   * Deliberately not `axis()`: that reports a signed value per axis and a
+   * caller reading two of them cannot recover the throw of a diagonal without
+   * doing the trigonometry twice. This is the one number, once.
+   */
+  moveThrow() {
+    if (this.scripted) return 0;
+    return this.touch?.live ? this.touch.mag : 0;
+  }
+
+  /**
    * Axis helper: -1, 0 or 1 from the keyboard, or the thumbstick's analog
    * value between them.
    *

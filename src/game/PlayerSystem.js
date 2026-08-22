@@ -198,26 +198,49 @@ export class PlayerSystem extends System {
     this.isSwimming = !this.isFlying && !this.isWaterWalking && submersion > HEIGHT * 0.55;
     this.isWading = !this.isSwimming && submersion > 0.15;
 
-    // ── look ──
-    const look = input.lookDelta();
-    if (look.dx || look.dy) {
-      this.yaw -= look.dx * MOUSE_SENSITIVITY;
-      this.pitch -= look.dy * MOUSE_SENSITIVITY;
-    }
-    const keyTurn = (input.action('turnLeft') ? 1 : 0) - (input.action('turnRight') ? 1 : 0);
-    if (keyTurn) this.yaw += keyTurn * KEY_TURN_RATE * dt;
-    if (input.action('lookUp')) this.pitch += KEY_TURN_RATE * 0.6 * dt;
-    if (input.action('lookDown')) this.pitch -= KEY_TURN_RATE * 0.6 * dt;
-    if (input.actionPressed('centerView')) this.pitch = 0;
-    this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
+    // Look is NOT here. See `_look`, called from `update`.
 
     // ── intent ──
-    const fwd = (input.action('forward') ? 1 : 0) - (input.action('back') ? 1 : 0);
-    const strafe = (input.action('strafeRight') ? 1 : 0) - (input.action('strafeLeft') ? 1 : 0);
+    let fwd = (input.action('forward') ? 1 : 0) - (input.action('back') ? 1 : 0);
+    let strafe = (input.action('strafeRight') ? 1 : 0) - (input.action('strafeLeft') ? 1 : 0);
+
+    // A company that cannot act cannot walk.
+    //
+    // `PartySystem.isDefeated` is `rules.partyIsDown` — conditions only, never
+    // the half-second recovery timer after a swing, so an ordinary fight never
+    // trips this and a genuine wipe always does. Before it existed here, four
+    // unconscious characters could be steered across the field by the thumbstick
+    // while the message strip said they had fallen.
+    //
+    // **Walking is refused and LOOKING is not, and that is a decision.**
+    // REFERENCE.md records nothing about what MM6 did on a wipe — it is a
+    // document about screens, and this is not on one — so it is reasoned rather
+    // than copied. Two reasons the camera stays live: a first-person game that
+    // stops answering the controls entirely is indistinguishable from one that
+    // has crashed, and "it froze" is the reading a player reaches for first; and
+    // the party's eyes ARE the camera in a blobber, so being able to turn the
+    // head while down is how the player finds out what put them there and what
+    // is still standing over them. A body on the floor that can look around is
+    // legible. A black screen that ignores you is a bug report.
+    //
+    // Jumping goes with walking rather than with looking, for the obvious
+    // reason.
+    const down = ctx.get('party')?.isDefeated ?? false;
+    if (down) { fwd = 0; strafe = 0; }
 
     let speed = WALK_SPEED;
     if (input.action('run')) speed = RUN_SPEED;
     else if (input.action('sneak')) speed = SNEAK_SPEED;
+    // A thumbstick is analog and a key is not, and until this line the party
+    // threw the difference away: `action()` answers a boolean, so every
+    // deflection past the 20% dead zone bought the same 6.2 m/s and every
+    // deflection past 86% bought the same 11.5 m/s. Measured, that is exactly
+    // two speeds over the whole travel of the stick — and a thumb rests on the
+    // rim, so the phone ran everywhere and could not walk. The throw picks a
+    // pace between a creep and a dead run instead; a key reports no throw at
+    // all and the choice above stands.
+    const thrown = input.moveThrow?.() ?? 0;
+    if (thrown > 0) speed = SNEAK_SPEED + (RUN_SPEED - SNEAK_SPEED) * thrown;
     if (this.isSwimming) speed = SWIM_SPEED;
     else if (this.isWading) speed *= 0.55;
     if (this.isFlying) speed = input.action('run') ? FLY_SPEED * 1.6 : FLY_SPEED;
@@ -234,15 +257,18 @@ export class PlayerSystem extends System {
 
     // ── vertical ──
     if (this.isFlying) {
-      const climb = (input.action('jump') ? 1 : 0) - (input.action('sneak') ? 1 : 0);
+      // `down` gates the climb for the same reason it gates the jump: it is a
+      // thing the party does, not a thing that happens to them. The buoyancy
+      // below is the opposite case and is left alone.
+      const climb = down ? 0 : (input.action('jump') ? 1 : 0) - (input.action('sneak') ? 1 : 0);
       // Flying follows the look direction, plus explicit climb/dive.
       this.velocity.y = climb * speed * 0.7 + Math.sin(this.pitch) * speed * fwd * 0.6;
     } else if (this.isSwimming) {
-      const climb = (input.action('jump') ? 1 : 0) - (input.action('sneak') ? 1 : 0);
+      const climb = down ? 0 : (input.action('jump') ? 1 : 0) - (input.action('sneak') ? 1 : 0);
       // Slight positive buoyancy so an idle swimmer floats rather than sinks.
       this.velocity.y = climb * SWIM_SPEED + 0.6;
     } else {
-      if (input.actionPressed('jump')) this._jumpBuffer = 0.12;
+      if (input.actionPressed('jump') && !down) this._jumpBuffer = 0.12;
       this._jumpBuffer = Math.max(0, (this._jumpBuffer ?? 0) - dt);
       if (this._jumpBuffer > 0 && (this.grounded || (this._coyote ?? 0) > 0)) {
         this.velocity.y = JUMP_SPEED;
@@ -378,8 +404,53 @@ export class PlayerSystem extends System {
     this._anchorAt = ctx.state.elapsed;
   }
 
+  /**
+   * Free-look, and why it runs once per RENDERED frame rather than once per
+   * simulation step.
+   *
+   * A look delta is a quantity of hand movement, not a rate. The browser hands
+   * it over already integrated — `movementX` for the frame, or the pixels a
+   * thumb dragged across it — and `Input.endFrame()` clears it once per frame
+   * for that reason. Read from `fixedUpdate` it was applied once per fixed
+   * step, and the number of those in a frame is `min(5, floor(frameMs / 16.7))`
+   * — so the SAME hand movement turned the party a different amount at every
+   * frame rate. Measured, one second of a steady 600 px/s sweep:
+   *
+   *     60 fps  →   75.6°        12 fps  →  378.2°
+   *     30 fps  →  151.3°         8 fps  →  378.2°  (the catch-up cap)
+   *     20 fps  →  226.9°
+   *
+   * Five times the sensitivity across the range a phone actually visits, and a
+   * 120 Hz display was worse in the other direction: half its frames run no
+   * fixed step at all, so half the samples were cleared unread and the drag
+   * came out short AND jerky. That is what "floaty" was — not the party
+   * sliding, which measures at zero, but the horizon never landing where the
+   * thumb put it.
+   *
+   * Once per frame, whole, at any frame rate. The keyed turn is a rate and is
+   * integrated against the real frame `dt` here for the same reason.
+   */
+  _look(dt, ctx) {
+    // `fixedUpdate` does not run while the engine is paused, so neither did
+    // look. Keeping that true is the whole of this line.
+    if (ctx.state.paused) return;
+    const input = ctx.input;
+    const look = input.lookDelta();
+    if (look.dx || look.dy) {
+      this.yaw -= look.dx * MOUSE_SENSITIVITY;
+      this.pitch -= look.dy * MOUSE_SENSITIVITY;
+    }
+    const keyTurn = (input.action('turnLeft') ? 1 : 0) - (input.action('turnRight') ? 1 : 0);
+    if (keyTurn) this.yaw += keyTurn * KEY_TURN_RATE * dt;
+    if (input.action('lookUp')) this.pitch += KEY_TURN_RATE * 0.6 * dt;
+    if (input.action('lookDown')) this.pitch -= KEY_TURN_RATE * 0.6 * dt;
+    if (input.actionPressed('centerView')) this.pitch = 0;
+    this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
+  }
+
   update(dt, ctx) {
     if (this._captureHeld) return;
+    this._look(dt, ctx);
     const cam = ctx.camera;
     cam.position.set(
       this.position.x,
