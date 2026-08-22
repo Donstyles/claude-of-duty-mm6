@@ -214,15 +214,37 @@ def figure_raws():
 
 # The grey-subject control set, read off `src/game/data/Items.js` rather than
 # guessed from filenames: the catalogue states a weapon's type and an armour's
-# skill, and those are what say "this object is made of grey metal". Steel is
-# sword / axe / spear / mace / dagger (`Icons.js:itemMaterial` says so in as
-# many words); mail and plate are the armour skills `chain` and `plate`; a
-# shield is its own skill; and two more records name a grey metal outright.
-# The list is baked rather than parsed because parsing JavaScript from a build
+# skill, and those are what say "this object is made of grey metal".
+#
+# The rule, and it is mechanical — this list was regenerated from the tree with
+# it rather than remembered, by importing `Items.js` and `itemPlates.js` in node
+# and keeping every plate whose record matches:
+#
+#     weapon    weaponType in sword | axe | spear | mace | dagger
+#               (`Icons.js:itemMaterial` says exactly this: everything that is
+#               not a staff and not a bow is steel)
+#     armour    skill `chain` or `plate` — NOT `leather`
+#     helm      unless the record itself says leather, cap or crown
+#     shield    every one of ours is a metal-faced board
+#     gauntlets / boots / belt whose record is a plate, ring-mail or forge piece
+#
+# That rule returns 60 plates. This tuple is 63: it keeps three the rule does
+# not reach — `boots_boots`, `gauntlets_gauntlets` and `ring_ring`, whose art is
+# metal-fitted leather and a metal band — and adds `belt_forgeband`, which the
+# rule finds and the first hand-written version of this list missed. Erring
+# wide is the safe direction: every extra plate is one more chance for the
+# matte to be caught taking paint, and none of them can flatter the result.
+#
+# `Icons.js:itemMaterial` alone is NOT the instrument, and it is worth saying
+# why since it looks like one: it is the ramp for the SVG fallback icon, it
+# calls every `armour` iron, and asking it directly puts studded leather and a
+# wooden staff artifact in a set that exists to hold steel.
+#
+# Baked rather than parsed at run time because parsing JavaScript from a build
 # tool is a worse dependency than a list somebody can check by eye.
 CONTROL = (
     'axe_battle', 'axe_caldera', 'axe_executioner', 'axe_great', 'axe_hand', 'axe_war',
-    'belt_plate', 'boots_boots', 'boots_greaves', 'boots_plate',
+    'belt_forgeband', 'belt_plate', 'boots_boots', 'boots_greaves', 'boots_plate',
     'chain_chain', 'chain_elven', 'chain_ring', 'chain_scale', 'chain_splint', 'chain_sunder',
     'dagger_dagger', 'dagger_dirk', 'dagger_emberfang', 'dagger_kris', 'dagger_main_gauche',
     'dagger_stiletto',
