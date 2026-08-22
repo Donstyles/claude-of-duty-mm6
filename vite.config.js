@@ -117,14 +117,31 @@ function spaFallback() {
  */
 function stampServiceWorker() {
   let outDir = 'dist';
+  let publicDir = 'public';
   return {
     name: 'sw-version',
     apply: 'build',
-    configResolved(cfg) { outDir = cfg.build.outDir; },
+    configResolved(cfg) { outDir = cfg.build.outDir; publicDir = cfg.publicDir; },
     closeBundle() {
       const sw = path.resolve(outDir, 'sw.js');
       let src;
       try { src = readFileSync(sw, 'utf8'); } catch { return; }
+
+      // The rename guard has to read the SOURCE, not the copy.
+      //
+      // `vite build` does not empty the output directory by default, so
+      // `dist/sw.js` is usually the last build's already-stamped file. Checking
+      // only that would mean a rename in `public/sw.js` still found a stampable
+      // line — in the output, left there by the build before the rename — and
+      // passed. The source is the thing that can be renamed, so the source is
+      // what is checked.
+      const LINE = /^const VERSION = '[^']*';$/m;
+      const source = path.resolve(publicDir, 'sw.js');
+      let sourceText = null;
+      try { sourceText = readFileSync(source, 'utf8'); } catch { /* no publicDir */ }
+      if (sourceText !== null && !LINE.test(sourceText)) {
+        throw new Error(`[sw] no \`const VERSION = '…';\` line to stamp in ${source}`);
+      }
 
       // Every file `sw.js` keeps by name, by path and content, in a stable
       // order. Keep these three in step with `immutable()` over there.
@@ -150,13 +167,16 @@ function stampServiceWorker() {
       }
       const version = `caerwen-${digest.digest('hex').slice(0, 12)}`;
 
-      const stamped = src.replace(/^const VERSION = '[^']*';$/m, `const VERSION = '${version}';`);
-      if (stamped === src) {
-        // A rename in `sw.js` must not silently turn this into a no-op and
-        // leave every phone on a cache that never expires again.
-        throw new Error('[sw] no `const VERSION = \'…\';` line to stamp in sw.js');
-      }
-      writeFileSync(sw, stamped);
+      // Test for the line, never for the write changing anything.
+      //
+      // The first version of this threw when the replacement produced identical
+      // text, on the reasoning that a rename must not silently turn the stamp
+      // into a no-op. That conflated "there was nothing to replace" with "what
+      // was already there was already right" — and the second happens routinely,
+      // because an un-emptied `dist/` holds the previous build's stamp and a
+      // rebuild whose art has not changed writes the same digest onto itself.
+      // It failed the `build` gate on its very first run.
+      writeFileSync(sw, src.replace(LINE, `const VERSION = '${version}';`));
       console.log(`[sw] cache version ${version} — ${files.length} files digested`);
     },
   };
