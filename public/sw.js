@@ -16,7 +16,11 @@
  * activate, which is the whole upgrade story — there is no partial migration
  * because there is no state in here worth migrating.
  */
-const VERSION = 'caerwen-v1';
+// Bumped to 'v2' to evict a poisoned shell. See the navigation handler below:
+// v1 could cache a 404 page AS THE APP, and an installed app that did so had no
+// way back on its own. Every old cache is dropped on activate, so a bump is the
+// rescue for anybody already holding one.
+const VERSION = 'caerwen-v2';
 const SHELL = './index.html';
 
 self.addEventListener('install', (e) => {
@@ -54,8 +58,23 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(VERSION).then((c) => c.put(SHELL, copy));
+          // Only a REAL page is worth keeping.
+          //
+          // This used to cache whatever came back. A deploy replaces every
+          // content-hashed file at once, and GitHub Pages serves a 404 for a
+          // few seconds while it propagates — so an installed app that happened
+          // to be opened inside that window fetched the 404 page, stored it as
+          // the shell, and then had a 404 for an app. Reinstalling is the only
+          // cure a player can find on their own, and nothing on screen tells
+          // them that is what happened.
+          //
+          // The asset branch below has always guarded this and says why in its
+          // own comment — "a cached 404 is a 404 forever". The shell, ten lines
+          // above it, did not. Same rule, both halves.
+          if (res.ok && res.type === 'basic') {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put(SHELL, copy));
+          }
           return res;
         })
         .catch(() => caches.match(SHELL).then((r) => r ?? Response.error())),

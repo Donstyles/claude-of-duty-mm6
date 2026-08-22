@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import { readdirSync, statSync, rmSync } from 'node:fs';
+import { readdirSync, statSync, rmSync, copyFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -52,9 +52,41 @@ function dropArtRaws() {
   };
 }
 
+/**
+ * Serve the game for any path under the project, not GitHub's error page.
+ *
+ * A static host answers an unknown path with a 404, and on GitHub Pages that
+ * is a black page saying "File not found". Three ordinary things land there:
+ * a Home Screen icon installed from an older build whose start URL has since
+ * moved, a link somebody typed with a stray character, and a deep link into a
+ * screen this game addresses with a query string rather than a path.
+ *
+ * GitHub Pages serves `404.html` for all of them, so making it a copy of the
+ * shell turns every one into the game booting. Written as a copy rather than a
+ * redirect: a redirect costs a round trip on a phone that has just spent one
+ * finding out the path was wrong, and the shell is 4 KB.
+ */
+function spaFallback() {
+  let outDir = 'dist';
+  return {
+    name: 'spa-404',
+    apply: 'build',
+    configResolved(cfg) { outDir = cfg.build.outDir; },
+    closeBundle() {
+      const index = path.resolve(outDir, 'index.html');
+      try {
+        copyFileSync(index, path.resolve(outDir, '404.html'));
+        console.log('[404] index.html copied to 404.html — any path boots the game');
+      } catch (err) {
+        console.warn('[404] could not write the fallback:', err.message);
+      }
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [dropArtRaws()],
+  plugins: [dropArtRaws(), spaFallback()],
   server: { port: 5173, strictPort: true, host: '127.0.0.1' },
   preview: { port: 4173, strictPort: true, host: '127.0.0.1' },
   build: {

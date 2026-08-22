@@ -2,7 +2,7 @@
   "name": "Claude of Duty — Chronicles of Caerwen",
   "short_name": "Caerwen",
   "description": "A first-person party RPG in the Kingdom of Caerwen.",
-  "id": "/",
+  "id": "./",
   "start_url": "./?pwa=1",
   "scope": "./",
   "display": "fullscreen",
