@@ -27,14 +27,22 @@
  * post problem; a cliff in both is the palette or a branch above it.
  *
  * Usage:
- *   node tools/skysweep.mjs                    # default terrain, clear sky
- *   node tools/skysweep.mjs --units=16         # the phone's LEAN terrain splat
- *   node tools/skysweep.mjs --weather=auto     # let the weather clock run
- *   node tools/skysweep.mjs --step=0.1 --shots # finer, and write four PNGs
+ *   node tools/skysweep.mjs                      # default terrain, clear sky
+ *   node tools/skysweep.mjs --units=16           # the phone's LEAN terrain splat
+ *   node tools/skysweep.mjs --weather=auto       # let the weather clock run
+ *   node tools/skysweep.mjs --step=0.25 --shots  # finer, and write four PNGs
+ *   node tools/skysweep.mjs --hours=17,17.5,18   # only where the curve moves
+ *   node tools/skysweep.mjs --yaw=-28            # the reciprocal heading
+ *   node tools/skysweep.mjs --day=18             # a moonless night
+ *
+ * A software-rendered frame of this scene costs 30–70 s on a loaded box, so
+ * `--hours` is usually the right way to run it: dense across the twilights,
+ * sparse across the middle of the day and the middle of the night.
  *
  * Exit code is the number of ADJACENT sample pairs whose median luminance
  * changes by more than `CLIFF` of the brighter one — i.e. the number of steps
- * in a curve that is supposed to have none.
+ * in a curve that is supposed to have none. Pairs more than half an hour apart
+ * are not counted: a gap in the hour list is not a cliff in the world.
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
