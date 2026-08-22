@@ -1,7 +1,12 @@
 import { System } from '../core/Engine.js';
 import { Character } from './Character.js';
-import { CONDITIONS } from './rules.js';
+import {
+  CONDITIONS, getCondition, REST_CURES, RESCUE_FRACTION,
+  partyIsDown, partyCanRally,
+} from './rules.js';
 import { getItem } from './data/Items.js';
+import { TEMPLES } from './data/NPCs.js';
+import { townPosition } from './data/Regions.js';
 
 /**
  * A plain instance of a catalogue item, identified and unbroken.
@@ -117,6 +122,43 @@ const STARTING_PACK = ['potion_red', 'torch'];
  */
 const HOURS_PER_RATION = 8;
 
+// ── What a wipe means ───────────────────────────────────────────────────────
+//
+// MM6's answer, and the one this game takes: a defeated party is not a game
+// over. Unconsciousness is a CONDITION, and conditions are healed by time — so
+// the trap is not being beaten, it is being unable to spend the time that
+// would undo it. Nobody who is unconscious can open the rest screen's mind and
+// decide to sleep.
+//
+// So the game spends it for them. The party lies where it fell, one in-game
+// hour goes past every real second — eighty times the sky's own drift, so the
+// light visibly moves and that is the whole picture of a wipe — and the bill
+// is paid in the currency this game runs on everywhere else: rations eaten,
+// wages owed, interest missed, and the hour of the day they stand up in.
+// Nothing is reloaded, nothing is destroyed, and no screen says GAME OVER.
+//
+// Hours cannot mend everything. A party that is dead, petrified or paralysed
+// will lie there until the world ends, so at that point the Order of the
+// Kindled Lamp is sent for — which is the other currency, and the one the
+// temple screen has always charged in. It always comes, and it always leaves
+// the party able to walk, because a state a player can reach and not leave is
+// not a punishment, it is a bug. What being unable to pay costs is being
+// mended only as far as standing up.
+
+/** World seconds bought by one real second while nobody is standing. */
+const DOWN_TIME_SCALE = 3600;
+/** Hours of lying there before the Order is sent for regardless. */
+const CARRY_AFTER_HOURS = 24;
+/** Hours it takes to carry four bodies to the nearest lit lamp. */
+const CARRY_HOURS = 8;
+/** Most hours one frame may resolve, so a forced clock cannot heal a year. */
+const MAX_DOWN_HOURS_PER_FRAME = 36;
+
+/** Four digits and over take a thousands separator (STYLE.md §7). */
+function coin(n) {
+  return String(Math.max(0, Math.round(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 export class PartySystem extends System {
   static id = 'party';
   static order = 90;
@@ -134,6 +176,13 @@ export class PartySystem extends System {
     this._hungerSeconds = 0;
     /** Last clock reading we billed against; null re-syncs without charging. */
     this._lastWorldTime = null;
+    /**
+     * Null while anybody is standing. While nobody is, this is the record of
+     * the ordeal — `{ hours, since, clock, pending }` — and it is saved, so a
+     * game written at the worst possible moment loads back into the same
+     * recovery rather than into a party that never gets up.
+     */
+    this.down = null;
   }
 
   /**
@@ -193,8 +242,22 @@ export class PartySystem extends System {
 
   alive() { return this.members.filter((m) => !m.isDead && !m.isUnconscious); }
 
-  /** True when nobody can act — the party has wiped. */
-  get isDefeated() { return this.alive().length === 0; }
+  /**
+   * True when nobody can act — the party has wiped.
+   *
+   * This is the field the playtest found: it was authored, it resolved, and
+   * **nothing in the tree ever asked it**, so the party fell over and the game
+   * carried on. `_tickDefeat` below is its reader now, and `CombatSystem` and
+   * the rest screen ask it too.
+   *
+   * It is `rules.partyIsDown` rather than `alive().length === 0` for two
+   * reasons. `alive()` counts only the dead and the unconscious, so a party
+   * with all four paralysed or petrified — every one of them out of play, none
+   * of them "not alive" — was not a wipe by this field and was every bit as
+   * stuck. And `alive()` builds an array, which this getter cannot afford:
+   * it is read every fixed step, forever.
+   */
+  get isDefeated() { return partyIsDown(this.members); }
 
   select(i) {
     if (i < 0 || i >= this.members.length) return;
@@ -286,8 +349,10 @@ export class PartySystem extends System {
       m.restoreSP(Math.ceil(m.maxSP * (hours / 8)));
       m.recovery = 0;
       if (hours >= 8) {
-        // A full night clears the conditions rest can actually cure.
-        for (const id of ['weak', 'asleep', 'afraid', 'drunk', 'unconscious']) m.removeCondition(id);
+        // A full night clears the conditions rest can actually cure. The list
+        // lives in `rules.js` because lying where you fell clears the same
+        // ones on the same schedule, and two copies of it would drift.
+        for (const id of REST_CURES) m.removeCondition(id);
       }
     }
     this._events?.emit('party:rested', { hours });
@@ -303,6 +368,10 @@ export class PartySystem extends System {
       food: this.food,
       hirelings: this.hirelings,
       hunger: Math.round(this._hungerSeconds),
+      // Saved, because a quicksave taken as the last member goes down would
+      // otherwise load into a party that is defeated and has nothing counting
+      // the hours back for it.
+      down: this.down ? { ...this.down } : null,
     };
   }
 
@@ -317,12 +386,218 @@ export class PartySystem extends System {
     // The clock is about to jump to whatever the save says. That jump is not
     // time the loaded party lived through, so re-sync rather than bill it.
     this._lastWorldTime = null;
+    // Same argument for the ordeal's own clock: `clock: null` makes the first
+    // frame after the load adopt whatever hour it finds, so a party loaded
+    // face-down does not get credited with every hour since the save.
+    this.down = json.down ? { ...json.down, clock: null } : null;
+  }
+
+  // ── the wipe, and the two ways out of it ─────────────────────────────────
+
+  /**
+   * Notice that nobody is standing, and then do something about it.
+   *
+   * Runs before anything else in the frame because it moves the clock, and the
+   * hunger accounting below has to bill the hours it moves — the party is
+   * living through them, so they eat.
+   */
+  _tickDefeat(dt, ctx) {
+    const down = this.isDefeated;
+    if (down && !this.down) this._fall(ctx);
+    else if (!down && this.down) this._rise(ctx);
+    if (!this.down) return;
+
+    // The hours pass whether the player spends them or not. `SkySystem` adds
+    // its own drift only when nothing else has moved the clock this frame, so
+    // this replaces that drift rather than stacking on top of it, and the sun
+    // moves with it — which is the only picture of a wipe there is.
+    ctx.state.worldTime += dt * DOWN_TIME_SCALE;
+
+    // Counted from the clock rather than from `dt`, so hours the PLAYER spends
+    // count too: waiting an hour on the rest screen, or a coach that arrives
+    // with nobody awake on it, mends exactly as much as lying there does.
+    const now = ctx.state.worldTime;
+    this.down.clock ??= now;
+    this.down.pending += Math.max(0, now - this.down.clock);
+    this.down.clock = now;
+
+    let whole = Math.floor(this.down.pending / 3600);
+    if (whole <= 0) return;
+    this.down.pending -= whole * 3600;
+    whole = Math.min(whole, MAX_DOWN_HOURS_PER_FRAME);
+    for (let h = 0; h < whole; h++) {
+      this._downHour(ctx);
+      if (!this.down || !this.isDefeated) break;
+    }
+  }
+
+  /** The moment the last of them goes down. */
+  _fall(ctx) {
+    const now = ctx.state.worldTime;
+    this.down = { hours: 0, since: now, clock: now, pending: 0 };
+    // A turn order with nobody in it is a trap of its own — the monsters go on
+    // taking turns and the party never gets one — so this is emitted before
+    // the sentence is written. `CombatSystem` hears it and breaks off.
+    ctx.events.emit('party:defeated', { members: this.members, at: now });
+    ctx.events.emit('ui:log', { text: 'The party falls where it stands.', kind: 'warn' });
+  }
+
+  /**
+   * One hour on the floor.
+   *
+   * Wounds close at the rate a night's sleep would close them, and after eight
+   * hours the conditions a night's sleep would lift are lifted — the same
+   * numbers `rest()` uses, because coming round on a dungeon floor should not
+   * be a second, kinder set of rules. Spell points are the difference: those
+   * come back from sleeping, not from being knocked out, which is what keeps
+   * the inn's bed and the temple's altar worth their prices.
+   */
+  _downHour(ctx) {
+    const d = this.down;
+    d.hours += 1;
+    for (const m of this.members) {
+      if (m.isDead) continue;
+      m.heal(Math.ceil(m.maxHP / 8));
+      // Both halves, or nobody wakes: `canAct` is `!isIncapacitated &&
+      // recovery <= 0`, so hit points alone leave a character on the floor
+      // with a recovery timer that nothing is decrementing.
+      m.recovery = 0;
+      if (d.hours >= 8) for (const id of REST_CURES) m.removeCondition(id);
+    }
+    if (!this.isDefeated) return;
+    // Hours have stopped being the answer: either nobody here is the kind of
+    // hurt that time mends, or a day of them has not been enough.
+    if (!partyCanRally(this.members) || d.hours >= CARRY_AFTER_HOURS) this._carry(ctx);
+  }
+
+  /** Somebody stirred. */
+  _rise(ctx) {
+    const d = this.down;
+    this.down = null;
+    if (!this.active?.canAct) this.selectNextAble();
+    const who = this.members.find((m) => m.canAct);
+    const h = Math.max(1, Math.round(d?.hours ?? 1));
+    ctx.events.emit('ui:log', {
+      text: `${who?.name ?? 'The party'} comes round after ${h === 1 ? 'an hour' : `${h} hours`}.`,
+      kind: 'good',
+    });
+  }
+
+  /**
+   * The Order of the Kindled Lamp is sent for.
+   *
+   * The paid way out, and the only one that works on a party time cannot mend.
+   * The house asks what the temple screen would ask for the same work; if the
+   * purse covers it the party wakes whole, and if it does not the house takes
+   * what there is and mends only as far as standing up — every affliction that
+   * stops a character acting, and nothing else. It never refuses and it never
+   * leaves anybody down, because the alternative is a state a player can reach
+   * and not leave.
+   */
+  _carry(ctx) {
+    this.down = null;
+
+    const temple = this._nearestTemple(ctx);
+    // Four bodies and a stretcher is most of a day, and the day is billed.
+    ctx.state.worldTime += CARRY_HOURS * 3600;
+
+    const model = ctx.get('services')?.model ?? null;
+    const venue = model?.resolve?.({ service: 'temple', venue: temple?.id }) ?? null;
+    let bill = 0;
+    try {
+      bill = venue ? Math.round(model.templeBill(venue)) : 0;
+    } catch (err) {
+      // A book-keeping failure must never be the reason a party stays down.
+      console.error('[party] could not price the rescue:', err);
+      bill = 0;
+    }
+    const paid = Math.max(0, Math.min(Math.round(this.gold), bill));
+    if (paid > 0) this.addGold(-paid);
+    const settled = paid >= bill;
+
+    for (const m of this.members) {
+      for (const id of [...m.conditions]) {
+        if (settled || getCondition(id)?.blocksAction) m.removeCondition(id);
+      }
+      m.hp = Math.max(1, Math.round(m.maxHP * (settled ? 1 : RESCUE_FRACTION)));
+      if (settled && m.maxSP > 0) m.sp = m.maxSP;
+      m.recovery = 0;
+      m.refresh?.();
+    }
+    // `refresh()` rebuilds `bonuses` from equipment and buffs alone, so the
+    // retinue's flat entries — a Surgeon's hit points, a Sellsword's attack —
+    // are wiped by the loop above and have to be written back over the top.
+    // `SaveSystem._settleBuffs` does the same after a load, for the same
+    // reason and through the same method.
+    try {
+      ctx.get('services')?.model?._applyRetinue?.();
+    } catch (err) {
+      console.error('[party] could not re-derive the retinue after a rescue:', err);
+    }
+    if (!this.active?.canAct) this.selectNextAble();
+
+    this._toTown(ctx, temple);
+
+    const house = temple?.name ?? 'the nearest lamp';
+    ctx.events.emit('ui:log', {
+      text: 'The Order of the Kindled Lamp comes for the party.', kind: 'warn',
+    });
+    ctx.events.emit('ui:log', {
+      text: bill <= 0
+        ? `The party wakes at ${house} with nothing to pay.`
+        : settled
+          ? `The party wakes whole at ${house}, ${coin(paid)} gold the poorer.`
+          : paid > 0
+            ? `The house takes the last ${coin(paid)} gold and the party wakes, still hurt.`
+            : `The party has nothing to give, and ${house} mends what it must.`,
+      kind: 'info',
+    });
+  }
+
+  /** The lit lamp nearest to wherever the party went down. */
+  _nearestTemple(ctx) {
+    const terrain = ctx.get('terrain');
+    const here = ctx.get('player')?.position ?? null;
+    let best = null;
+    let bestDistance = Infinity;
+    for (const house of Object.values(TEMPLES)) {
+      const at = townPosition(house.town, terrain?.worldSize ?? undefined, terrain);
+      if (!at) continue;
+      const d = here ? Math.hypot(at[0] - here.x, at[1] - here.z) : 0;
+      if (d < bestDistance) { bestDistance = d; best = house; }
+    }
+    return best ?? Object.values(TEMPLES)[0] ?? null;
+  }
+
+  /**
+   * Put the party down in the town whose lamp took them in.
+   *
+   * `dungeon.exit()` before anything moves, and that is not optional: going
+   * underground hides the sun, the sky fill and the ambient floor, and only
+   * `exit()` puts them back. `SpellSystem` documents the same trap for Town
+   * Portal — a party lifted out of a dungeon any other way arrives on a
+   * hillside lit like a crypt, which reads as a grading choice rather than a
+   * bug and survived a full round of blind review once already.
+   */
+  _toTown(ctx, temple) {
+    const townId = temple?.town ?? 'town_millhaven';
+    ctx.get('venue')?.leave?.({ silent: true });
+    ctx.get('dungeon')?.exit?.(ctx);
+    const terrain = ctx.get('terrain');
+    const at = townPosition(townId, terrain?.worldSize ?? undefined, terrain);
+    if (at) {
+      const y = (terrain?.heightAt?.(at[0], at[1]) ?? 0) + 0.1;
+      ctx.get('player')?.teleport?.(at[0], y, at[1], 0);
+    }
+    ctx.events.emit('player:enteredTown', { town: townId, via: 'carried' });
   }
 
   // ── simulation ───────────────────────────────────────────────────────────
 
   fixedUpdate(dt, ctx) {
     this._events ??= ctx.events;
+    // First, because it moves the clock and everything below bills against it.
+    this._tickDefeat(dt, ctx);
     const worldTime = ctx.state.worldTime;
 
     for (const m of this.members) m.tick(dt, worldTime);

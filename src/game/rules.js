@@ -161,6 +161,82 @@ export function isIncapacitated(char) {
   return false;
 }
 
+// ── Going down, and getting back up ─────────────────────────────────────────
+//
+// `PartySystem.isDefeated` existed for most of this project's life with no
+// reader anywhere: the party fell over and the game carried on, four
+// unconscious characters walking around with nothing on screen to say why. The
+// predicates below are what a wipe actually is, kept here with the rest of the
+// mechanics so the party system, the combat system and the rest screen all ask
+// the same question rather than three near-misses of it.
+
+/**
+ * The conditions a night's sleep lifts.
+ *
+ * `PartySystem.rest` clears exactly these after eight hours; so does the inn's
+ * bed in `TownServices.rentRoom`; and so does an hour spent lying where you
+ * fell. One list, because three lists is two too many — and because the whole
+ * design of a wipe turns on which afflictions time can undo and which it
+ * cannot. Anything not on it (paralysis, petrifaction, death) is a temple's
+ * business, not a bedroll's.
+ */
+export const REST_CURES = deepFreeze(['weak', 'asleep', 'afraid', 'drunk', 'unconscious']);
+
+/**
+ * Can time alone put this character back into play?
+ *
+ * The question a defeated party turns on. Unconsciousness heals with hours, so
+ * a party knocked cold gets up on its own and pays in hours. Death, stone and
+ * paralysis do not heal with hours at any price, so a party in that state has
+ * to be fetched — which is what costs gold. Deliberately blind to hit points:
+ * a character at zero is unconscious, and unconsciousness is on the list.
+ */
+export function rousableByTime(char) {
+  if (!char) return false;
+  for (const id of char.conditions ?? []) {
+    const c = CONDITION_BY_ID[id];
+    if (c?.blocksAction && !REST_CURES.includes(id)) return false;
+  }
+  return true;
+}
+
+/**
+ * Nobody left who can act — the party has wiped.
+ *
+ * Conditions only, never the recovery timer: `recovery` is the half-second
+ * after a swing and every member of a party mid-fight is inside it at some
+ * point, so a check that counted it would declare a wipe several times a
+ * minute in an ordinary fight.
+ *
+ * Written as a loop rather than as `members.filter(…).length === 0` because it
+ * is read every frame by whoever has to notice, and a `filter` builds an array
+ * to throw away sixty times a second for the life of the session.
+ */
+export function partyIsDown(members) {
+  if (!members?.length) return false;
+  let present = 0;
+  for (const m of members) {
+    if (!m) continue;                      // an empty slot is not a casualty
+    present++;
+    if (!isIncapacitated(m)) return false;
+  }
+  return present > 0;
+}
+
+/** Is there anybody here that time alone will bring round? */
+export function partyCanRally(members) {
+  for (const m of members ?? []) {
+    if (rousableByTime(m)) return true;
+  }
+  return false;
+}
+
+/**
+ * What the Order leaves a party it had to carry in and could not be paid for
+ * in full: on its feet, and not much more.
+ */
+export const RESCUE_FRACTION = 0.25;
+
 /**
  * What a character may do right now.
  * `{ canAct, canMelee, canCast, controlled, worst }`

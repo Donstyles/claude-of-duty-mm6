@@ -69,11 +69,38 @@ export class CombatSystem extends System {
 
     ctx.input.bindings.turnBased = ['Enter'];
     ctx.events.on('combat:requestAttack', ({ index }) => this.partyAttack(ctx, index));
+    ctx.events.on('party:defeated', () => this._standDown(ctx));
   }
 
   // ── mode ─────────────────────────────────────────────────────────────────
 
+  /**
+   * The party has wiped: come out of turn-based mode and drop the order.
+   *
+   * A turn order is a queue of people taking turns, and a wiped party supplies
+   * none of them — `_beginRound` pushes nobody, `isPartyTurn` is false forever,
+   * and the monsters go on spending turns while the player watches. That is a
+   * soft-lock inside the trap rather than beside it, so `PartySystem` announces
+   * the wipe and this is what hears it.
+   *
+   * `combat:ended` still goes out, because the fight really has ended as far as
+   * this system is concerned and the music has to know.
+   */
+  _standDown(ctx) {
+    if (this.mode !== 'turnbased') return;
+    this.mode = 'realtime';
+    this.order.length = 0;
+    this.turnIndex = 0;
+    ctx.events.emit('combat:ended', { mode: this.mode });
+  }
+
   toggleMode(ctx) {
+    // And it cannot be walked back into. Pressing Enter over four unconscious
+    // characters used to build an order of monsters only.
+    if (this.mode === 'realtime' && ctx.get('party')?.isDefeated) {
+      ctx.events.emit('ui:log', { text: 'Nobody in the party can take a turn.', kind: 'warn' });
+      return;
+    }
     this.mode = this.mode === 'realtime' ? 'turnbased' : 'realtime';
     if (this.mode === 'turnbased') this._beginRound(ctx);
     else this.order.length = 0;

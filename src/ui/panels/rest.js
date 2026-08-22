@@ -120,6 +120,10 @@ export class RestPanel extends Panel {
     const town = venue?.town ?? null;
     const indoors = !!venue?.current;
     const safe = (!!town || indoors) && !inDungeon && !foe;
+    // Nobody standing. This screen sells hours, and hours are exactly what a
+    // wiped party needs, so it is the one screen that must say so out loud
+    // rather than answering a downed party with a refusal about rations.
+    const down = !!party?.isDefeated;
 
     const food = party?.food ?? this.ui.food ?? 0;
     // The party system charges one ration per eight hours slept, and that is
@@ -134,7 +138,7 @@ export class RestPanel extends Panel {
     else if (food < cost) refuse = `Camping eight hours takes ${cost} ration${cost === 1 ? '' : 's'}. The pack holds ${food}.`;
 
     return {
-      inDungeon, forbids, foe, town, indoors, safe, food, cost, risk, refuse,
+      inDungeon, forbids, foe, town, indoors, safe, down, food, cost, risk, refuse,
       where: this._whereText(dungeon, venue, player),
     };
   }
@@ -427,9 +431,18 @@ export class RestPanel extends Panel {
     const bar = el('div', { className: 'mm-rest-risk' },
       camp.risk > 0 ? el('i', { style: { width: `${Math.round(clamp(camp.risk, 0, 1) * 100)}%` } }) : null);
 
+    // §9's table, so the state of the party reads as one more fact about the
+    // ground the party is on — and `--down`, because being unable to act is a
+    // condition that blocks. The row only exists while it is true; a party on
+    // its feet does not need a line telling it so.
+    const company = camp.down
+      ? labelRow('The company', 'Nobody is standing', { tone: 'mm-t-down' })
+      : null;
+
     return engraved('mm-rest-camp',
       labelRow('Where', camp.where),
       labelRow('The spot', verdict, { tone }),
+      company,
       labelRow('Rations', `${camp.cost} of ${camp.food}`, {
         tone: camp.food < camp.cost ? 'mm-t-down' : '',
       }),
@@ -437,11 +450,20 @@ export class RestPanel extends Panel {
       bar,
       el('div', {
         className: `mm-rest-verdict${camp.refuse ? ' is-bad' : ''}`,
-        text: camp.refuse ?? (camp.safe
-          ? 'Four walls and a bolt. Nothing will find you here.'
-          : camp.risk > 0.35
-            ? 'Uneasy ground. Somebody stays awake, and it will not be enough.'
-            : 'Quiet enough to sleep through, with a watch set.'),
+        // A refusal still wins the line, because it is the thing standing
+        // between the player and the button. But a party with nobody standing
+        // is told what happens next either way — and the refusal is not the
+        // whole truth for one, since the hours go by regardless of whether the
+        // ground will let anybody sleep through them.
+        text: camp.down
+          ? (camp.refuse
+            ? `${camp.refuse} The hours pass anyway, and will bring them round.`
+            : 'The hours will bring them round. The Order would do it sooner, for a price.')
+          : (camp.refuse ?? (camp.safe
+            ? 'Four walls and a bolt. Nothing will find you here.'
+            : camp.risk > 0.35
+              ? 'Uneasy ground. Somebody stays awake, and it will not be enough.'
+              : 'Quiet enough to sleep through, with a watch set.')),
       }));
   }
 

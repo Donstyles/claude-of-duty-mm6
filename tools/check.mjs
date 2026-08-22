@@ -121,6 +121,14 @@
  *               the bug existed only for characters a player rolled, which is
  *               every character a player has.
  *
+ *   wipe        `PartySystem.isDefeated` existed, was documented "true when
+ *               nobody can act — the party has wiped", and had NO READERS. The
+ *               whole party fell over and the game carried on: four unconscious
+ *               characters, nothing on screen, and no way out. An authored
+ *               field with no reader is a mechanism that does not happen, and
+ *               `seam` cannot catch it because the field RESOLVES — it is
+ *               simply never asked.
+ *
  * Note what `content` and `seam` each do NOT do. `content` checks that ids
  * RESOLVE: that a quest naming an NPC names one who exists. It never checks
  * that a FIELD exists, so it was green through all eleven. `seam` is the other
@@ -180,6 +188,8 @@ const GATES = [
     why: 'no speaker in Caerwen falls back to a stranger of the wrong trade' },
   { name: 'journal', slow: false, cmd: 'node', args: ['tools/questtest.mjs'],
     why: 'the book shows what the party did, and an idle hour buys no deed' },
+  { name: 'wipe', slow: false, cmd: 'node', args: ['tools/wipetest.mjs'],
+    why: 'a party that falls gets up again, and never lands somewhere it cannot leave' },
   { name: 'save', slow: false, cmd: 'node', args: ['tools/savetest.mjs'],
     why: 'a played party survives a write and a read with every field intact' },
   { name: 'physics', slow: false, cmd: 'node',
