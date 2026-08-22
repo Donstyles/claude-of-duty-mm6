@@ -369,8 +369,8 @@ Face faceOf(vec2 f, float ci) {
   F.nostril = 1.0 - sstep(0.0, 0.005, sdEllipse2(nl, vec2(0.0095, 0.0048)));
   // Under the septum only, and narrow: a shadow across the whole base is a
   // moustache.
-  F.crease += (1.0 - sstep(0.003, 0.013, abs(f.y - noseBase - 0.005)))
-            * (1.0 - sstep(0.004, nw * 0.55, ax)) * 0.42;
+  F.crease += (1.0 - sstep(0.003, 0.011, abs(f.y - noseBase - 0.005)))
+            * (1.0 - sstep(0.004, nw * 0.42, ax)) * 0.28;
   // Philtrum.
   F.detail -= (1.0 - sstep(0.006, 0.014, ax)) * sstep(noseBase, noseBase + 0.012, f.y)
             * (1.0 - sstep(A_MOUTH - 0.032, A_MOUTH - 0.016, f.y)) * 0.22;
@@ -434,14 +434,17 @@ Face faceOf(vec2 f, float ci) {
   }
 
   /* ── stubble ───────────────────────────────────────────────────────────── */
-  float jaw = sstep(0.585, 0.660, f.y) * (1.0 - sstep(0.845, 0.930, f.y))
-            * (1.0 - sstep(0.205, 0.290, ax));
-  float tache = sstep(noseBase + 0.004, noseBase + 0.016, f.y)
-              * (1.0 - sstep(A_MOUTH - 0.030, A_MOUTH - 0.014, f.y))
-              * (1.0 - sstep(0.075, 0.115, ax));
+  //
+  // Jaw only. There used to be an upper-lip patch as well, and at the size a
+  // head actually renders — about forty pixels at conversation range — a dark
+  // patch between the nose and the mouth is not stubble, it is a painted-on
+  // moustache. It is also the place a mis-sexed face shows first, and the
+  // atlas cannot know a person's sex (see the note in NPCSystem), so the one
+  // region where being wrong is unmistakable is the one region left bare.
+  float jaw = sstep(0.615, 0.690, f.y) * (1.0 - sstep(0.845, 0.930, f.y))
+            * (1.0 - sstep(0.195, 0.280, ax));
   float grain = tFbm01(vec2(ax * 4.0 + ci * 0.7, f.y * 4.0), vec2(70.0, 90.0), 3);
-  F.stub = stub * max(jaw, tache) * (1.0 - F.lipU) * (1.0 - F.lipL)
-         * sstep(0.34, 0.72, grain);
+  F.stub = stub * jaw * (1.0 - F.lipU) * (1.0 - F.lipL) * sstep(0.34, 0.72, grain);
   F.relief += F.stub * 0.03;
 
   /* ── where the blood shows ─────────────────────────────────────────────── */
@@ -758,7 +761,7 @@ const CHARACTER_DEFS = {
           // Every line carries shadow and a little more blood than its plane.
           c = mix(c, mix(shade, blood, 0.35), F.crease * 0.50);
           // Stubble is a value shift, not a colour: a shaved jaw goes grey.
-          c = mix(c, col8(118, 110, 106), F.stub * 0.50);
+          c = mix(c, col8(122, 114, 110), F.stub * 0.34);
 
           // Lips are a shift in hue and a drop in value, not a coat of paint:
           // 0.74 of a saturated pink is a clown, and this is a market town.

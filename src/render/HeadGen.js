@@ -66,13 +66,6 @@ const bump = (x, w) => Math.exp(-(x * x) / (w * w));
 /* ── the atlas ───────────────────────────────────────────────────────────── */
 
 /**
- * A point in a face cell.
- *
- * `sx` runs −0.5…0.5 across the cell from the centre line of the face; `sy`
- * runs 0…1 from the crown to under the chin. The vertical flip is because a
- * texture's v grows upward and a face is drawn downward.
- */
-/**
  * Kept off the cell's own top and bottom edge.
  *
  * `sy` reaches 0 at the crown and 1 under the chin, which lands exactly on the
@@ -83,6 +76,14 @@ const bump = (x, w) => Math.exp(-(x * x) / (w * w));
  * reaches the side edges at all.
  */
 const FACE_INSET = 0.006;
+
+/**
+ * A point in a face cell.
+ *
+ * `sx` runs −0.5…0.5 across the cell from the centre line of the face; `sy`
+ * runs 0…1 from the crown to under the chin. The vertical flip is because a
+ * texture's v grows upward and a face is drawn downward.
+ */
 
 export function faceCellUV(cell, sx, sy) {
   const col = cell % FACE_COLS;
@@ -97,9 +98,9 @@ export function faceCellUV(cell, sx, sy) {
  * Rewrite a primitive's UVs into the atlas's bare-skin cell.
  *
  * Hands, ears and throats want plain flesh, and the swatch in that cell is
- * built periodic so a cylinder wrapped in it has no seam. `inset` keeps the
- * part off the cell's own border, where the derived normal and AO passes see
- * across into the neighbouring face.
+ * built periodic in the cell, so a cylinder wrapped in it has no seam. There is
+ * deliberately no inset here: an inset would break that periodicity, and the
+ * cells this one borders are all bare scalp at the edge anyway.
  */
 export function plainSkin(geom) {
   const uv = geom.attributes.uv;
@@ -250,7 +251,11 @@ export function buildHead(opts = {}) {
       const nw = 0.030 + 0.048 * nt * nt;
       const nose = front * (1 - sstep(nw * 0.50, nw * 1.20, ax))
         * sstep(-0.02, 0.16, nt) * (1 - sstep(0.84, 1.04, nt)) * guard;
-      z -= nose * D * (0.112 + noseP * 0.087);
+      // 1.0 to 1.6 cm of projection on a 19 cm skull. The first sculpt ran to
+      // 2.3 cm at the heaviest, which is a real measurement of a real nose and
+      // reads as a beak on a head forty pixels tall — the shadow it throws is
+      // wider than the nose is.
+      z -= nose * D * (0.100 + noseP * 0.070);
       // Wings, so the base flares instead of coming to a point.
       z -= front * bump(ax - nw * 0.95, 0.026) * bump(sy - (A.nose - 0.004), 0.024) * guard * D * 0.033;
 

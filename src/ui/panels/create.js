@@ -232,9 +232,26 @@ export class CreatePanel extends Panel {
   _buildSkillBlock() {
     this.skillListEl = el('div', { className: 'mm-create-list is-three' });
     this.skillScrollEl = el('div', { className: 'mm-create-scroll' }, this.skillListEl);
-    const block = el('div', { className: 'mm-create-block is-skills' },
-      el('div', { className: 'mm-create-grouphead', text: 'Available Skills' }),
-      this.skillScrollEl);
+    const head = el('div', { className: 'mm-create-grouphead', text: 'Available Skills' });
+    // MM6's box holds nine and needs no such line. Ours holds up to thirty, so
+    // the only honest thing is to say how to reach the rest — and to say it in
+    // the word for the device in the player's hand, which is `pointer.js`'s job
+    // and not this screen's guess.
+    tooltip.attach(head, () => {
+      const slot = this.slot;
+      const all = learnableSkills(slot?.classId ?? '');
+      return tipMarkup({
+        title: 'Available skills',
+        subtitle: `${all.length} a ${slot?.cls?.name ?? 'character'} may learn`,
+        lines: [
+          { k: 'Free picks', v: `${slot?.picks.length ?? 0} of ${FREE_SKILL_PICKS}` },
+          { k: 'Already given', v: (slot?.cls?.startingSkills ?? []).length },
+        ],
+        flavour: 'Two are yours to choose now. The rest are what this profession is permitted to learn at all — a trainer sells them later, and nothing else ever will.',
+        footer: `${pointerWords().drag} the list to reach the ones below the fold.`,
+      });
+    });
+    const block = el('div', { className: 'mm-create-block is-skills' }, head, this.skillScrollEl);
     this.skillScrollEl.addEventListener('scroll', () => this._paintScrollCue());
     return block;
   }

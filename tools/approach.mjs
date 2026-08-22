@@ -836,9 +836,37 @@ async function build() {
   });
 }
 
+/**
+ * A port nobody is on.
+ *
+ * `--strictPort` makes `vite preview` exit when the port is taken, and the
+ * spawn is `stdio: 'ignore'`, so the failure is silent and the browser then
+ * talks to whatever else is already listening there. That is not a hang or a
+ * crash — it is a run that completes, writes PNGs, and photographs somebody
+ * else's build. It happened here: an after-walk produced a frame identical to
+ * the before-walk's to seventeen pixels, because a preview left over from an
+ * earlier attempt was still serving a tree from before the change. Measuring
+ * the wrong world and not knowing it is the worst failure this tool has, so it
+ * finds its own port rather than being handed one.
+ */
+async function freePort(start) {
+  const net = await import('node:net');
+  for (let p = start; p < start + 200; p++) {
+    // eslint-disable-next-line no-await-in-loop
+    const ok = await new Promise((res) => {
+      const s2 = net.createServer();
+      s2.once('error', () => res(false));
+      s2.once('listening', () => s2.close(() => res(true)));
+      s2.listen(p, '127.0.0.1');
+    });
+    if (ok) return p;
+  }
+  throw new Error('no free port');
+}
+
 async function walk(opts) {
   const { chromium } = await import('playwright');
-  const PORT = opts.port;
+  const PORT = await freePort(opts.port);
   await build();
   const server = spawn('npx', ['vite', 'preview', '--outDir', OUT_DIR,
     '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'],

@@ -1227,6 +1227,13 @@ noted the value appears in several frames.
 | `#504946` | Condition gem, dead |
 | `#DE2831` / `#730810` / `#4A0408` | Apple |
 | `#0D1020` / `#080821` | Portrait interior ground |
+| `#0E1A14` | **Party-creation serpentine**, median — p05 `#040B09`, p95 `#2D3F32`, brightest veining `#6E8775` (§3.4a) |
+| `#A59A99` | Party-creation marble rib — p05 `#998E8B`, p95 `#B2ACAC` |
+| `#877B79` | Party-creation header-block field, one stop darker than the ribs |
+| `#6A605D` | Party-creation name-plate interior, flat |
+| `#6590DC` → `#BDC7D4` | Party-creation sky plaque, blue at the top row to cloud at the foot |
+| `#E8973B` / `#A06E2B` / `#582E11` | Party-creation torch flame — core, body, root |
+| `#675537` / `#E4DAA9` / `#F5F5D5` | Party-creation OK oval — body, highlight, peak |
 
 ### 4.5 Automap
 
@@ -1255,6 +1262,9 @@ noted the value appears in several frames.
 | Available skill points | `#00FE00` |
 | Hovered skill row (name, rank and number together) | `#FF0000` |
 | Main-menu options | `#FFDF94` / `#FFD773` |
+| Party-creation group headings (`SKILLS`, `CLASS`, `Available Skills`, `Bonus Pts`) | `#C8B87F` — a **dull brass**, not `#FFFF9C`; see §3.4a for the two measurements |
+| Party creation: the class in force, an available skill taken, an unfilled skill slot | `#00FFFF` |
+| Party creation: the arrowheads flanking the selected statistic | `#C4A272` |
 | Quest-book body | `#000000` |
 | Text shadow, everywhere | `#000000` |
 | Rest-screen selected entry fill | `#16301E` |
