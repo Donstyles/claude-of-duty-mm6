@@ -714,27 +714,47 @@ export class HUD {
       g.restore();
     }
 
-    const map = this.ui?.mapData?.();
+    // Underground, the arch shows the floor the party is standing on.
+    //
+    // It used to show the surface. `UISystem.mapData()` surveys the terrain
+    // heightmap around the player's world position, and a dungeon does not
+    // move the player out of the world — so every one of the fifty-five
+    // dungeons in the catalogue was crawled with a sidebar drawing grass,
+    // rust-brown roads, salmon-roofed cottages and the town's own fence, four
+    // storeys of masonry above the party's head. It is on screen in
+    // `shots/phone/dungeon-{corridor,room,boss,cave,vessel}.png`, and it is the
+    // one element of the sidebar a player navigates by.
+    //
+    // The full-screen Maps page has drawn the floor plan correctly all along
+    // (`map.js` `_drawDungeon`, "Surveyed by torchlight"), off
+    // `dungeon.built.get(current).grid` — so this is the same source, at the
+    // arch's own scale, and the two can no longer disagree about where the
+    // party is.
+    const dungeon = this.ui?.ctx?.get?.('dungeon');
+    const built = dungeon?.current ? dungeon.built?.get?.(dungeon.current) : null;
+
+    const map = built?.grid ? null : this.ui?.mapData?.();
+    if (built?.grid) {
+      const cx = W / 2;
+      const cy = H * 0.52;
+      // Rock to the edge of the opening, not the surface map's organic blob:
+      // underground there is no sky to see past the floor plan, and the whole
+      // window is unlit stone until a corridor is cut through it. The painted
+      // sky the reference keeps indoors is in the frame's spandrels, outside
+      // this opening — `UITextures.archFrame` paints it and it is still there.
+      g.fillStyle = '#080000';
+      g.fillRect(0, 0, W, H);
+      this._drawDungeonFloor(g, W, H, cx, cy, built);
+      this._drawPartyArrow(g, W, cx, cy, this._yaw);
+      g.restore();
+      return;
+    }
     if (map) {
       // Organic silhouette: a wobbling radial blob with notches at the bottom.
       const cx = W / 2;
       const cy = H * 0.52;
-      const blob = new Path2D();
-      const steps = 64;
-      for (let i = 0; i <= steps; i++) {
-        const a = (i / steps) * Math.PI * 2 - Math.PI / 2;
-        const bulge = 1 + 0.11 * Math.sin(a * 2) + 0.06 * Math.sin(a * 5 + 1.2);
-        const notch = a > 0.3 && a < Math.PI - 0.3 ? 1 - 0.15 * Math.abs(Math.sin(a * 6)) : 1;
-        const rx = W * 0.44 * bulge * notch;
-        const ry = H * 0.43 * bulge * notch;
-        const px = cx + Math.cos(a) * rx;
-        const py = cy + Math.sin(a) * ry;
-        if (i === 0) blob.moveTo(px, py); else blob.lineTo(px, py);
-      }
-      blob.closePath();
-
       g.save();
-      g.clip(blob);
+      g.clip(this._mapBlob(W, H, cx, cy));
       g.fillStyle = '#080000';
       g.fillRect(0, 0, W, H);
 
@@ -793,38 +813,134 @@ export class HUD {
         }
       }
 
-      // The town fence: a long dashed light-grey line.
-      g.save();
-      g.setLineDash([px * 0.8, px * 0.9]);
-      g.strokeStyle = '#E7DFD6';
-      g.lineWidth = Math.max(1, px * 0.25);
-      g.beginPath();
-      g.moveTo(cx - W * 0.5, cy + H * 0.18);
-      g.lineTo(cx + W * 0.5, cy + H * 0.18);
-      g.stroke();
-      g.restore();
+      // No "town fence" here. There was one: a dashed light-grey line drawn
+      // straight across the map at cy + H * 0.18. It was the only thing on this
+      // canvas anchored to the screen rather than to the world — roads and pins
+      // all go through (p.x - party.x) * px — so it sat at the same row whether
+      // the party stood in Millhaven, on the Saltmarch shore or out at the
+      // standing stones, and it painted over ground the party had never
+      // surveyed. mapData() carries no fence, so there was nothing true to draw
+      // and it is drawn no longer.
       g.restore();
 
-      // Party marker: a plain white arrow with a black outline, at the centre,
-      // rotating with facing.
-      g.save();
-      g.translate(cx, cy);
-      g.rotate(-(party.yaw ?? 0));
-      const s = W * 0.032;
-      g.beginPath();
-      g.moveTo(0, -s * 1.5);
-      g.lineTo(s, s * 1.1);
-      g.lineTo(0, s * 0.5);
-      g.lineTo(-s, s * 1.1);
-      g.closePath();
-      g.fillStyle = '#FFFFFF';
-      g.fill();
-      g.lineWidth = Math.max(1, s * 0.28);
-      g.strokeStyle = '#000000';
-      g.stroke();
-      g.restore();
+      this._drawPartyArrow(g, W, cx, cy, party.yaw ?? 0);
     }
     g.restore();
+  }
+
+  /**
+   * The map bitmap's silhouette: a wobbling radial blob with notches along its
+   * bottom edge, which is what REFERENCE §3.2 measures MM6's own clip to be —
+   * "an irregular organic silhouette that follows the arch, bulges at the
+   * shoulders and has 2–3 semicircular notches along its bottom edge".
+   *
+   * Lifted out of `_drawMap` when the dungeon floor plan arrived, so that both
+   * kinds of map are cut to exactly the same shape rather than to two copies
+   * of it that can drift apart.
+   */
+  _mapBlob(W, H, cx, cy) {
+    const blob = new Path2D();
+    const steps = 64;
+    for (let i = 0; i <= steps; i++) {
+      const a = (i / steps) * Math.PI * 2 - Math.PI / 2;
+      const bulge = 1 + 0.11 * Math.sin(a * 2) + 0.06 * Math.sin(a * 5 + 1.2);
+      const notch = a > 0.3 && a < Math.PI - 0.3 ? 1 - 0.15 * Math.abs(Math.sin(a * 6)) : 1;
+      const rx = W * 0.44 * bulge * notch;
+      const ry = H * 0.43 * bulge * notch;
+      const px = cx + Math.cos(a) * rx;
+      const py = cy + Math.sin(a) * ry;
+      if (i === 0) blob.moveTo(px, py); else blob.lineTo(px, py);
+    }
+    blob.closePath();
+    return blob;
+  }
+
+  /**
+   * Party marker: a plain white arrow with a black outline, at the centre of
+   * the map, rotating with facing (REFERENCE §3.2). One copy, because the
+   * surface map and the dungeon floor both need it and a second copy is how
+   * the two start pointing different ways.
+   */
+  _drawPartyArrow(g, W, cx, cy, yaw) {
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(-(yaw ?? 0));
+    const s = W * 0.032;
+    g.beginPath();
+    g.moveTo(0, -s * 1.5);
+    g.lineTo(s, s * 1.1);
+    g.lineTo(0, s * 0.5);
+    g.lineTo(-s, s * 1.1);
+    g.closePath();
+    g.fillStyle = '#FFFFFF';
+    g.fill();
+    g.lineWidth = Math.max(1, s * 0.28);
+    g.strokeStyle = '#000000';
+    g.stroke();
+    g.restore();
+  }
+
+  /**
+   * The floor the party is standing on, drawn the way the Maps page draws it.
+   *
+   * `built.grid[j][i]` is truthy where the builder cut floor; the dungeon is
+   * laid out on four-metre cells centred on the world origin, which is the
+   * transform `map.js` `_localFrame` uses and the one used here. A wall is the
+   * face between floor and rock, stroked on the floor side so a corridor keeps
+   * its width — again the Maps page's own rule, so the two drawings of one
+   * dungeon agree.
+   *
+   * Nothing is remembered yet: `map.js` gates each cell on `_walked`, and the
+   * sidebar has no walked set of its own, so the whole plan is drawn. That is
+   * the same claim the surface map already makes (CRITIQUE: "discovery is not
+   * a thing yet; it only looks like one") and it is better than the surface.
+   */
+  _drawDungeonFloor(g, W, H, cx, cy, built) {
+    const CELL = 4;
+    const size = built.size ?? (built.grid?.length ?? 0);
+    if (!size) return;
+    const half = (size * CELL) / 2;
+    const pos = this.ui?.ctx?.get?.('player')?.position ?? this.ui?.ctx?.camera?.position;
+    const px = pos?.x ?? 0;
+    const pz = pos?.z ?? 0;
+
+    // Span, in metres, that the arch shows. The surface map shows 46 cells of
+    // its own grid at zoom 1; a dungeon is small, so the arch shows 120 m of
+    // it — the figure `map.js` picks for the same reason.
+    const span = 120 / this._mapZoom;
+    const s = Math.min(W, H) / span;
+    const cellPx = CELL * s;
+
+    for (let j = 0; j < size; j++) {
+      const row = built.grid[j];
+      if (!row) continue;
+      for (let i = 0; i < size; i++) {
+        if (!row[i]) continue;
+        const wx = i * CELL - half + CELL / 2;
+        const wz = j * CELL - half + CELL / 2;
+        const x = cx + (wx - px) * s;
+        const z = cy + (wz - pz) * s;
+        if (x < -cellPx || z < -cellPx || x > W + cellPx || z > H + cellPx) continue;
+        g.fillStyle = '#4A423A';
+        g.fillRect(x - cellPx / 2, z - cellPx / 2, cellPx + 1, cellPx + 1);
+        g.strokeStyle = '#7A736B';
+        g.lineWidth = Math.max(1, cellPx * 0.14);
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ni = i + di;
+          const nj = j + dj;
+          if (ni >= 0 && nj >= 0 && ni < size && nj < size && built.grid[nj]?.[ni]) continue;
+          g.beginPath();
+          if (di) {
+            g.moveTo(x + (di * cellPx) / 2, z - cellPx / 2);
+            g.lineTo(x + (di * cellPx) / 2, z + cellPx / 2);
+          } else {
+            g.moveTo(x - cellPx / 2, z + (dj * cellPx) / 2);
+            g.lineTo(x + cellPx / 2, z + (dj * cellPx) / 2);
+          }
+          g.stroke();
+        }
+      }
+    }
   }
 
   _updateFloats(dt, ctx) {

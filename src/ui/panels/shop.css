@@ -49,6 +49,36 @@
 
 .mm-shop-goods { position: absolute; inset: 0; }
 
+/* Pinned, or the wall is not a wall.
+ *
+ * `.has-item-plate` in `ui.panels.css` turns every sprite drawn from a painted
+ * plate `position: relative`, so `layoutWall`'s hand-placed `left`/`top`
+ * stopped being coordinates and became OFFSETS from the normal flow — seven
+ * block-level sprites stacking down the page, each one shifted a little from
+ * where the last one ended.
+ *
+ * `inventory.css` documents this exact failure and pins the backpack's sprites
+ * for it ("A sprite drawn from a generated plate turns `relative`, which would
+ * let the pack's hand-placed left/top offsets stack the whole backpack into a
+ * diagonal"). The shop wall has the same sprites and the same hand placement
+ * and was never pinned.
+ *
+ * Measured on a 932x430 phone at `shop-wall`, against a panel 315.3 px tall:
+ *
+ *   item  1   y   64.4 –  136.0
+ *   item  2   y  112.5 –  220.0
+ *   item  3   y  236.8 –  344.3   past the foot of the panel
+ *   item  4   y  315.7 –  459.0   entirely below it
+ *   item  5   y  456.8 –  635.9   entirely below it
+ *   item  6   y  635.9 –  815.1   entirely below it
+ *   item  7   y  815.3 –  958.7   entirely below it
+ *
+ * Five of seven pieces of stock were off the screen, in every shop in the
+ * game. The inline styles were right the whole time — `top: calc(var(--u) *
+ * 29.97)` and so on, all seven inside the band — and nothing in `shop.js`
+ * needed changing. */
+.mm-panel[data-panel='shop'] .mm-shop-item { position: absolute; }
+
 /* Goods are hung, not slotted: free sprites at object size, upright, each one
    throwing a shadow back onto the wall behind it. */
 /* The goods are lit, not just outlined.

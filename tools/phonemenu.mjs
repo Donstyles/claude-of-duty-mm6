@@ -51,6 +51,7 @@ import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import net from 'node:net';
+import { auditInPage } from './_inkaudit.mjs';
 
 const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -156,163 +157,12 @@ async function takeLock() {
 }
 
 /**
- * Runs in the page. Everything about the audit is here so it can be reasoned
- * about as one piece rather than split across the process boundary.
- *
- * ── what is measured, and the two things that are NOT ─────────────────────
- *
- * Every test below is on the INK — the client rects of the element's own text
- * nodes, taken through a `Range` — and never on the element's box. Both of the
- * obvious box-based tests were tried first and both reported this interface
- * broken in places it is not:
- *
- *   · `scrollWidth > clientWidth` flagged all five actions on every venue
- *     sidebar, `Buy` as "167 px of text in a 24 px box". It is not text. Under
- *     a coarse pointer `ui.panels.css` grows each action's touch target with an
- *     `::after` reaching 160u to either side, and an absolutely positioned
- *     pseudo-element is part of its parent's scrollable overflow. The measure
- *     was reading the deliberate hit box as an overflowing word.
- *   · The element's bounding box flagged `2 in hand` — a *centred* caption in a
- *     full-width box on the quest book's left page — as 34 px under the island.
- *     The box is; the words are nowhere near it.
- *
- * A text rect cannot be either of those things. It is also calibration-free in
- * STYLE.md §0's sense: a containment between two rectangles in one rendered
- * frame, with no absolute measurement anywhere in it.
+ * `auditInPage` — the ink measurement — now lives in `tools/_inkaudit.mjs`, so
+ * that the 88-viewpoint capture in `tools/uishoot.mjs` measures the same thing
+ * this file does rather than growing a second, subtly different copy. Its
+ * header carries the three false positives this measurement has already had to
+ * be defended against; read it before changing anything here.
  */
-/* eslint-disable */
-function auditInPage() {
-  const V = { w: innerWidth, h: innerHeight };
-  const num = (n) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n)) || 0;
-  const safe = { t: num('--safe-t'), r: num('--safe-r'), b: num('--safe-b'), l: num('--safe-l') };
-  const R = (n) => {
-    const b = n.getBoundingClientRect();
-    return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height };
-  };
-  const over = (a, b) => Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l))
-    * Math.max(0, Math.min(a.b, b.b) - Math.max(a.t, b.t));
-
-  /** The union of the client rects of an element's own text — its ink. */
-  const inkOf = (n) => {
-    const rng = document.createRange();
-    let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity, any = false;
-    for (const c of n.childNodes) {
-      if (c.nodeType !== 3 || !c.data.trim()) continue;
-      rng.selectNodeContents(c);
-      for (const q of rng.getClientRects()) {
-        if (q.width < 0.5 || q.height < 0.5) continue;
-        any = true;
-        l = Math.min(l, q.left); t = Math.min(t, q.top);
-        r = Math.max(r, q.right); b = Math.max(b, q.bottom);
-      }
-    }
-    return any ? { l, t, r, b, w: r - l, h: b - t } : null;
-  };
-
-  /** The element's own content box — what its text is supposed to sit inside. */
-  const contentBox = (n, cs) => {
-    const q = n.getBoundingClientRect();
-    const px = (v) => parseFloat(v) || 0;
-    return {
-      l: q.left + px(cs.borderLeftWidth) + px(cs.paddingLeft),
-      r: q.right - px(cs.borderRightWidth) - px(cs.paddingRight),
-      t: q.top + px(cs.borderTopWidth) + px(cs.paddingTop),
-      b: q.bottom - px(cs.borderBottomWidth) - px(cs.paddingBottom),
-    };
-  };
-
-  const roots = [...document.querySelectorAll('.mm-panel.is-open, .mm-panel-side.is-open')];
-
-  /* Painted above the panel layer (z-index 5), so they cover it wherever they
-   * cross it. The pillars are `pointer-events: none`, which is why an
-   * elementFromPoint test would report the panel as visible and miss this
-   * entirely — the geometry has to be compared directly. */
-  const chrome = [];
-  for (const n of document.querySelectorAll('.mm-column')) chrome.push({ what: `pillar.${n.className.split(' ').pop()}`, rect: R(n), z: 7 });
-  for (const n of document.querySelectorAll('#tc-root .tc-btn')) {
-    if (getComputedStyle(n).display === 'none') continue;
-    const root = document.getElementById('tc-root');
-    if (root && (root.classList.contains('is-hidden') || getComputedStyle(root).display === 'none')) continue;
-    chrome.push({ what: `touch[${n.dataset.action}]`, rect: R(n), z: 20 });
-  }
-
-  const out = [];
-  for (const root of roots) {
-    const pr = R(root);
-    const which = root.classList.contains('mm-panel-side') ? 'side' : 'body';
-
-    // Text-bearing: carries a non-empty text node of its own, so a wrapper is
-    // not counted for the words its children hold.
-    const nodes = [...root.querySelectorAll('*')].filter((n) => {
-      for (const c of n.childNodes) if (c.nodeType === 3 && c.data.trim()) return true;
-      return false;
-    });
-    const kept = [];
-    for (const n of nodes) {
-      const cs = getComputedStyle(n);
-      if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) continue;
-      const ink = inkOf(n);
-      if (!ink) continue;
-      kept.push({ n, ink, cs });
-    }
-
-    for (let i = 0; i < kept.length; i++) {
-      const { n, ink, cs } = kept[i];
-      const why = [];
-      // 1. The words do not fit the box they were given, and something clips
-      //    them. `text-overflow: ellipsis` is the same fault with a nicer edge:
-      //    the string still does not fit, so it still gets counted.
-      const cb = contentBox(n, cs);
-      if (ink.r > cb.r + 1 || ink.l < cb.l - 1) {
-        why.push(`text ${ink.w.toFixed(0)}px in a ${(cb.r - cb.l).toFixed(0)}px box`);
-      } else if (cs.textOverflow === 'ellipsis' && n.scrollWidth > n.clientWidth + 1) {
-        why.push(`truncated to fit: ${n.scrollWidth}px of text in ${n.clientWidth}px`);
-      }
-      // 2. The words cross the edge of the panel that is supposed to hold them.
-      //    Both panels are `overflow: hidden`/`clip`, so this IS the clip.
-      if (ink.r > pr.r + 1) why.push(`${(ink.r - pr.r).toFixed(0)}px past the panel's right edge`);
-      if (ink.l < pr.l - 1) why.push(`${(pr.l - ink.l).toFixed(0)}px past the panel's left edge`);
-      // 3. The words are outside the glass, or under the island.
-      if (ink.r > V.w - safe.r + 1) why.push(`${(ink.r - (V.w - safe.r)).toFixed(0)}px outside the safe right edge`);
-      if (ink.l < safe.l - 1) why.push(`${(safe.l - ink.l).toFixed(0)}px outside the safe left edge`);
-
-      const covered = [];
-      // 4. Chrome painted above the panel layer, drawn across the words.
-      for (const c of chrome) if (over(ink, c.rect) > 2) covered.push(c.what);
-      // 5. A later sibling inside the same panel, which paints over them.
-      for (let j = i + 1; j < kept.length; j++) {
-        const o = kept[j];
-        if (n.contains(o.n) || o.n.contains(n)) continue;
-        if (over(ink, o.ink) > 4) covered.push(`.${(o.n.className || o.n.tagName).toString().split(' ')[0]}`);
-      }
-
-      if (why.length || covered.length) {
-        out.push({
-          where: which,
-          cls: (n.className || n.tagName).toString().split(' ').slice(0, 2).join('.'),
-          text: (n.textContent || '').trim().slice(0, 46),
-          why, covered: [...new Set(covered)].slice(0, 3),
-        });
-      }
-    }
-  }
-
-  const side = document.querySelector('.mm-panel-side.is-open');
-  const body = document.querySelector('.mm-panel.is-open');
-  return {
-    safe, vw: V.w,
-    u: getComputedStyle(document.querySelector('.mm-ui')).getPropertyValue('--u').trim(),
-    bodyRight: body ? +(V.w - R(body).r).toFixed(1) : null,
-    sideRight: side ? +(V.w - R(side).r).toFixed(1) : null,
-    touchVisible: (() => {
-      const t = document.getElementById('tc-root');
-      if (!t) return null;
-      return !(t.classList.contains('is-hidden') || getComputedStyle(t).display === 'none');
-    })(),
-    findings: out,
-  };
-}
-/* eslint-enable */
 
 /**
  * The compass tape, swept through a full turn.

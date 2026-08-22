@@ -279,8 +279,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* A flex item's min-width is auto, which floors it at its own content width —
+     so without this the ellipsis above can never engage and a long roster shoves
+     the place-and-date off its right edge instead of being cut. */
+  min-width: 0;
 }
-.mm-panel[data-panel='menu'] .mm-sv-place { font-size: calc(var(--u) * 10); font-style: italic; color: #e0d2ac; white-space: nowrap; }
+/* The place and date are short, fixed and the row's anchor: they are never the
+   thing that gives way. */
+.mm-panel[data-panel='menu'] .mm-sv-place { font-size: calc(var(--u) * 10); font-style: italic; color: #e0d2ac; white-space: nowrap; flex: none; }
 
 .mm-panel[data-panel='menu'] .mm-sv-del {
   width: calc(var(--u) * 20);
@@ -292,10 +298,20 @@
 
 /* ── options ──────────────────────────────────────────────────────────────── */
 
+/* Capped and centred, which is STYLE.md §13's own remedy for an ultra-wide
+ * window and the answer `spellbook.css` already gives — "it caps the page at
+ * 460u and centres, so the extra width becomes binding cloth".
+ *
+ * Measured at 932x430 the page is 624 CSS px, so a row's label column ran
+ * 438 px against the ~250 px it is drawn for at 4:3 — the gloss ended and the
+ * control began three inches later, with the cavern showing between them. The
+ * cap is the same 460u the spellbook uses; the surplus goes back to the
+ * painted vault, which is the best thing on the screen. */
 .mm-panel[data-panel='menu'] .mm-opt-list {
   flex: 1;
   min-height: 0;
   width: 100%;
+  max-width: calc(var(--u) * 460);
   overflow-y: auto;
   padding-right: calc(var(--u) * 4);
 }
@@ -321,13 +337,40 @@
  * tier plate below the fold with nothing on screen saying so. */
 .mm-panel[data-panel='menu'] .mm-opt-row {
   display: grid;
-  grid-template-columns: 1fr calc(var(--u) * 140) calc(var(--u) * 40);
+  /* The control column was 140u and the four difficulty plates did not fit in
+   * it. Measured by `tools/_inkaudit.mjs`'s ruler on a 932x430 phone:
+   * `Merciless` wanted 41 px of content inside a 34 px box, `Gentle` 29 in 24,
+   * `Medium` 38 in 36, `Hard` 23 in 21 — four of the nine choice plates with
+   * their word standing on the stone bevel and over it. Twenty units to the
+   * control column and four to the reading beside it is 190 px of plate
+   * against the 157 the widest row needs, and the label column keeps 204 px,
+   * which is more than its longest gloss. */
+  grid-template-columns: 1fr calc(var(--u) * 160) calc(var(--u) * 44);
   align-items: center;
   gap: calc(var(--u) * 8);
   padding: 0 calc(var(--u) * 6);
   border-bottom: 1px solid rgba(120, 104, 62, 0.22);
 }
-.mm-panel[data-panel='menu'] .mm-opt-label { min-width: 0; }
+/* The row's height is the label stack's height, and the label stack was being
+ * set by a strut nobody declared.
+ *
+ * `.mm-opt-label` is a block with no `line-height` of its own, so it inherited
+ * `1.18` at the interface's root `font-size: 14u` — a 16.5u strut. The name
+ * inside it is 11u on 1.1, which is 12.1u, so the first line box came out
+ * 16.5u tall and not 12.1u. Measured on a 932x430 phone: a row is **25.5u**,
+ * where the arithmetic over `.mm-opt-row` predicts 21.1u, and ten rows are
+ * 255u in a 241.3u list. The tenth row — `Apply the tier`, which is where the
+ * graphics tier in force is stated — was **bisected by the foot row**, half a
+ * plate of it visible and no scrollbar to say why.
+ *
+ * Declaring the block's own line-height takes the strut down to the name it
+ * actually holds: 12.1 + 7.9 (the gloss) + 1.1 (the rule) = 21.1u a row, 211u
+ * for ten, and thirty units of air left over. Not one glyph moves. */
+.mm-panel[data-panel='menu'] .mm-opt-label {
+  min-width: 0;
+  font-size: calc(var(--u) * 11);
+  line-height: 1.1;
+}
 .mm-panel[data-panel='menu'] .mm-opt-label span { font-size: calc(var(--u) * 11); line-height: 1.1; color: #ffd773; }
 .mm-panel[data-panel='menu'] .mm-opt-label small {
   display: block;
@@ -340,7 +383,13 @@
   text-overflow: ellipsis;
 }
 .mm-panel[data-panel='menu'] .mm-opt-value { font-size: calc(var(--u) * 11); text-align: right; color: #fff2c0; }
-.mm-panel[data-panel='menu'] .mm-opt-wide { grid-column: 2 / span 2; display: flex; gap: calc(var(--u) * 4); }
+.mm-panel[data-panel='menu'] .mm-opt-wide {
+  grid-column: 2 / span 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: calc(var(--u) * 4);
+}
 
 /* A slider MM6 never had, built out of the parts it did: a recessed channel
    and a brass fitting sliding in it. */
@@ -374,9 +423,15 @@
 
 .mm-panel[data-panel='menu'] .mm-opt-toggle,
 .mm-panel[data-panel='menu'] .mm-opt-choice {
-  min-width: calc(var(--u) * 40);
+  min-width: calc(var(--u) * 34);
   height: calc(var(--u) * 16);
-  padding: 0 calc(var(--u) * 8);
+  /* 5u a side, not 8u. A plate is as wide as its word plus its margin, and
+   * four of these have to share one row; see the arithmetic over
+   * `.mm-opt-row`. `nowrap` so a squeezed plate never breaks `By steps` in
+   * half — if a word ever cannot fit, the row wraps and the list has the
+   * height for it. */
+  padding: 0 calc(var(--u) * 5);
+  white-space: nowrap;
   display: grid;
   place-items: center;
   font-size: calc(var(--u) * 11);

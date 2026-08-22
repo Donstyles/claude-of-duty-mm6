@@ -26,10 +26,16 @@
 }
 
 .mm-ui .mm-map-titles { text-align: center; }
+/* A screen's title is `--ink`, not gold. STYLE.md §2 gives gold exactly one
+   job — the live control, hover and the option you are inside — and §3a says
+   so again for a title that carries a name. The character sheet's title bar
+   already obeys it (`character.css` leaves `.mm-sheet-title` on `--ink`), and
+   two screens whose titles are two different colours is precisely the class of
+   internal inconsistency STYLE.md was written to stop. */
 .mm-ui .mm-mapview-title {
   font-size: calc(var(--u) * 17);
   font-style: italic;
-  color: var(--gold);
+  color: var(--ink);
   line-height: 1;
 }
 .mm-ui .mm-map-sub {
@@ -94,6 +100,17 @@
   width: calc(100% - var(--u) * 6);
   height: calc(100% - var(--u) * 6);
   cursor: grab;
+  /* Stated on the element that takes the drag, not left to `body`.
+   *
+   * `map.js` now pans on pointer events, and a browser that thinks a touch is
+   * a scroll takes the gesture over and stops sending `pointermove` — which
+   * would put the chart straight back where it was, unpannable on the one
+   * device the game is played on. `html, body` already declare `none` and the
+   * used value is the intersection down the ancestor chain, so this changes
+   * nothing today; it is here so that a future scroll container between this
+   * canvas and the body cannot silently re-enable panning. Nothing painted
+   * moves. */
+  touch-action: none;
 }
 .mm-ui .mm-map-full:active { cursor: grabbing; }
 .mm-ui .mm-map-full.is-noting { cursor: crosshair; }
@@ -147,4 +164,6 @@
 .mm-ui .mm-map-key i.is-town { background: linear-gradient(180deg, #ce8e63 0 45%, #945531 45%); }
 .mm-ui .mm-map-key i.is-unknown { background: #7a756a; }
 .mm-ui .mm-map-key i.is-here { background: #fff; clip-path: polygon(50% 0, 100% 100%, 50% 72%, 0 100%); }
-.mm-ui .mm-map-coord { color: var(--gold); white-space: nowrap; font-style: italic; }
+/* The reading in the corner is data — where the party is, or what the cursor
+   is over — so it takes the ink colour and not the live-control colour (§2). */
+.mm-ui .mm-map-coord { color: var(--ink); white-space: nowrap; font-style: italic; }

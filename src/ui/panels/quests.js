@@ -1,6 +1,6 @@
 import './quests.css';
 import { Panel } from './base.js';
-import { el, setChildren, nu, fmt, ellipsis, tooltip, tipMarkup, goldOval, attribute } from '../widgets.js';
+import { el, setChildren, nu, fmt, ellipsis, tooltip, tipMarkup, goldOval, attribute, curly } from '../widgets.js';
 import { icon } from '../Icons.js';
 import { QUESTS } from '../../game/data/Quests.js';
 import { obeliskInscription } from '../../game/data/Regions.js';
@@ -124,6 +124,30 @@ export class QuestPanel extends Panel {
       binding,
       el('div', { className: 'mm-quest-tabs' }, ...this.tabEls),
       exit));
+  }
+
+  /**
+   * The book opens on Current Quests, as MM6's does.
+   *
+   * It used to open on whichever tab was last read, and a panel that remembers
+   * a tab across openings is a panel whose screenshot is not reproducible: in
+   * the 88-shot capture `ui-quests-awards` runs first, so `ui-quests` — the
+   * canonical picture of the quest book, and the screen `tools/phonemenu.mjs`
+   * opens as "the quest book" — came out showing the AWARDS page. Every
+   * measurement anybody has ever taken of "the quest book" was taken of a
+   * different page than the name says.
+   *
+   * The player gets the same thing MM6 gives them: the book opens where the
+   * work is.
+   */
+  onOpen(opts = {}) {
+    // `opts.tab` is how a caller that means a particular page says so — the
+    // three sub-tab capture shots, which set the filter and then open. Without
+    // it this reset ran after they had chosen and photographed all three on
+    // the Current page, which is the same defect in the other direction.
+    const want = TABS.some((t) => t.id === opts.tab) ? opts.tab : 'active';
+    this.filter = want;
+    this.selected = { active: 0, completed: 0, notes: 0, awards: 0 };
   }
 
   onKey(e) {
@@ -300,18 +324,26 @@ export class QuestPanel extends Panel {
     // prose. The split is by weight of text rather than by group count, or one
     // long category leaves a page and a half of empty parchment.
     const all = [...groups];
-    const weight = ([, items]) => items.reduce((a, n) => a + n.text.length + 60, 0);
-    const total = all.reduce((a, g) => a + weight(g), 0);
-    let carried = 0;
-    let half = all.length;
-    for (let i = 0; i < all.length; i++) {
-      carried += weight(all[i]);
-      if (carried >= total / 2) { half = i + 1; break; }
+    const note = (n) => el('p', { className: 'mm-qb-note', text: n.text });
+    const head = (g) => el('div', { className: 'mm-qb-note-head', text: g });
+
+    // Everything the party has learned so far can easily be one category, and
+    // splitting whole groups cannot split one of them: the book then wrote six
+    // notes down the left leaf and left the right one blank parchment. So when
+    // there is a single group the notes themselves are spread, and the heading
+    // stays on the left where the reading starts — a category named twice reads
+    // as two categories.
+    if (all.length === 1) {
+      const [group, items] = all[0];
+      const cut = spreadPoint(items.map((n) => n.text.length + 60));
+      setChildren(this.indexEl, head(group), ...items.slice(0, cut).map(note));
+      setChildren(this.entryEl, ...items.slice(cut).map(note));
+      return;
     }
-    const render = (pairs) => pairs.flatMap(([group, items]) => [
-      el('div', { className: 'mm-qb-note-head', text: group }),
-      ...items.map((n) => el('p', { className: 'mm-qb-note', text: n.text })),
-    ]);
+
+    const weight = ([, items]) => items.reduce((a, n) => a + n.text.length + 60, 0);
+    const half = spreadPoint(all.map(weight));
+    const render = (pairs) => pairs.flatMap(([group, items]) => [head(group), ...items.map(note)]);
     setChildren(this.indexEl, ...render(all.slice(0, half)));
     setChildren(this.entryEl, ...render(all.slice(half)));
   }
@@ -343,16 +375,13 @@ export class QuestPanel extends Panel {
     }
     // Split by weight of text rather than by count, exactly as the autonotes
     // do, or one long citation leaves a page and a half of empty parchment.
-    const total = awards.reduce((a, w) => a + w.text.length + 60, 0);
-    let carried = 0;
-    let half = awards.length;
-    for (let i = 0; i < awards.length; i++) {
-      carried += awards[i].text.length + 60;
-      if (carried >= total / 2) { half = i + 1; break; }
-    }
+    const half = spreadPoint(awards.map((a) => a.text.length + 60));
+    // Through `curly()`: STYLE.md §7 lets a data file hold a typewriter
+    // apostrophe and does not let one reach the screen, and `The Carter's
+    // Tally` is an award title that does.
     const render = (list) => list.map((a) => el('div', { className: 'mm-qb-award' },
       el('i', { html: icon('star', { size: 11 }) }),
-      el('span', { text: a.text })));
+      el('span', { text: curly(a.text) })));
     setChildren(this.indexEl, ...render(awards.slice(0, half)));
     setChildren(this.entryEl, ...render(awards.slice(half)));
   }
@@ -558,9 +587,10 @@ export class QuestPanel extends Panel {
       description,
       apply: () => {
         this._playForShot();
-        this.filter = filter;
-        this.selected[filter] = 0;
-        this.ui.openPanel('quests');
+        // Through `openPanel`'s options, not by writing the field and hoping
+        // the panel does not reset it — which is exactly what `onOpen` now
+        // does, deliberately, so that a player's book always opens on Current.
+        this.ui.openPanel('quests', { tab: filter });
       },
     });
     shot('ui-quests-done', 'completed', 'The quest book on its Completed tab: finished work, grouped by '
@@ -595,6 +625,39 @@ export class QuestPanel extends Panel {
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Where to break a run of items across the book's two leaves.
+ *
+ * Returns the index of the first item that belongs on the right-hand page.
+ *
+ * The old rule walked the list adding weight and broke at the first item that
+ * carried the running total past half, which fails on exactly the shape the
+ * autonotes usually have: a short group followed by a long one. `RUMOURS` (one
+ * note) then `THE MAIN ROAD` (five) never reaches half until the very last
+ * group, so the break landed at `all.length`, every note went onto the left
+ * leaf, the prose overran the page and clipped mid-word — the phone capture
+ * caught it cutting `cut.` in half — and the entire right-hand leaf sat blank
+ * beside it.
+ *
+ * So: choose the break that leaves the two leaves closest in weight, and never
+ * return 0 or `n` while there is more than one item to spread. A book with one
+ * item has nothing to spread and keeps it on the left.
+ */
+function spreadPoint(weights) {
+  const n = weights.length;
+  if (n < 2) return n;
+  const total = weights.reduce((a, w) => a + w, 0);
+  let carried = 0;
+  let best = 1;
+  let bestGap = Infinity;
+  for (let i = 0; i < n - 1; i++) {
+    carried += weights[i];
+    const gap = Math.abs(total - 2 * carried);
+    if (gap < bestGap) { bestGap = gap; best = i + 1; }
+  }
+  return best;
+}
 
 const KIND_LABEL = {
   main: 'The main road', side: 'Errand', guild: 'Guild business',

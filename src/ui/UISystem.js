@@ -1969,6 +1969,28 @@ export class UISystem extends System {
         populate();
         this.hud?.setRegion('Millhaven Downs');
         this.selectMember(0);
+
+        // Stand somewhere. This shot registered no camera at all, so it was
+        // photographed from wherever the previous viewpoint left the party —
+        // which in the 88-shot run is one metre from a plank door, inside a
+        // town wall. `shots/phone/ui-hud.png` is 80% brick at a texel scale
+        // where one course fills 200 px, with a low-poly townsman standing in
+        // the middle of it. That is the shot whose entire job is to show the
+        // frame, and it is the first thing a reviewer opens.
+        //
+        // The town square's own camera is already registered and already
+        // framed; borrowing it costs nothing and cannot drift, because there
+        // is only one of it. If the town has not registered (a tree with no
+        // world systems) the shot behaves exactly as it did before.
+        const square = cap.shots?.get?.('town-square');
+        if (square?.camera) window.__CAPTURE?.setCamera?.(square.camera);
+        // And its hour. Without one the shot inherits whatever the previous
+        // viewpoint left on the clock, so the picture of the interface came
+        // out at 9:32 pm with the square in the dark — the chrome is the
+        // subject and a night scene behind it is the one lighting that hides
+        // it. Mid-morning is what `town-square` sets, and is MM6's own.
+        window.__CAPTURE?.setTimeOfDay?.(10);
+
         // Everything the game has to say goes through the one message strip.
         // Through `seeLine()`, not around it. STYLE.md §5 is why the strip
         // reads "You see a tree." and not "tree" — and this line, which exists
@@ -2024,8 +2046,15 @@ export class UISystem extends System {
     panelShot('ui-menu', 'menu', 'The game menu over the viewport: raised buttons on stone, the sidebar untouched.');
     // The skills page is a separate photograph from the stats page because the
     // two are different screens to a reviewer even though they share a panel.
-    panelShot('ui-skills', 'character', 'The skills page: four categories across two columns, mastery in gold, the '
-      + 'point cost of the next level, and untaught skills listed rather than hidden.',
+    // The caption said "the point cost of the next level, and untaught skills
+    // listed rather than hidden", and the page does neither on purpose:
+    // `_skillIds` reads the held map because the sheet is a record and not a
+    // menu, `None` stands where a category is empty exactly as Screenshot (22)
+    // prints it, and the price of a rank belongs in the strip. A caption that
+    // describes a screen the code deliberately does not draw sends the next
+    // reviewer looking for a bug that is not there.
+    panelShot('ui-skills', 'character', 'The skills page: four categories across two columns, the rank held in gold, '
+      + 'and “None” under a category this class has nothing in.',
     () => this.selectMember(0), { page: 'skills' });
     // Awards is the one screen in the character family nothing photographed.
     //

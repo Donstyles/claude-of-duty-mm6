@@ -336,8 +336,16 @@ export class RestPanel extends Panel {
       labelRow('Month', clock.month),
       labelRow('Year', String(clock.year)),
       labelRow('Weekday', clock.weekday),
-      labelRow('Season', clock.season, { tone: SEASON_TONE[clock.season] ?? '' }),
-      labelRow('Moon', clock.moon, { tone: 'mm-t-dim' }));
+      // No tone on either. STYLE.md §2 names this row by name — "Green is a
+      // *state*, never a *category*. `Safe` may be green; **`Spring` may
+      // not.**" — and the table it was keyed on spent four of the seven tokens
+      // on four seasons: `--up` (a state), `--gold` (the live control),
+      // `--gold-deep` (money) and `--azure` (a person's name). A season is a
+      // value like the day and the year beside it, and it reads as one.
+      // `--dim` is the LABEL colour, so putting it on the moon's value made
+      // the data quieter than the word naming it, which is §2 backwards.
+      labelRow('Season', clock.season),
+      labelRow('Moon', clock.moon));
   }
 
   _restButton(camp) {
@@ -398,7 +406,21 @@ export class RestPanel extends Panel {
     const verdict = camp.forbids ? 'Forbidden'
       : camp.foe ? 'Enemies near'
         : camp.safe ? 'Safe' : camp.inDungeon ? 'Underground' : 'Exposed';
-    const tone = camp.refuse ? 'mm-t-down' : camp.safe ? 'mm-t-up' : 'mm-t-gold';
+    // The colour describes the SPOT, not the transaction.
+    //
+    // It was `camp.refuse ? down : camp.safe ? up : gold`, and `refuse` is set
+    // by anything that stops a camp — an empty ration sack included. So a party
+    // out of food standing on safe ground read `The spot   Safe` in the
+    // blocking red, the word and the colour saying opposite things on one row.
+    // STYLE.md §8a is explicit that the blocker is stated in the numbers: the
+    // `Rations` row below already goes `--down` and already names it, so this
+    // row does not have to say it a second time in the wrong word.
+    //
+    // `--up` for a condition met, `--down` for one that blocks, and nothing at
+    // all for a spot that is merely open — gold is the live control and a
+    // verdict is not one (§2). The degree of "merely open" is on the
+    // interruption row and in the bar under it.
+    const tone = camp.forbids || camp.foe ? 'mm-t-down' : camp.safe ? 'mm-t-up' : '';
 
     // An empty channel is the honest picture of a safe camp; a stub of green
     // would read as "a little risk", which is a different statement.
@@ -441,7 +463,6 @@ export class RestPanel extends Panel {
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
-const SEASON_TONE = { Spring: 'mm-t-up', Summer: 'mm-t-gold', Autumn: 'mm-t-golddeep', Winter: 'mm-t-azure' };
 
 /**
  * The calendar's season, to the plate painted for it. A table rather than a

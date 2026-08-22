@@ -88,6 +88,18 @@
   bottom: auto;
   left: calc(var(--u) * 40);
   right: calc(var(--u) * 40);
+  /* A notice is as wide as what is written on it.
+   *
+   * `left`/`right` alone made the slab as wide as the window: on a 932x430
+   * phone the viewport is 860 native pixels across, so a four-line notice sat
+   * on a 780u granite plate with two thirds of it bare — and the whole point
+   * of this view is that the board "sizes itself to what it has to say".
+   * `max-width` with auto margins centres an absolutely positioned box inside
+   * its own left/right, so 4:3 is untouched (the slab is 380u there already)
+   * and a wide window keeps the room the guild is shutting you out of. */
+  max-width: calc(var(--u) * 380);
+  margin-left: auto;
+  margin-right: auto;
   /* A granite notice screwed to the door: the interface's own material, so the
      terms read exactly as the character sheet's rows do. */
   background: var(--tex-granite) center / 100% 100% no-repeat;
@@ -179,11 +191,26 @@
   box-shadow: 0 calc(var(--u) * 1) calc(var(--u) * 4) rgba(60, 44, 20, 0.55);
 }
 
-.mm-guild-art {
+/* Scoped, as STYLE.md §11 asks — `.mm-guild-art` was one of this file's bare
+   private prefixes, which is a bet that no other screen adopts the name and
+   not a boundary. Nothing else in the tree uses it today, so the rule's reach
+   is the only thing that changes.
+ *
+ * The declaration below is `.mm-portrait`'s, for `.mm-portrait`'s reason. It
+ * is honest to record that it cannot do its whole job at this size: the box is
+ * 52u, so on a phone at `--u` 0.8958 the plate lands on 104 device pixels and
+ * 172 does not divide 104 — there is no integer texel and the quantisation
+ * cannot resolve. Measured on the shelf, 2.44x of MM6's colour depth before
+ * the retro pass and 2.51x after. 43u or 86u would make the division exact,
+ * and that is a layout change to a twelve-cell grid rather than a one-line
+ * one; it is in the report for the owner rather than taken here. */
+.mm-panel[data-panel='guild'] .mm-guild-art {
   width: calc(var(--u) * 52);
   height: calc(var(--u) * 52);
   background: center / contain no-repeat;
   filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 3) rgba(0, 0, 0, 0.75));
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;   /* Firefox spells it this way */
 }
 /* Labels below the art, centred, small dark serif with no shadow at all — the
    one place besides the quest book where MM6 prints ink on paper. */
@@ -220,6 +247,13 @@
 .mm-guild-rows {
   position: absolute;
   inset: calc(var(--u) * 5) calc(var(--u) * 8);
+  /* Capped and centred inside the board, with the training hall's roll and for
+   * the same measured reason: at 932x430 `Lesson` ended at x 200 and `Level`
+   * began at x 553, so every row of the instruction board carried 353 CSS px
+   * of bare timber between a trade and its rank. See `train.css`. */
+  max-width: calc(var(--u) * 470);
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   flex-direction: column;
   overflow-y: auto;

@@ -100,13 +100,21 @@ export class TravelPanel extends Panel {
       dataset: { route: offer.route.id },
     });
 
+    // STYLE §8a: a blocked action stays clickable and says why. This button used
+    // to go `disabled` with its fare replaced by an em dash, which broke the rule
+    // twice — a dead control tells you only that you cannot, and blanking the
+    // fare also hid the one number the party needs in order to come back able to
+    // pay. The fare stays on the plate, `--down` when the seat is out of reach,
+    // and the verb stays live: clicking answers in the coach-hand's own words.
     const go = el('button', {
-      className: 'mm-travel-go mm-raised',
+      className: `mm-travel-go mm-raised${offer.blocked ? ' mm-t-down' : ''}`,
       type: 'button',
-      text: offer.blocked ? '—' : `${offer.fare}g`,
-      disabled: !!offer.blocked,
+      text: `${offer.fare}g`,
     });
-    go.addEventListener('click', () => this._depart(offer));
+    go.addEventListener('click', () => {
+      if (offer.blocked) { this.ui.log(offer.blocked, 'warn'); return; }
+      this._depart(offer);
+    });
 
     row.append(
       el('div', { className: 'mm-travel-sign' }, iconEl(this.mode === 'ship' ? 'compass' : 'boot', { size: 22 })),
@@ -116,7 +124,10 @@ export class TravelPanel extends Panel {
         el('div', { className: 'mm-travel-note', text: offer.blocked || offer.note })),
       el('div', { className: 'mm-travel-cost' },
         el('div', { text: `${offer.totalHours ?? offer.hours} hrs` }),
-        el('div', { className: 'mm-travel-rations', text: `${offer.rations} rations` })),
+        el('div', {
+          className: 'mm-travel-rations',
+          text: `${offer.rations} ration${offer.rations === 1 ? '' : 's'}`,
+        })),
       go);
 
     const lines = [

@@ -378,9 +378,17 @@ export class SpellbookPanel extends Panel {
 
     this._renderChoice();
 
-    // Every prompt in MM6 goes through the one message strip, this one included.
+    // Every prompt in MM6 goes through the one message strip, this one
+    // included — and STYLE.md §5 gives the strip one grammar: a complete
+    // sentence, sentence case, ending in a stop. Both of these were bare
+    // fragments (§5 names `Select a spell` by that spelling under "Not mine to
+    // fix"), and the second was also telling the player to do a thing they had
+    // just done: the spell named in it is the one already chosen. So the
+    // no-selection line takes the stop it was missing, and the other becomes
+    // what it was actually trying to say — which spell the page is on, and
+    // what the plate below it will cast.
     if (this.pick) return;
-    this.ui.log(selected ? `Select ${selected.name}` : 'Select a spell', 'info');
+    this.ui.log(selected ? `Cast ${selected.name}, or select another spell.` : 'Select a spell.', 'info');
   }
 
   /* ── on whom? ─────────────────────────────────────────────────────────────
@@ -586,7 +594,10 @@ export class SpellbookPanel extends Panel {
         el('div', { className: 'mm-sb-illum-frame' }, art)),
       el('div', { className: 'mm-sb-name is-title', text: school.name }));
     tooltip.attach(cell, () => this._schoolTip(school));
-    cell.addEventListener('mouseenter', () => this.ui.log(school.name, 'info'));
+    // A bare noun is not a line the strip may carry (STYLE.md §5): its one
+    // grammar is a complete sentence in sentence case ending in a stop, and
+    // `Water` is the same defect §5 names when it quotes the HUD's `tree`.
+    cell.addEventListener('mouseenter', () => this.ui.log(`This is the school of ${school.name}.`, 'info'));
     return cell;
   }
 
@@ -637,8 +648,10 @@ export class SpellbookPanel extends Panel {
       el('div', { className: 'mm-sb-name', text: spell.name }));
 
     tooltip.attach(cell, () => this._spellTip(spell, vm, state, learned, check));
-    // Hover names go through the message strip, exactly as in the play view.
-    cell.addEventListener('mouseenter', () => this.ui.log(spell.name, 'info'));
+    // Hover names go through the message strip, exactly as in the play view —
+    // but as a sentence, not as a bare noun (STYLE.md §5). The imperative is
+    // also the truer line: what hovering this cell offers is the choice.
+    cell.addEventListener('mouseenter', () => this.ui.log(`Select ${spell.name}.`, 'info'));
     cell.addEventListener('click', () => {
       // Readying a spell syncs the party, which rebuilds this grid, so a
       // `dblclick` listener would never fire — the second click lands on a

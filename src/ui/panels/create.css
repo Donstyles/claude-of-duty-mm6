@@ -572,3 +572,48 @@
  * never applied to a tooltip. Dead and global is the worst pair, because it
  * fires the moment some other screen tags a tooltip `is-bad` and the cause is
  * in a file nobody would think to open. STYLE.md §11. */
+
+/* ── the island, on the one screen that keeps its full bleed ───────────────
+ *
+ * `ui.panels.css`'s coarse-pointer block moves every screen inboard by the
+ * safe-area insets, and excludes this one BY NAME — because creation is the
+ * only screen that takes the whole frame rather than the viewport rectangle,
+ * and `left: 0; right: 0` at the top of this file is what gives it that. The
+ * exclusion protected the bleed and forgot the words.
+ *
+ * Measured on a 932x430 capture with an iPhone 14 Pro Max's own insets,
+ * `tools/uishoot.mjs` counted **49 runs of text outside the safe area on this
+ * one screen** — more than the other 87 viewpoints put together. The first
+ * column's stat labels (`Might`, `Intellect`, `Personality`, `Endurance`,
+ * `Accuracy`, `Speed`, `Luck`, `Hit Pts`) sat 42 px inside the Dynamic Island;
+ * the fourth column's figures ran 32 px past the other edge; the class list,
+ * the skill list and the bonus-points block went 17–23 px under on both sides.
+ * On the owner's phone a quarter of the party-creation screen is behind the
+ * hardware.
+ *
+ * The remedy keeps both halves. The panel and `.mm-create-edge` still run to
+ * the glass, so the painted limestone bleeds exactly as before; the three
+ * blocks that hold TEXT take the inset as padding, so nothing readable starts
+ * outside the safe area. On a device with no insets every one of these
+ * `calc()`s is the figure that was already there.
+ */
+@media (pointer: coarse) {
+  .mm-panel[data-panel='create'] .mm-create .mm-create-cols {
+    padding-left: calc(var(--u) * 8 + var(--safe-l));
+    padding-right: calc(var(--u) * 8 + var(--safe-r));
+  }
+  .mm-panel[data-panel='create'] .mm-create .mm-create-bottom {
+    padding-left: calc(var(--u) * 34 + var(--safe-l));
+    padding-right: calc(var(--u) * 34 + var(--safe-r));
+    /* And the home indicator, which is the other 21 px. Measured after the
+     * left and right insets were paid: the class description's last line sat
+     * 12 px into it, the `Begin` oval's own label 7 px, and the skill note
+     * 4 px. A screen the player has to read every word of before the game
+     * starts is the wrong screen to lose three lines off the bottom of. */
+    padding-bottom: calc(var(--u) * 6 + var(--safe-b));
+  }
+  .mm-panel[data-panel='create'] .mm-create .mm-create-title {
+    padding-left: var(--safe-l);
+    padding-right: var(--safe-r);
+  }
+}

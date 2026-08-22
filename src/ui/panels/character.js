@@ -89,7 +89,12 @@ const PAGE_TITLE = Object.freeze({
 /** Left column, then right — the split MM6 uses on the skills page. */
 const SKILL_COLUMNS = [
   [['weapon', 'Weapons'], ['magic', 'Magic']],
-  [['armour', 'Armor'], ['misc', 'Miscellaneous']],
+  // 'Armour', not MM6's 'Armor': this heading sits directly above the skills it
+  // names, and those come from src/game/data/Skills.js as 'Plate Armour',
+  // 'Leather Armour' and so on. A US heading over UK entries is a clash on one
+  // screen. 'Armor Class' elsewhere keeps MM6's spelling — that is a fixed term
+  // of art, not a category name.
+  [['armour', 'Armour'], ['misc', 'Miscellaneous']],
 ];
 
 const signed = (n) => (n >= 0 ? `+${Math.round(n)}` : String(Math.round(n)));
@@ -319,7 +324,17 @@ export class CharacterPanel extends Panel {
     const worst = this._worstCondition(c);
     const cond = engraved('mm-block');
     cond.appendChild(labelRow('Condition:', worst ? worst.name : 'Good', {
-      tone: worst ? (worst.severity >= 13 ? 'mm-t-down' : 'mm-t-gold') : 'mm-t-up',
+      // Both severities take `--down`, and the difference is the word.
+      //
+      // A mild affliction used to print gold, and gold is the live control and
+      // nothing else (STYLE.md §2) — `Condition: Weak` in the colour of a
+      // button under the cursor, on the one row of the sheet that says what is
+      // wrong with the character. There is no warning colour in the seven
+      // roles, and there does not need to be one: `Weak` and `Dead` are
+      // different words, which is §6's rule that colour is never the only
+      // carrier of a meaning, and the tooltip lists every condition with
+      // "impaired" or "out of play" beside it.
+      tone: worst ? 'mm-t-down' : 'mm-t-up',
       tip: () => tipMarkup({
         title: 'Condition',
         subtitle: worst ? worst.name : 'Good',
@@ -803,7 +818,7 @@ export class CharacterPanel extends Panel {
       if (!text || awards.some((a) => a.text === text)) return;
       awards.push({ text, from });
     };
-    for (const a of c.awards ?? []) add(a, `Entered against ${c.name}'s own name.`);
+    for (const a of c.awards ?? []) add(a, `Entered against ${c.name}\u2019s own name.`);
     for (const a of quests?.awards ?? []) add(a, 'Recorded by the party journal.');
     for (const a of journal.awards ?? []) add(a, 'Recorded by the party journal.');
 

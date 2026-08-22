@@ -88,12 +88,27 @@
 }
 
 /* Venue title: bare marble above the board, white upright serif, centred, and
-   on one line — a second line would disappear behind the board. */
+   on one line — a second line would disappear behind the board.
+ *
+ * The sign takes the full width of the marble, not the board's inset, and the
+ * difference is two characters. At `4u` a side the box measured 125.4 px on a
+ * 932x430 phone and `House on Cooper Row` measured 125.8 — over by four
+ * TENTHS of a pixel, which under `text-overflow: ellipsis` costs the whole of
+ * `ow` and prints `House on Cooper R…`. `DialogueSystem` builds every house
+ * sign as `House on <street>` and its longest street is `Cordwainer`, so 19
+ * characters is the size this box has to hold and it was 0.3% short of it.
+ *
+ * `2u` a side gives 129.0 px against 125.8, and the sign is centred, so the
+ * margin only disappears on the one longest name in the table. The ellipsis
+ * stays as the graceful failure for anything longer, and
+ * `tools/_inkaudit.mjs` now measures the string on a ruler rather than
+ * trusting `scrollWidth`, which reported 126 against a 125 box and missed
+ * this by one. */
 .mm-panel-side[data-panel='dialogue'] .mm-npc-side .mm-venue {
   position: absolute;
   top: calc(var(--u) * 4);
-  left: calc(var(--u) * 4);
-  right: calc(var(--u) * 4);
+  left: calc(var(--u) * 2);
+  right: calc(var(--u) * 2);
   text-align: center;
   font-size: calc(var(--u) * 14);
   line-height: calc(var(--u) * 17);

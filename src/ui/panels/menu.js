@@ -1,6 +1,6 @@
 import './menu.css';
 import { Panel } from './base.js';
-import { el, setChildren, fmt, ellipsis, tooltip, tipMarkup } from '../widgets.js';
+import { el, setChildren, fmt, tooltip, tipMarkup } from '../widgets.js';
 import { icon } from '../Icons.js';
 import { byPointer } from '../../input/pointer.js';
 
@@ -191,7 +191,10 @@ export class MenuPanel extends Panel {
     }
     return [grid, el('div', {
       className: 'mm-menu-hint',
-      text: byPointer('Escape returns to the game', 'The Exit oval returns to the game'),
+      // Both were fragments. STYLE.md §5 gives every line the interface
+      // writes one grammar — a complete sentence in sentence case ending in a
+      // stop — and a hint under a menu is not exempt from it.
+      text: byPointer('Escape returns you to the game.', 'The brass exit oval returns you to the game.'),
     })];
   }
 
@@ -637,7 +640,12 @@ export class MenuPanel extends Panel {
 function partyText(row) {
   const names = row?.names ?? [];
   if (!names.length) return `Level ${row?.level ?? 1} party`;
-  return `${ellipsis(names.join(', '), 42)} · level ${row.level ?? 1}`;
+  // No character cap here. `.mm-sv-party` is nowrap with text-overflow:ellipsis,
+  // so the row itself decides where the roster runs out — and it decides in
+  // pixels, at whatever --u the device is running. A 42-character cap ran out
+  // roughly 870 device px early on a 14 Pro Max, cutting the third name in half
+  // with most of the row still empty beside it.
+  return `${names.join(', ')} · level ${row.level ?? 1}`;
 }
 
 /**

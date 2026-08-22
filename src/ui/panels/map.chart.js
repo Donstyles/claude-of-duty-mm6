@@ -302,6 +302,9 @@ function layPaper(g, img, W, H) {
 
 /** Draw the whole kingdom onto the panel's canvas. */
 export function drawChart(panel, g) {
+  // Per-frame state for `freeSlot`: every name inked on this chart, so no two
+  // of them can be laid on top of each other. Reset here and nowhere else.
+  _labelRects = [];
   const W = g.canvas.width;
   const H = g.canvas.height;
   const regions = chartRegions();
@@ -418,7 +421,13 @@ export function drawChart(panel, g) {
     ['coach', 'Coach'], ['ship', 'Packet'], ['town', 'Town'],
     ['unknown', 'Unvisited'], ['here', 'Party'],
   ]);
-  panel.coordEl.textContent = panel.hover?.name ?? 'Drag to pan · wheel to zoom';
+  // The hint names the gesture the reader actually has. A phone has no wheel,
+  // and telling a thumb to use one is worse than saying nothing: it reads as
+  // "this screen was not built for you". `(pointer: coarse)` is the same test
+  // `ui.panels.css` uses to grow every touch target.
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  panel.coordEl.textContent = panel.hover?.name
+    ?? (coarse ? 'Drag to pan · the studs zoom' : 'Drag to pan · wheel to zoom');
 }
 
 /** What the cursor is over, in the chart's own words. */
@@ -532,9 +541,10 @@ function drawTowns(panel, g, towns, toX, toZ, s) {
     }
 
     if (seen) {
-      g.font = `${Math.round(clamp(s / 26, 13, 19))}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
+      const px = Math.round(clamp(s / 26, 13, 19));
+      g.font = `${px}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
       g.textAlign = 'center';
-      inkLabel(g, t.name, x, z + r * 2.6, 'rgba(232,224,200,0.9)', '#241A0E');
+      inkLabel(g, t.name, x, z + r * 2.6, 'rgba(232,224,200,0.9)', '#241A0E', px);
     }
   }
 }
@@ -546,9 +556,10 @@ function drawRegionLabels(panel, g, regions, toX, toZ, s) {
     // Above the province, clear of the town name that sits under its glyph.
     const x = toX(r.x);
     const z = toZ(r.z) - (r.kind === 'under' ? -r.rz * s - 14 : r.rz * s * 0.78);
-    g.font = `italic ${Math.round(clamp(s / 30, 12, 17))}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
+    const px = Math.round(clamp(s / 30, 12, 17));
+    g.font = `italic ${px}px 'Pagella', 'Palatino Linotype', Georgia, serif`;
     g.textAlign = 'center';
-    inkLabel(g, r.name, x, z, 'rgba(236,228,206,0.85)', '#2E2418');
+    inkLabel(g, r.name, x, z, 'rgba(236,228,206,0.85)', '#2E2418', px);
 
     // Danger, as a row of small marks — the chart's own warning to travellers.
     const pips = Math.round(r.danger / 2);
@@ -599,16 +610,63 @@ const INK_PASSES = 3;
  * to be standing behind and simply eats it. Twelve is where the stem survives
  * its own outline.
  */
-function inkLabel(g, text, x, y, halo, ink) {
+function inkLabel(g, text, x, y, halo, ink, size = 0) {
+  const at = size ? freeSlot(g, text, x, y, size) : { x, y };
+  if (!at) return;
   g.save();
   g.lineJoin = 'round';
   g.miterLimit = 2;
   g.lineWidth = 3;
   g.strokeStyle = halo;
-  g.strokeText(text, x, y);
+  g.strokeText(text, at.x, at.y);
   g.fillStyle = ink;
-  for (let i = 0; i < INK_PASSES; i++) g.fillText(text, x, y);
+  for (let i = 0; i < INK_PASSES; i++) g.fillText(text, at.x, at.y);
   g.restore();
+}
+
+/**
+ * Where a name can be laid down without landing on one already there.
+ *
+ * The kingdom chart printed every name at the coordinate of the thing it names
+ * and never asked whether anything was already there. Three names collided in
+ * the shipped capture at 932x430 — `Greywater` over `Fennwick Vale`, and
+ * `Saltmarch` over `Millhaven Downs` and again over `Millhaven`, each pair
+ * overprinting into a single unreadable run (`GreywaterlFennwicl Vale`,
+ * `Millhaven DoSaltmarch`, `MillhaveSaltmarch`). Both are drawn to a canvas, so
+ * `tools/phonemenu.mjs`'s ink audit cannot see them: a `Range` measures DOM
+ * text nodes and there are none. That is exactly the blind spot that let this
+ * ship, and it is why the chart has to do its own collision test.
+ *
+ * The rule is: try the drawn position, then a ladder of whole line-heights
+ * above and below it, and take the first that is clear. A name that finds no
+ * clear slot at all is dropped rather than overprinted — half a word on top of
+ * half another word names neither place, while a glyph with no caption at
+ * least still says a town is there. In practice the ladder always finds one:
+ * measured on the same chart, five offsets clear all three collisions.
+ *
+ * `_labelRects` is reset by `drawChart` at the top of every frame, so this is
+ * per-draw state and never accumulates.
+ */
+let _labelRects = [];
+
+function freeSlot(g, text, x, y, size) {
+  const w = g.measureText(text).width;
+  const rect = (yy) => ({
+    l: x - w / 2 - 2, r: x + w / 2 + 2, t: yy - size * 0.86, b: yy + size * 0.28,
+  });
+  const step = size * 1.15;
+  // Seven slots, not three. At five, `Greywater Fen` found none and was
+  // dropped — which is the right behaviour and still a name lost, so the
+  // ladder reaches a line further either way before it gives up. Three whole
+  // line-heights is about a third of a province at the chart's own scale, so a
+  // name that walks that far is still inside the shape it labels.
+  for (const dy of [0, step, -step, step * 2, -step * 2, step * 3, -step * 3]) {
+    const box = rect(y + dy);
+    if (_labelRects.some((b) => box.l < b.r && box.r > b.l && box.t < b.b && box.b > b.t)) continue;
+    _labelRects.push(box);
+    return { x, y: y + dy };
+  }
+  return null;
 }
 
 /** Where the party is standing, if the world has told us. */

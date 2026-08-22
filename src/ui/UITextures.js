@@ -1726,15 +1726,61 @@ export class UITextures {
    * mouldings, a notched keystone with stepped merlons at the top, and a stone
    * sill along the bottom. The opening is punched clear so the map canvas
    * underneath shows through.
+   *
+   * ── the spandrels are sky, and they were stone ────────────────────────────
+   *
+   * REFERENCE.md §3.2 records it plainly — "**Behind the arch, in both top
+   * corners, is a painted blue sky with white-grey cumulus** (`#7386CE`,
+   * `#8496C6`, clouds `#CECFCE`, `#DEDFD6`, `#E7DFD6`) — sampled directly at
+   * y 14 in Screenshot 17, and **present indoors too**" — §8 makes "plain
+   * stone where the painted sky belongs behind the arch" an automatic failure,
+   * and §9 lists it again as trap 44. This function painted marble edge to
+   * edge and punched the opening through it, so the spandrels were stone.
+   *
+   * Measured off a 1600x900 capture before the change, the top-left spandrel
+   * read `#746e6a` and the top-right `#7e7772` — achromatic warm grey, chroma
+   * (max−min)/max = 0.06 and 0.11 — against the reference's `#7386CE`, which
+   * is blue-dominant at 0.44. It is not a near miss; it is a different
+   * material.
+   *
+   * The sky is the ground the whole plate is painted on now, and everything
+   * that is stone is painted over it: the keystone band across the top that
+   * the compass plaque and its two merlons sit in, the mouldings, and the
+   * sill. Nothing else moved, so every measured figure in the frame is
+   * unchanged and only the two corners are a different colour.
    */
   archFrame(w = 300, h = 284) {
     return this._make(`arch-${w}x${h}`, w, h, (g, W, H, rng) => {
+      // The window's own weather. Flat-ish and pale, because it is a painting
+      // behind a stone opening and not the game's live sky — the reference's
+      // two blues sit within nine points of each other.
+      const sky = g.createLinearGradient(0, 0, 0, H * 0.6);
+      sky.addColorStop(0, '#7386CE');
+      sky.addColorStop(1, '#8496C6');
+      g.fillStyle = sky;
+      g.fillRect(0, 0, W, H);
+      for (let i = 0; i < 26; i++) {
+        UITextures.dab(g, rng.range(0, W), rng.range(H * 0.04, H * 0.52),
+          rng.range(W * 0.06, W * 0.22), rng.range(H * 0.02, H * 0.07), 0,
+          rng.chance(0.5) ? '#E7DFD6' : (rng.chance(0.5) ? '#DEDFD6' : '#CECFCE'),
+          rng.range(0.28, 0.72), 5);
+      }
+
+      const m = Math.round(W * 0.055);
+
+      // The keystone band. The plaque and its merlons are cut into stone, so
+      // the top of the block stays stone and the sky starts under it — which
+      // is where the reference samples it, six native pixels down from the
+      // block's own top edge.
+      g.save();
+      g.beginPath();
+      g.rect(0, 0, W, Math.ceil(H * 0.055));
+      g.clip();
       UITextures.paintMarble(g, W, H, rng, {
         palette: ['#B5ACA5', '#ADA29C', '#A5968C', '#A59A94', '#9C928C'],
         ochre: false, grain: 7,
       });
-
-      const m = Math.round(W * 0.055);
+      g.restore();
       const path = UITextures.archPath(W, H - Math.round(H * 0.055), m);
 
       // Merlons flanking the keystone notch at the apex.

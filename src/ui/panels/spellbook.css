@@ -118,6 +118,16 @@
   height: calc(var(--u) * 86);
   margin-left: calc(var(--u) * -43);
   background: center / contain no-repeat;
+  /* Hard texel edges — `.mm-portrait` in `ui.panels.css` gives the reasoning
+     and it is the same reasoning here. Worth recording that this one is not
+     belt-and-braces: at `--u` 2.000 the 172 px plate paints 1:1 into an 86u
+     box and the crops are BYTE-IDENTICAL with and without the declaration,
+     which is why nobody noticed it missing. At `--u` 1.875 — an ordinary
+     1600x900 desktop, and `shoot.mjs`'s own default — the same plate reads
+     3.77x of MM6's colour depth without it and 1.22x with. The declaration is
+     what makes the treatment exist at every scale except that one zoom. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;   /* Firefox spells it this way */
   /* Two masks, intersected. The first is the plate as its own alpha, which
      squares it: several plates were cut off a pale ground and kept a bright rim
      in their part-transparent pixels, and that rim is the white halo reviewers

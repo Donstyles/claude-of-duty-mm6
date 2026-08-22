@@ -1,8 +1,9 @@
 import './services.css';
 import { Panel } from './base.js';
-import { el, setChildren, tooltip, tipMarkup, fmt, goldOval, labelRow, attribute } from '../widgets.js';
+import {
+  el, setChildren, tooltip, tipMarkup, fmt, goldOval, labelRow, attribute, enterLine, properName,
+} from '../widgets.js';
 import { icon } from '../Icons.js';
-import { enterLine } from './dialogue.js';
 import { TownServices } from '../../game/TownServices.js';
 import { INTERIOR_BASE } from '../interiorPlates.js';
 import { hashSeed } from '../../core/RNG.js';
@@ -61,10 +62,22 @@ const OFFICES = {
  * campaign without anybody having to author nineteen of them; `townsfolk`
  * counts for four, because `UITextures` spreads it over four plates.
  */
+/* `official` is the counting house's face and it was in the taproom's pool too.
+ *
+ * The plate is a heavy burgher in a black cap under a gold chain of office —
+ * unmistakably a clerk — and with it in both pools the two civic buildings of
+ * Millhaven came out wearing one face: `shots/phone/ui-services-rumours.png`
+ * and `ui-services-ledger.png` show `Wat Fletcher the Innkeeper` and `Clerk
+ * Ivo Wysk the Ledger-keeper` as the same painting, chain and all. `facetest`
+ * could not see it, because it asks whether a speaker FALLS BACK to a stranger
+ * of the wrong trade and both of these resolve deliberately.
+ *
+ * `elder` takes the slot: a landlord who has been behind that bar thirty years
+ * is a face the set already has, and it belongs to nothing else. */
 const KEEPER_LOOK = {
   bank: ['official', 'scholar', 'noble'],
   temple: ['cleric', 'priest', 'monk'],
-  tavern: ['townsfolk', 'rogue', 'official'],
+  tavern: ['townsfolk', 'rogue', 'elder'],
 };
 
 /**
@@ -235,7 +248,7 @@ export class ServicesPanel extends Panel {
     const venue = this.venue ?? (this.venue = this.model.resolve({ service: this.service }));
     const T = this.ui.textures;
 
-    this.titleEl.textContent = venue?.name ?? 'Town Services';
+    this.titleEl.textContent = properName(venue?.name) || 'Town Services';
 
     // Fallowmere's church has no priest and is not going to grow one, so the
     // sidebar has to read properly with nobody behind the counter.
@@ -326,12 +339,19 @@ export class ServicesPanel extends Panel {
     const ceiling = withdrawing ? s.balance : s.carried;
     const amount = Math.max(0, Math.min(this.amount, ceiling));
 
+    // Every standing sum on this plate is `--gold-deep`, because §2 gives that
+    // token money and gives `--gold` the live control. `On deposit` was wearing
+    // the control colour — the palest yellow on the screen, on a figure you
+    // cannot click — while `In the purse` directly beneath it, the same kind of
+    // figure on the same plate, was plain white. A running total keeps the money
+    // colour; only a *change* in money takes `--up` / `--down`, which is why
+    // `Interest to date` stays green and the ledger's own +21 / -400 do too.
     const account = el('div', { className: 'mm-svc-plaquegroup mm-engraved' },
-      labelRow('On deposit', `${fmt(s.balance)} gold`, { tone: 'mm-t-gold' }),
-      labelRow('In the purse', `${fmt(s.carried)} gold`),
+      labelRow('On deposit', `${fmt(s.balance)} gold`, { tone: 'mm-t-golddeep' }),
+      labelRow('In the purse', `${fmt(s.carried)} gold`, { tone: 'mm-t-golddeep' }),
       labelRow('Interest', `${s.ratePercent}% each week`),
       s.away ? labelRow('Paid by', s.payingBranch, { tone: 'mm-t-dim' }) : null,
-      labelRow('A full week pays', `${fmt(s.weekly)} gold`),
+      labelRow('A full week pays', `${fmt(s.weekly)} gold`, { tone: 'mm-t-golddeep' }),
       labelRow('Credited next', s.balance > 0 ? `in ${s.daysToCredit} day${s.daysToCredit === 1 ? '' : 's'}` : 'nothing on deposit'),
       labelRow('Last credited', s.lastInterest
         ? `${fmt(s.lastInterest)} gold, day ${s.lastInterestDay}`
@@ -408,7 +428,7 @@ export class ServicesPanel extends Panel {
       const chips = [];
       if (r.wounds > 0) {
         chips.push(this._chip(`Wounds ${r.hp}/${r.maxHP}`, r.wounds, () => this._say(this.model.tend(r.index, venue)),
-          `Closing ${r.name}'s wounds`, `${r.maxHP - r.hp} hit points at the house's rate.`));
+          `Closing ${r.name}\u2019s wounds`, `${r.maxHP - r.hp} hit points at the house\u2019s rate.`));
       }
       for (const a of r.afflictions) {
         chips.push(this._chip(a.name, a.price, () => this._say(this.model.cure(r.index, a.id, venue)), a.name, a.note));
@@ -462,13 +482,16 @@ export class ServicesPanel extends Panel {
 
     const state = blessing
       ? el('div', { className: 'mm-svc-plaquegroup mm-engraved' },
-        labelRow('Kindled by', blessing.house, { tone: 'mm-t-gold' }),
+        // The house that lit the lamp is body text, not a control (§2: gold is
+        // hover and the option you are inside, and nothing else).
+        labelRow('Kindled by', blessing.house),
         labelRow('Every attribute', `+${blessing.power}`, { tone: 'mm-t-up' }),
         labelRow('Every resistance', `+${blessing.resist}`, { tone: 'mm-t-up' }),
         labelRow('Armour class', `+${blessing.ac}`, { tone: 'mm-t-up' }),
         labelRow('Burns out', `day ${blessing.expiresDay} — ${blessing.daysLeft} day${blessing.daysLeft === 1 ? '' : 's'}`))
       : el('div', { className: 'mm-svc-plaquegroup mm-engraved' },
-        labelRow('Standing', this.model.standingLabel(venue?.town), { tone: 'mm-t-gold' }),
+        labelRow('Standing', this.model.standingLabel(venue?.town),
+          { tone: standingTone(this.model.standing(venue?.town)) }),
         labelRow('Given here', `${fmt(this.model.donated[venue?.town] ?? 0)} gold`),
         el('div', { className: 'mm-svc-note', text: 'No lamp is lit over the party. The Order does not hold this against you, but it does notice.' }));
 
@@ -486,7 +509,10 @@ export class ServicesPanel extends Panel {
     const s = this.model.tavernState(venue);
     const rations = Math.max(1, Math.min(6, s.foodCap - s.food));
 
-    const food = this._plaque(`${rations} days' provisions`, rations * s.foodPrice,
+    // A typographic apostrophe, not a typewriter one (STYLE.md §7). `curly()`
+    // cannot rescue this one: it upgrades `(\w)'(\w)` and this mark closes a
+    // plural, with a space after it.
+    const food = this._plaque(`${rations} days\u2019 provisions`, rations * s.foodPrice,
       () => this._say(this.model.buyFood(rations, venue)), s.food < s.foodCap,
       `The party cannot carry more than ${s.foodCap} days of food.`);
     tooltip.attach(food, () => tipMarkup({
@@ -516,8 +542,9 @@ export class ServicesPanel extends Panel {
       el('div', { className: 'mm-svc-rows is-wide' }, food, drink, bed),
       el('div', { className: 'mm-svc-plaquegroup mm-engraved' },
         labelRow('Provisions', `${s.food} of ${s.foodCap} days`),
-        labelRow('In the purse', `${fmt(s.gold)} gold`),
-        labelRow('The retinue costs', s.wages ? `${fmt(s.wages)} gold a day` : 'nothing — nobody is hired')),
+        labelRow('In the purse', `${fmt(s.gold)} gold`, { tone: 'mm-t-golddeep' }),
+        labelRow('The retinue costs', s.wages ? `${fmt(s.wages)} gold a day` : 'nothing — nobody is hired',
+          s.wages ? { tone: 'mm-t-golddeep' } : undefined)),
     ];
   }
 
@@ -598,7 +625,11 @@ export class ServicesPanel extends Panel {
         el('span', { className: 'mm-svc-hire-name' },
           el('b', { text: hand.name }),
           el('i', { text: ` — ${hand.profession}` })),
-        el('span', { className: 'mm-svc-slot-pay', text: `${hand.wage} a day` }),
+        // The same wage the offer row shows, shown the same way. It was a plain
+        // dim span here, so a hireling's pay stopped being money the moment they
+        // joined — §2 gives `--gold-deep` every figure denominated in gold, and
+        // `--dim` only the words that name data.
+        this._coin(hand.wage, 'a day'),
         el('span', { className: 'mm-svc-slot-go', text: 'Pay off' }));
       tooltip.attach(off, () => tipMarkup({
         title: hand.name, subtitle: hand.profession,
@@ -967,6 +998,23 @@ export class ServicesPanel extends Panel {
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 /**
+ * How the party's standing with a house is coloured (STYLE.md §2).
+ *
+ * It used to be flat `--gold`, which was wrong twice over: gold is the live
+ * control, and standing is a readout you cannot click; and a flat colour threw
+ * the reading away, so a party the Order calls a Benefactor looked exactly like
+ * one it holds In Ill Odour. `--up` is "a condition met", `--down` is "a
+ * condition blocking" — which is precisely what the two ends of this scale are.
+ * `Barely tolerated` is neither, so it stays body text.
+ */
+function standingTone(s) {
+  if (!Number.isFinite(s)) return undefined;
+  if (s >= 1) return 'mm-t-up';
+  if (s < 0) return 'mm-t-down';
+  return undefined;
+}
+
+/**
  * The role line of the identity block (STYLE.md §3): a short noun phrase
  * beginning "the ", Title Case. Not a lowercase fragment ("innkeeper"), not a
  * prepositional tail ("of the Ledger") — those were two of the five different
@@ -1007,7 +1055,7 @@ function effectLines(effect = {}) {
   const push = (k, v) => lines.push({ k, v });
   if (effect.healPerHour) push('While resting', `+${effect.healPerHour} HP an hour, each`);
   if (effect.spPerHour) push('While resting', `+${effect.spPerHour} SP an hour, each`);
-  if (effect.foodPerRest) push('Each camp', `+${effect.foodPerRest} days' rations`);
+  if (effect.foodPerRest) push('Each camp', `+${effect.foodPerRest} days\u2019 rations`);
   if (effect.curesConditions) push('Overnight', 'Draws poison and fever');
   if (effect.ac) push('Armour class', `+${effect.ac}`);
   if (effect.attack) push('Attack', `+${effect.attack}`);

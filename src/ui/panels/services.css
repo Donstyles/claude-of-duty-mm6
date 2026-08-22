@@ -106,6 +106,21 @@
 .mm-svc-col { flex: 1; display: flex; flex-direction: column; gap: calc(var(--u) * 5); min-width: 0; }
 .mm-svc-col.is-wide { flex: 1.25; }
 
+/* Capped and centred inside the board, which is STYLE.md §13's own remedy for
+ * an ultra-wide window — `spellbook.css` "caps the page at 460u and centres,
+ * so the extra width becomes binding cloth".
+ *
+ * A row here is a person on the left and what they cost on the right, and the
+ * board fills the viewport by design so the painted room frames it. At 4:3
+ * that is a 430u board and the pair reads as a pair. Measured on a 932x430
+ * phone the board is 630 CSS px, and on the hiring page `Odile Chandler —
+ * Trader` ended at x 245 while `100 a day` began at x 645: **400 px of empty
+ * plank between a name and its own price**, on every row. The healing roster
+ * is worse — 346 px between `Sir Edran Vaile level 1` and `Wounds 8/29`.
+ *
+ * 470u is the board's own drawn width less its padding, so nothing moves at
+ * the ratio the screen was measured for and the surplus goes back to the
+ * painted timber. The board, the header plate and the room are untouched. */
 .mm-svc-rows {
   flex: 1;
   display: flex;
@@ -113,6 +128,10 @@
   gap: calc(var(--u) * 4);
   min-height: 0;
   overflow-y: auto;
+  width: 100%;
+  max-width: calc(var(--u) * 470);
+  margin-left: auto;
+  margin-right: auto;
 }
 .mm-svc-rows.is-wide { gap: calc(var(--u) * 6); justify-content: center; }
 .mm-svc-rows.is-tight { flex: 0 0 auto; gap: calc(var(--u) * 3); }
@@ -293,8 +312,10 @@
 .mm-svc-hire-name b { color: var(--name); font-weight: normal; }
 .mm-svc-hire-name i { color: var(--dim); }
 .mm-svc-hire:hover .mm-svc-hire-name b { color: var(--gold); }
-.mm-svc-slot-pay { font-size: calc(var(--u) * 12); font-style: italic; color: var(--dim); }
-.mm-svc-slot-go { color: var(--dim); font-style: italic; }
+/* `Pay off` is a control at rest, so it takes --ink (§2). It was --dim, which
+   names data — and it sat immediately beside the wage in the same dim italic,
+   so the value and the thing that acts on it were indistinguishable. */
+.mm-svc-slot-go { color: var(--ink); font-style: italic; margin-left: calc(var(--u) * 8); }
 
 /* ── the keeper's side of the counter ────────────────────────────────────── */
 

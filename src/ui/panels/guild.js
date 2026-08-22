@@ -2,11 +2,10 @@ import './guild.css';
 import { Panel } from './base.js';
 import {
   el, setChildren, tooltip, tipMarkup, fmt, ellipsis, goldOval, engraved, labelRow,
-  attribute,
+  attribute, enterLine, curly, properName,
 } from '../widgets.js';
 import { icon } from '../Icons.js';
 import { MASTERY_LABEL, masteryRank } from '../../game/data/Skills.js';
-import { enterLine } from './dialogue.js';
 import { GuildSystem } from '../../game/GuildSystem.js';
 
 /**
@@ -19,11 +18,6 @@ import { GuildSystem } from '../../game/GuildSystem.js';
  *
  * It belongs in `ui/widgets.js` beside `attribute()`; that file is not ours.
  */
-function curly(text) {
-  let open = true;
-  return String(text ?? '').replace(/"/g, () => (open = !open) ? '\u201d' : '\u201c')
-    .replace(/(\w)'(\w)/g, '$1\u2019$2');
-}
 
 /**
  * Where the painted spell plates live. Committed art, never fetched, and the
@@ -196,7 +190,7 @@ export class GuildPanel extends Panel {
 
     this.el.dataset.kind = hall.order.school ? 'magic' : 'lay';
     this.el.dataset.view = this.view;
-    this.titleEl.textContent = hall.name;
+    this.titleEl.textContent = properName(hall.name);
     // A tier-one hall is licensed to teach the trade and no rank of it at all,
     // and saying "teaches to Normal" would hide that rather than state it.
     const licence = hall.teaches === 'normal'
@@ -277,7 +271,7 @@ export class GuildPanel extends Panel {
       const standing = trial && !guilds.questDone(trial.id)
         ? ` The house has not yet had ${trial.name} of you: ${trial.summary}`
         : trial ? ` ${trial.name} is done; the house owes you its highest rank.` : '';
-      this._say(`The roll carries ${m.sponsor}'s name, entered at ${m.town} on day ${m.day}. `
+      this._say(`The roll carries ${m.sponsor}\u2019s name, entered at ${m.town} on day ${m.day}. `
         + `The whole party trades on it.${standing}`, true);
     });
     if (this.view !== 'hall') {

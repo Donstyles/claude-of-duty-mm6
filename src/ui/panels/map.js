@@ -229,19 +229,47 @@ export class MapPanel extends Panel {
     return b;
   }
 
+  /**
+   * Pointer events, not mouse events, and the difference is the whole screen.
+   *
+   * This was `mousedown` / `mousemove` / `mouseup` / `wheel`, and the game is
+   * played on an iPhone. A mobile browser synthesises `mousedown` from a tap
+   * and sends **no `mousemove` at all** during a touch drag — the same fact
+   * `tools/touchtest.mjs` was written for after the backpack's item stuck to
+   * the finger — so on the owner's device the chart could be opened, could be
+   * zoomed with the two studs, and **could not be panned by a single pixel**.
+   * `wheel` never fires there either, which is what the corner hint was
+   * telling them to use.
+   *
+   * Pointer events cover mouse, pen and touch in one path, so nothing about
+   * the desktop behaviour changes: `button === 2` still means right-click,
+   * `_hoverAt` still runs for a hovering mouse and simply never fires for a
+   * finger, which has no hover. `setPointerCapture` is what makes a drag
+   * survive the finger leaving the canvas, which is `window.mouseup`'s job in
+   * the old code and is done properly here.
+   */
   _wireCanvas() {
     const cv = this.canvas;
     let drag = null;
 
-    cv.addEventListener('mousedown', (e) => {
+    cv.addEventListener('pointerdown', (e) => {
       if (this.noting) { this._placeNote(e); return; }
       const hit = this._noteAt(e);
       if (hit && e.button === 2) { this._removeNote(hit); return; }
-      drag = { x: e.clientX, y: e.clientY, moved: false };
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+      try { cv.setPointerCapture(e.pointerId); } catch { /* no capture, still drags */ }
     });
-    window.addEventListener('mouseup', () => { drag = null; });
-    cv.addEventListener('mousemove', (e) => {
-      if (drag) {
+    const endDrag = (e) => {
+      if (drag && e && drag.id === e.pointerId) {
+        try { cv.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+      }
+      drag = null;
+    };
+    cv.addEventListener('pointerup', endDrag);
+    cv.addEventListener('pointercancel', endDrag);
+    window.addEventListener('pointerup', () => { drag = null; });
+    cv.addEventListener('pointermove', (e) => {
+      if (drag && drag.id === e.pointerId) {
         const dx = e.clientX - drag.x;
         const dy = e.clientY - drag.y;
         if (dx || dy) {
@@ -252,9 +280,11 @@ export class MapPanel extends Panel {
         }
         return;
       }
-      this._hoverAt(e);
+      // A finger has no hover, and asking for one paints a highlight under a
+      // tap that then never clears. Only a mouse gets the hover reading.
+      if (e.pointerType === 'mouse') this._hoverAt(e);
     });
-    cv.addEventListener('mouseleave', () => { this.hover = null; this._draw(); });
+    cv.addEventListener('pointerleave', () => { this.hover = null; this._draw(); });
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
       this.zoom[this.view] = clamp(this.zoom[this.view] * (e.deltaY < 0 ? 1.2 : 1 / 1.2), 0.35, 9);
@@ -755,7 +785,10 @@ export class MapPanel extends Panel {
     if (text && this._pending) {
       this._noteList().push({ ...this._pending, text: ellipsis(text, 60) });
       saveJSON(NOTE_KEY, this._notes);
-      this.ui.log(`Noted on the map: ${text}`, 'info');
+      // A complete sentence with a stop, and curly marks — STYLE.md §5 and §7.
+      // `Noted on the map: …` is a labelled fragment, which is the grammar §5
+      // rules out in as many words.
+      this.ui.log(`The note \u201c${text}\u201d is written on the map.`, 'info');
     }
     this._cancelNote();
     this._draw();

@@ -154,7 +154,73 @@ export function attribute(speaker, line) {
   const said = String(line ?? '').trim().replace(/^["“”']+|["“”']+$/g, '').trim();
   if (!said) return '';
   const who = String(speaker ?? '').trim();
-  return who ? `${who}: “${said}”` : `“${said}”`;
+  // The *inside* of the line goes through `curly()` too. This used to strip the
+  // outer marks and re-make them and stop there, so the quotation marks were
+  // curly and everything between them was whatever the data file typed: the
+  // phone capture caught `the maker's mark` on `ui-dialogue-hire`, a typewriter
+  // apostrophe sitting between two proper curly quotes. §7 is that nothing
+  // straight reaches the screen, not that the outermost pair is tidy.
+  const spoken = curly(said);
+  return who ? `${who}: “${spoken}”` : `“${spoken}”`;
+}
+
+/**
+ * Straight marks to curly, in place (STYLE.md §7).
+ *
+ * For narration that must NOT be attributed — `Sella Roon does not look up
+ * from the crucible. "The Ember takes apprentices…"` — where `attribute()`
+ * would print the speaker's name twice and nest one pair of quotes inside
+ * another. Only the caller knows which of the two it has, which is why there
+ * are two helpers and not one.
+ *
+ * Moved here from `guild.js`, where STYLE.md's "Not mine to fix" §7 has been
+ * asking for it: it belongs beside `attribute()` and `roleLine()`, and one
+ * screen owning the interface's punctuation rule is how five screens came to
+ * disagree about it in the first place.
+ */
+export function curly(text) {
+  let open = true;
+  return String(text ?? '').replace(/"/g, () => ((open = !open) ? '”' : '“'))
+    .replace(/(\w)'(\w)/g, '$1’$2');
+}
+
+/**
+ * A proper name, as it is allowed to reach the screen.
+ *
+ * STYLE.md §7 is explicit that "straight quotes in a data file are fine — they
+ * are normalised at render — but nothing straight reaches the screen", and
+ * nothing was doing the normalising for names. `Venues.js` spells 91 of its 92
+ * names with a real `’` and one with a typewriter apostrophe, and that one is
+ * `Hobb's Forge` — the shop the capture set photographs, so the straight tick
+ * is on the sign in `shots/phone/ui-shop.png` at 10x. One helper on the way to
+ * the screen is the fix the rule already describes; a corrected data file
+ * would only hold until the next name is typed.
+ */
+export function properName(name) {
+  return curly(String(name ?? '').trim());
+}
+
+/**
+ * The arrival sentence for the message strip (STYLE.md §5).
+ *
+ * `Venues.js` stores a bare name — `Guild of the Ember`, `Hobb’s Forge`,
+ * `The Bell and Anchor`, `House on Fishgate` — because a name is a name. The
+ * article is a property of the *sentence*, not of the name, so it is added
+ * here: `You enter Guild of the Ember.` is not English, and `You enter the
+ * The Bell and Anchor.` is worse.
+ *
+ * The test is only about determiners, which is the one thing about a venue
+ * name that can be read off the string reliably: a name that already opens
+ * with an article, or with somebody's possessive, takes none.
+ *
+ * Moved here from `dialogue.js` for the reason its own note gave — all five
+ * venue screens import it, so it is not the conversation screen's property.
+ */
+export function enterLine(name) {
+  const n = properName(name);
+  if (!n) return 'You enter.';
+  const article = /^(the|a|an)\s/i.test(n) || /^\S+['’]s\s/.test(n) ? '' : 'the ';
+  return `You enter ${article}${n}.`;
 }
 
 /**

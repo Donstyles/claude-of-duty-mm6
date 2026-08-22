@@ -141,7 +141,9 @@
   font-size: 13px;
 }
 
-.mm-travel-go[disabled] { cursor: default; filter: saturate(0.3) brightness(0.85); }
+/* No `[disabled]` rule here any more: STYLE §8a keeps the verb live on a route
+   the party cannot board, so the plate never goes dead. The fare itself carries
+   the refusal, in `--down`. */
 
 .mm-travel-empty {
   padding: 28px 12px;

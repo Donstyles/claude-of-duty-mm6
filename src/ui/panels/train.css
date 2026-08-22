@@ -42,6 +42,18 @@
   position: absolute;
   left: calc(var(--u) * 18);
   right: calc(var(--u) * 18);
+  /* Capped and centred over the yard — STYLE.md §13's remedy for an ultra-wide
+   * window, and the one `spellbook.css` and `character.css` already take.
+   *
+   * A row here is a name and four figures, and `1fr` on the name column hands
+   * it every pixel the window has. Measured on a 932x430 phone the board runs
+   * 630 CSS px, and `Sir Edran Vaile` ended at x 172 with his level printed at
+   * x 460: **288 px of empty plank between an adventurer and his own number**,
+   * on every row of the roll. 470u is the width the table is drawn for, so 4:3
+   * does not move and the surplus goes back to the painted yard. */
+  max-width: calc(var(--u) * 470);
+  margin-left: auto;
+  margin-right: auto;
   top: calc(var(--u) * 64);
   border-radius: calc(var(--u) * 5);
   padding: calc(var(--u) * 5) calc(var(--u) * 4);

@@ -1,7 +1,8 @@
 import './dialogue.css';
 import { Panel } from './base.js';
 import {
-  el, setChildren, tooltip, tipMarkup, goldOval, ellipsis, attribute, roleLine,
+  el, setChildren, tooltip, tipMarkup, goldOval, ellipsis, attribute, roleLine, properName,
+  enterLine,
 } from '../widgets.js';
 import { DialogueSystem } from '../../game/DialogueSystem.js';
 
@@ -135,7 +136,7 @@ export class DialoguePanel extends Panel {
     const s = conv.speaker;
     const T = this.ui.textures;
 
-    this.venueEl.textContent = ellipsis(s.place, 34);
+    this.venueEl.textContent = ellipsis(properName(s.place), 34);
     this.portraitEl.style.backgroundImage = portraitUrl(T, s.portraitSpec);
     this.nameEl.textContent = s.name;
     this.tradeEl.textContent = roleLine(s.profession);
@@ -271,31 +272,7 @@ export class DialoguePanel extends Panel {
  * `ReferenceError` at runtime while the build stayed green. Vite has no reason
  * to object — the construct is valid, the names simply are not local.
  */
-export { attribute, roleLine } from '../widgets.js';
-
-/**
- * The arrival sentence for the message strip (STYLE.md §5).
- *
- * `Venues.js` stores a bare name — `Guild of the Ember`, `Hobb's Forge`,
- * `The Bell and Anchor`, `House on Fishgate` — because a name is a name. The
- * article is a property of the *sentence*, not of the name, so it is added
- * here: `You enter Guild of the Ember.` is not English, and `You enter the
- * The Bell and Anchor.` is worse.
- *
- * The test is only about determiners, which is the one thing about a venue
- * name that can be read off the string reliably: a name that already opens
- * with an article, or with somebody's possessive, takes none.
- *
- * It lives here because `dialogue.js` is a file this agent owns and
- * `widgets.js` is not; it belongs beside `attribute()` and `roleLine()`, and
- * should be moved there with them.
- */
-export function enterLine(name) {
-  const n = String(name ?? '').trim();
-  if (!n) return 'You enter.';
-  const article = /^(the|a|an)\s/i.test(n) || /^\S+['’]s\s/.test(n) ? '' : 'the ';
-  return `You enter ${article}${n}.`;
-}
+export { attribute, roleLine, enterLine, curly, properName } from '../widgets.js';
 
 /**
  * The painted plate for a sitter.

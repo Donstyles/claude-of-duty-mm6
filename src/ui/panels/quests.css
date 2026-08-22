@@ -34,9 +34,28 @@
    element itself contributes no fill and no border at all. The plate goes in a
    pseudo-element rather than the background so the deckle is not cut off by
    the box, and the content sits above it by DOM order. */
+/* The side padding is a PERCENTAGE, and that is the fix rather than a taste.
+ *
+ * The deckle is painted into the plate, and the plate is laid `100% 100%`, so
+ * the width of the paper's own ragged margin is a fixed FRACTION of the leaf —
+ * measured off the plate as it renders, 14.5 of 304 CSS px, 4.8%. The padding
+ * was `12u`, which is 3.5% of the same leaf, so the text block began 1.3%
+ * INSIDE the painted edge and only the glyphs' own left sidebearings kept the
+ * letters on paper.
+ *
+ * Measured on a 932x430 capture of the Notes page before this: the median
+ * painted paper edge sat at CSS x 86.7 and the 5th-percentile leftmost ink at
+ * 86.3 — a margin of **−0.3 px**. Every wrapped line began on the deckle, and
+ * several began over it: `in his coat` reads `n his coat`, `is` reads `s`.
+ *
+ * A percentage tracks the deckle at every window, which a `--u` figure cannot:
+ * `--u` is height-bound and the leaf's width is not, so any fixed unit is
+ * correct at one aspect ratio and wrong at the rest. 6.5% leaves 1.7% of the
+ * leaf — 5 px on the phone, 8 on a desktop — of clear paper before the first
+ * letter. */
 .mm-panel[data-panel='quests'] .mm-quest-page {
   position: relative;
-  padding: calc(var(--u) * 8) calc(var(--u) * 12) calc(var(--u) * 14);
+  padding: calc(var(--u) * 8) 6.5% calc(var(--u) * 14);
   display: flex;
   flex-direction: column;
   min-width: 0;

@@ -1550,6 +1550,14 @@
   background-position: center;
   background-size: contain;
   pointer-events: none;
+  /* Hard texel edges, for the same reason `.mm-portrait` states above: an item
+     plate is quantised to a 1998 colour ladder and hard-doubled, and a smooth
+     downscale averages it straight back into the continuum the quantisation
+     existed to remove. Handed over with the figures: modelled over every plate
+     at every shipping `--u`, the items read 1.87x of MM6's colour depth with
+     smoothing and 1.26x without. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;   /* Firefox spells it this way */
 }
 /* The liquid is masked to the bottle it is inside.
  *
@@ -1828,7 +1836,21 @@
    * Only the right inset, deliberately. The sidebar is on the right and the
    * left one is the 3-D view's business. */
   .mm-ui .mm-sidebar { right: var(--safe-r); }
-  .mm-ui .mm-side-field { right: calc(var(--u) * 10 - var(--safe-r)); }
+  /* "The marble still runs to the glass" was the intention above and the
+   * arithmetic did not deliver it. `.mm-side-field`'s `right` is measured from
+   * `.mm-sidebar`, and the sidebar has ALREADY moved inboard by the inset — so
+   * `10u − safe-r` puts the field's right edge at `safe-r + 10u − safe-r`, ten
+   * native pixels from the glass, exactly where it sat before the rule was
+   * written. The right column used to cover those ten; it moved inboard too.
+   *
+   * Measured off a 932x430 capture with the island's own insets: from x 923 to
+   * x 932 the frame reads (100, 86, 84) where the field beside it reads
+   * (169, 156, 144) — nine CSS pixels of live 3-D view down the outer edge of
+   * the glass, in every single frame, panel open or not. `−safe-r` is the
+   * offset that actually reaches the glass: safe-r + (−safe-r) = 0. With no
+   * inset it is `right: 0`, which puts the field's edge under the right column
+   * that already paints over it, so nothing on a desktop moves. */
+  .mm-ui .mm-side-field { right: calc(var(--safe-r) * -1); }
 
   /* And the two columns have to come with it.
    *
@@ -1871,10 +1893,21 @@
    * stone it abuts on a desktop and the relationship the frame was drawn with
    * is restored rather than adjusted.
    *
-   * The strip of 3-D view this opens on the left is under the island by
-   * construction — that is what the inset means — so nothing visible is lost
-   * there, and the left pillar is deliberately left at the glass so the painted
-   * frame still bleeds edge to edge.
+   * The strip of 3-D view this opens on the left is NOT under the island, and
+   * the sentence that used to stand here — "under the island by construction,
+   * so nothing visible is lost" — was wrong. iOS reports the same inset on
+   * BOTH short edges in landscape, precisely so that a layout does not move
+   * when the phone is flipped: `tools/phonemenu.mjs` models it that way too
+   * ({ l: 59, r: 59 }). So the island is on one of those two bands and the
+   * other is plain visible glass. Measured on a 932x430 capture with a screen
+   * open, the left band ran sky, hills, trees and grass from x 7 to x 66 —
+   * 59 CSS px, 6.3% of the frame's width, full height — a slab of live 3-D
+   * world standing OUTSIDE the frame beside a painted room. REFERENCE §3.1
+   * has the viewport "simply cropped by the frame"; world outside the frame is
+   * the one thing it never is. The band below fills it with the frame's own
+   * stone, and it is on the panel LAYER rather than on a panel so that it
+   * appears and goes with the screen: with nothing open the 3-D view still
+   * bleeds edge to edge, which is what borderless means and is correct.
    *
    * Party creation is excluded by name, not by accident. It is the one screen
    * that takes the whole frame rather than the viewport rectangle, and it says
@@ -1888,4 +1921,28 @@
     right: calc(var(--side-w) + var(--safe-r));
   }
   .mm-ui .mm-panel-side { right: calc(var(--u) * 10 + var(--safe-r)); }
+
+  /* The stone that fills the band the screens vacate on the left.
+   *
+   * It starts below the architrave rather than at y 0, because the architrave
+   * already runs `left: 0; right: 0` and paints that band correctly; covering
+   * its left end would break the light rail that runs across the top of the
+   * frame. It stops at the bottom bar, which also already runs to the glass.
+   * So the frame's stone is continuous on all three edges and the world is
+   * inside it.
+   *
+   * `:has()` rather than a class on the layer, so nothing in JS has to
+   * remember to set one — the band is a consequence of a screen being open,
+   * and that is exactly what `:has()` says. Creation is excluded for the same
+   * reason it is excluded above: it is `left: 0` and vacates nothing. */
+  .mm-ui .mm-panel-layer:has(> .mm-panel.is-open:not([data-panel='create']))::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: calc(var(--u) * 8);
+    bottom: var(--bar-h);
+    width: calc(var(--u) * 8 + var(--safe-l));
+    background: var(--tex-marble-side) center / 100% 100% no-repeat;
+    background-color: #ada29c;
+  }
 }

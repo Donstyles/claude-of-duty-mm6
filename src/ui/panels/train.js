@@ -2,9 +2,8 @@ import './train.css';
 import { Panel } from './base.js';
 import {
   el, setChildren, tooltip, tipMarkup, fmt, ellipsis, engraved, labelRow, goldOval,
-  attribute,
+  attribute, enterLine, properName,
 } from '../widgets.js';
-import { enterLine } from './dialogue.js';
 import { GuildSystem, experienceOf } from '../../game/GuildSystem.js';
 import { experienceForLevel } from '../../game/rules.js';
 
@@ -124,7 +123,7 @@ export class TrainPanel extends Panel {
     const state = guilds.trainingState(hall, char);
 
     this.el.dataset.view = this.view;
-    this.titleEl.textContent = hall.name;
+    this.titleEl.textContent = properName(hall.name);
     this.subEl.textContent = `${hall.townName} · trains to level ${hall.maxLevel}`;
     this.portraitEl.style.backgroundImage = `url("${T.portrait(hall.portrait)}")`;
     this.nameEl.textContent = hall.keeper;
@@ -196,8 +195,13 @@ export class TrainPanel extends Panel {
         className: `is-num${capped ? '' : state.short > 0 ? ' mm-t-down' : ' mm-t-up'}`,
         text: capped ? '—' : state.short > 0 ? fmt(state.short) : 'ready',
       }),
+      // The same colour the side plate gives this very number four lines away:
+      // `--gold-deep` is money (§2), and the roll printed 3,240 in plain white
+      // while the plate beside it printed 3,240 in gold — one figure, one
+      // screen, two colours. `--down` still wins when the purse is short,
+      // because then the fee is the blocker (§8a) rather than merely a price.
       el('span', {
-        className: `is-num${!capped && !state.ok && state.short === 0 ? ' mm-t-down' : ''}`,
+        className: `is-num ${!capped && !state.ok && state.short === 0 ? 'mm-t-down' : 'mm-t-golddeep'}`,
         text: capped ? '—' : fmt(state.cost),
       }));
 

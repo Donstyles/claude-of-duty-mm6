@@ -4,8 +4,8 @@ import { itemMaterial } from '../Icons.js';
 import { ITEM_PLATE_ASPECT } from '../itemPlates.js';
 import {
   el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, goldOval, attribute,
+  enterLine, properName,
 } from '../widgets.js';
-import { enterLine } from './dialogue.js';
 import { MASTERY_LABEL } from '../../game/data/Skills.js';
 import {
   ShopSystem, SHOPS, SHOP_TYPES, displayName, isIdentified,
@@ -299,7 +299,10 @@ export class ShopPanel extends Panel {
     // hash, so all six general stores in Caerwen were one room.
     this._applyInterior({ interior: shop.type, venue: shop.id });
 
-    this.venueEl.textContent = shop.name;
+    // Through `properName()`, not raw: STYLE.md §7 says a data file may hold a
+    // typewriter apostrophe and the screen may not, and `Hobb's Forge` is the
+    // one name in the catalogue that has one.
+    this.venueEl.textContent = properName(shop.name);
     this.portraitEl.style.backgroundImage = `url("${T.portrait(shop.portrait)}")`;
     // Name and role are two elements, never one wrapped run: the name is the
     // person, the role is what they do, and only the name is blue (STYLE.md
@@ -402,7 +405,7 @@ export class ShopPanel extends Panel {
       lines: [
         { k: 'Asking', v: `${Math.round(t.spread.buy * 100)}% of worth` },
         { k: 'Paying', v: `${Math.round(t.spread.sell * 100)}% of worth` },
-        { k: `${trader.name}'s Merchant`, v: `${m.level} ${MASTERY_LABEL[m.mastery] ?? ''}`.trim() },
+        { k: `${trader.name}\u2019s Merchant`, v: `${m.level} ${MASTERY_LABEL[m.mastery] ?? ''}`.trim() },
         { k: 'Next delivery', v: `${sys.daysToRestock(shop)} days` },
       ],
       flavour: t.line,
