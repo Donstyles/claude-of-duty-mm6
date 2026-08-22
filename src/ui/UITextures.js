@@ -4183,7 +4183,9 @@ export class UITextures {
    * items are dragged straight onto it.
    */
   figure(spec = {}) {
-    const key = `figure-${spec.key ?? spec.classId ?? 'x'}-${spec.gender ?? 'm'}`;
+    // The cache key must include the class, or two characters with different
+    // classes and the same face share one niche.
+    const key = `figure-${spec.key ?? 'x'}-${spec.figureClass ?? spec.classId ?? 'x'}-${spec.gender ?? 'm'}`;
     // The niche is always painted here, because it has to keep matching the
     // panel's stone. Only the body on top of it is a plate — the procedural
     // painter builds a correct silhouette and then reads as a flat cartoon,
@@ -4192,7 +4194,29 @@ export class UITextures {
     // all: it is a different height and a different silhouette, so the two
     // together left a cartoon head sticking out above an armoured knight.
     const plated = !!FIGURE_PLATES.pick(spec);
-    return this._make(plated ? `niche-${key}` : key, 300, 640, (g, w, h, rng) => {
+    // `niche`, not `niche-${key}`, and the difference is a second and a half of
+    // frozen phone per party member.
+    //
+    // When a plate carries the body, NOTHING drawn on this canvas depends on
+    // who is standing in it: the callback is `paintNiche` alone, which paints
+    // the same stone for everybody. The character was in the cache key anyway,
+    // so the niche was repainted and re-encoded from scratch for every member
+    // of the party — 300x640 of procedural stone, measured by
+    // `tools/paneltest.mjs` at 2.4-4.0 s each in the headless harness, all of
+    // it synchronous on the main thread INSIDE `openPanel`. The backpack could
+    // not paint, and the four small images it needed could not even be
+    // requested, until it finished: the fetches were measured starting 2,075 ms
+    // after the open call.
+    //
+    // That is most of the "noticeable wait" the playtest reported, and it is
+    // not an image load at all. The unplated branch keeps its own key, because
+    // there the painter really does draw the character.
+    //
+    // The visible consequence: every niche now carries one stone grain instead
+    // of one per character. It was never a difference anybody could see — the
+    // surround is the same granite whoever is in it — and the figure covers
+    // most of it.
+    return this._make(plated ? 'niche' : key, 300, 640, (g, w, h, rng) => {
       UITextures.paintNiche(g, w, h, rng);
       if (!plated) paintFigure(g, w, h, spec, rng);
     });
@@ -4239,6 +4263,26 @@ export class UITextures {
   portraitPlates(sex = 'm') {
     const want = sex === 'f' ? 'f-' : 'm-';
     return [...PORTRAIT_PLATES.available].filter((n) => n.startsWith(want)).sort();
+  }
+
+  /**
+   * Every painted face in the game, as urls, for whoever wants them early.
+   *
+   * The whole set is fifty-one plates at 8-10 KB — smaller than two venue
+   * interiors — and a keeper's face costs 121-159 ms of round trip on a phone
+   * if it is asked for at the moment their screen opens. The alternative,
+   * resolving just the faces a town needs, would mean copying each venue
+   * screen's own idea of who stands behind its counter into a second place,
+   * and a second place is where those two answers start disagreeing.
+   *
+   * Urls, not stems: `PORTRAIT_PLATES.base` is relative on purpose so the game
+   * works under a deployed project subpath, and `artUrl` is the only thing in
+   * the tree that knows how to resolve that.
+   */
+  portraitPlateUrls() {
+    return [...PORTRAIT_PLATES.available]
+      .sort()
+      .map((name) => artUrl(`${PORTRAIT_PLATES.base}${name}.plate.png`));
   }
 
   /**
@@ -5147,9 +5191,20 @@ const FIGURE_PLATES = {
 
   has(name) { return this.available.has(name); },
 
+  /**
+   * `figureClass` first, and `classId` only as a fallback for the sample party.
+   *
+   * `classId` on a portrait spec is a PORTRAIT PLATE name, not a class — see
+   * `PartyCreation.portraitSpec()`, which sets it from `faceDef.plate`. Reading
+   * it as a class meant every rolled character missed the table and took the
+   * `thief` fallback, so a knight and a cleric stood in the niche as the same
+   * hooded woman. A fallback that looks like a plausible answer is exactly what
+   * kept it invisible; `null` would have been noticed in a day.
+   */
   pick(spec = {}) {
     const sex = (spec.gender ?? spec.sex ?? 'm') === 'f' ? 'f' : 'm';
-    const role = FIGURE_BASE_CLASS[spec.classId] ?? 'thief';
+    const asked = spec.figureClass ?? spec.classId;
+    const role = FIGURE_BASE_CLASS[asked] ?? 'thief';
     const want = `${sex}-${role}`;
     return this.has(want) ? artUrl(`${this.base}${want}.plate.png`) : null;
   },

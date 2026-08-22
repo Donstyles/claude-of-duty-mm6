@@ -98,6 +98,265 @@ export function sceneUrl(name) {
 }
 const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
+// ── plates, fetched and decoded before the screen that needs them ───────────
+
+/**
+ * A `background-image` is fetched AND DECODED after its element is on screen.
+ *
+ * That one sentence is the whole of the bug a playtest reported as *"opening a
+ * shop or the inventory shows a black screen, or items suddenly pop into the
+ * inventory after a noticeable wait."* Nothing was broken and nothing threw:
+ * `openPanel` builds the entire screen synchronously, so every gate that reads
+ * the DOM sees a finished screen — while the browser is still on the network
+ * fetching the room the player is supposed to be standing in. Measured on the
+ * phone's viewport over a 4G profile by `tools/paneltest.mjs`, before this:
+ *
+ *   · a venue backdrop      143-203 KB     386-551 ms of fetch, ~10 ms decode
+ *   · a keeper's portrait     8-10 KB      121-159 ms, almost all round trip
+ *   · one item sprite          4-6 KB      131-223 ms, likewise
+ *
+ * and for that whole window the panel paints its fallback surface colour —
+ * `#3a4247` for a shop, `#0b0805` for a conversation, which is the black
+ * rectangle in the report.
+ *
+ * So the plates are fetched before anybody asks for them, out of the frame
+ * where the player is walking around a town, and `decode()` is called on the
+ * small ones. `decode()` rather than `onload` is the point: a fetched image
+ * that has not been decoded still stalls the first paint that needs it, and on
+ * screen the two are indistinguishable.
+ *
+ * `ServicesPanel` has done a cut-down version of this since it was written —
+ * three interiors and a pool of portraits, fetched in its constructor — which
+ * is why it is the one venue screen that did not show the fault. This is that
+ * idea, kept in one place, with the decode it was missing and the variant hash
+ * it did not know about (it warms `tavern.jpg`, and Saltmarch's tavern is
+ * `tavern_2.jpg`).
+ *
+ * The record is kept, not just the request: holding the `Image` is what keeps
+ * the browser from throwing the decoded frame away between the warm and the
+ * open. The urls are the game's own committed files — nothing here fetches
+ * anything that is not already shipped in `public/art`.
+ */
+const PLATES = new Map();
+
+function plateRecord(src) {
+  const url = artUrl(src);
+  let rec = PLATES.get(url);
+  if (rec) return rec;
+  rec = { url, img: null, ok: false, decoded: null };
+  PLATES.set(url, rec);
+  if (typeof Image !== 'function') return rec;
+  const img = new Image();
+  // Let the browser decode off the main thread if it can; `decodePlate` below
+  // is what makes it actually happen rather than waiting for a paint.
+  img.decoding = 'async';
+  rec.img = img;
+  img.src = url;
+  return rec;
+}
+
+/** Put a plate in the browser's cache. Cheap — no decode, no bitmap. */
+export function warmPlate(src) {
+  if (src) plateRecord(src);
+}
+
+/**
+ * Fetch a plate and decode it, so the first paint that wants it does not wait.
+ *
+ * Only worth spending on the small ones. A 960x717 interior costs 2.75 MB of
+ * bitmap held against a ~10 ms decode saved, and a town has a dozen of them;
+ * an item sprite is 100 px square and costs nothing to keep decoded.
+ */
+export function decodePlate(src) {
+  if (!src) return Promise.resolve(false);
+  const rec = plateRecord(src);
+  if (!rec.img) return Promise.resolve(false);
+  rec.decoded ??= (rec.img.decode ? rec.img.decode() : Promise.resolve())
+    .then(() => { rec.ok = true; return true; }, () => false);
+  return rec.decoded;
+}
+
+/** True when the next paint of this plate will not have to wait for anything. */
+export function plateReady(src) {
+  return !!src && (PLATES.get(artUrl(src))?.ok ?? false);
+}
+
+/**
+ * The queue. One file at a time, with an idle gap between them.
+ *
+ * A burst of fifty parallel requests is the wrong shape for this: it competes
+ * with whatever the world is streaming, and on a phone's connection it makes
+ * every one of them slower. Nothing here is urgent by definition — if it were
+ * urgent the screen would already be open — so it trickles.
+ */
+const queue = [];
+let pumping = false;
+
+function idle(fn) {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 1500 });
+  else setTimeout(fn, 16);
+}
+
+async function pump() {
+  pumping = true;
+  while (queue.length) {
+    const { src, decode } = queue.shift();
+    const rec = plateRecord(src);
+    if (rec.img && !rec.img.complete) {
+      // Timed out rather than awaited forever: one plate the server never
+      // answers must not wedge every plate behind it.
+      await new Promise((done) => {
+        const end = () => { clearTimeout(t); done(); };
+        const t = setTimeout(end, 8000);
+        rec.img.addEventListener('load', end, { once: true });
+        rec.img.addEventListener('error', end, { once: true });
+      });
+    }
+    if (decode) await decodePlate(src);
+    await new Promise((r) => idle(r));
+  }
+  pumping = false;
+}
+
+function enqueue(sources, { decode = false } = {}) {
+  let added = 0;
+  for (const src of sources) {
+    if (!src || PLATES.has(artUrl(src))) continue;
+    queue.push({ src, decode });
+    added++;
+  }
+  if (added && !pumping) pump();
+  return added;
+}
+
+/**
+ * Which painting a venue's screen will show, as a url.
+ *
+ * Shared with `_applyInterior` rather than reimplemented beside it. The two
+ * have to agree on the variant hash or the warmer fetches one room and the
+ * panel paints another — which is this project's signature bug in miniature,
+ * and it is exactly what `ServicesPanel._preload` does today by warming
+ * `<kind>.jpg` while the hash sends half its venues to `<kind>_2.jpg`.
+ */
+export function interiorPlateUrl(kind, key = kind) {
+  const variants = kind ? INTERIOR_VARIANTS[kind] : null;
+  if (!kind || !variants?.length) return null;
+  const which = variants[hashIndex(key, variants.length)];
+  return artUrl(`${INTERIOR_BASE}${which === 1 ? kind : `${kind}_${which}`}.jpg`);
+}
+
+/**
+ * The ground under a painted room, when the screen declares no material.
+ *
+ * `#312418` is the mean of all thirty interior plates, measured off the files
+ * themselves — the spread runs `#1f1810` to `#432e1b`, tight enough that one
+ * value serves every room. It is a measurement within one set of images, so it
+ * needs no calibration to be true (STYLE.md §0), and it is the room's own
+ * colour rather than another screen's material (STYLE.md §12).
+ *
+ *   python3 - <<'EOF'
+ *   from PIL import Image; import glob
+ *   px = [Image.open(f).convert('RGB').resize((1,1), Image.BOX).getpixel((0,0))
+ *         for f in glob.glob('public/art/interiors/*.jpg')]
+ *   print('#%02x%02x%02x' % tuple(round(sum(c[i] for c in px)/len(px)) for i in range(3)))
+ *   EOF
+ *
+ * Only screens that declare `surface = 'none'` get it, and `none` means "the
+ * venue's painted interior IS my background" — `DialoguePanel` says so in its
+ * own comment. Completing that declaration is not the same as repainting a
+ * ground somebody else declared, which STYLE.md §6 forbids and which is how
+ * the shop counter ended up at 1.21:1. White ink on this measures 15.2:1, and
+ * the conversation's only ink over the room carries the §4 scrim as well.
+ */
+const ROOM_GROUND = '#312418';
+
+/**
+ * The spec the equipment niche resolves a character's figure from.
+ *
+ * Shared by `refreshNiche`, which paints it, and by the warmer, which fetches
+ * it ahead of time. Two copies of this would be two chances to warm one plate
+ * and paint another — and the note in `refreshNiche` is about precisely that
+ * class of mistake happening inside a single field name.
+ */
+export function figureSpecFor(vm) {
+  return {
+    ...(vm?.portraitSpec ?? {}),
+    figureClass: vm?.classId ?? vm?.portraitSpec?.classId,
+    gender: vm?.portraitSpec?.gender ?? vm?.gender ?? vm?.sex ?? 'm',
+  };
+}
+
+/**
+ * Fetch what the player is about to open, while they are still walking to it.
+ *
+ * Three sets, in the order the player meets them:
+ *
+ *   1. **The party's own gear.** A character's pack is known from the moment
+ *      the party exists, hours before anybody opens the backpack, and the
+ *      sprites are 4-6 KB each. Fetched AND decoded — that is what stops the
+ *      items appearing one after another over the drawn grid.
+ *   2. **The rooms of the town the party is standing in.** Ten to twelve
+ *      plates, and the player has to walk to a door before any of them is
+ *      needed. Fetched but not decoded: 2.75 MB of bitmap each against a
+ *      ~10 ms decode is the wrong trade to make twelve times over, and the
+ *      fetch was 386-551 ms of the measured stall while the decode was ten.
+ *   3. **Every painted face.** Fifty-one 8-10 KB plates, 612 KB in total,
+ *      which covers every keeper behind every counter and every townsperson in
+ *      every doorway. Resolving one keeper's portrait from here would mean
+ *      copying each venue screen's own idea of who is standing there; the whole
+ *      set is smaller than two interiors and cannot be wrong.
+ *
+ * Re-armed when the party travels, and when a find enters somebody's pack. Any
+ * of it may fail — a missing plate falls through to the procedural icon exactly
+ * as before, and nothing here is ever awaited by a screen.
+ */
+let warming = null;
+
+export function startWarming(ui) {
+  if (!ui?.ctx) return;
+  // A re-inited interface gets the same warmer pointed at it rather than a
+  // second one: the map of what has already been fetched is worth keeping and
+  // the listeners below are wired to the bus, not to the panel.
+  if (warming) { warming.ui = ui; return; }
+  warming = { ui, town: null };
+  const ctx = ui.ctx;
+  const soon = (fn) => idle(() => { try { fn(); } catch { /* warming is never load-bearing */ } });
+
+  const gear = () => {
+    const sprites = [];
+    const bodies = [];
+    for (const vm of warming.ui.members?.() ?? []) {
+      for (const entry of vm?.inventory ?? []) sprites.push(itemPlateUrl(entry?.item ?? entry));
+      for (const worn of Object.values(vm?.equipment ?? {})) sprites.push(itemPlateUrl(worn));
+      const body = warming.ui.textures?.figurePlate?.(figureSpecFor(vm));
+      if (body) bodies.push(body);
+    }
+    enqueue(sprites, { decode: true });
+    enqueue(bodies, { decode: true });
+  };
+
+  const rooms = () => {
+    const id = ctx.get?.('venue')?.town ?? null;
+    if (!id || id === warming.town) return;
+    warming.town = id;
+    enqueue(Object.values(VENUES)
+      .filter((v) => v.town === id)
+      .map((v) => interiorPlateUrl(v.kind, v.id)));
+  };
+
+  const faces = () => enqueue(warming.ui.textures?.portraitPlateUrls?.() ?? []);
+
+  soon(gear);
+  soon(rooms);
+  soon(faces);
+
+  ctx.events?.on('player:enteredTown', () => soon(rooms));
+  ctx.events?.on('venue:entered', () => soon(rooms));
+  ctx.events?.on('party:created', () => soon(gear));
+  ctx.events?.on('ui:panelClosed', () => soon(gear));
+  ctx.events?.on('loot:picked', ({ item } = {}) => { decodePlate(itemPlateUrl(item)); });
+}
+
 // ── base ────────────────────────────────────────────────────────────────────
 export class Panel {
   static id = 'panel';
@@ -144,6 +403,10 @@ export class Panel {
       });
       parent.appendChild(this.sideEl);
     }
+    // Every panel mounts; the warmer starts once. Here rather than in a
+    // constructor because this is the first moment the whole interface is
+    // known to exist, and it is a method every screen already runs.
+    startWarming(this.ui);
     return this.el;
   }
 
@@ -170,6 +433,11 @@ export class Panel {
     this.el.classList.add('is-open');
     this.sideEl?.classList.add('is-open');
     this.ui.hud?.setSidebarMode(this.constructor.coversSidebar ? 'cover' : 'map');
+    // Which building this screen was opened for, kept for the whole visit.
+    // Screens re-paint their room from `onOpen` and from `refresh` with
+    // whatever that call happens to know, and the one that knows the venue is
+    // not always the last to run — see `_applyInterior`.
+    this._venueKey = opts?.venue ?? null;
     this._applyInterior(opts);
     try { this.onOpen(opts); } catch (err) { console.error('[ui] panel open failed:', err); }
     try { this.refresh(); } catch (err) { console.error('[ui] panel refresh failed:', err); }
@@ -210,22 +478,44 @@ export class Panel {
    * of the venue's own id rather than a roll, so a house does not rearrange
    * its furniture between two visits, and the same house is the same house
    * across a save.
+   *
+   * **The variant key is the screen's, not the call's.** A screen paints its
+   * room more than once per visit — `show` does it from the venue's options,
+   * and then `onOpen` or `refresh` does it again from whatever that method
+   * knows. `DialoguePanel._begin` passes only `{ interior: 'house' }`, so the
+   * second call hashed the bare word `house`, which is a constant: every one
+   * of the fifty-five cottages in Caerwen showed `house_4.jpg`, and the four
+   * painted houses this file's own comment above exists to spread were three
+   * files nobody ever saw. It also cost a wasted 150 KB fetch on every door,
+   * because `show` had already started downloading the right one. Remembering
+   * the venue for the length of the visit fixes both without a screen having
+   * to remember to pass it.
+   *
+   * The url comes from `interiorPlateUrl`, which the warmer also calls, so the
+   * plate that was fetched ahead of time and the plate that gets painted
+   * cannot drift apart.
    */
   _applyInterior(opts) {
     const kind = opts?.interior ?? this.constructor.interior
       ?? (opts?.venue ? VENUE_INTERIOR.get(opts.venue) : null);
-    const variants = kind ? INTERIOR_VARIANTS[kind] : null;
-    if (!kind || !variants?.length) {
-      this.el.style.backgroundImage = '';
-      this.el.classList.remove('has-interior');
-      return;
-    }
-    const which = variants[hashIndex(opts?.venue ?? kind, variants.length)];
-    const file = which === 1 ? kind : `${kind}_${which}`;
     // `artUrl`, not a leading slash: `INTERIOR_BASE` is relative on purpose and
     // the slash turned it into a request the deployed site cannot answer. See
     // the note on `artUrl` above — this one character was the black viewport.
-    this.el.style.backgroundImage = `url("${artUrl(`${INTERIOR_BASE}${file}.jpg`)}")`;
+    const url = interiorPlateUrl(kind, opts?.venue ?? this._venueKey ?? kind);
+    if (!url) {
+      this.el.style.backgroundImage = '';
+      this.el.style.backgroundColor = '';
+      this.el.classList.remove('has-interior');
+      return;
+    }
+    // Holds the record so the browser keeps the plate; a no-op when the town
+    // warmer already has it, which is the normal case.
+    warmPlate(url);
+    this.el.style.backgroundImage = `url("${url}")`;
+    // A screen with no material of its own has, until the plate decodes,
+    // nothing but `.mm-surface-none`'s `#0b0805` — the black rectangle the
+    // playtest reported. See `ROOM_GROUND`.
+    if (this.constructor.surface === 'none') this.el.style.backgroundColor = ROOM_GROUND;
     this.el.classList.add('has-interior');
   }
 
@@ -279,7 +569,29 @@ export class Panel {
   refreshNiche() {
     const vm = this.ui.active();
     if (!this.nicheFigure || !vm) return;
-    const spec = vm.portraitSpec ?? { classId: vm.classId };
+    // The figure needs the character's CLASS. `portraitSpec.classId` is not it.
+    //
+    // One field name carrying two meanings in the same object, which is this
+    // repository's most common bug and was live on the most-looked-at screen
+    // in the game. `PartyCreation.portraitSpec()` returns
+    // `classId: this.faceDef.plate` and says so in its own comment — "plates
+    // are keyed by face, not class" — so for a rolled character that field
+    // holds a FACE id. `FIGURE_PLATES.pick` reads the same name as a class,
+    // finds no entry in `FIGURE_BASE_CLASS`, and falls back to `thief`.
+    //
+    // The owner photographed the consequence: "Ostrid Mercer the Knight" and
+    // "Serah Saltcombe the Cleric" standing in the niche as the SAME hooded
+    // woman in dark leather, matching neither their portrait nor their class.
+    // Every rolled party member in the game was wearing a thief.
+    //
+    // The sample party was unaffected, because it builds its own spec where
+    // `classId` really is a class — so every capture and every review of this
+    // screen showed it working.
+    //
+    // Built by `figureSpecFor` rather than here, because the warmer fetches
+    // this same plate before the screen opens and the two must not be able to
+    // disagree about which one it is.
+    const spec = figureSpecFor(vm);
     // Two layers, painted stone underneath and a painted body on top. The
     // stone is a synchronous canvas so it is there on the first frame; the
     // body is a file and arrives a frame later, which is the right way round.

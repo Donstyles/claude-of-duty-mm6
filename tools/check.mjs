@@ -111,6 +111,16 @@
  *               populations from the same walk, so no threshold is picked by
  *               hand.
  *
+ *   figures     a knight and a cleric stood in the equipment niche as the SAME
+ *               hooded woman. `portraitSpec.classId` holds a FACE plate name,
+ *               not a class — its own comment says so — and the figure picker
+ *               read the same field name as a class, missed its table and took
+ *               a `?? 'thief'` fallback. One name, two meanings, in one object.
+ *               It survived every capture ever taken of that screen because the
+ *               SAMPLE party builds a spec where `classId` really is a class;
+ *               the bug existed only for characters a player rolled, which is
+ *               every character a player has.
+ *
  * Note what `content` and `seam` each do NOT do. `content` checks that ids
  * RESOLVE: that a quest naming an NPC names one who exists. It never checks
  * that a FIELD exists, so it was green through all eleven. `seam` is the other
@@ -206,6 +216,8 @@ const GATES = [
     why: 'the four in the bar are the painted plates, and are not being smoothed' },
   { name: 'sound', slow: true, cmd: 'node', args: ['tools/soundtest.mjs'],
     why: 'the game is audible — measured on its own master bus, not asserted' },
+  { name: 'figures', slow: true, cmd: 'node', args: ['tools/figuretest.mjs'],
+    why: 'the body in the niche is the one the character\'s class calls for' },
   { name: 'lod', slow: true, cmd: 'node', args: ['tools/lodtest.mjs'],
     why: 'the ground holds its shape while you walk over it' },
 ];
