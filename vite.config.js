@@ -112,7 +112,12 @@ function spaFallback() {
  * version on every code-only deploy and throw away a phone's art cache to ship
  * a one-line fix — several megabytes re-fetched, over mobile data, for nothing.
  *
- * A rebuild that changed nothing produces the same digest, so a redeploy that
+ * Measured both ways, on real builds of this tree, because "the version tracks
+ * the art" is exactly the sort of claim that is comfortable to assert and easy
+ * to get wrong. Repainting ONE pixel of one plate out of the 570 files digested
+ * moved it from `caerwen-2e4d3d1d4313` to `caerwen-817bd86dd3d9`; restoring
+ * that pixel moved it back to `caerwen-2e4d3d1d4313`. So it is a function of
+ * the art and nothing else: it moves when the art moves, and a redeploy that
  * changed nothing evicts nothing.
  */
 function stampServiceWorker() {
