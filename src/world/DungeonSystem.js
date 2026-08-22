@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { System } from '../core/Engine.js';
 import { getMaterialLibrary } from '../render/MaterialLibrary.js';
 import { DUNGEONS, entranceOf } from '../game/data/Dungeons.js';
+import { approachBearing } from './approach.js';
 import { QUESTS } from '../game/data/Quests.js';
 import { charSkillEffect } from '../game/rules.js';
 
@@ -296,7 +297,30 @@ export class DungeonSystem extends System {
     for (const def of Object.values(DUNGEONS)) {
       const plan = entranceOf(def, worldSize);
       if (!plan) continue;
-      this.entrances.set(def.id, { def, ...this._snapToGround(terrain, plan.x, plan.z) });
+      const at = this._snapToGround(terrain, plan.x, plan.z);
+      // Which way the door faces, decided by the ground rather than by a die.
+      //
+      // `_buildPortals` used to turn each arch by `rng.range(0, 2*PI)`, so
+      // roughly half of them faced INTO the hillside they stand against and the
+      // player met a 4.6 m stone doorway edge-on: a grey block in a field, which
+      // is most of why the owner called them "just a weird arch". The approach
+      // walk caught it too — one dungeon photographed as a slab you would walk
+      // straight past.
+      //
+      // `approachBearing` is the same call `PropSystem` lays the waystones and
+      // the flanking piers along, which is the point of it being shared: the
+      // marks lead along a bearing and the mouth now opens onto the same one,
+      // so the composition is a doorway at the end of a line rather than a line
+      // that arrives at a wall.
+      //
+      // Taken unconditionally, unlike the marks. `PropSystem` skips a door whose
+      // ring is flatter than `APPROACH_RELIEF`, because on isotropic ground
+      // there is no line and marking one is a lie — but the arch has to face
+      // somewhere regardless, and on flat ground one bearing is as good as
+      // another. The lowest is at least stable across runs, which the die was
+      // not.
+      const facing = terrain ? approachBearing(terrain, at.x, at.z) : null;
+      this.entrances.set(def.id, { def, ...at, yaw: facing?.bearing ?? 0 });
     }
   }
 
@@ -326,7 +350,6 @@ export class DungeonSystem extends System {
     this._owned.push(dark);
     const stone = new Batch(this.lib.get('granite-block', { repeat: 1.4 }));
     const hole = new Batch(dark);
-    const rng = this.rngRoot.fork('dungeon-portals');
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const one = new THREE.Vector3(1, 1, 1);
@@ -338,7 +361,7 @@ export class DungeonSystem extends System {
     const mouth = new THREE.BoxGeometry(2.4, 3.4, 0.4);
 
     for (const door of this.entrances.values()) {
-      q.setFromEuler(new THREE.Euler(0, rng.range(0, Math.PI * 2), 0));
+      q.setFromEuler(new THREE.Euler(0, door.yaw ?? 0, 0));
       const put = (batch, geom, lx, ly, lz) => {
         const p = new THREE.Vector3(lx, ly, lz).applyQuaternion(q);
         m.compose(p.add(new THREE.Vector3(door.x, door.y - 0.4, door.z)), q, one);

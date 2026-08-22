@@ -7,6 +7,7 @@ import {
 } from '../game/data/Regions.js';
 import { stowInPack } from '../game/AlchemySystem.js';
 import { getItem } from '../game/data/Items.js';
+import { approachBearing, APPROACH_RELIEF } from './approach.js';
 
 /**
  * The things that make the countryside look inhabited: boulders and outcrops,
@@ -457,42 +458,16 @@ export class PropSystem extends System {
   /**
    * Which way you walk *out* of a dungeon door.
    *
-   * Nothing here knows where the towns are — only five of the eleven have a
-   * terrain landmark and none of the far ones is built — so the approach is
-   * taken from the ground instead: sample sixteen bearings and keep the one
-   * where the ground stands lowest. A door sited against a hillside has one
-   * open side by construction, and that open side is the way a party arrives
-   * and the way it leaves. Deriving it rather than storing it also means the
-   * marks follow the door if the catalogue ever re-sites it.
-   *
-   * Two details that were each worth a measurement.
-   *
-   * **Lowest, not steepest-falling.** The first version asked which way the
-   * ground *drops* two metres, and lost twelve of the fifty-five: a door on a
-   * level shelf with a headwall behind it has a perfectly clear way out and no
-   * fall at all in it. Taking the minimum instead of the descent finds the way
-   * out at every one of them, and on 53 of 55 the direction it picks is the one
-   * facing away from the higher ground — which is the check that matters.
-   *
-   * **Fifty-five metres, not thirty.** `TerrainGen` levels a porch whose blend
-   * reaches 17 m, so a ring sampled at thirty is still half inside the pad this
-   * function is trying to see past. Fifty-five is clear of it.
-   *
-   * Returns null only where the ring varies by under a metre and a half — truly
-   * isotropic ground, where there is no line to mark and marking one is a lie.
+   * The arithmetic moved to `./approach.js` when `DungeonSystem` needed the
+   * same answer to turn the arch to face the approach. Two copies of it is how
+   * the waystones end up leading to the side of a doorway rather than through
+   * it, and that divergence is invisible in review because both copies look
+   * correct. The reasoning that set the ring radius and the lowest-not-steepest
+   * rule went with it, next to the code it justifies.
    */
   _approachBearing(terrain, x, z, radius = 55) {
-    let low = null, high = -Infinity;
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2;
-      const px = x + Math.sin(a) * radius;
-      const pz = z + Math.cos(a) * radius;
-      if (terrain.isWater(px, pz)) continue;
-      const h = terrain.heightAt(px, pz);
-      if (!low || h < low.h) low = { a, h };
-      if (h > high) high = h;
-    }
-    return low && (high - low.h) > 1.5 ? low.a : null;
+    const got = approachBearing(terrain, x, z, radius);
+    return got && got.relief > APPROACH_RELIEF ? got.bearing : null;
   }
 
   /**
