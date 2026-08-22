@@ -60,6 +60,20 @@ async function measure(label, query, phone) {
     ? { viewport: { width: 932, height: 430 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true }
     : { viewport: { width: 1600, height: 900 } });
   page.setDefaultTimeout(180000);
+  // Say WHY the page went, rather than only that it did.
+  //
+  // The first retry wrapper assumed WebGL context eviction and said so in its
+  // commit message. Three retries then failed at the identical point, which
+  // rules that out — eviction is a race and would not be deterministic. An
+  // assumption stated confidently in a commit message is still an assumption,
+  // so these listeners exist to replace it with the browser's own answer.
+  const why = [];
+  page.on('crash', () => why.push('the renderer process crashed'));
+  page.on('close', () => why.push('the page was closed'));
+  page.on('pageerror', (e) => why.push(`pageerror: ${String(e.message).slice(0, 160)}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') why.push(`console: ${m.text().slice(0, 160)}`);
+  });
   try {
     await page.goto(`http://127.0.0.1:${port}/?${query}`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => window.__GAME?.ready === true, undefined, { timeout: 180000 });
@@ -118,8 +132,11 @@ async function measure(label, query, phone) {
         rows,
       };
     });
+  } catch (err) {
+    if (why.length) console.log(`  ..    ${label}: ${why.slice(0, 4).join(' | ')}`);
+    throw err;
   } finally {
-    await page.close();
+    try { await page.close(); } catch { /* already gone */ }
   }
 }
 
