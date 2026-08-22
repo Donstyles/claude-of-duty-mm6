@@ -38,6 +38,17 @@
        choice" as distinct from "the control under the pointer"; this file is
        the case for writing it.
 
+   Type is on STYLE.md §1's ladder and nowhere between its steps — `display`
+   19u for the title, `body` 12u for every row, name and figure, `micro` 10u
+   for the four gold headings and for the two bottom lists. The reference's own
+   cap heights are 14 / 8 / 7, and Pagella reaches those at 20.2 / 11.6 / 10.1,
+   so the ladder and the measurement agree to within a native pixel everywhere
+   except the bottom lists, where `micro` is a deliberate step down and the
+   comment on `.mm-create-entry` gives the arithmetic. The three sizes that are
+   NOT on the ladder — 13u on the portrait chevrons and the +/- steppers, 11u
+   on the stat arrowheads — are glyph sizes fitted to their boxes, the way the
+   brass ovals' glyphs are, not type.
+
    Every selector is scoped to `.mm-panel[data-panel='create']` (STYLE.md §11).
    `ui.panels.css` still carries an older `.mm-create-*` block written bare;
    these rules outrank it by specificity, which is why nothing here relies on
@@ -160,14 +171,20 @@
 .mm-panel[data-panel='create'] .mm-create-sky.is-left { left: 2.5%; width: 22.19%; }
 .mm-panel[data-panel='create'] .mm-create-sky.is-right { left: 75.63%; width: 22.66%; }
 
-/* Cap 14 in Pagella is 20.2u of font-size. Tracked +10.7 native px against a
-   glyph width of 12-15, which is 0.53em — the only tracked type in the game. */
+/* STYLE.md §1's `display` step, 19u, and nothing between the steps. The
+   reference measures this title at cap 14, which Pagella reaches at 20.2u —
+   0.8 native px apart, which is one device row on a 1.5x capture and inside
+   its resolution, so the ladder wins and the measurement does not disagree
+   with it. Leading is the plaque's 22u rather than the table's 23u for the one
+   reason the table gives: leading is for elements that can wrap, and a title
+   set `nowrap` in a 22u recess cannot. Tracked +10.7 native px against a glyph
+   width of 12-15 — 0.53em, and the only tracked type in the game. */
 .mm-panel[data-panel='create'] .mm-create .mm-create-title {
   left: 26.09%;
   width: 47.97%;
   display: grid;
   place-items: center;
-  font-size: calc(var(--cu) * 20);
+  font-size: calc(var(--cu) * 19);
   line-height: calc(var(--cu) * 22);
   letter-spacing: 0.53em;
   text-indent: 0.53em;
@@ -332,7 +349,7 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   text-align: right;
-  font-size: calc(var(--cu) * 11.5);
+  font-size: calc(var(--cu) * 12);
   line-height: calc(var(--cu) * 13);
   color: var(--ink);
   text-shadow: var(--shadow);
@@ -354,7 +371,7 @@
   display: block;
   padding: 0 calc(var(--cu) * 5);
   font-family: inherit;
-  font-size: calc(var(--cu) * 11.5);
+  font-size: calc(var(--cu) * 12);
   line-height: calc(var(--cu) * 20);
   letter-spacing: 0;
   text-align: left;
@@ -390,7 +407,7 @@
   flex: 0 0 calc(var(--cu) * 16);
   height: calc(var(--cu) * 16);
   line-height: calc(var(--cu) * 16);
-  font-size: calc(var(--cu) * 11.5);
+  font-size: calc(var(--cu) * 12);
   letter-spacing: 0;
   white-space: nowrap;
   cursor: default;
@@ -451,7 +468,7 @@
 .mm-panel[data-panel='create'] .mm-create-skillrow {
   height: calc(var(--cu) * 16);
   line-height: calc(var(--cu) * 16);
-  font-size: calc(var(--cu) * 11.5);
+  font-size: calc(var(--cu) * 12);
   letter-spacing: 0;
   text-align: center;
   white-space: nowrap;
@@ -665,7 +682,7 @@
 .mm-panel[data-panel='create'] .mm-create-pool-value {
   height: calc(var(--cu) * 16);
   line-height: calc(var(--cu) * 16);
-  font-size: calc(var(--cu) * 11.5);
+  font-size: calc(var(--cu) * 12);
   letter-spacing: 0;
   color: var(--ink);
   text-shadow: var(--shadow);
