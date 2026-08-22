@@ -762,7 +762,8 @@ export class HUD {
       const cells = Math.max(18, Math.round(46 / zoom));
       const px = W / cells;
       const py = px;
-      const party = map.party ?? { x: map.sizeX / 2, y: map.sizeY / 2, yaw: 0 };
+      // Position only. Facing is `this._yaw`, taken once at the arrow.
+      const party = map.party ?? { x: map.sizeX / 2, y: map.sizeY / 2 };
       const half = cells / 2;
       for (let ry = -half; ry <= half; ry++) {
         for (let rx = -half; rx <= half; rx++) {
@@ -823,22 +824,28 @@ export class HUD {
       // and it is drawn no longer.
       g.restore();
 
-      // `this._yaw`, not `party.yaw` — the same input the dungeon arrow takes.
+      // `this._yaw` — the same input the dungeon arrow a few lines up takes.
       //
-      // `UISystem.mapParty()` returns `yaw: -yaw`, already negated for the
-      // Maps page's own frame, and `_drawPartyArrow` negates what it is given.
-      // Two negations on the surface and one underground, so the arrow on the
-      // sidebar map turned the WRONG WAY — mirrored about the north-south axis,
-      // reading NW while the compass beside it read SW. The owner: "Arrow on
-      // minimap doesn't relate to party direction correctly."
+      // This used to pass `map.party.yaw`, which `UISystem.mapParty()` handed
+      // back already negated for the Maps page's own frame, and
+      // `_drawPartyArrow` negates what it is given. Two negations on the
+      // surface and one underground, so the arrow on the sidebar map turned the
+      // WRONG WAY — mirrored about the north-south axis, reading NW while the
+      // compass beside it read SW. The owner: "Arrow on minimap doesn't relate
+      // to party direction correctly."
       //
       // `_drawPartyArrow`'s own comment already argued for one arrow, "because
       // the surface map and the dungeon floor both need it and a second copy is
       // how the two start pointing different ways". One copy of the DRAWING was
-      // not enough; they were being handed two different inputs. It also fixes
-      // a second difference nobody had noticed — `this._yaw` is smoothed at
-      // 12 Hz and `party.yaw` is not, so the surface arrow snapped while the
-      // dungeon arrow eased.
+      // not enough; they were being handed two different inputs. `mapParty()`
+      // no longer returns a facing at all, so there is no second input left to
+      // reach for. It also fixed a difference nobody had noticed — `this._yaw`
+      // is smoothed at 12 Hz and the raw camera yaw is not, so the surface
+      // arrow snapped while the dungeon arrow eased.
+      //
+      // `tools/arrowtest.mjs` sweeps a full turn against this: a mirror is the
+      // one error a single heading cannot show, because north and south are
+      // their own mirrors and east and west merely swap.
       this._drawPartyArrow(g, W, cx, cy, this._yaw);
     }
     g.restore();

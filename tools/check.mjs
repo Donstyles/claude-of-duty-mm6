@@ -245,6 +245,8 @@ const GATES = [
     why: 'the body in the niche is the one the character\'s class calls for' },
   { name: 'lod', slow: true, cmd: 'node', args: ['tools/lodtest.mjs'],
     why: 'the ground holds its shape while you walk over it' },
+  { name: 'arrow', slow: true, cmd: 'node', args: ['tools/arrowtest.mjs'],
+    why: 'the marker on the map points where the party faces, all the way round' },
 ];
 
 function run(gate) {

@@ -1544,21 +1544,37 @@ export class UISystem extends System {
 
   // ── map ───────────────────────────────────────────────────────────────────
 
+  /**
+   * Where the party stands on the survey grid, in cells.
+   *
+   * Position only, deliberately. This used to also return `yaw: -yaw`, a
+   * facing already negated for the Maps page's frame, and that negation is
+   * what broke the sidebar arrow: `HUD._drawPartyArrow` negates whatever it is
+   * handed, so the surface map got two negations against the dungeon's one and
+   * the marker turned the wrong way — mirrored about north-south, reading NW
+   * while the compass an inch above it read SW.
+   *
+   * The field had no readers left once the HUD was fixed. The Maps page builds
+   * its own frame from `player.yaw` and negates it once itself (`map.js`
+   * `_drawParty`), and the HUD takes its own smoothed `this._yaw`. So it is
+   * gone rather than left sitting here correct-for-nobody: a facing whose sign
+   * depends on which screen you were thinking of when you wrote it is a trap,
+   * and this one had already been walked into. Facing comes from the camera,
+   * with one negation at the drawing, and there is now nowhere else to get it.
+   */
   mapParty() {
     const player = this.ctx?.get('player');
     const map = this._map;
-    const yaw = this.ctx?.camera?.rotation?.y ?? 0;
-    if (!map) return { x: 0, y: 0, yaw: -yaw };
+    if (!map) return { x: 0, y: 0 };
     if (player?.position && map.span) {
       const gx = ((player.position.x - map.origin.x) / map.span) * map.sizeX;
       const gy = ((player.position.z - map.origin.z) / map.spanY) * map.sizeY;
       return {
         x: Math.max(0, Math.min(map.sizeX - 1, gx)),
         y: Math.max(0, Math.min(map.sizeY - 1, gy)),
-        yaw: -yaw,
       };
     }
-    return { ...map.party, yaw: -yaw };
+    return { x: map.party?.x ?? 0, y: map.party?.y ?? 0 };
   }
 
   /**
