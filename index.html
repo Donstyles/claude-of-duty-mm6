@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- `viewport-fit=cover` is what lets the canvas reach into the notch and
+         the home-indicator strip; `user-scalable=no` plus `maximum-scale=1`
+         stops a two-finger drag on the look control pinch-zooming the page,
+         which iOS otherwise does even with `touch-action: none`. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Claude of Duty — The Kingdom of Caerwen</title>
+
+    <!-- Installable. On Android the manifest alone gets a real fullscreen
+         launcher entry. iOS ignores most of it: Safari reads the three
+         `apple-*` tags below and the `apple-touch-icon` link instead, and only
+         once the page is added to the Home Screen does it launch in its own
+         window without Safari's chrome. `black-translucent` is the one that
+         puts our own pixels under the status bar rather than beside it — the
+         difference between borderless and a black band. -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#12141c" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Caerwen" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png" />
+    <!-- Safari will happily let a swipe on the game select the party names. -->
+    <meta name="format-detection" content="telephone=no" />
+    <!-- Inline so there is no second request. Without any icon at all the
+         browser asks for /favicon.ico, gets a 404, and every capture report
+         then carries a console error — which is exactly how a review process
+         learns to ignore console errors. -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23191b22'/%3E%3Cpath d='M16 5l2.6 6.4L25 14l-6.4 2.6L16 23l-2.6-6.4L7 14l6.4-2.6z' fill='%23ffdf7a'/%3E%3Ccircle cx='16' cy='14' r='2.4' fill='%23fff6d0'/%3E%3C/svg%3E" />
+    <script type="module" crossorigin src="./assets/index-BotfF7-v.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/rolldown-runtime-DK3Fl9T5.js">
+    <link rel="modulepreload" crossorigin href="./assets/three-Bd1PvSFC.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-CFtDarGJ.css">
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="viewport"></canvas>
+      <div id="ui-root"></div>
+      <!-- Shown only on a coarse pointer in a portrait-ish window; see ui.css.
+           The game keeps running behind it. -->
+      <div id="rotate-veil">
+        <div class="rv-glyph"></div>
+        <div class="rv-text">TURN THE PHONE</div>
+        <div class="rv-sub">Caerwen is a widescreen kingdom.</div>
+      </div>
+      <!-- The title screen. Its ground is `scenes/title.png` laid over the old
+           radial gradient in ui.css, which stays as the fallback — the veil is
+           four elements and a painting, and the painting is the only part of it
+           that is not a rectangle. Everything inside `.boot-inner` is held to
+           the top of the veil rather than centred in it, because the upper
+           third is the band the plate was painted dark and empty for and the
+           centre is where its lit horizon falls. -->
+      <div id="boot">
+        <div class="boot-inner">
+          <div class="boot-title">CLAUDE OF DUTY</div>
+          <div class="boot-sub">Chronicles of Caerwen</div>
+          <div class="boot-bar"><div class="boot-bar-fill" id="boot-fill"></div></div>
+          <div class="boot-status" id="boot-status">Kindling the realm…</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

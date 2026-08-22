@@ -1,0 +1,1 @@
+import{t as e}from"./rolldown-runtime-DK3Fl9T5.js";var t=e({INTERIOR_BASE:()=>r,INTERIOR_VARIANTS:()=>n}),n=Object.freeze({alchemist:[1,2],armourer:[1,2],bank:[1,2],coachstop:[1,2],dock:[1,2],generalstore:[1,2],guild:[1,2,3],house:[1,2,3,4],magicshop:[1,2],tavern:[1,2,3],temple:[1,2],trainer:[1,2],weaponsmith:[1,2]}),r=`art/interiors/`;export{n,t as r,r as t};

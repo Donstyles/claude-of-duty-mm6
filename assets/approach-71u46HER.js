@@ -1,0 +1,1 @@
+function e(e,t,n,r=55){let i=null,a=-1/0;for(let o=0;o<16;o++){let s=o/16*Math.PI*2,c=t+Math.sin(s)*r,l=n+Math.cos(s)*r;if(e.isWater(c,l))continue;let u=e.heightAt(c,l);(!i||u<i.h)&&(i={a:s,h:u}),u>a&&(a=u)}return i?{bearing:i.a,relief:a-i.h}:null}var t=1.5;export{t as APPROACH_RELIEF,e as approachBearing};
