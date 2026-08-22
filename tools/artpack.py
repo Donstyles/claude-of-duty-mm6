@@ -13,13 +13,19 @@ Two treatments:
              MM6's own density — and the doubling is what carries a hard pixel
              edge through to the screen.
 
-  spells     1024 -> 176 PNG with an alpha matte. MM6's spellbook miniatures
-             sit directly on the parchment page with soft, feathered edges and
-             no frame. The generator obliges by painting on cream, so the cream
-             is keyed out against each plate's own measured border colour
-             (they vary a few units) rather than a fixed constant. A rounded
-             falloff then guarantees nothing reaches the plate edge hard, which
-             is what would otherwise betray the miniatures as pasted rectangles.
+  spells     1024 -> an 86 texel grid, quantised, hard-doubled to a 172 plate.
+             MM6's spellbook miniatures sit directly on the parchment page with
+             soft, feathered edges and no frame. The generator obliges by
+             painting on cream, so the cream is keyed out against each plate's
+             own measured border colour (they vary a few units) rather than a
+             fixed constant. A rounded falloff then guarantees nothing reaches
+             the plate edge hard, which is what would otherwise betray the
+             miniatures as pasted rectangles. 86 is what `.mm-sb-ink` draws.
+
+  items      1024 -> matted, cropped to the paint, then the same treatment on a
+             texel grid sized by the square root of the plate's area, because
+             one item plate is drawn at anything from a 29-pixel backpack cell
+             to 200 pixels on a shop wall. See `ITEM_TEXEL_AREA`.
 
   python3 tools/artpack.py                 every stage
   python3 tools/artpack.py portraits figures
@@ -42,34 +48,47 @@ ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 # ── the retro pass ──────────────────────────────────────────────────────────
 #
 # The owner's note was "portrait and paper dolls need a filter to look retro",
-# and `tools/retroaudit.py` is the measurement under it. Against MM6's own
-# bitmaps, recovered at native 640x480 from the reference captures and read
-# through a 36x52 window:
+# later "every item and spell icon should look like MM6", and
+# `tools/retroaudit.py` is the measurement under both. Against MM6's own
+# bitmaps, recovered at native 640x480 from the reference captures — the first
+# two families through a 36x52 window, the item family through the sprite's own
+# silhouette at a 600-pixel sample, the spell family through a 40x40 window:
 #
 #                          colours/95%      step        hf
-#     MM6 portrait              378       0.0684      0.113
+#     MM6 portrait              378       0.0684      0.113   (32px tile)
 #     ours, before             1705       0.0857      0.103
-#     MM6 paper doll            446       0.1183      0.454
+#     MM6 paper doll            446       0.1183      0.454   (32px tile)
 #     ours, before             1424       0.1009      0.121
+#     MM6 item sprite           283       0.1066      0.290   (8px tile)
+#     ours, before              545       0.0692      0.372
+#     MM6 spell art             371       0.0854      0.245   (16px tile)
+#     ours, before             1414       0.1167      0.302
 #
-# So the gap was never local contrast — `step` was already at or above MM6's on
-# both — and it was not sharpness either. It was **colour depth**: our art
-# arrives as 24-bit painting with a distinct value under almost every pixel,
-# where a 1998 asset repeats itself. Nothing else in the three numbers was more
-# than 30% out. That is why what follows is mostly a quantiser and only barely a
-# dither: a heavy dither would have driven `step` and `hf` PAST the reference to
-# fix a number that was never the problem, and that is what "reads as damaged"
-# looks like in practice.
+# The same shape of defect in all four, and the same conclusion: `hf` and
+# `step` were within 40% and the colour count was out by 1.9x to 4.5x.
+#
+# So the gap was never local contrast — `step` was at or near MM6's everywhere
+# — and it was not sharpness either. It was **colour depth**: our art arrives
+# as 24-bit painting with a distinct value under almost every pixel, where a
+# 1998 asset repeats itself. That is why what follows is mostly a quantiser and
+# only barely a dither: a heavy dither would have driven `step` and `hf` PAST
+# the reference to fix a number that was never the problem, and that is what
+# "reads as damaged" looks like in practice.
 #
 # Two knobs, both tuned by sweeping them against those figures rather than
-# picked for feel (the sweep is in the docstring of `retro`):
+# picked for feel (the sweep is in the docstring of `retro`, of `pack_items`
+# and of `pack_spells`):
 #
-#   bits   the colour ladder. Portraits take R5G6B5 — literally MM6's own frame
-#          buffer, which is why REFERENCE.md §0 records its art sitting on a
-#          32-step ladder in red and blue and a 64-step one in green. The
-#          figures take R6G7B6, one bit finer in every channel, because our
-#          figure art carries more variation per texel than our portrait art
-#          does and the same ladder over-collapses it by 3.4x.
+#   bits   the colour ladder. Portraits and item sprites take R5G6B5 —
+#          literally MM6's own frame buffer, which is why REFERENCE.md §0
+#          records its art sitting on a 32-step ladder in red and blue and a
+#          64-step one in green. The figures take R6G7B6, one bit FINER in
+#          every channel, because our figure art carries more variation per
+#          texel than our portrait art does and the same ladder over-collapses
+#          it by 3.4x. The spell miniatures take R4G5B4, one bit COARSER,
+#          because a watercolour vignette at 86 texels carries more variation
+#          still and R5G6B5 leaves it at 2.4x MM6's colour count. Four
+#          families, three ladders, every one of them a measurement.
 #
 #   amp    ordered-dither amplitude, as a fraction of one ladder step. Its job
 #          is to break the contour lines quantisation leaves across a slow
@@ -82,14 +101,18 @@ ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 # uses a seeded RNG everywhere and never Math.random, and a build step has no
 # business being the exception.
 #
-# NOTE this is deliberately confined to the character art — party portraits,
-# speaker portraits and the paper-doll bodies. REFERENCE.md §1 rules out
-# "deliberate 640x480 pixelation ... no 16-bit banding" and it is right to, but
-# it is ruling it out for the WORLD: those were the limits MM6's renderer was
-# fighting. A portrait bitmap is not the renderer. It is a piece of 1998 art
-# that MM6 shipped quantised on purpose, and it is the one place where matching
-# the limitation is matching the artwork. UI chrome, interiors, item sprites,
-# spell miniatures and creature hides are untouched.
+# NOTE this is deliberately confined to the SPRITE art — party portraits,
+# speaker portraits, the paper-doll bodies, the item sprites and the spellbook
+# miniatures. REFERENCE.md §1 rules out "deliberate 640x480 pixelation ... no
+# 16-bit banding" and it is right to, but it is ruling it out for the WORLD:
+# those were the limits MM6's renderer was fighting. A portrait bitmap is not
+# the renderer. Neither is an item sprite: MM6's backpack draws hand-painted
+# 2-D bitmaps at natural size on a 1:1 pixel grid, and every one of the eight
+# recovered in `retroaudit.py`'s reference table is a quantised 1998 asset by
+# measurement rather than by assertion. Matching the limitation is matching the
+# artwork. UI chrome, interiors, scenes, class emblems and creature hides are
+# untouched — a hide is a texture the renderer samples, not a bitmap the screen
+# shows, and quantising it would be quantising the world.
 
 BAYER8 = np.array([
     [0, 32, 8, 40, 2, 34, 10, 42], [48, 16, 56, 24, 50, 18, 58, 26],
@@ -127,6 +150,64 @@ PORTRAIT_AMP = 0.5
 FIGURE_BITS = (6, 7, 6)
 FIGURE_AMP = 0.9
 UPSCALE = 2                  # texels are two plate pixels, so an edge stays an edge
+
+# ── the item texel grid ─────────────────────────────────────────────────────
+#
+# An item plate is sized by the SQUARE ROOT OF ITS TEXEL COUNT rather than by
+# its longest side, and that is the one non-obvious decision in this stage.
+#
+# The reason is that one plate is drawn at wildly different sizes and the rule
+# has to hold at all of them. The drawn size is `background-size: contain` of
+# the plate's own aspect into `itemFootprint` x `CELL 32` for the backpack and
+# x `WALL.unit 40` for the shop wall; `tools/retroitems.mjs` reads it off the
+# live DOM and agrees with that arithmetic to a tenth of a pixel on the twelve
+# sprites a staged shot happens to show. Over all 201 plates any item resolves
+# to, the drawn LONGEST side falls out as:
+#
+#     backpack cell   ~29 native: 72 plates   ~61: 42   ~93: 35   up to 157
+#     shop wall        40 native (min)   median 80   p75 120   max 200
+#
+# — a 5.4x spread, which no single longest-side figure can serve: at 96 texels
+# a ring is over-resolved 3.3x and a pike under-resolved 0.6x. The SHORT side
+# is tighter (29 or 61, because `ITEM_FOOTPRINT` is solved to match each
+# plate's aspect) and the geometric mean is tighter still. Texels per native
+# pixel, over those 201 plates:
+#
+#                              min    p10   median    p90    max
+#     longest side 64          0.41   0.58   1.05    2.21   2.21
+#     shortest side 32         0.52   0.52   1.16    2.10   3.23
+#     sqrt(area)   48          0.65   0.74   1.14    1.87   2.78
+#
+# so sqrt(area) it is: 2.5x of spread across the middle 80% where the
+# longest-side rule has 3.8x, and no bimodal clump at either end.
+#
+# 48 rather than 40 or 56 is the sweep in `pack_items`. What it costs, stated
+# plainly: the extremes are a 1x1 quest key at 2.78 texels per native pixel
+# (detail the 29-pixel cell throws away) and a 2x3 tower shield at 0.65 (a
+# texel a pixel and a half across), so neither end is the clean
+# one-texel-per-pixel the party bar gets. 98 of the 201 sit between 0.63 and
+# 1.12. Closing the rest needs a per-plate texel grid, which needs
+# each item's `w`/`h` — and those live in `src/game/data/Items.js`, which was
+# itself solved FROM `ITEM_PLATE_ASPECT` in the file this stage writes. Making
+# this stage read them back would close that loop, and a loop between the art
+# pack and the catalogue is a worse defect than 2.8 texels on a ring.
+ITEM_TEXEL_AREA = 48
+ITEM_BITS = (5, 6, 5)        # MM6's own frame buffer, as the portraits take
+ITEM_AMP = 0.5
+
+# A spell miniature has no such problem: `.mm-sb-ink` is `86u` square on every
+# screen that draws one, and the plate is fitted `contain` into it, so 86 is
+# the drawn size full stop. 86 texels hard-doubled is a 172 plate, which at the
+# 1280x960 viewport where `--u` is exactly 2.000 lands one texel on a solid 2x2
+# block of device pixels with nothing resampled.
+#
+# The 176 the plates used to ship at is only 12 pixels wider than that and it
+# is the difference between the treatment working and not working at all:
+# measured through the audit's 40x40 window, 86 texels reads c95 1.12x of MM6's
+# own spell art and 96 texels reads 3.24x. A plate has to divide the box.
+SPELL_TEXEL = 86
+SPELL_BITS = (4, 5, 4)       # one bit COARSER than MM6's buffer; see pack_spells
+SPELL_AMP = 0.5
 
 
 def _dither(h, w):
@@ -236,8 +317,75 @@ def pack_portraits(texel=PORTRAIT_TEXEL, quality=95, png=WRITE_PORTRAIT_PNG):
     return out
 
 
-def pack_spells(size=176, feather=0.05):
-    """Key the paper out to alpha, then shrink."""
+def pack_spells(texel=SPELL_TEXEL, feather=0.05):
+    """Key the paper out to alpha, shrink to the texel grid, quantise, double.
+
+    MM6's spellbook miniatures sit directly on the parchment page with soft,
+    feathered edges and no frame, so the keying below is unchanged. What is new
+    is that the plate now lands on a colour ladder instead of staying 24-bit.
+
+    Swept against MM6's own spell art — Torch Light on the page and in its
+    tooltip, and the Fire school's illuminated plate, recovered from
+    Screenshots 24 and 25 (c95 371, step 0.0854, hf 0.245 through a 40x40
+    window at a 16px tile) — measured after fitting the plate into the 86u box
+    `.mm-sb-ink` gives it:
+
+        texel   ladder    c95      step      hf        (all 99 plates)
+        ---------------------------------------
+        176     24-bit    3.81x    1.37x    1.23x     <- what shipped
+        176     R5G6B5    3.86x    1.26x    1.09x
+        128     R5G6B5    3.89x    1.25x    1.08x
+         96     R4G5B4    3.27x    1.24x    1.02x
+         86     R5G6B5    2.40x    1.48x    1.42x
+         86     R5G5B5    1.93x    1.48x    1.43x
+         86     R4G6B4    1.67x    1.49x    1.42x
+         86     R4G5B4    1.22x    1.49x    1.43x     <- taken
+         86     R3G5B3    0.79x    1.50x    1.44x
+         64     R4G5B4    2.33x    1.15x    0.97x
+
+    The 96 row is the whole argument in one line: ten texels away from the box
+    it is drawn into, with a coarser ladder than the one taken, and the colour
+    depth reads 3.27x instead of 1.22x. Everything at 128 and above is
+    indistinguishable from no treatment at all. A plate has to divide the box.
+
+    **The ladder is R4G5B4, one bit coarser in every channel than MM6's own
+    frame buffer**, and that is not a mistake. Our miniatures carry more
+    variation per texel than a 1998 watercolour does — the same finding that
+    sent the paper dolls one bit the OTHER way — so R5G6B5 leaves 890 distinct
+    colours in a 40x40 window where MM6 has 371. Sixteen levels of red and blue
+    and thirty-two of green lands on 453. R3G5B3 overshoots to 0.79x.
+
+    `amp` was swept at 0.0 / 0.5 / 0.9 / 1.3 and moves c95 from 1.11x to 1.24x,
+    which is not a basis for choosing; it is set to `PORTRAIT_AMP` on the
+    argument in `retro`, and a watercolour wash is exactly the slow gradient
+    that contours without it.
+
+    `step` (1.37x -> 1.49x) and `hf` (1.23x -> 1.43x) both move the wrong way.
+    That is the price of authoring at 86 instead of letting the browser average
+    a 176 plate down to it: our miniatures really are busier per native pixel
+    than MM6's, and the old plate was hiding it behind a resample rather than
+    fixing it. Trading a 3.81x error on colour depth for a 0.12x and a 0.20x
+    drift on two numbers that were already inside 40% is the trade this file
+    exists to make.
+
+    **86 is exact at `--u` 2.000 and nowhere else, so the stylesheet has to
+    help here too.** `.mm-sb-ink` is 86 native and the plate is 172, so at
+    `--u` 2 the browser paints it 1:1 and nothing is resampled — which is why
+    the row above holds. At any other scale a smooth filter re-averages it:
+
+        --u      auto (smooth)   image-rendering: pixelated
+        1.500        3.89x            2.06x
+        1.875        3.77x            1.22x
+        2.000        1.22x            1.22x
+        2.250        3.66x            1.22x
+
+    1.875 is the `--u` of a 1600x900 desktop, which is what `tools/shoot.mjs`
+    photographs at by default. Without the declaration the treatment is present
+    in the file and absent from the screen at every size but one. The selector
+    is `.mm-panel[data-panel='spellbook'] .mm-sb-ink` in
+    `src/ui/panels/spellbook.css`, which this pass does not own and has asked
+    for.
+    """
     out, suspect = 0, []
     for src in sorted(glob.glob(os.path.join(ROOT, 'spells', '*.png'))):
         if src.endswith('.plate.png') or os.path.basename(src).startswith('cover_'):
@@ -282,7 +430,10 @@ def pack_spells(size=176, feather=0.05):
         a = _normalise(a, alpha)
 
         rgba = np.dstack([a, alpha * 255.0]).astype(np.uint8)
-        im = Image.fromarray(rgba, 'RGBA').resize((size, size), Image.LANCZOS)
+        im = Image.fromarray(rgba, 'RGBA').resize((texel, texel), Image.LANCZOS)
+        t = np.asarray(im, dtype=np.float32)
+        t[..., :3] = retro(t[..., :3], SPELL_BITS, SPELL_AMP)
+        im = _hard_double(Image.fromarray(t.astype(np.uint8), 'RGBA'))
         im.save(os.path.join(ROOT, 'spells', os.path.basename(src)[:-4] + '.plate.png'),
                 'PNG', optimize=True)
         out += 1
@@ -371,15 +522,89 @@ def pack_figures(width=320, feather=0.012):
     return out
 
 
-def pack_items(width=256, feather=0.012):
-    """Matte the item sprites off their flat grey ground.
+def pack_items(area=ITEM_TEXEL_AREA, feather=0.012):
+    """Matte the item sprites off their flat grey ground, then quantise them.
 
-    Same treatment as the standing figures — these are painted on the same flat
-    backdrop for the same reason. They are drawn at anything from a 32px
-    inventory cell to nearly full panel height on a shop wall, so they are kept
-    generous rather than sized to the smallest use.
+    Same treatment as the standing figures, and it now IS — this said so for
+    months while doing a LANCZOS resize and a save, which is why every item in
+    the game was 24-bit painting next to a party bar of 1998 bitmaps.
+
+    The plate is `sqrt(area)` texels on its geometric mean (see the note over
+    `ITEM_TEXEL_AREA` for why that measure and not the longest side), quantised
+    there, and hard-doubled. Quantising at the plate's old 256-pixel width did
+    nothing at all: the browser fits it into a 29-to-157-pixel box and a
+    fractional downscale averages neighbouring texels together, which is the
+    quantisation undone on the way to the screen. The alpha rides the same
+    grid, so a silhouette edge is a 1998 masked bitmap rather than a modern
+    cut-out — `pack_figures` says the same thing at more length.
+
+    Swept against MM6's own eight item sprites, recovered from Screenshots 19
+    and 29 by `tools/retroaudit.py` (c95 283, step 0.1066, hf 0.290 at an 8px
+    tile). All 207 plates, measured three ways — at the plate's own texel grid,
+    and at the size each one is ACTUALLY drawn (per plate, from its footprint)
+    in the backpack cell and on the shop wall:
+
+        sqrt(area) ladder   own grid: c95 step   hf    cell: c95      wall: c95
+        ---------------------------------------------------------------------
+        shipped    24-bit        1.93x 0.65x 1.28x       1.86x          1.88x
+        40         R5G6B5        0.66x 0.97x 1.27x       0.94x          0.71x
+        48         R5G6B5        0.68x 0.98x 1.32x       1.21x          0.98x
+        48         R6G6B6        1.04x 0.98x 1.32x       1.45x          1.23x
+        48         R6G7B6        1.26x 0.97x 1.28x       1.60x          1.40x
+        56         R5G6B5        0.71x 0.96x 1.34x       1.43x          1.24x
+        56         R6G7B6        1.29x 0.96x 1.32x       1.74x          1.59x
+        80         R5G6B5        0.69x 0.89x 1.36x       1.88x          1.71x
+
+    Read the last row first: at 80 the treatment has almost no effect — 1.88x
+    against the untreated 1.86x — because the plate is then large enough that
+    the browser's own downscale reconstitutes a continuum out of it. That is
+    the same trap the portrait note describes, and it is why this stage had to
+    change its plate SIZE and not only add a quantiser.
+
+    The three conventions disagree — 0.68x, 1.21x and 0.98x for one and the
+    same plate — and the tie-break is what the SCREEN shows. Modelling the
+    browser at each realistic `--u` (nearest for `image-rendering: pixelated`,
+    bilinear without it — see the note below), 48/R5G6B5 lands at c95
+    1.13-1.49x through `--u` 1.5 to 2.25, cell and wall alike. A finer ladder
+    starts a factor of 1.5 to 1.9 above that on every one of the three
+    conventions at once (the R6G6B6 and R6G7B6 rows), so there is nowhere it
+    lands closer. 48 with R5G6B5 — MM6's own frame buffer, the ladder the
+    portraits take — is the pick.
+
+    `amp` was swept at 0.5 / 0.9 / 1.3 / 1.8 over 60 of the 207 and moved the
+    three numbers by under 6%, so it is set on the argument `retro` gives
+    rather than on the metric: enough to break the contour lines quantisation
+    leaves across a slow gradient, not enough to read as a checkerboard.
+
+    **The stylesheet has to help, and this is the number that says so.** With
+    the default `image-rendering: auto`, a browser fits the plate into the box
+    with a smooth filter, and a smooth filter averages neighbouring texels back
+    into a continuum whenever the box is not an exact multiple of the file —
+    which is every box, because an item's box comes from its footprint.
+    Modelled over all 201 plates any item resolves to:
+
+        --u        auto (smooth)          image-rendering: pixelated
+                   cell     wall          cell     wall
+        1.500      1.84x    1.83x         1.19x    1.13x
+        1.875      1.87x    1.88x         1.26x    1.25x
+        2.000      1.89x    1.87x         1.33x    1.34x
+        2.250      1.89x    1.87x         1.49x    1.48x
+
+    Left column: the treatment is undone at every scale, and the plate might as
+    well not have been quantised. `.mm-portrait` needed the same declaration
+    for the same reason. The selector is `.mm-item-plate, .mm-item-fill` in
+    `src/ui/ui.panels.css`, which this pass does not own and has asked for.
+
+    **`step` is the number this does not fix.** At the plate's own grid it
+    actually improves, 0.65x to 0.98x; at the drawn size it drops to about
+    0.7x. A 1998 sprite of a sword is fifteen pixels across with a hard bright
+    edge against nothing, and our art is a rendered object with a gradient down
+    the blade, so ours has genuinely less contrast between neighbouring pixels
+    at the same size. It is not chased, because the only way to raise it is to
+    add noise, and `retro`'s note records what happened last time somebody
+    moved a number that was not the defect. The defect was colour depth.
     """
-    out, names = 0, []
+    out, names, suspect = 0, [], []
     for src in sorted(glob.glob(os.path.join(ROOT, 'items', '*.png'))):
         if src.endswith('.plate.png'):
             continue
@@ -395,14 +620,35 @@ def pack_items(width=256, feather=0.012):
         rgba = np.dstack([a, alpha * 255.0]).astype(np.uint8)
         im = _crop_to_paint(Image.fromarray(rgba, 'RGBA'))
         cw, ch = im.size
-        im = im.resize((width, max(1, round(width * ch / cw))), Image.LANCZOS)
+        # The texel grid, from the crop's own proportions. `round`, then a
+        # floor of one, so a plate is never zero-sized and two runs of this
+        # file land on the same integers.
+        k = area / math.sqrt(cw * ch)
+        im = im.resize((max(1, round(cw * k)), max(1, round(ch * k))), Image.LANCZOS)
+        t = np.asarray(im, dtype=np.float32)
+        t[..., :3] = retro(t[..., :3], ITEM_BITS, ITEM_AMP)
+        im = _hard_double(Image.fromarray(t.astype(np.uint8), 'RGBA'))
         base = os.path.basename(src)[:-4]
         im.save(os.path.join(ROOT, 'items', base + '.plate.png'), 'PNG', optimize=True)
+        # The ratio is still measured off the CROP, not off the texel grid:
+        # `ITEM_FOOTPRINT` in `src/game/data/Items.js` was solved against these
+        # numbers, so rounding them to a 48-texel grid would silently reshape a
+        # dozen backpack footprints.
         names.append((base, round(cw / ch, 4)))
+        # Say when the matte kept nearly the whole frame, exactly as
+        # `pack_spells` does. `_flat_ground_mask` floods from the border and
+        # stops at the first hard edge, so a raw the generator painted on two
+        # grounds — `helm_great` has a dark teal margin round a pale grey
+        # vignette — keeps the inner one as a visible square behind the object.
+        # Nothing here can fix that; the raw has to be repainted, and a line in
+        # the run log is how anybody finds out it needs to be.
+        cover = float((np.asarray(im)[..., 3] > 128).mean())
+        if cover > 0.90:
+            suspect.append((base, round(cover, 3)))
         out += 1
 
     _write_item_index(names)
-    return out
+    return out, suspect
 
 
 def _crop_to_paint(im, margin=0.02):
@@ -745,6 +991,13 @@ def _stage_spells():
     return f'{s} spell plates'
 
 
+def _stage_items():
+    n, suspect = pack_items()
+    for name, cover in suspect:
+        print(f'  ?  {name}: matte kept {cover:.0%} of the frame - check it')
+    return f'{n} item sprites'
+
+
 def _stage_interiors():
     i = pack_flat('interiors', 960)
     _write_interior_index()
@@ -770,7 +1023,7 @@ STAGES = {
     'portraits': lambda: f'{pack_portraits()} portraits',
     'spells': _stage_spells,
     'figures': lambda: f'{pack_figures()} figures',
-    'items': lambda: f'{pack_items()} item sprites',
+    'items': _stage_items,
     'interiors': _stage_interiors,
     'monsters': _stage_monsters,
     # Painted first, indexed second: the index is a directory listing of the
