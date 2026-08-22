@@ -213,6 +213,35 @@ const DEG = Math.PI / 180;
 const MAX_SUN_ELEVATION = 50 * DEG;
 /** Never let the key light graze below this; MM6 has no raking shadows. */
 const MIN_KEY_ELEVATION = 8 * DEG;
+/**
+ * …and after dark the floor is much higher, for a reason that is about the
+ * GROUND rather than about shadows.
+ *
+ * Flat ground receives `sin(elevation)` of the key, so an 8° floor hands it
+ * 0.139 of whatever the palette asked for. At night the key is the moon, and
+ * the moon's elevation drifts with the synodic month: measured with
+ * `tools/skysweep.mjs` and the analytic rig beside it, `keyDirection.y` at
+ * midnight runs **0.766 on day 3 and 0.139 on day 13** — the moon overhead on
+ * one night and below the horizon a fortnight later. The same hour of the same
+ * palette key therefore lit the ground 5.5× harder on one night than another,
+ * and midnight's ground luminance measured 40.6 against 15.7: a **2.6× swing
+ * handed to the player by the calendar**, with no way to tell which night they
+ * were going to get.
+ *
+ * That is also why every gate in this tree believed night was brighter than it
+ * is. `tools/nighttest.mjs` samples day 3 — the one night in the month with the
+ * moon at its highest — so the 4.4× noon/midnight figure it reports is the
+ * brightest night there is; days 13 through 23 measure 9.5×.
+ *
+ * MM6's night has no such variation: it is a flat blue wash. So after dark the
+ * key is held at `MAX_SUN_ELEVATION` — and that is not an arbitrary number, it
+ * is the highest the moon ever gets, because the moon rides the same tilted
+ * circle the sun does. Flooring there therefore *pins* the night key at the
+ * elevation it already had on its best night: the swing collapses to nothing,
+ * every night is the brightest night, and the night the gates measure does not
+ * move by a pixel. Raise the floor, never lower the ceiling.
+ */
+const MIN_NIGHT_KEY_ELEVATION = MAX_SUN_ELEVATION;
 /** Synodic month, in days, for the moon's phase drift. */
 const LUNAR_PERIOD = 29.53;
 
@@ -232,7 +261,55 @@ function C(hex) {
  * One keyframe per meaningful moment of the day. Colours are display sRGB;
  * `lift` is how much of a horizon band the sky is allowed, and it is the knob
  * that holds both halves of the brief — 0.05 through the middle of the day,
- * 1.0 at sunrise and sunset.                                                */
+ * 1.0 at sunrise and sunset.
+ *
+ * ── twilight is not darker than night, and it used to be ──────────────────
+ *
+ * `tools/skysweep.mjs` stands at one outdoor viewpoint and steps the clock
+ * through a day. Run against the palette as authored, the ground's median
+ * luminance reached its twenty-four-hour MINIMUM at **18:54 and again at
+ * 05:36** — the two civil-twilight keys — and both were three to seven times
+ * darker than midnight. The sky was still painting a lit sunset over the top
+ * of it, which is exactly what the owner photographed: a sliver of blue and
+ * pink at 6:40 pm and everything below the horizon at zero.
+ *
+ * The cause is not the intensities alone, and that is why it was easy to miss.
+ * `lightI` multiplies `lightCol`, and the two twilight keys were authored with
+ * *dark* light: `#7a6a8e` at dusk and `#9a7a90` at dawn are linear luminance
+ * 0.17 and 0.20, against the moon's `#aec0e0` at **0.53**. So "dusk" and
+ * "dawn" carried a third of night's light per unit of intensity before their
+ * intensities were even applied, and they were the two lowest intensities in
+ * the table as well. Read down the `lightI` column and the palette looks like
+ * it ramps; multiply it by what it multiplies and it falls off a cliff and
+ * climbs back out.
+ *
+ * The two keys keep their hue and their saturation and gain value — the same
+ * mauve and the same rose, lifted — and the intensities move with them until
+ * the delivered curve is monotone into the night floor. Measured on the flat
+ * ground of the analytic model beside this file, the evening now runs
+ * 53.9 · 44.9 · 41.3 · 42.0 · 43.1 · 43.4 · 43.2 · 41.5 (17:45 → 19:30) into a
+ * night that sits at 39.4–40.7 all the way round, with no local minimum
+ * anywhere in the day that is not night itself.
+ *
+ * `night falls` (19.8) and `last of the night` (4.4) came up with them for the
+ * same reason: both sat below the deep-night key they lead into, so the hour
+ * either side of them dipped.
+ *
+ * ── and dawn was not the same day as dusk ─────────────────────────────────
+ *
+ * The same sweep, shot at BOTH the viewpoint's heading and its reciprocal so
+ * the answer could not be an accident of which slopes face which way: at
+ * matched sun elevations the morning ground measured **2.8× darker than the
+ * evening**, on whichever heading was the better of the two. The palette says
+ * why. Against its own evening mirror, `sunrise` (6.4) carried
+ * `lightI · lum(lightCol)` of 0.372 where `golden hour` (17.7) carries 0.647,
+ * and `ambI · lum(ambSky)` of 0.354 against 0.497 — the key 1.74× down and the
+ * fill 1.40× down, for a moment of the day that is the mirror image. Their
+ * neighbours one key further in (7.6 against 16.6) already matched to within
+ * 9%, so this was one key out of step rather than a deliberate cool morning.
+ * `sunrise` now lands at 78% and 88% of its evening mirror: dawn stays the
+ * cooler and slightly quieter end of the day, which is worth keeping, without
+ * being a different exposure.                                                */
 const KEYS = [
   {
     h: 0.0,                                   // deep night
@@ -251,8 +328,8 @@ const KEYS = [
     gNear: C(0x141924), gFar: C(0x20273a),
     cmul: [0.40, 0.42, 0.60], cadd: [0.0, 0.0, 0.008], cbright: 0.70, silver: 0.20,
     sunTint: C(0xb08498), sunDisc: 0.0, sunHalo: 0.05,
-    lightCol: C(0x9aacd6), lightI: 0.42,
-    ambSky: C(0x475b8a), ambGnd: C(0x31384b), ambI: 0.96,
+    lightCol: C(0x9aacd6), lightI: 0.56,
+    ambSky: C(0x475b8a), ambGnd: C(0x31384b), ambI: 1.04,
     fog: C(0x10193a), fogD: 0.00038, haze: 0.0,
     stars: 0.90, night: 0.92, moonDisc: 0.95, moonTint: C(0xd0dbef),
   },
@@ -262,8 +339,8 @@ const KEYS = [
     gNear: C(0x191921), gFar: C(0x2b273a),
     cmul: [0.78, 0.64, 0.66], cadd: [0.030, 0.010, 0.020], cbright: 0.88, silver: 0.45,
     sunTint: C(0xdc9a76), sunDisc: 0.30, sunHalo: 0.35,
-    lightCol: C(0x9a7a90), lightI: 0.26,
-    ambSky: C(0x505a7e), ambGnd: C(0x423e4a), ambI: 0.80,
+    lightCol: C(0xd4a9c8), lightI: 0.80,
+    ambSky: C(0x505a7e), ambGnd: C(0x423e4a), ambI: 1.28,
     fog: C(0x453e5e), fogD: 0.00046, haze: 0.12,
     stars: 0.45, night: 0.55, moonDisc: 0.60, moonTint: C(0xd6dcea),
   },
@@ -273,8 +350,8 @@ const KEYS = [
     gNear: C(0x2e2a1e), gFar: C(0x4a3f33),
     cmul: [1.28, 0.90, 0.68], cadd: [0.090, 0.020, 0.0], cbright: 1.0, silver: 0.95,
     sunTint: C(0xffb572), sunDisc: 1.0, sunHalo: 0.90,
-    lightCol: C(0xffa95e), lightI: 0.74,
-    ambSky: C(0x8091b8), ambGnd: C(0x6c5f4a), ambI: 1.26,
+    lightCol: C(0xffa95e), lightI: 1.00,
+    ambSky: C(0x8091b8), ambGnd: C(0x6c5f4a), ambI: 1.50,
     fog: C(0x6d5f76), fogD: 0.00048, haze: 0.30,
     stars: 0.10, night: 0.14, moonDisc: 0.20, moonTint: C(0xdde3ef),
   },
@@ -284,8 +361,8 @@ const KEYS = [
     gNear: C(0x384326), gFar: C(0x455438),
     cmul: [1.10, 1.00, 0.90], cadd: [0.020, 0.008, 0.0], cbright: 1.0, silver: 0.60,
     sunTint: C(0xffe0b0), sunDisc: 0.50, sunHalo: 0.40,
-    lightCol: C(0xffe8c2), lightI: 1.20,
-    ambSky: C(0x9db0d6), ambGnd: C(0x797052), ambI: 1.54,
+    lightCol: C(0xffe8c2), lightI: 1.24,
+    ambSky: C(0x9db0d6), ambGnd: C(0x797052), ambI: 1.56,
     fog: C(0x45589a), fogD: 0.00058, haze: 0.88,
     stars: 0.0, night: 0.02, moonDisc: 0.0, moonTint: C(0xdde3ef),
   },
@@ -354,8 +431,8 @@ const KEYS = [
     gNear: C(0x241f17), gFar: C(0x3a3026),
     cmul: [1.22, 0.90, 0.68], cadd: [0.040, 0.018, 0.0], cbright: 1.0, silver: 1.0,
     sunTint: C(0xff9a52), sunDisc: 1.0, sunHalo: 1.0,
-    lightCol: C(0xff9450), lightI: 0.62,
-    ambSky: C(0x8390ab), ambGnd: C(0x6f5d4a), ambI: 1.16,
+    lightCol: C(0xff9450), lightI: 0.78,
+    ambSky: C(0x8390ab), ambGnd: C(0x6f5d4a), ambI: 1.24,
     fog: C(0x6b5747), fogD: 0.00048, haze: 0.12,
     stars: 0.08, night: 0.12, moonDisc: 0.25, moonTint: C(0xdde3ef),
   },
@@ -365,8 +442,8 @@ const KEYS = [
     gNear: C(0x18181f), gFar: C(0x2b2739),
     cmul: [0.72, 0.62, 0.66], cadd: [0.020, 0.010, 0.020], cbright: 0.86, silver: 0.40,
     sunTint: C(0xa06a72), sunDisc: 0.30, sunHalo: 0.32,
-    lightCol: C(0x7a6a8e), lightI: 0.24,
-    ambSky: C(0x56628c), ambGnd: C(0x464253), ambI: 0.82,
+    lightCol: C(0xae97cb), lightI: 0.86,
+    ambSky: C(0x56628c), ambGnd: C(0x464253), ambI: 1.30,
     fog: C(0x3e3a5e), fogD: 0.00046, haze: 0.0,
     stars: 0.50, night: 0.60, moonDisc: 0.70, moonTint: C(0xd6dcea),
   },
@@ -376,8 +453,8 @@ const KEYS = [
     gNear: C(0x151a26), gFar: C(0x21283b),
     cmul: [0.40, 0.44, 0.62], cadd: [0.0, 0.0, 0.010], cbright: 0.72, silver: 0.18,
     sunTint: C(0x8090b8), sunDisc: 0.0, sunHalo: 0.0,
-    lightCol: C(0x9db0d8), lightI: 0.42,
-    ambSky: C(0x455987), ambGnd: C(0x303749), ambI: 0.95,
+    lightCol: C(0x9db0d8), lightI: 0.52,
+    ambSky: C(0x455987), ambGnd: C(0x303749), ambI: 1.02,
     fog: C(0x131b3c), fogD: 0.00038, haze: 0.0,
     stars: 0.95, night: 0.95, moonDisc: 1.0, moonTint: C(0xd2dcf0),
   },
@@ -958,6 +1035,8 @@ export class SkySystem extends System {
     this._ownsLighting = true;
     this._tmpV = new THREE.Vector3();
     this._tmpV2 = new THREE.Vector3();
+    this._tmpKeyA = new THREE.Vector3();
+    this._tmpKeyB = new THREE.Vector3();
     this._lightBasis = { u: new THREE.Vector3(), v: new THREE.Vector3(), w: new THREE.Vector3() };
 
     /** Weather modulation, driven by the `weather` system. */
@@ -1302,13 +1381,39 @@ export class SkySystem extends System {
     this.sunElevation = Math.asin(clamp(this.sunDirection.y, -1, 1));
     this.isNight = this.sunDirection.y < -0.02;
 
-    // Key light: sun by day, moon by night, never grazing from below.
-    const useMoon = this.sunDirection.y < -0.09 && this.moonDirection.y > 0.02;
-    this.keyDirection.copy(useMoon ? this.moonDirection : this.sunDirection);
-    if (this.keyDirection.y < Math.sin(MIN_KEY_ELEVATION)) {
-      this.keyDirection.y = Math.sin(MIN_KEY_ELEVATION);
-      this.keyDirection.normalize();
-    }
+    // ── the key light: sun by day, moon by night, and the handover ──
+    //
+    // This used to be `const useMoon = sun.y < -0.09 && moon.y > 0.02`, and a
+    // boolean is the wrong shape for it. The two bodies are on opposite sides
+    // of the sky, so the frame the branch flipped on moved the key through
+    // roughly 180° of azimuth in one step: every shadow in the world swung
+    // round, and every slope that had been lit went dark and its opposite lit
+    // up. Which of the two you got depended on the moon's phase, so the same
+    // dusk did it at a different minute on a different day.
+    //
+    // Both ends ramp now. The sun's authority fades as it sinks, the moon's
+    // fades in as it clears the horizon, and the key travels between them —
+    // but **around the compass, not across the sky**. Interpolating the two
+    // vectors and re-normalising looks like the obvious answer and is not: two
+    // bodies on opposite sides of the sky at the same elevation sum to a vector
+    // pointing straight up, so a naive blend swings the key through the zenith
+    // and flat ground catches `sin(90°)` instead of `sin(50°)` on the way past.
+    // Measured, that put a **+35% spike** into the middle of the handover —
+    // trading a step for a flash. Blending azimuth and elevation separately
+    // cannot overshoot either endpoint: the key sweeps round the horizon and
+    // its elevation moves monotonically from one body's to the other's.
+    const minY = Math.sin(lerp(MIN_KEY_ELEVATION, MIN_NIGHT_KEY_ELEVATION, clamp(p.night, 0, 1)));
+    const sunKey = liftAbove(this._tmpKeyA.copy(this.sunDirection), minY);
+    const moonKey = liftAbove(this._tmpKeyB.copy(this.moonDirection), minY);
+    const moonShare = smoothstep(-0.02, -0.14, this.sunDirection.y)
+      * smoothstep(-0.01, 0.09, this.moonDirection.y);
+    const aSun = Math.atan2(sunKey.x, sunKey.z);
+    let dAz = Math.atan2(moonKey.x, moonKey.z) - aSun;
+    dAz -= TAU * Math.floor(dAz / TAU + 0.5);          // the shorter way round
+    const az = aSun + dAz * moonShare;
+    const el = lerp(Math.asin(clamp(sunKey.y, -1, 1)), Math.asin(clamp(moonKey.y, -1, 1)), moonShare);
+    const cel = Math.cos(el);
+    this.keyDirection.set(Math.sin(az) * cel, Math.sin(el), Math.cos(az) * cel);
 
     // ── sky field, with weather pulling it toward overcast ──
     // The overcast target is itself scaled by cloud brightness, so a storm
@@ -1728,6 +1833,25 @@ function mixOvercast(rgb, t, scale) {
     lerp(rgb[1], OVERCAST[1] * scale, t),
     lerp(rgb[2], OVERCAST[2] * scale, t),
   ];
+}
+
+/**
+ * Raise a unit direction to elevation `asin(minY)` if it is below it, keeping
+ * its azimuth.
+ *
+ * The tempting one-liner — write `y` and re-normalise — undershoots, and by a
+ * lot where it matters. It leaves the horizontal part at its old length, so a
+ * body at `y = 0.30` asked to come up to 0.766 arrives at **0.626**: the
+ * further below the floor it started, the further short it lands. At an 8°
+ * floor that is a rounding error; at the night floor it was most of the moon's
+ * remaining month-to-month swing. Rebuilding the horizontal part against the
+ * target elevation puts it exactly where it was asked for.
+ */
+function liftAbove(v, minY) {
+  if (v.y >= minY) return v;
+  const h = Math.hypot(v.x, v.z) || 1e-6;
+  const k = Math.sqrt(Math.max(0, 1 - minY * minY)) / h;
+  return v.set(v.x * k, minY, v.z * k);
 }
 
 const scaleRGB = (rgb, k) => [rgb[0] * k, rgb[1] * k, rgb[2] * k];

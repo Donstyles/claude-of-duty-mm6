@@ -420,6 +420,10 @@ export class PropSystem extends System {
       }
     }
 
+    // Before the pool is flushed, so the approach marks land in the same
+    // InstancedMeshes as everything else and cost no draw call of their own.
+    this._markDungeonApproaches(ctx, terrain, towns, rootRng.fork('approaches'));
+
     for (const [key, p] of this._parts) {
       if (!p.mats.length) continue;
       const mesh = new THREE.InstancedMesh(p.geom, p.mat, p.mats.length);
@@ -448,6 +452,137 @@ export class PropSystem extends System {
     this.obeliskCaches = this.landmarks
       .filter((L) => L.kind === OBELISK_CACHE.landmark && L.region === OBELISK_CACHE.region)
       .map((L) => ({ x: L.x, y: L.y, z: L.z }));
+  }
+
+  /**
+   * Which way you walk *out* of a dungeon door.
+   *
+   * Nothing here knows where the towns are — only five of the eleven have a
+   * terrain landmark and none of the far ones is built — so the approach is
+   * taken from the ground instead: sample sixteen bearings at thirty metres and
+   * keep the one that drops furthest. A door sited against a hillside has one
+   * open side by construction, and that open side is the way a party arrives
+   * and the way it leaves. Deriving it rather than storing it also means the
+   * marks follow the door if the catalogue ever re-sites it.
+   *
+   * Returns null where the ground falls away on every side — a knoll, where
+   * there is no line to mark and marking one would be a lie.
+   */
+  _approachBearing(terrain, x, z, radius = 30) {
+    const h0 = terrain.heightAt(x, z);
+    let best = null;
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const px = x + Math.sin(a) * radius;
+      const pz = z + Math.cos(a) * radius;
+      if (terrain.isWater(px, pz)) continue;
+      const drop = h0 - terrain.heightAt(px, pz);
+      if (!best || drop > best.drop) best = { a, drop };
+    }
+    // Two metres over thirty is a 4° fall — below that the ground is flat
+    // enough that no direction is the way out and the door is on open ground.
+    return best && best.drop > 2 ? best.a : null;
+  }
+
+  /**
+   * Mark the way in to every dungeon door.
+   *
+   * The note this answers: *"you have to use landscape to frame and lead the
+   * player to interesting things like dungeon entrances."* The landscape half
+   * is done in `TerrainGen` and `Dungeons.js` — the doors now stand at the
+   * heads of the field's own channels instead of wherever a hash dropped them.
+   * This is the other half: the ground says *up here*, and these say *here*.
+   *
+   * Three marks, in the order a player meets them:
+   *
+   *   · a **line of waystones** down the approach at 26, 52 and 84 m, pale
+   *     sandstone against dark grass, each visible from the last. A line of
+   *     three is the smallest number that reads as a line rather than as two
+   *     unrelated rocks, and the spacing is set so the far one sits near the
+   *     median distance at which a door first comes into sight (80 m);
+   *   · a **flanking pair** of granite posts at the mouth, ±3.4 m across a
+   *     4.6 m portal. This is REFERENCE §2.1's proscenium reduced to its two
+   *     load-bearing elements: "framed by two dark vertical masses at ±20% from
+   *     the view axis". Screenshot 17's whole composition is a gate between two
+   *     piers, and it is the single most MM6 thing a landmark can do;
+   *   · a **spoil heap** to one side. Every hole in the ground has the ground
+   *     that came out of it piled beside it, and it is the one detail that says
+   *     *dug* rather than *found* at a hundred metres.
+   *
+   * Cost, because ARCHITECTURE §8 asks and geometry is never free: six
+   * instances a door, all of them into part pools that already exist
+   * (`granite-post` from the stone circle and the barrow mouths, `milestone`
+   * from the Thornwick road, `barrow-spoil` from Netherby). Five boxes at
+   * twelve triangles and one seven-sided cone at fourteen is **74 triangles a
+   * door, 4,070 for all fifty-five, and no new draw call at all** — the parts
+   * merge into instanced meshes the world was already submitting. A boulder
+   * would have been the obvious choice for a waymark and would have cost 80
+   * triangles each, sixteen times as much, for a silhouette that reads worse
+   * at the distance these are meant to be read from.
+   */
+  _markDungeonApproaches(ctx, terrain, towns, rng) {
+    const doors = ctx.get('dungeon')?.entrances;
+    if (!doors?.size) return;
+
+    // Borrow the pools the region tables have already filled, rather than
+    // asking the library for a second copy of the same material: `_part` keys
+    // on the string, so an existing key keeps its first geometry and material
+    // and every mark here merges into a mesh the world was already drawing.
+    // A pool that is empty because its region table was emptied simply drops
+    // its own mark — none of the three is load-bearing on its own.
+    const pier = this._parts.get('granite-post');
+    const way = this._parts.get('milestone') ?? this._parts.get('obelisk-kerb');
+    const spoil = this._parts.get('barrow-spoil');
+
+    // A waymark inside a town's skirts is street furniture, not a signpost.
+    const clearOfTowns = (x, z) => !towns.some((t) => (x - t.x) ** 2 + (z - t.z) ** 2 < 150 * 150);
+
+    for (const door of doors.values()) {
+      const bearing = this._approachBearing(terrain, door.x, door.z);
+      if (bearing === null) continue;
+      const sin = Math.sin(bearing), cos = Math.cos(bearing);
+
+      // The line in. Skipped individually rather than as a run: a waystone that
+      // would stand in a river is dropped and the other two still mark the way.
+      if (way) {
+        for (const d of [26, 52, 84]) {
+          const wx = door.x + sin * d + rng.range(-2.2, 2.2);
+          const wz = door.z + cos * d + rng.range(-2.2, 2.2);
+          if (!this._canPlace(terrain, wx, wz, 0.5) || !clearOfTowns(wx, wz)) continue;
+          const o = { x: wx, z: wz, y: terrain.heightAt(wx, wz), yaw: 0 };
+          this._part('milestone', way.geom, way.mat,
+            this._at(o, 0, -0.2, 0, rng.range(0, 6.28),
+              0.5, rng.range(1.2, 1.6), 0.36, rng.range(-0.06, 0.06)));
+        }
+      }
+
+      // The two piers. Set across the axis, leaning very slightly outward the
+      // way the circle's stones do, so the pair reads as raised rather than as
+      // two posts that happen to be there.
+      if (pier) {
+        for (const side of [-1, 1]) {
+          const px = door.x + sin * 2.6 + cos * side * 3.4;
+          const pz = door.z + cos * 2.6 - sin * side * 3.4;
+          if (!this._canPlace(terrain, px, pz, 0.62)) continue;
+          const o = { x: px, z: pz, y: terrain.heightAt(px, pz), yaw: bearing };
+          this._part('granite-post', pier.geom, pier.mat,
+            this._at(o, 0, -0.3, 0, 0, 0.95, rng.range(2.9, 3.5), 0.62, side * 0.045));
+        }
+      }
+
+      // The spoil. Downhill of the mouth and off to one side, which is where a
+      // digger tips a barrow and not where anyone would want it across the door.
+      if (spoil) {
+        const sx = door.x + sin * 7.5 - cos * 5.5;
+        const sz = door.z + cos * 7.5 + sin * 5.5;
+        if (this._canPlace(terrain, sx, sz, 0.6)) {
+          const o = { x: sx, z: sz, y: terrain.heightAt(sx, sz), yaw: 0 };
+          this._part('barrow-spoil', spoil.geom, spoil.mat,
+            this._at(o, 0, -0.3, 0, 0,
+              rng.range(1.5, 2.2), rng.range(0.7, 1.1), rng.range(1.5, 2.2)));
+        }
+      }
+    }
   }
 
   _nearestLandmark(kind, x, z) {

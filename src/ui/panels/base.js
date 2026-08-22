@@ -143,7 +143,7 @@ function plateRecord(src) {
   const url = artUrl(src);
   let rec = PLATES.get(url);
   if (rec) return rec;
-  rec = { url, img: null, ok: false, decoded: null };
+  rec = { url, img: null, decoded: null };
   PLATES.set(url, rec);
   if (typeof Image !== 'function') return rec;
   const img = new Image();
@@ -172,47 +172,56 @@ export function decodePlate(src) {
   const rec = plateRecord(src);
   if (!rec.img) return Promise.resolve(false);
   rec.decoded ??= (rec.img.decode ? rec.img.decode() : Promise.resolve())
-    .then(() => { rec.ok = true; return true; }, () => false);
+    .then(() => true, () => false);
   return rec.decoded;
 }
 
-/** True when the next paint of this plate will not have to wait for anything. */
-export function plateReady(src) {
-  return !!src && (PLATES.get(artUrl(src))?.ok ?? false);
-}
-
 /**
- * The queue. One file at a time, with an idle gap between them.
+ * The queue: a trickle, three files wide, with an idle gap between rounds.
  *
- * A burst of fifty parallel requests is the wrong shape for this: it competes
- * with whatever the world is streaming, and on a phone's connection it makes
- * every one of them slower. Nothing here is urgent by definition — if it were
- * urgent the screen would already be open — so it trickles.
+ * Both numbers are measured rather than picked. One at a time with a long idle
+ * gap is what this started as, and a hundred plates then took longer to arrive
+ * than a play session — `tools/paneltest.mjs` caught it as its own harness
+ * overhead tripling, which was the background fetch still running through
+ * every screen it was timing. Fifty at once is the other failure: it competes
+ * with whatever the world is streaming and makes every one of them slower on a
+ * phone's connection. Three is enough to keep a mobile link busy without
+ * monopolising the six connections a browser will open to one host.
+ *
+ * Nothing here is urgent by definition — if it were urgent the screen would
+ * already be open — so it yields between rounds and never blocks a frame.
  */
 const queue = [];
+const queued = new Set();
 let pumping = false;
 
 function idle(fn) {
-  if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 1500 });
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 250 });
   else setTimeout(fn, 16);
+}
+
+/** Resolve when the plate has arrived, or when it is clear it will not. */
+function settled(rec) {
+  if (!rec.img || rec.img.complete) return Promise.resolve();
+  return new Promise((done) => {
+    // Timed out rather than awaited forever: one plate the server never
+    // answers must not wedge every plate behind it.
+    const end = () => { clearTimeout(t); done(); };
+    const t = setTimeout(end, 8000);
+    rec.img.addEventListener('load', end, { once: true });
+    rec.img.addEventListener('error', end, { once: true });
+  });
 }
 
 async function pump() {
   pumping = true;
   while (queue.length) {
-    const { src, decode } = queue.shift();
-    const rec = plateRecord(src);
-    if (rec.img && !rec.img.complete) {
-      // Timed out rather than awaited forever: one plate the server never
-      // answers must not wedge every plate behind it.
-      await new Promise((done) => {
-        const end = () => { clearTimeout(t); done(); };
-        const t = setTimeout(end, 8000);
-        rec.img.addEventListener('load', end, { once: true });
-        rec.img.addEventListener('error', end, { once: true });
-      });
-    }
-    if (decode) await decodePlate(src);
+    const round = queue.splice(0, 3);
+    await Promise.all(round.map(async ({ src, decode }) => {
+      queued.delete(artUrl(src));
+      await settled(plateRecord(src));
+      if (decode) await decodePlate(src);
+    }));
     await new Promise((r) => idle(r));
   }
   pumping = false;
@@ -221,7 +230,10 @@ async function pump() {
 function enqueue(sources, { decode = false } = {}) {
   let added = 0;
   for (const src of sources) {
-    if (!src || PLATES.has(artUrl(src))) continue;
+    if (!src) continue;
+    const url = artUrl(src);
+    if (PLATES.has(url) || queued.has(url)) continue;
+    queued.add(url);
     queue.push({ src, decode });
     added++;
   }
@@ -297,9 +309,11 @@ export function figureSpecFor(vm) {
  *      items appearing one after another over the drawn grid.
  *   2. **The rooms of the town the party is standing in.** Ten to twelve
  *      plates, and the player has to walk to a door before any of them is
- *      needed. Fetched but not decoded: 2.75 MB of bitmap each against a
- *      ~10 ms decode is the wrong trade to make twelve times over, and the
+ *      needed. Fetched but not decoded in bulk: 2.75 MB of bitmap each against
+ *      a ~10 ms decode is the wrong trade to make twelve times over, and the
  *      fetch was 386-551 ms of the measured stall while the decode was ten.
+ *      The decode is spent on exactly one room — the door the party is
+ *      standing in, see the `ui:reticle` listener below.
  *   3. **Every painted face.** Fifty-one 8-10 KB plates, 612 KB in total,
  *      which covers every keeper behind every counter and every townsperson in
  *      every doorway. Resolving one keeper's portrait from here would mean
@@ -312,13 +326,13 @@ export function figureSpecFor(vm) {
  */
 let warming = null;
 
-export function startWarming(ui) {
+function startWarming(ui) {
   if (!ui?.ctx) return;
   // A re-inited interface gets the same warmer pointed at it rather than a
   // second one: the map of what has already been fetched is worth keeping and
   // the listeners below are wired to the bus, not to the panel.
   if (warming) { warming.ui = ui; return; }
-  warming = { ui, town: null };
+  warming = { ui, town: null, tries: 0 };
   const ctx = ui.ctx;
   const soon = (fn) => idle(() => { try { fn(); } catch { /* warming is never load-bearing */ } });
 
@@ -336,8 +350,18 @@ export function startWarming(ui) {
   };
 
   const rooms = () => {
-    const id = ctx.get?.('venue')?.town ?? null;
-    if (!id || id === warming.town) return;
+    // `VenueSystem.town` is authoritative once travel has told it anything, and
+    // is null until then; the town generator's own id is the answer at boot.
+    // Retried rather than given up on, because `TownSystem` lays its streets
+    // out asynchronously and the panels mount well before it finishes — the
+    // first version of this asked once, got null, and warmed nothing at all
+    // for the town the player actually starts in.
+    const id = ctx.get?.('venue')?.town ?? ctx.get?.('town')?.townId ?? null;
+    if (!id) {
+      if (warming.tries++ < 20) setTimeout(() => soon(rooms), 1000);
+      return;
+    }
+    if (id === warming.town) return;
     warming.town = id;
     enqueue(Object.values(VENUES)
       .filter((v) => v.town === id)
@@ -352,6 +376,20 @@ export function startWarming(ui) {
 
   ctx.events?.on('player:enteredTown', () => soon(rooms));
   ctx.events?.on('venue:entered', () => soon(rooms));
+  // Standing in a doorway: decode the one room that is about to be shown.
+  //
+  // The town pass above has already fetched it, which was 386-551 ms of the
+  // stall; this is the ten milliseconds left, spent while the player is looking
+  // at the reticle deciding whether to go in. `ui:reticle` is emitted only when
+  // the nearby venue CHANGES (`VenueSystem.update` returns early otherwise), so
+  // this is once per door approached, not once per frame — and one plate at a
+  // time is why the interiors are not decoded in bulk: twelve rooms held
+  // decoded is 33 MB of bitmap for a screen that shows one.
+  ctx.events?.on('ui:reticle', ({ mode } = {}) => {
+    if (mode !== 'door') return;
+    const at = ctx.get?.('venue')?.nearby;
+    if (at) decodePlate(interiorPlateUrl(at.kind, at.id));
+  });
   ctx.events?.on('party:created', () => soon(gear));
   ctx.events?.on('ui:panelClosed', () => soon(gear));
   ctx.events?.on('loot:picked', ({ item } = {}) => { decodePlate(itemPlateUrl(item)); });

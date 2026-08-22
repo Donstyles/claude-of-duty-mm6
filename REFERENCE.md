@@ -50,6 +50,33 @@ red and blue and a 64-step ladder in green, so gradients band visibly.
 | `Screenshot 2026-07-09 144812.png` | Skills page (German), sorceress paper doll |
 | `Screenshot 2026-07-09 183355.png` | Spellbook Water page; **dead party members**, hireling photographs |
 
+### Evidence that is not in `reference/mm6/`
+
+**The 21 files contain no party-creation screen.** They were checked one by one,
+not taken on trust from this manifest — the manifest was itself the thing that
+had to be falsified, because the screen was built for months against a section
+of this document that did not exist. It still does not appear: 17 is the town
+gate, 18 the main menu, 19–20 inventory, 21–23 the character sheet, 24–25 and
+183355 the spellbook, 26 a temple porch, 27–29 shop dialogue and stock, 30 rest,
+31 the quest book, 32–35 outdoor terrain, 144812 the German skills page. §3.4a
+below is therefore the one section in this file measured off imagery that does
+not ship with the repository, and it names its sources so the measurements can
+be re-taken:
+
+| Source | What it gives | Where |
+|---|---|---|
+| **A 720p60 recording of an unmodified retail run**, `lets-play-might-and-magic-vi-the-mandate-of-heaven-pc-session-1-720p-60fps` on archive.org. The screen is up from **t ≈ 240 s to t ≈ 445 s** | **Every figure in §3.4a.** The game window sits at stream `x 320–1279, y 0–719` — an exact **1.5× of 640×480**, so `gx = (x − 320)/1.5`, `gy = y/1.5`. Colours are the **median of 100 consecutive frames** at t = 242.2 s and t = 436.0 s, which removes the codec's per-frame noise; geometry is read off that same stack | not in repo |
+| The game's printed **Quick Reference Card**, p. 1 | A clean 360×270 figure of the same screen — greyscale, but independent of the recording and free of its compression | not in repo |
+| The game's printed **Start-Up Guide**, p. 2, "Character Creation Screen" | The **publisher's own names for the controls**, on callout lines: *Change Portraits · Currently Selected Stat · Class · Name · Bonus Points Box · Class Selection Box · Available Skills Box · OK Button (Start the Game)*. Where §3.4a names a control it uses these | not in repo |
+| `reference/NOTES-extra.md` §A | A written record made from a screenshot the owner pasted into a session and which was never saved to disk. It is the only source for one fact (a statistic **below** its class base printing red) and it is **wrong on four others** — see the end of §3.4a | in repo |
+
+Nothing was added to `reference/` for this: commit `c2bd207` ("stop
+distributing the screenshots we study") settled that we cite sources rather than
+redistribute them. Colour figures below carry the caveat that a 1.5× H.264
+frame is not a 3× nearest-neighbour PNG; every one of them was taken by the
+calibration-free methods STYLE.md §0 requires — ratios and percentiles *within*
+one frame — and the two places where that still leaves doubt say so out loud.
+
 ---
 
 ## 1. What MM6 is, and what we are making
@@ -628,6 +655,255 @@ dialogues** replace the viewport **and** the sidebar's upper block (y 0–351)
 while the food/gold row and the four brass ovals **always remain**. The bottom
 bar is never covered.
 
+**Party creation is the single exception and it is total.** It replaces the
+frame — viewport, divider column, right sidebar, bottom bar, party cells, all of
+it — and paints its own stone edges to the glass. It is the only screen in the
+game that owns all 640 × 480, for the plain reason that there is no party yet to
+draw underneath.
+
+#### 3.4a Party creation — `CREATE PARTY` (sources: §0, "Evidence that is not in `reference/mm6/`")
+
+The first screen anybody sees, and the one furthest from the character sheet in
+material and in type. **Dark green serpentine, not the sheet's grey granite**,
+and **set upright throughout — not one italic anywhere on the page**, which is
+the exact opposite of the character sheet, where every label and value is the
+Face A italic.
+
+**The frame.** A near-black line at x 0 and y 0; pale grey marble ribs full
+height at **x 1–7** and **x 634–639**; a marble band across the foot at
+**y 471–479**. Three more ribs of the same 7 px width divide the page into four
+character columns:
+
+| | rib | column interior |
+|---|---|---|
+| 1 | x 1–7 | **x 9–157** |
+| 2 | x 159–165 | **x 167–315** |
+| 3 | x 317–323 | **x 325–473** |
+| 4 | x 474–480 | **x 482–632** |
+| — | x 634–639 | — |
+
+Each interior is **149 px** wide and the **pitch is 158 px** — measured three
+ways that agree: rib centres, stat-label left edges (33.7 / 190.7 / 348.7) and
+class-name right edges (151.3 / 310.0 / 467.3 / 626.7). Every per-column figure
+below is given for column 1; **add 158 per column.**
+
+**The top band, y 0–25.** Three plaques side by side, all with the same 1 px
+dark bevel:
+
+- **A painted strip of blue sky with cumulus over column 1** — frame x 16–157,
+  the bitmap x 18–155, y 3–22 (19 rows). Blue at the top rows, cloud at the
+  foot. **Mirrored over column 4** at x 484–628.
+- **The title plaque over columns 2 and 3**, x 167–473, on the *same dark
+  serpentine as the stat panels*. It is not a pale marble bar and **it carries
+  no gold rule** — both of those are inventions that have to go.
+- `CREATE PARTY` in **white upright caps, cap height 14**, ink y 6–20, spanning
+  **x 185–455 and centred on x 320**, the exact centre of the frame. Twelve
+  letters over 270 px: **letter advance 24.3 px against glyph widths of 12–15,
+  so roughly +10.7 px of tracking**, and a word space of 26.7. This is the only
+  tracked type in the game.
+
+Sky over columns 2 and 3 would be wrong: the title occupies that half of the
+band. Only the outer two columns get sky.
+
+**A character column.** Four blocks, stacked, no gaps:
+
+| block | rows | ground |
+|---|---|---|
+| header | **y 26–121** (96) | pale grey marble |
+| name plaque | y 122–145, interior **125–143** | flat `#6A605D`, recessed |
+| statistics | **y 146–375** | dark green serpentine |
+| — | y 376–394 | marble band above the bottom strip |
+
+Inside the header block, on bare marble:
+
+- **The portrait oval — x 13–81, y 29–119, so 69 × 90, w : h = 0.77.** A tall
+  egg like the party bar's, in a double rim: near-black outside, an olive-gold
+  band inside it. The plate behind the face is rectangular with its own
+  near-black ground and is simply masked, so hair is cut by the ring. It very
+  nearly fills the header block — 90 rows of 96 — and a portrait drawn small
+  with furniture stacked beside it is the commonest way to lose this screen.
+- **The `Change Portraits` pair — two buttons, y 31–47 (17 rows), left x 88–123,
+  right x 124–157**, so ≈ 35 × 17 each, recessed into the marble, each carrying
+  a **hollow outlined arrow** (an open chevron with a black keyline, not a solid
+  glyph). They sit hard against the top-right corner of the header block.
+- **The class emblem**, painted with its own highlight and shadow, on bare
+  marble beneath the arrows: the Paladin's blue heater shield with a white
+  dragon at ≈ x 103–137, y 48–96; the Cleric's gold ankh measured x 413–439,
+  y 50–91 in column 3, i.e. **27 × 42**. Archer a gold longbow, Sorcerer a gold
+  star. They are paintings, not flat icons.
+- **The class name** in **white upright, cap 8**, ink y 104–116,
+  **right-aligned to the column interior's right edge minus 5.5 px** — 151.3,
+  310.0, 467.3, 626.7 across the four columns. It is *not* centred, *not*
+  coloured, and *not* below the name.
+
+The **name plaque** is a recessed bar the full width of the column, interior
+x 15–151, carrying the name in **white upright, cap 8**, ink y 128–137,
+**left-aligned at the column interior + 10.7 px** — 19.7, 178.0, 336.7, 495.3.
+Left-aligned, not centred.
+
+The **statistics** run on the serpentine:
+
+- **Seven rows at a pitch of exactly 16 px**, cap-tops at y 163, 179, 195, 211,
+  227, 243, 259. Order: **Might, Intellect, Personality, Endurance, Accuracy,
+  Speed, Luck.**
+- **Label flush left at column interior + 24.7** (x 33.7); **value flush right
+  at column interior + 128** (x 137). Both white, both upright, both cap 8 —
+  hierarchy is position and colour only.
+- **`Currently Selected Stat` is marked by a brass arrowhead on each side of
+  the row, outside the text** — left x 13–29, right x 139–156, on that row's own
+  baseline. There is no highlight bar, no colour change, no underline. The
+  arrowheads are the whole indicator, and they are what the `−`/`+` in the
+  Bonus Points Box act on.
+- A statistic **raised above its class base** is `#00FE00` — *the label as well
+  as the figure*, both turn together. One left at base is white.
+
+Then, still on the serpentine and **centred on the column**:
+
+- **`SKILLS`** — gold, caps, cap 7, ink y 293–301, x 60–105 (centre 83.0 against
+  the interior's centre of 83.0).
+- **Exactly four rows, centred, pitch 16**, first cap-top y 311. Rows 1–2 are
+  the class's own two skills in **white**; rows 3–4 are the player's two picks
+  and read **`None` in cyan** until they are filled, then the chosen skill's
+  name in **`#00FE00` green**.
+
+And then nothing. **The column ends there.** No hit points, no spell points, no
+armour class, no mastery letters, no counters, no buttons.
+
+**The bottom strip, y 395–470**, five cells between the two marble bands:
+
+| cell | interior x |
+|---|---|
+| left torch niche | 9–31 |
+| `Class Selection Box` | 40–230 |
+| `Available Skills Box` | 240–474 |
+| `Bonus Points Box` + `OK Button` | 484–606 |
+| right torch niche | 607–633 |
+
+- **The torch niches** are recessed slots the full height of the strip with a
+  **burning flame** in each — x 10–32 and x 608–634, y 409–467, over a brass
+  bracket. Flame core `#E8973B`, body `#A06E2B`, root `#582E11`. Small, and the
+  single most characteristic thing on the page.
+- **`CLASS`** — gold header, cap 7, ink y 401–409, x 112–154, centred. Beneath
+  it **six class names in two sub-columns, three rows**: sub-column centres
+  measured at **x 95.4 and 175.8**, i.e. the panel centre ± 40.2; rows at pitch
+  16 with cap-tops y 419, 435, 451. **The class the selected column holds is
+  cyan; the other five are white.** Six, not nine — Knight · Paladin / Cleric ·
+  Archer / Sorcerer · Druid, read across.
+- **`Available Skills`** — gold header, ink y 401–410, x 301–410. Beneath it
+  **nine entries in three sub-columns, three rows**: sub-column centres **x
+  270.4, 349.9, 429.6** (pitch 79.6), rows on the same y as the class list.
+  Selected entries cyan, the rest white. The nine are the ones the selected
+  column's class may take.
+- **`Bonus Pts`** — the `−` and `+` are **raised marble plaques flanking the
+  header, not the number**: `−` at x 483–500, `+` at x 585–602, both y 394–427,
+  each carrying a dark engraved glyph. Between them a serpentine field x 501–584
+  carries `Bonus Pts` in gold (cap 7, ink y 397–405, x 509–576) and **the figure
+  below it in white** (cap 8, ink y 413–422, x 535–551), both centred. The pool
+  **opens at 50**.
+- **The `OK Button`** sits in its own recessed marble box, x 483–604, y 429–473:
+  **one wide gold oval, 55 × 23 at x 515–569, y 441–464 — aspect 2.4 : 1** —
+  carrying a dark silhouette of a hand with the thumb up. **It carries no
+  lettering**, and it is the only oval anywhere on the page.
+
+**The type ladder**, native px, every step with the game's standard hard black
+shadow at exactly +1, +1:
+
+| step | cap | pitch | where |
+|---|---|---|---|
+| display | **14** | — | `CREATE PARTY`, and nothing else, tracked +10.7 px |
+| row | **8** | **16** | every statistic, skill, class and available-skill row; the character's name; the class name; the bonus figure |
+| head | **7** | — | the four gold group headings — `SKILLS`, `CLASS`, `Available Skills`, `Bonus Pts` |
+
+Two things about that table are worth stating because they are easy to get
+backwards. **One pitch, 16, governs every list on the page** — statistics,
+skills, classes and available skills all march on the same rhythm. And **the
+group headings are set one pixel smaller than the rows they head**, measured as
+13 device rows against 14 on a 1.5× capture, which is a two-row difference and
+not noise. A heading here is quieter than its data in both size and colour,
+which is exactly what STYLE.md §2 asks of a column head.
+
+**Colour.** Grounds are medians over a 100-frame stack; ink is the median of the
+brightest 5% of each glyph run, which is the only estimator that survives a
+video codec on un-antialiased single-colour type.
+
+| role | value |
+|---|---|
+| **Serpentine** — stat panels, title plaque, all three bottom cells | median **`#0E1A14`**; p05 `#040B09`, p95 `#2D3F32`, brightest veining `#6E8775` |
+| **Pale grey marble** — ribs, header blocks, plaque frames, steppers, the OK box | rib median **`#A59A99`** (p05 `#998E8B`, p95 `#B2ACAC`); the header block's field is one stop darker at **`#877B79`** |
+| Name plaque interior | flat **`#6A605D`** — a recessed warm grey, not stone |
+| Sky plaque | **`#6590DC`** at the top row, through `#9EBBD7`, to cloud `#BDC7D4`–`#D4D9DA` at the foot |
+| Torch flame | core **`#E8973B`**, body `#A06E2B`, root `#582E11` |
+| Ink, everything ordinary | **`#FFFFFF`** |
+| **Gold group heading** | **`#C8B87F`** — peaks measured `#CDBC85`, `#C8BF87`, `#DBCB81` |
+| A statistic above its class base; a chosen skill | **`#00FE00`** |
+| The class in force; an available skill taken; an unfilled skill slot (`None`) | **`#00FFFF`** |
+| The arrowheads flanking the selected statistic | brass **`#C4A272`** |
+| The OK oval | body `#675537`, highlight `#E4DAA9`, peak `#F5F5D5` |
+| Text shadow | `#000000` at +1, +1 |
+
+Two of those need their working shown, because they are the two a reader will
+want to argue with.
+
+**The gold heading is not `#FFFF9C`, and that matters.** Every other gold in
+this game is the `#FFFF9C` of §4.6. Measured *against white text of the same
+size in the same frame* — the calibration-free comparison STYLE.md §0 asks for —
+`SKILLS` sits at R 0.80, G 0.74, B 0.52 of the `Sword` beneath it, which puts it
+near `#C9C186`. Checked a second way, on luma alone, which H.264 preserves at
+full resolution: the measured peak `#CDBC85` carries Y = 187, `#C8B87F` carries
+Y = 182, and `#FFFF9C` would carry **Y = 244**. A 25% luma gap is not codec
+loss. These headings are a **dull brass**, a step down from the interface's
+usual pale yellow, and reproducing them at `#FFFF9C` makes the whole bottom
+strip shout.
+
+**The cyan is `#00FFFF` and the green is `#00FE00`,** by the same luma
+arithmetic. Cyan's measured peak `#20F4EF` carries Y = 180 and `#00FFFF` carries
+Y = 179 — an exact match. Green's peak `#3EBC50` carries Y = 138 against 149 for
+`#00FE00`, low by 7%, which is what a thin glyph loses; and `#00FE00` is already
+this engine's green on the character sheet (§4.6), so there is no case for a
+second one.
+
+**One colour could not be measured here and is recorded on weaker evidence.**
+`reference/NOTES-extra.md` §A, written from a screenshot pasted into a session
+and never saved, records a statistic dropped **below** its class base printing
+**red**, citing `Luck 5`. Every frame of the 205-second recording was scanned
+for red ink in the statistics area at 4 samples a second and **there is none** —
+that player never sold a point back. So: red is real but second-hand. Use
+`#FF0000`, the engine's own red from the character sheet's hovered skill row
+(§4.6), and treat it as the one figure in this section that a better capture
+could still overturn.
+
+**What this screen does not have.** Every item here has been checked against the
+recording frame by frame, because each one has been asserted at some point by
+somebody working from memory:
+
+- **No race.** MM6 parties are human only. There is no race control, and adding
+  one is importing MM7.
+- **No roll, and no re-roll.** Statistics are fixed by class. The only way to
+  move one is to spend from the 50-point `Bonus Pts` pool through the arrowheads
+  on the selected row. A dice-roll button is MM3's, not this game's.
+- **No standing figure.** The full-body painted render lives on the character
+  sheet and the inventory. Creation shows the portrait ovals and nothing else.
+- **No sex control.** Choosing the portrait chooses it.
+- **No derived numbers** — no hit points, no spell points, no armour class.
+- **No per-character or party-wide buttons**, no randomise, no clear, no reset.
+- **No message strip, no caption and no tooltip.** The screen never explains
+  itself; the printed card did that.
+- **One gold oval, unlettered.**
+
+**Where `reference/NOTES-extra.md` §A is wrong.** It is the only in-repo record
+of this screen, it was right about the serpentine and about the torches, and it
+is wrong in four places that a remake would inherit:
+
+| the note says | the screen shows |
+|---|---|
+| "the nine class names in a 2-column list" | **six**, in two sub-columns of three |
+| "Each column header carries a strip of blue sky" | sky over **columns 1 and 4 only**; the title occupies the middle of the band |
+| "Name field: recessed stone plaque, white serif, **centred**" | **left-aligned**, at interior + 10.7 |
+| "large, white, wide-letterspaced serif caps **on a grey marble bar with a thin gold rule**" | the caps are right; the bar is **dark serpentine** and there is **no rule** |
+
+It also under-describes the `−`/`+` as "flanking the number" when they flank the
+*heading*, with the number below and between them.
+
 #### Character sheet (21, 22, 23, 144812)
 
 - **Background: dark slate granite**, neutral with a slight olive cast —
@@ -1069,6 +1345,7 @@ failure; matching the identity while looking like 1998 is also a failure.
 | Quest book | `Screenshot (31).png` |
 | Rest screen | `Screenshot (30).png` |
 | Shop or dialogue | `Screenshot (27).png`, `Screenshot (28).png`, `Screenshot (29).png` |
+| Party creation | **no file ships with the repo** — score it against §3.4a, whose figures are the measurement, and re-take them from the sources §0 names if a figure is in doubt |
 
 ---
 
@@ -1341,3 +1618,14 @@ memory**: combat framing, monster sprites, hit feedback and any turn-based mode
 indicator; any spell projectile in flight or on impact; the conversation panel
 for plot NPCs; and the Awards tab. When one of these must be built, flag the
 assumption explicitly rather than scoring it against this document.
+
+**Party creation used to be on that list and is not any more.** It is worth
+saying how it got there, because the failure was silent and repeatable. The
+owner supplied a screenshot of the screen; the file set never gained it; nobody
+wrote the section; the screen was built anyway, from memory, and passed review
+for months because there was nothing to score it against. `grep -i "party
+creation"` returned nothing and no gate cared. **A screen with no section in
+this file is not a screen with no requirements — it is a screen whose
+requirements nobody has written down yet**, and the honest move when you find
+one is to go and get the evidence before touching the code. §3.4a is what that
+looks like; §0's second table is where its sources are.

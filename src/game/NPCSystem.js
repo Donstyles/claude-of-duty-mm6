@@ -3,6 +3,10 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { System } from '../core/Engine.js';
 import { getCharacterMaterials } from '../render/CharacterMaterials.js';
 import {
+  buildHead, buildHair, plainSkin, chinDrop, headHalfHeight, facePerson,
+  FACE_COUNT, HAIR_STYLE_IDS, HEAD_WIDTH,
+} from '../render/HeadGen.js';
+import {
   NPCS, SHOPS, TEMPLES, TRAINING_HALLS, GUILDS, TAVERNS, BANKS,
   RUMOURS, hirelingsAt, spellPrice, HIRELING_PROFESSIONS,
 } from './data/NPCs.js';
@@ -24,6 +28,22 @@ import { hashSeed } from '../core/RNG.js';
  */
 
 const TALK_RADIUS = 4.0;
+
+/**
+ * How close the party has to be before a townsperson turns to look at them.
+ *
+ * It was eighteen metres, which is wider than Millhaven's square — so walking
+ * into a town made every single person in it pivot and face the party at once,
+ * and go on facing them for as long as they stood there. That is not a bug in
+ * any test's sense and it is a very large part of why a street of these figures
+ * read as wrong: nineteen strangers tracking you in unison is a horror-film
+ * shot, not a market town.
+ *
+ * Six metres is about the distance at which a real person notices somebody
+ * walking up to them, and it is comfortably outside `TALK_RADIUS`, so the
+ * keeper is still looking at you by the time you can speak to them.
+ */
+const NOTICE_RADIUS = 6.0;
 
 /**
  * Where a door's keeper stands, relative to the doorway.
@@ -88,11 +108,15 @@ const KEEPER_LOOK = Object.freeze({
 const TILE = {
   'npc-wool': 0.32,
   'npc-cloth': 0.30,
-  // Skin and hair are tiled a little larger than the part they cover, so a
-  // frequency in those shaders reads directly as "times across a head". At the
-  // first pass's 0.15 m a head wrapped five tiles and every feature the maps
-  // owned landed below a texel: a smooth ball and a moulded brown helmet.
-  'npc-skin': 0.30,
+  // Hair is tiled a little larger than the part it covers, so a frequency in
+  // that shader reads directly as "times across a head". At the first pass's
+  // 0.15 m a head wrapped five tiles and every feature the map owned landed
+  // below a texel: a moulded brown helmet.
+  //
+  // Skin has no entry any more and that is the point: `npc-face` is an ATLAS,
+  // not a tile. Nothing wearing it repeats — a head is unwrapped into its own
+  // painted cell by `HeadGen`, and every other bare part is mapped flat into
+  // the bare swatch by `plainSkin`.
   'npc-hair': 0.42,
   leather: 0.30,
   metal: 0.34,
@@ -255,7 +279,11 @@ export class NPCSystem extends System {
       const p = new THREE.Vector3(
         centre.x + Math.sin(a) * r, centre.y, centre.z + Math.cos(a) * r,
       );
-      this._spawn(ctx, idle[i], p, null, terrain);
+      // Facing roughly in at the market rather than all facing −Z, which is
+      // what an unset rotation gives and what made the square read as a shelf
+      // of figurines all turned the same way.
+      const inward = Math.atan2(-(centre.x - p.x), -(centre.z - p.z));
+      this._spawn(ctx, idle[i], p, null, terrain, inward + this.rng.range(-0.9, 0.9));
     }
 
     ctx.events.on('ui:talkTo', ({ id }) => {
@@ -280,11 +308,20 @@ export class NPCSystem extends System {
    * texture set no matter what colour the dress calls for.
    */
   async _loadMaterials(ctx) {
-    const chars = await getCharacterMaterials(ctx.renderer, ctx.config?.quality);
+    this.quality = ctx.config?.quality ?? 'high';
+    const chars = await getCharacterMaterials(ctx.renderer, this.quality);
+    // Kept, not discarded. The atlas is the one surface in this game whose
+    // correctness cannot be judged from a landscape shot — a face is 30 px
+    // wide out there — so `tools/folktest.mjs` reads the sheet back off the
+    // GPU through here and measures it cell by cell. A bake nobody can
+    // photograph is a bake nobody can review.
+    this.chars = chars;
     this.mats = {
       wool: chars.get('npc-wool'),
       cloth: chars.get('npc-cloth'),
-      skin: chars.get('npc-skin'),
+      // The face atlas stands where the old tiling skin did, and costs the
+      // same one draw: hands, ears and throats take its bare swatch.
+      skin: chars.get('npc-face'),
       hair: chars.get('npc-hair'),
       leather: chars.borrow('leather'),
       metal: chars.borrow('iron'),
@@ -506,7 +543,6 @@ export class NPCSystem extends System {
     const skinCol = dye(skinBase, 1.30).offsetHSL(rng.range(-0.012, 0.012), rng.range(-0.05, 0.05), rng.range(-0.03, 0.03));
     const hairBase = look.age === 'ancient' ? 0xdedede : look.age === 'older' ? 0x9a9088 : 0x3a2a1c;
     const hairCol = dye(hairBase, 1.95).offsetHSL(rng.range(-0.02, 0.02), 0, rng.range(-0.05, 0.05));
-    const eyeCol = new THREE.Color(0x1a2028);
 
     const W = BUILD.w, Hs = BUILD.h;
     // `skirt` reads as "how far down the garment reaches", 1 being the floor.
@@ -579,26 +615,47 @@ export class NPCSystem extends System {
       push(paint(skirt, cloak, worn(hemY, waistY)), garment);
     }
 
+    // A torso that ends in a neck, not in a rim.
+    //
+    // The lathe used to stop dead at the shoulder line with a 44 cm open ring
+    // and nothing above it, so every figure in the kingdom had a hard
+    // horizontal lip across the top of the garment with a 13 cm column of bare
+    // neck standing out of the middle of it. That is how a toy is moulded, and
+    // once the head was the right size it was the loudest thing left in the
+    // silhouette. Clothes close around a throat, so the profile carries on over
+    // the shoulder and gathers at the collar.
+    const collarTop = shoulderY + 0.045 * Hs;
     {
-      const torso = lathe(waistY, shoulderY, 0.205 * W, 0.215 * W, 22, 4);
+      const profile = [
+        [0.205 * W * 0.35, waistY],                       // closes the underside
+        [0.205 * W, waistY],
+        [0.212 * W, waistY + (shoulderY - waistY) * 0.45],
+        [0.216 * W, shoulderY - 0.075 * Hs],              // the chest at its widest
+        [0.205 * W, shoulderY - 0.020 * Hs],              // over the shoulder
+        [0.150 * W, shoulderY + 0.012 * Hs],
+        [0.082 * W, collarTop],                           // the collar
+      ].map(([r, y]) => new THREE.Vector2(r, y));
+      const torso = new THREE.LatheGeometry(profile, 22);
       flute(torso, folds, foldAmp * 0.55, phase);
       torso.scale(1.08, 1, 0.84);
       torso.translate(0, 0, lean(0, shoulderY, 0));
-      uvRepeat(torso, (2 * Math.PI * 0.21 * W) / gTile, (shoulderY - waistY) / gTile);
-      push(paint(torso, cloak, worn(waistY, shoulderY)), garment);
+      uvRepeat(torso, (2 * Math.PI * 0.21 * W) / gTile, (collarTop - waistY) / gTile);
+      push(paint(torso, cloak, worn(waistY, collarTop)), garment);
     }
 
-    // A shoulder cape or yoke. Robes get one because it is the cheapest way to
-    // break the long vertical run of cloth into a body with shoulders on it.
+    // A shoulder mantle. Robes get one because it is the cheapest way to break
+    // the long vertical run of cloth into a body with shoulders on it.
     if (DRESS.cape) {
-      // Narrower than the arms hang and stopping short of the collar. The first
-      // version flared past the shoulder line, so the sleeves emerged through it
-      // and the mantle read as a stack of angular petals rather than cloth.
-      const cap = lathe(shoulderY - 0.17 * Hs, shoulderY - 0.02, 0.232 * W, 0.120 * W, 20, 5);
+      // It tapered to a 24 cm opening at the top, and the torso underneath was
+      // 44 cm at the same height — so the mantle did not cover the shoulders at
+      // all, it sat inside them and let the garment's own rim stand proud of
+      // it. A cape hangs OVER a body: its top has to be wider than what it is
+      // hanging on, and the collar above it is the torso's own.
+      const cap = lathe(shoulderY - 0.17 * Hs, shoulderY - 0.030 * Hs, 0.232 * W, 0.222 * W, 20, 5);
       flute(cap, folds + 2, 0.028, phase + 1.1);
       cap.scale(1.06, 1, 0.90);
       cap.translate(0, 0, lean(0, shoulderY, 0));
-      uvRepeat(cap, (2 * Math.PI * 0.18 * W) / gTile, (0.15 * Hs) / gTile);
+      uvRepeat(cap, (2 * Math.PI * 0.22 * W) / gTile, (0.14 * Hs) / gTile);
       push(paint(cap, cloak, flat(1.06)), garment);
     }
 
@@ -639,9 +696,19 @@ export class NPCSystem extends System {
       uvRepeat(strap, (2 * Math.PI * 0.21 * W) / TILE.leather, 1);
       push(paint(strap, new THREE.Color(0xffffff), flat(0.9)), leather);
 
+      // The buckle rides on the LEATHER, not on the iron.
+      //
+      // It used to be the only thing on an unarmoured townsperson wearing the
+      // metal material, which bought a whole draw call — a full state
+      // validation and a bind — for twelve triangles the player sees as a
+      // bright speck at three metres. Painting it pale onto the strap's own
+      // material puts the speck back at the same brightness and drops a mesh
+      // from four fifths of the town. Iron survives where iron is actually
+      // worn: pauldrons, and the clasp at a herald's throat.
       const buckle = new THREE.BoxGeometry(0.056 * W, 0.052, 0.022);
       buckle.translate(0, waistY + 0.01, lean(0, waistY, 0) - 0.20 * W);
-      push(paint(buckle, trimCol), metal);
+      uvRepeat(buckle, (0.056 * W) / TILE.leather, 0.052 / TILE.leather);
+      push(paint(buckle, trimCol.clone().multiplyScalar(1.45)), DRESS.shoulder > 0 ? metal : leather);
     }
 
     if (DRESS.shoulder > 0) {
@@ -686,103 +753,103 @@ export class NPCSystem extends System {
         shoulderY - armLen * 0.98,
         lean(0, shoulderY, 0) - Math.sin(swing[i]) * armLen * 0.5,
       );
-      uvRepeat(hand, (2 * Math.PI * 0.044) / TILE['npc-skin'], (Math.PI * 0.044) / TILE['npc-skin']);
+      plainSkin(hand);
       push(paint(hand, skinCol), skin);
     }
 
     /* ── head ────────────────────────────────────────────────────────────── */
 
     const hz = lean(0, headY, 0);
+    // Which of the eleven painted faces this person wears. Hashed on the id,
+    // not rolled off the figure's stream, so a keeper keeps their face across a
+    // save, a rebuild, and the order the town happened to spawn people in.
+    const cell = hashSeed(`face:${npcId}`) % FACE_COUNT;
+    const person = facePerson(cell);
+    // Head size follows build, but only a third as far: a broad man has a
+    // slightly bigger head and a much bigger chest, and scaling them together
+    // is how a figure ends up a caricature.
+    const headW = HEAD_WIDTH * (1 + (W - 1) * 0.30) * Hs;
+    const headH = headHalfHeight(headW, cell);
     {
-      const neck = new THREE.CylinderGeometry(0.046, 0.058, 0.13, 9);
-      neck.translate(0, shoulderY + 0.055, hz);
-      uvRepeat(neck, (2 * Math.PI * 0.05) / TILE['npc-skin'], 0.13 / TILE['npc-skin']);
-      push(paint(neck, skinCol, flat(0.82)), skin);
+      // A throat, not a peg. The old neck was 11.6 cm across at the base —
+      // wider than the jaw above it — which is exactly the join a doll has
+      // where its head plugs in.
+      const neck = new THREE.CylinderGeometry(0.036, 0.050, 0.14, 10);
+      neck.translate(0, shoulderY + 0.050, hz + 0.006);
+      plainSkin(neck);
+      push(paint(neck, skinCol, flat(0.80)), skin);
 
-      const head = new THREE.SphereGeometry(0.115, 16, 13);
-      head.scale(0.97, 1.09, 0.94);
+      // Everything that used to be stuck ON the head — a brow hemisphere, a
+      // nose cone, two iron beads — is now sculpted INTO it, and the features
+      // those primitives were standing in for are painted. See `HeadGen`.
+      const head = buildHead({
+        cell, width: headW, quality: this.quality, lean: hunch * 0.020,
+      });
       head.translate(0, headY, hz);
-      uvRepeat(head, (2 * Math.PI * 0.115) / TILE['npc-skin'], (Math.PI * 0.115) / TILE['npc-skin']);
-      push(paint(head, skinCol), skin);
-
-      // Brow and ears, and nothing else. An earlier pass added a chin ball and
-      // a much heavier brow on the theory that more primitives make more of a
-      // face; they made a potato. Two shallow ridges that stay inside the
-      // head's own silhouette read as a face, and lumps that break it do not.
-      const brow = new THREE.SphereGeometry(0.104, 12, 7, 0, Math.PI * 2, 0, Math.PI * 0.5);
-      brow.scale(1.02, 0.30, 0.96);
-      brow.translate(0, headY + 0.030, hz - 0.014);
-      uvRepeat(brow, (2 * Math.PI * 0.104) / TILE['npc-skin'], (Math.PI * 0.03) / TILE['npc-skin']);
-      push(paint(brow, skinCol, flat(1.04)), skin);
+      push(paint(head, skinCol, (x, y) => {
+        const rel = (y - headY) / headH;
+        // The hair mass throws a shadow onto the forehead and the jaw shades
+        // its own underside; neither is something a tiling map can place.
+        return (1 - 0.16 * sstep(0.42, 1.0, rel)) * (1 - 0.12 * sstep(-0.40, -1.0, rel));
+      }), skin);
 
       for (const sgn of [-1, 1]) {
-        const ear = new THREE.SphereGeometry(0.028, 7, 6);
-        ear.scale(0.40, 1.10, 0.80);
-        ear.translate(sgn * 0.104, headY - 0.004, hz + 0.012);
-        uvRepeat(ear, (2 * Math.PI * 0.028) / TILE['npc-skin'], (Math.PI * 0.028) / TILE['npc-skin']);
-        push(paint(ear, skinCol, flat(1.03)), skin);
-      }
-
-      const nose = new THREE.ConeGeometry(0.024, 0.056, 7);
-      nose.rotateX(-Math.PI / 2);
-      nose.translate(0, headY - 0.004, hz - 0.117);
-      uvRepeat(nose, (2 * Math.PI * 0.024) / TILE['npc-skin'], 0.056 / TILE['npc-skin']);
-      push(paint(nose, skinCol, flat(1.04)), skin);
-
-      // The eye line sits at the middle of the head, not the top third. That
-      // was not a stylistic choice before: the hair cap reached 104° down from
-      // the crown and swallowed both eyes, which is why every townsperson had a
-      // blank face with a nose on it.
-      for (const sgn of [-1, 1]) {
-        const eye = new THREE.SphereGeometry(0.017, 8, 6);
-        eye.scale(1.1, 0.85, 1);
-        eye.translate(sgn * 0.043, headY + 0.004, hz - 0.100);
-        push(paint(eye, eyeCol), metal);
+        const ear = new THREE.SphereGeometry(headW * 0.30, 7, 6);
+        ear.scale(0.36, 1.15, 0.86);
+        ear.rotateZ(sgn * -0.13);
+        ear.translate(sgn * headW * 0.98, headY - headH * 0.06, hz + headW * 0.28);
+        plainSkin(ear);
+        push(paint(ear, skinCol, flat(1.02)), skin);
       }
     }
 
     /* ── hood or hair ────────────────────────────────────────────────────── */
 
     if (DRESS.hood) {
-      const hood = new THREE.SphereGeometry(0.148, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.60);
-      hood.scale(1.0, 1.10, 1.04);
-      hood.translate(0, headY + 0.018, hz + 0.012);
-      uvRepeat(hood, (2 * Math.PI * 0.148) / gTile, (Math.PI * 0.09) / gTile);
+      // Sized off the head rather than off a constant. It used to be a sphere
+      // of 0.148 scaled 1.10 upward, which cleared the old ball head by four
+      // centimetres in every direction; on a skull the right shape that is a
+      // bucket, so the hood takes the head's own proportions with a hand's
+      // clearance in each.
+      const hoodR = headW * 1.36;
+      const hood = new THREE.SphereGeometry(hoodR, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.60);
+      hood.scale(1.0, (headH * 1.20) / hoodR, (headW * 1.62) / hoodR);
+      hood.translate(0, headY + headH * 0.14, hz + headW * 0.16);
+      uvRepeat(hood, (2 * Math.PI * hoodR) / gTile, (Math.PI * 0.09) / gTile);
       push(paint(hood, cloak, flat(0.94)), garment);
 
       // A cowl falling behind the shoulders, so a hood is not a bowl on a head.
-      const cowl = new THREE.SphereGeometry(0.155, 12, 9, 0, Math.PI, Math.PI * 0.25, Math.PI * 0.5);
+      const cowl = new THREE.SphereGeometry(hoodR * 1.06, 12, 9, 0, Math.PI, Math.PI * 0.25, Math.PI * 0.5);
       cowl.scale(1.0, 1.5, 0.72);
       cowl.rotateY(-Math.PI / 2);
-      cowl.translate(0, headY - 0.085, hz + 0.075);
-      uvRepeat(cowl, (Math.PI * 0.155) / gTile, (Math.PI * 0.12) / gTile);
+      cowl.translate(0, headY - headH * 0.68, hz + headW * 0.95);
+      uvRepeat(cowl, (Math.PI * hoodR * 1.06) / gTile, (Math.PI * 0.12) / gTile);
       push(paint(cowl, cloak, flat(0.86)), garment);
     } else {
-      // 0.42π stops the cap at 76° from the crown — above the eye line, which
-      // is at 86°. Anything past 80° puts hair over the eyes.
-      const cap = new THREE.SphereGeometry(0.126, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.47);
-      cap.scale(1.02, 1.10, 1.02);
-      cap.translate(0, headY + 0.004, hz);
-      // Hair wants its strands running down the head, so v is the short axis.
-      uvRepeat(cap, (2 * Math.PI * 0.126) / TILE['npc-hair'], (Math.PI * 0.062) / TILE['npc-hair']);
-      push(paint(cap, hairCol), hair);
-
-      // The back and sides of the mass hang lower than the crown does — that
-      // asymmetry is most of what reads as a hairstyle rather than a swim cap.
-      const back = new THREE.SphereGeometry(0.124, 12, 10, 0, Math.PI, 0, Math.PI * 0.72);
-      back.scale(1.02, look.age === 'ancient' ? 0.86 : 1.10, 0.80);
-      back.rotateY(-Math.PI / 2);
-      back.translate(0, headY - 0.004, hz + 0.028);
-      uvRepeat(back, (Math.PI * 0.124) / TILE['npc-hair'], (Math.PI * 0.09) / TILE['npc-hair']);
-      push(paint(back, hairCol, flat(0.88)), hair);
+      // Five cuts rather than one bowl, and the choice is not free-form: an
+      // ancient head gets a bare one, an older head a thin one, and the rest
+      // are the roll. That ladder is what makes a crowd look like a crowd
+      // without asking the roster to write a hairstyle for ninety keepers.
+      const style = look.age === 'ancient' && person.heavy > 0.5 ? 'bare'
+        : look.age === 'older' && person.heavy > 0.5 ? 'thin'
+          : HAIR_STYLE_IDS[Math.floor(rng.range(0, 3))] ?? 'crop';
+      const mass = buildHair({
+        style, width: headW, quality: this.quality,
+        locks: 7 + Math.floor(rng.range(0, 5)), phase: rng.range(0, Math.PI * 2),
+      });
+      mass.translate(0, headY, hz);
+      push(paint(mass, hairCol, (x, y) => 0.86 + 0.20 * _clamp01((y - headY) / headH + 0.5)), hair);
     }
 
-    if (look.age === 'ancient' || look.age === 'older') {
-      const beard = new THREE.SphereGeometry(0.078, 10, 9, 0, Math.PI * 2, 0, Math.PI * 0.62);
+    // A beard belongs to a face, not to a birthday. Gating it on age alone —
+    // which is what shipped — put one on every older woman in the kingdom.
+    if ((look.age === 'ancient' || look.age === 'older') && person.heavy > 0.5) {
+      const drop = chinDrop(headW, cell);
+      const beard = new THREE.SphereGeometry(headW * 0.88, 10, 9, 0, Math.PI * 2, 0, Math.PI * 0.62);
       beard.rotateX(Math.PI);
-      beard.scale(1, 1.30, 0.82);
-      beard.translate(0, headY - 0.072, hz - 0.042);
-      uvRepeat(beard, (2 * Math.PI * 0.078) / TILE['npc-hair'], (Math.PI * 0.10) / TILE['npc-hair']);
+      beard.scale(1, 1.30 + person.age * 0.35, 0.80);
+      beard.translate(0, headY - drop * 0.46, hz - headW * 0.40);
+      uvRepeat(beard, (2 * Math.PI * headW * 0.88) / TILE['npc-hair'], (Math.PI * 0.10) / TILE['npc-hair']);
       push(paint(beard, hairCol, flat(0.95)), hair);
     }
 
@@ -873,13 +940,31 @@ export class NPCSystem extends System {
     if (facing !== null) figure.rotation.y = facing;
     this.group.add(figure);
 
+    // Standing still is not being still, and the difference is the whole
+    // reason a shop front reads as staffed rather than decorated. Everybody
+    // gets their own rate and their own amplitude off the same seeded stream,
+    // so a row of keepers along a street is never in step — nineteen figures
+    // breathing together would be worse than nineteen statues.
+    const idleRng = this.rng.fork(`idle:${npcId}`);
     const npc = {
       id: `${npcId}:${this.npcs.length}`,
       defId: npcId, def, figure,
       pos: new THREE.Vector3(position.x, y, position.z),
       building: buildingName,
       home: new THREE.Vector3(position.x, y, position.z),
-      wanderPhase: this.rng.range(0, Math.PI * 2),
+      facing: facing ?? figure.rotation.y,
+      wanderPhase: idleRng.range(0, Math.PI * 2),
+      // A weight shift every eight to fourteen seconds, which is about what a
+      // person standing at a counter actually does. The first pass ran this
+      // three times slower and the figures measured as statues — over a whole
+      // second the furthest vertex on most of them moved two millimetres.
+      swayRate: idleRng.range(0.45, 0.80),
+      swayAmp: idleRng.range(0.011, 0.022),
+      breathRate: idleRng.range(0.55, 0.85),
+      // Where they are looking when nothing is worth looking at. A keeper
+      // watching their own street does not hold one heading for ten minutes.
+      driftAmp: idleRng.range(0.10, 0.30),
+      driftRate: idleRng.range(0.05, 0.11),
     };
     this.npcs.push(npc);
     return npc;
@@ -1122,19 +1207,48 @@ export class NPCSystem extends System {
       if (npc) this.startDialogue(ctx, npc);
     }
 
-    // Townsfolk sway a little and turn to face a nearby party.
+    // How a townsperson stands.
+    //
+    // What shipped was: bob up and down 1.2 cm at 0.9 rad/s forever, and swivel
+    // to face the party from eighteen metres. Both were wrong in the same
+    // direction. A person standing still does not rise and fall like a float on
+    // water — the head moves, and it moves sideways, because the weight goes
+    // from one hip to the other. And a person does not turn to watch a stranger
+    // from across a square.
+    //
+    // So: a weight shift about the feet, which carries the head a couple of
+    // centimetres; a breath an order of magnitude smaller than the old bob; a
+    // slow drift of the heading when nothing is happening; and a turn toward
+    // the party only once they are close enough to speak to.
+    //
+    // All of it rides on the figure's own transform. Nineteen townsfolk cost
+    // nineteen matrix updates and not one extra draw call, which is the reason
+    // it is a stance and not a rig.
+    const t = ctx.state.elapsed;
     for (const n of this.npcs) {
       const d = n.pos.distanceTo(player.position);
-      if (d < 18) {
-        const want = Math.atan2(
+      let want;
+      if (d < NOTICE_RADIUS) {
+        want = Math.atan2(
           -(player.position.x - n.pos.x), -(player.position.z - n.pos.z),
         );
-        let delta = want - n.figure.rotation.y;
-        while (delta > Math.PI) delta -= Math.PI * 2;
-        while (delta < -Math.PI) delta += Math.PI * 2;
-        n.figure.rotation.y += delta * Math.min(1, dt * 3);
+      } else {
+        want = n.facing + Math.sin(t * n.driftRate + n.wanderPhase) * n.driftAmp;
       }
-      n.figure.position.y = n.pos.y + Math.sin(ctx.state.elapsed * 0.9 + n.wanderPhase) * 0.012;
+      let delta = want - n.figure.rotation.y;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      // Slower than the old 3: a head that snaps round is the tell.
+      n.figure.rotation.y += delta * Math.min(1, dt * (d < NOTICE_RADIUS ? 1.8 : 0.6));
+
+      const sway = Math.sin(t * n.swayRate + n.wanderPhase);
+      n.figure.rotation.z = sway * n.swayAmp;
+      n.figure.rotation.x = Math.sin(t * n.swayRate * 0.71 + n.wanderPhase * 1.7) * n.swayAmp * 0.55;
+      n.figure.position.y = n.pos.y
+        + Math.sin(t * n.breathRate + n.wanderPhase) * 0.004
+        // The hips drop a little as the weight goes over, which is what stops
+        // the sway reading as a metronome.
+        - Math.abs(sway) * n.swayAmp * 0.30;
     }
   }
 
@@ -1194,5 +1308,6 @@ export class NPCSystem extends System {
     this.group?.parent?.remove(this.group);
     this.npcs.length = 0;
     this.mats = null;
+    this.chars = null;
   }
 }

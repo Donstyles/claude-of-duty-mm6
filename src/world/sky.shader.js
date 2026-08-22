@@ -497,6 +497,25 @@ void main() {
 
   // ── optional inverse tonemap, for a post stack that grades the frame ───
   if (uPreTonemap > 0.5) {
+    // Clip to the display gamut FIRST, and it is load-bearing.
+    //
+    // The inverse tone curve below has no solution above its own asymptote: at
+    // v > 1/0.983729 the quadratic's leading coefficient qa changes sign, the
+    // discriminant goes negative, and the "root" it returns is the inverse of
+    // nothing. The max(..., 0.0) that follows then hands that channel back as
+    // ZERO — so an over-range channel does not clip, it is deleted.
+    //
+    // Measured at the sunrise key: mm6Ramp's top step is 0.906 red and the
+    // warm cloud multiplier there is 1.28, so a lit crest arrives at 1.25.
+    // Red solved to exactly 0 and the brightest puffs at dawn came out with
+    // SATURATED GREEN HOLES in them — which is what the 06:24 capture shows.
+    // Dusk clips the same channel to 1.145 and is one crest from the same.
+    //
+    // col is display-referred sRGB by construction, so anything above 1 was
+    // going to clip on the way to the framebuffer whatever happened here. This
+    // makes it clip in the colour space where clipping means something: a
+    // crest that wanted to be brighter than white becomes white.
+    col = clamp(col, 0.0, 1.0);
     // sRGB -> linear
     vec3 lin = mix(pow((col + 0.055) / 1.055, vec3(2.4)), col / 12.92, step(col, vec3(0.04045)));
     // inverse ACES output matrix (columns, matching three's mat3 convention)

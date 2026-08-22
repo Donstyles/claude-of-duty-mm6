@@ -26,6 +26,13 @@ import { charSkillEffect } from '../game/rules.js';
  * seconds, and light with no flame in it. The whole act turns on the party
  * being able to tell the difference by eye, so the generator has to earn it.
  *
+ * Every floor plan carries a way back to the surface, and it is the one piece
+ * of a dungeon that is not decoration: see `_carveExit`. `exit()` had existed
+ * since the first pass and had two callers in the whole tree — the travel spell
+ * and the screenshot harness — so a party with no travel spell, which is every
+ * party at level one, could walk into the first dungeon in the game and had no
+ * way out but a reload. `tools/exittest.mjs` is the gate on that.
+ *
  * Everything is deterministic from `ctx.rng.fork('dungeon:<id>')`.
  *
  * NOTE ON SIZE. This is past the ~900-line mark ARCHITECTURE §9 asks work to be
@@ -43,6 +50,17 @@ const CELL = 4;
 const FLOOR_GAP = 2.4;
 /** Cells in a stair shaft, and therefore how long the flight is. */
 const STAIR_RUN = 4;
+
+/**
+ * Seconds the party has to stand in the entrance arch before it takes them out.
+ *
+ * The exit is a place, not a menu, so the only question is what stops it firing
+ * by accident. Half a second of standing still is a decision; being shoved
+ * through a doorway in a fight is not, and `_driveExit` takes the belt as well
+ * as the braces — while anything is swinging at the party the dwell is refused
+ * outright and leaving costs a deliberate press instead.
+ */
+const LEAVE_DWELL = 0.55;
 
 /**
  * Interiors live *above* the terrain rather than buried under it.
@@ -192,6 +210,9 @@ export class DungeonSystem extends System {
     this._ready = false;
     this._exitTo = new THREE.Vector3();
     this._prompt = '';
+    /** Seconds the party has been standing in the entrance arch. */
+    this._standing = 0;
+    this._atExit = false;
   }
 
   async init(ctx) {
@@ -376,7 +397,12 @@ export class DungeonSystem extends System {
     built.size = built.floors[0].size;
 
     const door = this.entrances.get(id);
-    if (door) this._exitTo.set(door.x, door.y + 0.3, door.z + 6);
+    if (door) this._exitTo.copy(this._exitSpot(ctx, door));
+    // The arch is live from the frame the party lands, not from the frame the
+    // interior finishes streaming: "turn around right away" is the case the
+    // whole thing exists for.
+    this._standing = 0;
+    this._atExit = false;
 
     this._takeOverLighting(ctx, true);
     const physics = ctx.get('physics');
@@ -391,13 +417,64 @@ export class DungeonSystem extends System {
     return true;
   }
 
+  /**
+   * Somewhere to put the party down when they walk back out.
+   *
+   * Three things have to be true of it and a fixed offset from the door gets
+   * one of them. It has to be clear of the mouth, or the party comes out
+   * standing inside `_entranceNear`'s own four-metre radius with the interact
+   * key still down. It has to be *ground* — six metres downhill of `door.y` is
+   * a party buried to the waist the moment terrain collision comes back on.
+   * And it has to be dry: `_snapToGround` walks every door off water and off
+   * cliffs, and nothing was doing that for the six metres in front of it, which
+   * put the Buried Province's party into the oasis its door stands beside. Two
+   * of fifty-five, and only a real walk-out found them.
+   *
+   * Eight bearings at six, nine and thirteen metres, then `_snapToGround`'s own
+   * spiral — so this is the rule the doors were placed by rather than a second
+   * opinion about what standable ground is.
+   */
+  _exitSpot(ctx, door) {
+    const terrain = ctx.get('terrain');
+    const ok = (x, z) => !terrain?.isWater?.(x, z) && (terrain?.slopeAt?.(x, z) ?? 0) < 0.62;
+    const seat = (x, z) => new THREE.Vector3(x, (terrain?.heightAt?.(x, z) ?? door.y) + 0.3, z);
+    for (const r of [6, 9, 13]) {
+      for (let k = 0; k < 8; k++) {
+        // Due +z first, which is the offset this has always used and is still
+        // the right answer for fifty-three of the fifty-five.
+        const a = Math.PI / 2 + k * (Math.PI / 4);
+        const x = door.x + Math.cos(a) * r, z = door.z + Math.sin(a) * r;
+        if (ok(x, z)) return seat(x, z);
+      }
+    }
+    const s = this._snapToGround(terrain, door.x, door.z + 6);
+    return seat(s.x, s.z);
+  }
+
+  /**
+   * Where the way out is on the floor the party arrived on, or `null`.
+   *
+   * Public because it is the one thing about a dungeon a caller outside this
+   * file may reasonably want to point at — `tools/exittest.mjs` measures it,
+   * and an automap that wants to draw the door can read it rather than
+   * re-deriving the arch from the grid.
+   */
+  exitPortal() {
+    const b = this.current ? this.built.get(this.current) : null;
+    return b?.exit ?? null;
+  }
+
   /** Leave, returning to the surface door. */
   exit(ctx) {
     if (!this.current) return;
+    const name = this.currentName;
     this.group.visible = false;
     this.current = null;
     this.currentName = null;
     this.currentDef = null;
+    this._standing = 0;
+    this._atExit = false;
+    this._prompt = '';
     this._takeOverLighting(ctx, false);
     const physics = ctx.get('physics');
     if (physics) physics.waterEnabled = true;
@@ -405,6 +482,7 @@ export class DungeonSystem extends System {
     ctx.get('player')?.teleport(this._exitTo.x, this._exitTo.y, this._exitTo.z);
     ctx.get('audio')?.playMusic?.('wilderness');
     ctx.events.emit('player:enteredRegion', { region: 'wilderness', kind: 'outdoor' });
+    if (name) ctx.events.emit('ui:log', { text: `You leave ${name}.`, kind: 'info' });
   }
 
   /**
@@ -562,6 +640,7 @@ export class DungeonSystem extends System {
       rubble: new Batch(lib.get('rubble')),
       web: new Batch(this._webMaterial()),
       ember: new Batch(this._emberMaterial(def.light.torch)),
+      day: new Batch(this._daylightMaterial()),
     };
     // The hazard sheet is built into its own batch and added to the group
     // *after* the collider is taken, so the party wades through standing water
@@ -626,7 +705,13 @@ export class DungeonSystem extends System {
     if (sheet) { sheet.name = 'dungeon-hazard'; group.add(sheet); }
 
     const first = state.floors[0];
-    const [sx, sz] = cellToWorld(first.entry.cx, first.entry.cy, first.size);
+    const ex = first.exit;
+    // The party arrives standing in its own entrance, a pace inside the arch,
+    // looking into the dungeon — so the way out is behind them from the first
+    // frame and turning round is all it takes to find it. Without an arch
+    // (which nothing in the catalogue is) fall back to the old room centre.
+    const arrive = ex ? cellCoords(first, ex) : null;
+    const [ax, az] = cellToWorld(first.entry.cx, first.entry.cy, first.size);
     return {
       group,
       floors: state.floors,
@@ -637,8 +722,13 @@ export class DungeonSystem extends System {
       doors: state.doors,
       chests: state.chests,
       spawned: state.spawned,
-      spawn: new THREE.Vector3(sx, first.y, sz),
-      spawnYaw: bestViewYaw(first, first.entry.cx, first.entry.cy),
+      spawn: arrive
+        ? new THREE.Vector3(arrive.x, first.y, arrive.z)
+        : new THREE.Vector3(ax, first.y, az),
+      spawnYaw: ex
+        ? Math.atan2(ex.di, ex.dj)
+        : bestViewYaw(first, first.entry.cx, first.entry.cy),
+      exit: ex ? exitMouth(first, ex) : null,
       toWorld: (i, j) => cellToWorld(i, j, first.size),
     };
   }
@@ -692,6 +782,9 @@ export class DungeonSystem extends System {
     plan.noFloor = new Set();
     plan.noCeil = new Set();
     plan.sunk = new Set();
+    // Cells nothing is allowed to be dumped in — the arch and its porch. A
+    // barrel in the only way out is the same bug as no way out at all.
+    plan.clear = new Set();
     plan.torchDensity = Math.max(0.15, def.light.density * (1 - depth * 0.3));
 
     // The thing at the bottom holds the largest room on the deepest floor.
@@ -719,7 +812,116 @@ export class DungeonSystem extends System {
     plan.entry = previous
       ? plan.rooms.find((r) => r.landing) ?? open[0]
       : open.slice().sort((a, b) => (a.cx + a.cy) - (b.cx + b.cy))[0];
+    // The top floor is the only one with a door to the surface, so it is the
+    // only one that gets an arch. Everything below reaches it by the stair.
+    if (!previous) this._carveExit(state, plan);
     return plan;
+  }
+
+  /**
+   * The way back out, carved as a cell rather than drawn as a decoration.
+   *
+   * `DungeonSystem.exit()` has always worked and until now nothing the player
+   * could reach ever called it: the two call sites in the tree are the travel
+   * spell and the screenshot harness, so a party with no travel spell — which
+   * is every party at level one — could walk into the first dungeon in the game
+   * and had no way back to the surface but a reload. Fifty-five interiors, the
+   * same in all of them.
+   *
+   * The fix is a door the party walks into, at the place they came in, and the
+   * cheapest correct way to get one is to open a single cell of rock off the
+   * arrival chamber and let `_shell` build it. That is the whole trick here: a
+   * porch is an ordinary dead-end cell, so it gets a floor, a ceiling, three
+   * walls, the grammar's own jitter and the containment box for free, it is
+   * watertight by construction, and it shows up on the automap because the
+   * automap reads the same grid. Drawing a bespoke alcove would have meant
+   * suppressing a wall face and re-deriving all of that by hand — and in the
+   * cave grammar, whose wall corners are displaced by up to 0.4 m, re-deriving
+   * it slightly wrong means daylight through a crack in a crypt.
+   *
+   * Two conditions on the cell, both load-bearing:
+   *
+   *   1. it is rock now, and rock on every side but the doorway. Opening a cell
+   *      that touched anything else would join two corridors or unseal a vault
+   *      — a change to the floor plan, not a door in it;
+   *   2. facing *away* from it shows open floor. The party arrives standing in
+   *      the arch looking into the dungeon, so the arch is behind them and the
+   *      dungeon is in front, which is the arrival MM6 gives you and the one
+   *      that makes "turn around right away" answer with a door.
+   *
+   * If no pocket exists anywhere on the floor the arch is hung flat on a wall
+   * face instead (`porch: false`): it loses its recess and keeps its frame, its
+   * light and its trigger, so no dungeon in the catalogue is ever left without
+   * one. Nothing in the shipping catalogue takes that branch — `exittest`
+   * counts it — but a future layout that digs to the board edge might.
+   */
+  _carveExit(state, plan) {
+    const S = plan.size;
+    const room = plan.entry;
+    if (!room) return;
+    const rock = (i, j) => i > 0 && j > 0 && i < S - 1 && j < S - 1 && !plan.grid[j][i];
+    const runFrom = (i, j, di, dj) => {
+      let n = 0, x = i + di, y = j + dj;
+      while (plan.grid[y]?.[x]) { n++; x += di; y += dj; }
+      return n;
+    };
+
+    // Open cells taken off the grid rather than off the room record: a cave
+    // "room" is a blob whose bounding box is mostly rock, and a spine chamber
+    // can sit a cell off its own box. The arrival chamber and one ring around
+    // it first; a wider ring only if that finds nothing.
+    const collect = (pad) => {
+      const out = [];
+      for (let j = room.y - pad; j < room.y + room.h + pad; j++) {
+        for (let i = room.x - pad; i < room.x + room.w + pad; i++) {
+          if (plan.grid[j]?.[i] && !plan.noFloor.has(key(i, j))) out.push([i, j]);
+        }
+      }
+      return out;
+    };
+    const near = collect(1);
+    const wide = collect(5);
+
+    // Long view out of the arch beats a short walk to it, two to one: a party
+    // that turns round to a wall has learned nothing about where it is.
+    const score = (i, j, di, dj) =>
+      runFrom(i, j, -di, -dj) * 2 - Math.hypot(i - room.cx, j - room.cy);
+
+    // A porch needs rock on every side but the doorway — see the docstring.
+    const pocket = (cells) => {
+      let best = null;
+      for (const [i, j] of cells) {
+        for (const [di, dj] of SIDES) {
+          const ai = i + di, aj = j + dj;
+          if (!rock(ai, aj)) continue;
+          if (!SIDES.every(([ei, ej]) => (ei === -di && ej === -dj) || rock(ai + ei, aj + ej))) continue;
+          const s = score(i, j, di, dj);
+          if (!best || s > best.s) best = { i, j, di, dj, s, porch: true };
+        }
+      }
+      return best;
+    };
+
+    let best = pocket(near) ?? pocket(wide);
+    if (!best) {
+      for (const [i, j] of near.length ? near : wide) {
+        for (const [di, dj] of SIDES) {
+          if (plan.grid[j + dj]?.[i + di]) continue;
+          const s = score(i, j, di, dj);
+          if (!best || s > best.s) best = { i, j, di, dj, s, porch: false };
+        }
+      }
+    }
+    if (!best) return;
+
+    const { i, j, di, dj } = best;
+    if (best.porch) {
+      plan.grid[j + dj][i + di] = 1;
+      plan.tag[j + dj][i + di] = 2;
+      plan.clear.add(key(i + di, j + dj));
+    }
+    plan.clear.add(key(i, j));
+    plan.exit = { i, j, di, dj, porch: best.porch };
   }
 
   /**
@@ -1175,6 +1377,9 @@ export class DungeonSystem extends System {
       for (let k = 0; k < STAIR_RUN; k++) {
         i += di; j += dj;
         if (i < 2 || j < 2 || i >= S - 2 || j >= S - 2) { cells.length = 0; break; }
+        // A shaft suppresses the floor of every cell it takes. Through the
+        // entrance arch that would leave the way out standing over a hole.
+        if (upper.clear?.has(key(i, j))) { cells.length = 0; break; }
         cells.push([i, j]);
       }
       if (cells.length === STAIR_RUN) { run = { cells, di, dj }; break; }
@@ -1314,6 +1519,88 @@ export class DungeonSystem extends System {
     if (lattice) this._ceilingStrips(state, plan);
     this._torches(state, plan);
     this._stairFlight(state, plan);
+    this._exitArch(state, plan);
+  }
+
+  /**
+   * The arch, from the inside.
+   *
+   * It has to be *recognisable*, not merely present: a trigger volume with
+   * nothing drawn in it is a trapdoor. So it is deliberately the same doorway
+   * the party walked through on the surface — `_buildPortals` cuts jambs, a
+   * lintel, a cornice and a worn sill out of the same dressed stone, and this
+   * repeats them at the same proportions on the other side of the hill. A
+   * player who has seen one has seen the other.
+   *
+   * The thing that actually carries it across a dark room is the light. The
+   * back of the porch holds an unlit emissive panel — the shaft to the surface,
+   * the one bright rectangle on the floor — and a steady, cool anchor goes into
+   * `state.torches` beside it, so the light pool lifts the frame out of the
+   * dark from wherever the party is standing. Torchlight in here is warm and
+   * flickers; daylight is cool and does not, which is the whole tell.
+   */
+  _exitArch(state, plan) {
+    const ex = plan.exit;
+    if (!ex) return;
+    const { batches } = state;
+    const { i, j, di, dj } = ex;
+    // Exactly one of di/dj is ±1, so their sum is the outward sense, and the
+    // frame's own yaw follows `_buildDoors`: local +x runs along the wall.
+    const n = di + dj;
+    const yaw = di ? Math.PI / 2 : 0;
+    const [cx, cz] = cellToWorld(i, j, plan.size);
+    const y0 = plan.y;
+    const H = Math.min(plan.height - 1.1, 3.0);
+    const W = 2.6;
+    const jw = (CELL - W) / 2;
+
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0));
+    const one = new THREE.Vector3(1, 1, 1);
+    const put = (batch, geom, lx, ly, lz) => {
+      const p = new THREE.Vector3(lx, 0, lz).applyQuaternion(q);
+      m.compose(new THREE.Vector3(cx + p.x, y0 + ly, cz + p.z), q, one);
+      batch.geom(geom, m, 0.8);
+      geom.dispose();
+    };
+
+    // The reveal stands at the cell boundary and is 0.9 m thick, so the opening
+    // is a passage rather than a hole in a sheet of wall.
+    const t = CELL / 2;
+    const jambH = H + 0.34;
+    for (const s of [-1, 1]) {
+      put(batches.trim, new THREE.BoxGeometry(jw, jambH, 0.9), s * (W + jw) / 2, jambH / 2, n * t);
+    }
+    put(batches.trim, new THREE.BoxGeometry(W + 1.5, 0.42, 1.0), 0, jambH + 0.21, n * t);
+    put(batches.trim, new THREE.BoxGeometry(W + 2.3, 0.3, 1.3), 0, jambH + 0.57, n * t);
+    put(batches.trim, new THREE.BoxGeometry(W + 1.0, 0.09, 1.9), 0, 0.045, n * t);
+    // With a porch behind it both cells are open, so `_shell` drew no wall
+    // here: the header is what stops the opening running to the ceiling.
+    if (ex.porch) {
+      const hh = plan.height - jambH;
+      put(batches.wall, new THREE.BoxGeometry(CELL, hh, 0.9), 0, jambH + hh / 2, n * t);
+    }
+
+    // The shaft to the surface, at the back of the porch or — with no porch —
+    // a hand's breadth in front of the wall face the arch is hung on.
+    const gt = ex.porch ? CELL + CELL / 2 - 0.12 : CELL / 2 - 0.52;
+    const g = 1.25;
+    const lo = y0 + 0.05, hi = y0 + 0.05 + H;
+    // Wound so the lit face looks back into the room whichever way `n` points.
+    const P = (lx, wy) => {
+      const p = new THREE.Vector3(lx, 0, n * gt).applyQuaternion(q);
+      return [cx + p.x, wy, cz + p.z];
+    };
+    batches.day.quad(
+      P(n * g, lo), P(-n * g, lo), P(-n * g, hi), P(n * g, hi),
+      [0, 0], [1, 0], [1, 1], [0, 1],
+    );
+
+    const at = ex.porch ? CELL * 0.65 : CELL / 2 - 0.9;
+    state.torches.push({
+      x: cx + di * at, y: y0 + H * 0.72, z: cz + dj * at,
+      steady: true, base: 15, phase: 0, color: 0xd6e2ee,
+    });
   }
 
   /**
@@ -1513,6 +1800,9 @@ export class DungeonSystem extends System {
     const m = new THREE.Matrix4();
 
     const mount = (i, j) => {
+      // Not in the entrance arch: its own daylight anchor is there, and a
+      // bracket on the porch's back wall stands in the shaft panel.
+      if (plan.clear?.has(key(i, j))) return false;
       const dirs = SIDES.filter(([di, dj]) => !grid[j + dj]?.[i + di]);
       if (!dirs.length) return false;
       const [di, dj] = rng.pick(dirs);
@@ -1604,6 +1894,27 @@ export class DungeonSystem extends System {
     const { rng, def } = state;
     const kit = (THEMES[def.theme] ?? THEMES.cave).kit;
     const weights = kit.map((_, n) => Math.max(1, 4 - n));
+    // Furniture is placed by *cell* for props and by *room centre* for chests,
+    // and the second one can land outside the room it belongs to: cave blobs
+    // are allowed to overlap, so a neighbouring chamber's centre can fall in
+    // the entrance porch. The Greenheart is the case that found it — a chest
+    // standing in the only way out of the dungeon.
+    const half = (plan.size * CELL) / 2;
+    const inTheWay = (x, z) => plan.clear.has(
+      key(Math.floor((x + half) / CELL), Math.floor((z + half) / CELL)),
+    );
+    // Walked back into the dungeon rather than dropped, because two of the
+    // three chests here are the only copy of something — a dungeon's one prize
+    // and a quest's one item. The cell behind the arch is open by construction:
+    // `_carveExit` picks the doorway for having floor in front of it.
+    const clearOf = (x, z) => {
+      if (!plan.exit) return [x, z];
+      let px = x, pz = z;
+      for (let n = 0; n < 3 && inTheWay(px, pz); n++) {
+        px -= plan.exit.di * CELL; pz -= plan.exit.dj * CELL;
+      }
+      return [px, pz];
+    };
 
     for (const room of plan.rooms) {
       const count = Math.max(2, Math.round(room.w * room.h * 0.22));
@@ -1611,6 +1922,7 @@ export class DungeonSystem extends System {
         const i = room.x + rng.int(0, room.w - 1);
         const j = room.y + rng.int(0, room.h - 1);
         if (!plan.grid[j]?.[i] || plan.noFloor.has(key(i, j))) continue;
+        if (plan.clear.has(key(i, j))) continue;
         const [wx, wz] = cellToWorld(i, j, plan.size);
         this._prop(state, plan, rng.weighted(kit, weights),
           wx + rng.range(-1.2, 1.2), plan.y, wz + rng.range(-1.2, 1.2), rng);
@@ -1621,9 +1933,10 @@ export class DungeonSystem extends System {
       // it behind a wall instead — in the vault, which is the better trade: a
       // party that finds the seam gets the prize without the fight.
       if (def.reward && (room.vault ? room === state.prizeRoom : room.boss && !state.rewardHidden)) {
-        const [px, pz] = cellToWorld(room.cx, room.cy, plan.size);
+        const [cxp, czp] = cellToWorld(room.cx, room.cy, plan.size);
+        const [px, pz] = clearOf(cxp + (room.boss ? 1.9 : 0), czp);
         state.chests.push({
-          x: px + (room.boss ? 1.9 : 0), y: plan.y + (room.boss ? 0.6 : 0), z: pz,
+          x: px, y: plan.y + (room.boss ? 0.6 : 0), z: pz,
           yaw: rng.range(0, Math.PI * 2), open: false,
           locked: true, trap: def.trapLevel, prize: def.reward,
         });
@@ -1633,9 +1946,10 @@ export class DungeonSystem extends System {
       // and time spent failing a roll in front of the only copy of the Choir
       // Key is not a thing this game should be selling.
       if (room === state.questRoom) {
-        const [qx, qz] = cellToWorld(room.cx, room.cy, plan.size);
+        const [cxq, czq] = cellToWorld(room.cx, room.cy, plan.size);
+        const [qx, qz] = clearOf(cxq - (room.boss ? 1.9 : 0), czq);
         state.chests.push({
-          x: qx - (room.boss ? 1.9 : 0), y: plan.y + (room.boss ? 0.6 : 0), z: qz,
+          x: qx, y: plan.y + (room.boss ? 0.6 : 0), z: qz,
           yaw: rng.range(0, Math.PI * 2), open: false,
           locked: false, trap: 0, questItems: state.questItems,
         });
@@ -1643,9 +1957,10 @@ export class DungeonSystem extends System {
       // A chest is worth finding, so at most one a room and never one in the
       // room the party arrives in.
       if (room !== plan.entry && rng.chance(0.32)) {
-        const [wx, wz] = cellToWorld(room.cx, room.cy, plan.size);
+        const [cxc, czc] = cellToWorld(room.cx, room.cy, plan.size);
+        const [wx, wz] = clearOf(cxc + rng.range(-0.9, 0.9), czc + rng.range(-0.9, 0.9));
         state.chests.push({
-          x: wx + rng.range(-0.9, 0.9), y: plan.y, z: wz + rng.range(-0.9, 0.9),
+          x: wx, y: plan.y, z: wz,
           yaw: rng.range(0, Math.PI * 2), open: false,
           locked: rng.chance(0.45),
           trap: rng.chance(0.5) ? def.trapLevel : 0,
@@ -1668,6 +1983,7 @@ export class DungeonSystem extends System {
     for (let j = 1; j < size - 1; j++) {
       for (let i = 1; i < size - 1; i++) {
         if (!grid[j][i] || plan.noFloor.has(key(i, j))) continue;
+        if (plan.clear.has(key(i, j))) continue;
         const walls = SIDES.filter(([di, dj]) => !grid[j + dj]?.[i + di]);
         if (!walls.length) continue;
         const [wx, wz] = cellToWorld(i, j, size);
@@ -1718,6 +2034,9 @@ export class DungeonSystem extends System {
         if (!plan.grid[j]?.[i] || plan.grid[oj]?.[oi] !== 1) continue;
         if (plan.tag[oj][oi] !== 2) continue;
         if (plan.noFloor.has(key(i, j)) || plan.noFloor.has(key(oi, oj))) continue;
+        // The porch is tagged as corridor, so without this a leaf would be hung
+        // in the entrance itself and the way out would be a door to open.
+        if (plan.clear.has(key(i, j)) || plan.clear.has(key(oi, oj))) continue;
         const [wx, wz] = cellToWorld(i, j, plan.size);
         state.doors.push({
           x: wx + di * CELL / 2, y: plan.y, z: wz + dj * CELL / 2,
@@ -1738,6 +2057,7 @@ export class DungeonSystem extends System {
     for (let j = 2; j < plan.size - 2 && n < 8; j++) {
       for (let i = 2; i < plan.size - 2 && n < 8; i++) {
         if (!plan.grid[j][i] || plan.tag[j][i] !== 2 || (i * 7 + j * 3) % 23) continue;
+        if (plan.clear.has(key(i, j))) continue;
         const alongX = plan.grid[j][i - 1] && plan.grid[j][i + 1] && !plan.grid[j - 1][i];
         const alongZ = plan.grid[j - 1][i] && plan.grid[j + 1][i] && !plan.grid[j][i - 1];
         if (!alongX && !alongZ) continue;
@@ -2202,6 +2522,16 @@ export class DungeonSystem extends System {
     const { def, rng } = state;
     const pool = def.monsters.length ? def.monsters : ['skeleton'];
 
+    // Nothing waiting on the doormat. The arrival *chamber* has been off limits
+    // since the first pass, and on a cave floor that is not enough: blobs are
+    // allowed to overlap, so a neighbouring chamber's centre can be four metres
+    // from where the party lands. Thornhallow Deep is the case. The keep-out is
+    // measured from the arrival point itself, which is the thing that matters.
+    const first = state.floors[0];
+    const keepOut = first.exit
+      ? { ...cellCoords(first, first.exit), r2: 81 }
+      : null;
+
     for (const plan of state.floors) {
       for (const room of plan.rooms) {
         if (plan.index === 0 && room === plan.entry) continue;
@@ -2209,7 +2539,12 @@ export class DungeonSystem extends System {
         for (let k = 0; k < n; k++) {
           const type = room.boss ? (def.boss.base ?? rng.pick(pool)) : rng.pick(pool);
           const [wx, wz] = cellToWorld(room.cx, room.cy, plan.size);
-          const m = monsters.spawn(ctx, type, wx + rng.range(-2, 2), wz + rng.range(-2, 2), { leash: 12 });
+          // Every draw happens whether or not the creature is placed, so
+          // suppressing one cannot shift the stream for the rest of the floor.
+          const sx = wx + rng.range(-2, 2), sz = wz + rng.range(-2, 2);
+          if (keepOut && plan === first
+            && (sx - keepOut.x) ** 2 + (sz - keepOut.z) ** 2 < keepOut.r2) continue;
+          const m = monsters.spawn(ctx, type, sx, sz, { leash: 12 });
           if (!m) continue;
           if (room.boss) { m.name = def.boss.name; m.bossOf = def.id; }
           // MonsterSystem re-seats every creature on the heightfield each frame.
@@ -2235,7 +2570,7 @@ export class DungeonSystem extends System {
       const want = door ? door.def.name : '';
       if (want !== this._prompt) {
         this._prompt = want;
-        if (want) ctx.get('ui')?.toast?.(`${want} — press E to enter`, 'info');
+        if (want) ctx.get('ui')?.toast?.(`Press E to enter ${want}.`, 'info');
       }
       if (door && ctx.input?.actionPressed?.('interact') && !ctx.state.modal) {
         this.enter(ctx, door.def.id);
@@ -2253,6 +2588,9 @@ export class DungeonSystem extends System {
       fog.color.copy(this._hazeColour(this.currentDef.light));
       fog.density = HAZE_DENSITY;
     }
+
+    this._driveExit(dt, ctx, built);
+    if (!this.current) return;               // the arch took them out this frame
 
     this._driveLights(ctx, built);
     this._driveDoors(dt, ctx, built);
@@ -2280,6 +2618,64 @@ export class DungeonSystem extends System {
         m.group.visible = showing && m.alive !== false;
       }
     }
+  }
+
+  /**
+   * Standing in the entrance arch takes the party back to the surface.
+   *
+   * Two ways in, and both of them are the world rather than a menu — MM6 has no
+   * "leave dungeon" button and neither should this.
+   *
+   *   · **Stand in it.** Half a second inside the porch and the party walks
+   *     out. That is what "walk into the exit" means and it is the one a player
+   *     finds without being told.
+   *   · **Press the interact key in it.** Immediate, and the only way out while
+   *     the exit is contested — see below.
+   *
+   * The accident this guards is specific and it is the one the playtest names:
+   * a party fighting beside its own door, backing up, getting shoved. Three
+   * things stop that. The trigger is a dead-end recess you can only reach by
+   * walking through the doorway; the dwell wants half a second of *standing*,
+   * which is not what a fight looks like; and while anything hostile is within
+   * ten metres, or the party is in turn-based mode, the dwell is refused
+   * outright and only the deliberate press works. The strip says which of the
+   * two is live, so the rule is never something the player has to infer.
+   *
+   * What it deliberately does not do is refuse to open in a fight. The finding
+   * this whole thing answers is a party that walks in underlevelled and wants
+   * out; a door that locks itself the moment something notices them would be
+   * the same trap with a longer walk to it.
+   */
+  _driveExit(dt, ctx, built) {
+    const way = built.exit;
+    const p = ctx.get('player')?.position;
+    if (!way || !p) return;
+
+    const inside = Math.abs(p.x - way.x) <= way.halfX
+      && Math.abs(p.z - way.z) <= way.halfZ
+      && Math.abs(p.y - way.y) < 2.6;
+    if (!inside) { this._standing = 0; this._atExit = false; return; }
+
+    if (ctx.input?.actionPressed?.('interact') && !ctx.state.modal) {
+      this.exit(ctx);
+      return;
+    }
+
+    const contested = ctx.get('combat')?.mode === 'turnbased'
+      || built.spawned.some((m) => m.alive !== false && m.pos.distanceToSquared(p) < 100);
+
+    if (!this._atExit) {
+      this._atExit = true;
+      ctx.events.emit('ui:log', {
+        text: contested
+          ? `Press E to leave ${this.currentName}.`
+          : `Stand in the arch to leave ${this.currentName}.`,
+        kind: 'info',
+      });
+    }
+    if (contested) { this._standing = 0; return; }
+    this._standing += dt;
+    if (this._standing >= LEAVE_DWELL) this.exit(ctx);
   }
 
   /** Move the light pool onto the nearest anchors and flicker what burns. */
@@ -2625,6 +3021,45 @@ export class DungeonSystem extends System {
     return this._void;
   }
 
+  /**
+   * The shaft to the surface at the back of the entrance porch.
+   *
+   * Emissive and unlit like the flames, and cool where they are warm — that is
+   * the whole reading: the one thing in a dungeon that is not on fire and is
+   * still bright is the way out.
+   *
+   * It is flat and untextured, which ARCHITECTURE §6 rules out for surfaces and
+   * which is right here for the same reason `_emberMaterial` is: this is not a
+   * surface, it is light, and the other emitter in a dungeon — the flame on a
+   * torch — is drawn exactly this way three hundred lines up.
+   *
+   * That took two wrong turns to establish and both were measured rather than
+   * argued, which is the point of writing them down. Textured with the
+   * catalogue's own gravel driving the emission, the panel read as a pale
+   * *cobbled wall* at every brightness tried: at intensity 2.0 the panel sat at
+   * 158 against porch stone at 71 — ratio 2.25 — and at 3.0 it reached 184 for
+   * a ratio of 2.53, and neither said "way out", because what the eye was
+   * reading was the pebble pattern and not the glare. The version that did read
+   * was flat, and it measured a panel-to-stone ratio of **2.83**. So the ratio
+   * is the target and the texture was never the thing carrying it.
+   *
+   * The brightness is set from that ratio and not from an absolute, because a
+   * ratio within one frame is the calibration-free measurement STYLE §0 asks
+   * for. Nothing here reaches 255: the albedo is almost black, so the torch
+   * pool cannot add on top of the emission and clip it.
+   */
+  _daylightMaterial() {
+    if (!this._day) {
+      this._day = new THREE.MeshStandardMaterial({
+        color: 0x14171a, emissive: 0xc2d0da, emissiveIntensity: 1.0,
+        roughness: 1, metalness: 0, side: THREE.DoubleSide,
+      });
+      this._day.name = 'mat:dungeon-daylight';
+      this._owned.push(this._day);
+    }
+    return this._day;
+  }
+
   /** Flames, coals and ceiling strips: emissive, and deliberately unlit. */
   _emberMaterial(color) {
     this._embers ??= new Map();
@@ -2709,6 +3144,22 @@ export class DungeonSystem extends System {
         const [x, z] = cellToWorld(i, j, plan.size);
         return { x, y: plan.y + 1.7, z, yaw: -Math.PI / 2 };
       }),
+    });
+
+    // The playtest's own frame: walk into the first dungeon in the game at
+    // level one, turn round on the spot, and see whether there is a way out.
+    capture.registerShot('dungeon-arrival', {
+      description: "Hobb's Adit on the frame the party arrives, looking into the dungeon.",
+      apply: (c) => look(c, 'dun_hobbs_adit', (b) => ({
+        x: b.spawn.x, y: b.spawn.y + 1.7, z: b.spawn.z, yaw: b.spawnYaw,
+      })),
+    });
+
+    capture.registerShot('dungeon-exit', {
+      description: "The entrance arch of Hobb's Adit, from the arrival point, turned around.",
+      apply: (c) => look(c, 'dun_hobbs_adit', (b) => ({
+        x: b.spawn.x, y: b.spawn.y + 1.7, z: b.spawn.z, yaw: b.spawnYaw + Math.PI,
+      })),
     });
 
     capture.registerShot('dungeon-cave', {
@@ -2854,6 +3305,40 @@ function carveV(grid, tag, y0, y1, x, S) {
       if (!tag[y][x]) tag[y][x] = 2;
     }
   }
+}
+
+/**
+ * The volume the party has to be standing in for the arch to take them out,
+ * and the arch's own position for anything that wants to point at it.
+ *
+ * The box is the porch itself — a dead-end cell reached only by walking through
+ * the doorway — pulled in far enough on every side that the arrival point, one
+ * pace *outside* the arch, is nowhere near it. That gap is the first half of
+ * "not by accident": the party cannot be standing in the way out on the frame
+ * they arrive, so nothing they do on that frame can leave by it.
+ */
+/** Where the party is set down: one pace inside the arch, on the room side. */
+function cellCoords(plan, ex) {
+  const [cx, cz] = cellToWorld(ex.i, ex.j, plan.size);
+  return { x: cx - ex.di * 0.9, z: cz - ex.dj * 0.9 };
+}
+
+function exitMouth(plan, ex) {
+  const [cx, cz] = cellToWorld(ex.i, ex.j, plan.size);
+  const t = ex.porch ? CELL : CELL / 2 - 0.75;
+  const along = ex.porch ? 1.5 : 1.1;
+  const out = ex.porch ? 1.6 : 0.65;
+  return {
+    i: ex.i, j: ex.j, di: ex.di, dj: ex.dj, porch: ex.porch, floor: plan.index,
+    x: cx + ex.di * t, y: plan.y, z: cz + ex.dj * t,
+    // Half-extents on the world axes. The wall runs across the outward
+    // direction, so which half-extent is which follows `di`.
+    halfX: ex.di ? out : along,
+    halfZ: ex.di ? along : out,
+    /** Where the frame itself stands — the thing the player sees. */
+    archX: cx + ex.di * (CELL / 2),
+    archZ: cz + ex.dj * (CELL / 2),
+  };
 }
 
 /**

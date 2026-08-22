@@ -10,6 +10,19 @@
  * world, which screenshot regression depends on.
  */
 
+/**
+ * The catalogue of doors, so the ground can be told where they are.
+ *
+ * This is `world/` reaching into `game/data/`, which the tree already does in
+ * four places (`TerrainSystem` and `PropSystem` both read `Regions.js`,
+ * `DungeonSystem` reads this same file). It is one-way — nothing under
+ * `game/data/` imports anything under `world/` — so the layering is a
+ * direction, not a cycle. The alternative was for the doors to keep knowing
+ * nothing about the ground and the ground to keep knowing nothing about the
+ * doors, which is the defect being fixed.
+ */
+import { DUNGEON_LIST, entranceOf } from '../game/data/Dungeons.js';
+
 /** Metres across. The playable region is centred on the origin. */
 export const WORLD_SIZE = 2048;
 /** Heightfield samples per side. 4 m between samples at 513. */
@@ -150,6 +163,51 @@ export const ROADS = [
   [[-260, 240], [-450, 340], [-700, 640]],
   [[-260, 240], [-380, 60], [-520, -300]],
 ];
+
+/**
+ * How wide a level porch is cut at a dungeon door, in metres.
+ *
+ * `flattenDisc` levels the inner 55% of its radius fully and eases out to
+ * 1.7×, so this is an 11 m pad blending to 34 m across. That sounds generous
+ * for a 4.6 m portal until you notice the two things that eat it: the field is
+ * sampled every 4 m, so a pad under one cell wide never fully levels a single
+ * vertex, and `smooth()` then blurs one pass over whatever survives.
+ *
+ * Swept against the slope under the fifty-five doors, which is the number that
+ * decides whether the arch is seated or sliding:
+ *
+ * | porch | median | p90 | max | over 12° |
+ * | --- | --- | --- | --- | --- |
+ * | none | 18.3° | 31.8° | 35.3° | 40/55 |
+ * | 6 | 14.0° | 19.5° | 25.1° | 27/55 |
+ * | 8 | 7.4° | 10.7° | 16.1° | 4/55 |
+ * | **10** | **3.3°** | **4.7°** | **8.8°** | **0/55** |
+ * | 12 | 1.3° | 1.9° | 4.9° | 0/55 |
+ * | 16 | 0.1° | 0.3° | 1.3° | 0/55 |
+ *
+ * 10 is the smallest that clears with margin, and small matters: 12 and up buy
+ * a fraction of a degree nobody can see and pay for it with a wider terrace cut
+ * into a hillside that MM6's downland does not have terraces in. At 10 the
+ * fifty-five pads are 1.2% of the field.
+ *
+ * The bar is 12° because the portal's cornice is 4.6 m wide, and 12° across
+ * 4.6 m is 0.98 m of drop under a 3.4 m opening — one jamb visibly in the air.
+ */
+const DOOR_PORCH = 10;
+
+/**
+ * How far below the ground the porch is cut.
+ *
+ * Cutting rather than filling, deliberately. A door sited against a hillside
+ * has ground climbing behind it; levelling to exactly the door's own height
+ * would take half the pad out of the hill and build the other half out into
+ * the air, and fill that stands proud reads as a bug where a cut reads as
+ * work. Sixty centimetres puts the whole pad inside the slope and leaves a low
+ * scarp across its uphill side — which is what the mouth of an adit or a
+ * quarry actually looks like, and is the difference between a doorframe
+ * standing in a field and a door cut into something.
+ */
+const DOOR_CUT = 0.6;
 
 /**
  * Compass directions the terrain's own horizon is sampled in.
@@ -328,8 +386,15 @@ export class TerrainData {
 /**
  * Build the world.
  * @param {import('../core/RNG.js').RNG} rng
+ * @param {{doorSites?: boolean}} [opts]
+ *   `doorSites: false` builds the field *without* the porches cut at dungeon
+ *   doors. Nothing in the game passes it; it exists for `tools/approach.mjs`,
+ *   which chooses where the doors go by searching this heightfield and must
+ *   therefore search the field as it is before its own output is stamped into
+ *   it. Without the switch the siting pass would be reading its own answer
+ *   back and would give a different table on every regeneration.
  */
-export function generateTerrain(rng) {
+export function generateTerrain(rng, opts = {}) {
   const data = new TerrainData();
   const permBase = makePermutation(rng.fork('terrain-base'));
   const permHill = makePermutation(rng.fork('terrain-hill'));
@@ -414,7 +479,10 @@ export function generateTerrain(rng) {
   // ── 4. roads ─────────────────────────────────────────────────────────────
   buildRoads(data);
 
-  // ── 5. smooth, then classify ─────────────────────────────────────────────
+  // ── 5. porches at the dungeon doors ──────────────────────────────────────
+  if (opts.doorSites !== false) cutDoorPorches(data);
+
+  // ── 6. smooth, then classify ─────────────────────────────────────────────
   smooth(data, 1);
   computeSplat(data, permDetail);
   computeHorizon(data);
@@ -497,7 +565,7 @@ function carveChannel(data, cx, cz, widthMetres, depth) {
 }
 
 /** Level a circular site, blending back into the surrounding land. */
-function flattenDisc(data, wx, wz, radius, targetHeight, strength) {
+function flattenDisc(data, wx, wz, radius, targetHeight, strength, skipRoad = false) {
   const H = data.heights;
   const half = WORLD_SIZE / 2;
   const cx = Math.round((wx + half) / CELL);
@@ -509,10 +577,61 @@ function flattenDisc(data, wx, wz, radius, targetHeight, strength) {
       const dist = Math.hypot(dx, dz) * CELL;
       if (dist > radius * 1.7) continue;
       const i = data.idx(cx + dx, cz + dz);
+      // A porch that clips a road would put a step across the road, and the
+      // road is the one thing on this map the player is meant to be able to
+      // follow without looking down.
+      if (skipRoad && data.road[i] > 0.05) continue;
       // Full flatten inside the radius, easing out over the next 70%.
       const t = 1 - smoothstep(radius * 0.55, radius * 1.7, dist);
       H[i] = lerp(H[i], targetHeight, t * strength);
     }
+  }
+}
+
+/**
+ * Cut a level porch at every dungeon door.
+ *
+ * The complaint this answers is "dungeon entrances are just a weird arch", and
+ * half of why they read that way is that they are not standing on anything.
+ * `DungeonSystem` builds each portal as five axis-aligned boxes seated at
+ * `heightAt(door)`; the sill alone is 4.2 × 2.2 m, so on the twenty-degree
+ * ground the catalogue's doors habitually landed on, one corner of it is a
+ * metre in the air and the opposite corner is a metre underground. That is
+ * ARCHITECTURE §6's "nothing floats and nothing z-fights" broken fifty-five
+ * times, and it is why the portal reads as a prop dropped on a hillside rather
+ * than as a way into one.
+ *
+ * The cure is the operation this file already performs for its five landmarks,
+ * applied to the doors: level a small disc. Two things make it worth its own
+ * function rather than a loop at the call site —
+ *
+ *   · it cuts `DOOR_CUT` metres *below* the door rather than levelling to it,
+ *     so the pad sits inside the slope and leaves a scarp behind the mouth
+ *     instead of a shelf of fill sticking out of it;
+ *   · it runs after the roads and skips road cells, so a door that ended up
+ *     near a verge cannot put a step across the carriageway.
+ *
+ * It runs before `smooth()` and before `computeSplat()`, which is load-bearing
+ * in both directions: the single blur pass takes the staircase off the cut
+ * edge, and the splat pass then classifies the fresh scarp from its own slope,
+ * so the cut face comes out as bare rock and earth rather than as lawn draped
+ * over a step.
+ *
+ * Fifty-five discs of 6 m are 1.4 hectares of a 4.19 km² field — 0.33% of the
+ * map — and cost about nine thousand samples, against the twenty-five million
+ * `computeHorizon` already spends. It is not measurable in the build time and
+ * it adds no geometry at all: same grid, same chunks, same draw calls.
+ */
+function cutDoorPorches(data) {
+  for (const d of DUNGEON_LIST) {
+    const e = entranceOf(d, WORLD_SIZE);
+    if (!e) continue;
+    // A door in the sea has been placed badly, and `DungeonSystem._snapToGround`
+    // will walk it somewhere else on arrival — so levelling the seabed under it
+    // would flatten a patch of water for nothing.
+    if (data.heightAt(e.x, e.z) < SEA_LEVEL + 0.5) continue;
+    flattenDisc(data, e.x, e.z, DOOR_PORCH,
+      data.heightAt(e.x, e.z) - DOOR_CUT, 1.0, true);
   }
 }
 

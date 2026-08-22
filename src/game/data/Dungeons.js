@@ -813,6 +813,44 @@ for (const [id, c] of Object.entries(CHARACTER)) {
  * copy beside them, because the terrain is currently built at 2048: anything
  * placing a door in the world should take `entranceNormalized` and multiply by
  * half the terrain's own size.
+ *
+ * ── Why the hash is no longer the last word ─────────────────────────────────
+ *
+ * Everything above still runs and is still the fallback, and the paragraph
+ * before this one is the reason it had to stop being the whole answer: a rule
+ * that has no terrain to ask cannot know that the ground it just dropped a door
+ * on slopes the wrong way, or that a town is standing on it.
+ *
+ * Measured on the world this seed builds, before `SITED_ENTRANCES` existed:
+ *
+ *   · twenty-one of the fifty-five doors were within 140 m of a town, and the
+ *     Undercaldera's was 1.2 m from Emberhold — inside the walls;
+ *   · the mean framing index was **−0.09**, meaning the average door had more
+ *     hill in front of it, blocking the approach, than behind it holding it up.
+ *     Twenty-eight of fifty-five were on ground you looked down on;
+ *   · doors standing at the head of one of the heightfield's own channels: 11,
+ *     against a blind-hash expectation of 10.7. Exactly none of the correlation
+ *     a landscape is supposed to have with the things in it.
+ *
+ * So the door positions are now *searched* rather than hashed: `SITED_ENTRANCES`
+ * below is the output of `node tools/approach.mjs --site`, which scores a 12 m
+ * lattice inside each region's own box against the heightfield the game builds
+ * — the ground climbing behind the mouth, the ground falling away along the
+ * approach, the walls to either side, how far out the door stays in sight, and
+ * how near it stands to the head of a channel — and takes the best site left
+ * after town clearance and separation.
+ *
+ * It is a table of numbers rather than a call into the terrain for two hard
+ * reasons. This file must keep depending on nothing but data: `lint-content`,
+ * `questaudit` and eighteen other tools import it, and making it import
+ * `TerrainGen` would put a two-and-a-half-second heightfield build at the top
+ * of every one of them. And a table is reviewable — a coordinate that looks
+ * wrong can be argued with in a diff, which a scoring function cannot.
+ *
+ * It is *not* hand-authored, which is what the paragraph above rightly objects
+ * to. Regenerating it after a region moves or a dungeon is added is one
+ * command, and any dungeon missing from it falls straight back to the hash, so
+ * nothing here can break by omission.
  */
 
 /** FNV-1a over a string, as an unsigned 32-bit integer. */
@@ -847,6 +885,94 @@ const AUTHORED_ENTRANCES = {
   dun_the_pilots_chamber: [1675, -440],
 };
 
+/**
+ * Where the ground says the door should be, in the same authored metre frame.
+ *
+ * Generated — do not edit by hand:
+ *
+ *     node tools/approach.mjs --site src/game/data/_sited.js
+ *
+ * and paste. The trailing comment on each line is the evidence for that site,
+ * in the units the tool measures in: `wall` is the steepest rise per metre
+ * within forty metres BEHIND the mouth (0.5 is a 27° face), `open` the same
+ * along the approach where negative means the ground falls away in front of
+ * you, and `reveal` how far out the door stays continuously in line of sight.
+ *
+ * A door listed here overrides its hash. A door not listed keeps it. The five
+ * of the act-five descent are deliberately absent: that line is designed and is
+ * pinned by `AUTHORED_ENTRANCES` above.
+ */
+const SITED_ENTRANCES = {
+  // millhaven_downs
+  dun_hobbs_adit: [-1712.6, 1407.4],  // wall 0.98  open -0.45  reveal 48 m
+  dun_old_watch: [-1424.6, 1311.4],  // wall 1.17  open -0.01  reveal 80 m
+  dun_the_weeping_stair: [-1280.6, 1839.4],  // wall 0.74  open -0.01  reveal 80 m
+  // thornwick_vale
+  dun_wolf_den: [-832.6, 143.4],  // wall 0.60  open -0.18  reveal 400 m
+  dun_the_orchard_vault: [-808.6, 839.4],  // wall 0.52  open -0.20  reveal 400 m
+  dun_crown_undercroft: [-160.6, 863.4],  // wall 0.46  open -0.08  reveal 400 m
+  // ashford_hollow
+  dun_hollow_stockade: [-544.6, -880.6],  // wall 0.80  open -0.16  reveal 104 m
+  dun_wenlow_manor: [-328.6, -160.6],  // wall 0.72  open -0.09  reveal 140 m
+  dun_the_undercut: [-856.6, -496.6],  // wall 0.58  open 0.01  reveal 72 m
+  // saltmarch
+  dun_the_drowned_counting_house: [-280.6, 1527.4],  // wall 0.94  open -0.18  reveal 288 m
+  dun_sea_cloister: [-832.6, 1791.4],  // wall 0.76  open -0.06  reveal 112 m
+  dun_the_bell_wreck: [-160.6, 1191.4],  // wall 0.34  open -0.13  reveal 80 m
+  // the_cindermoor
+  dun_ashpit_workings: [695.4, -448.6],  // wall 0.96  open 0.00  reveal 96 m
+  dun_imperial_conduit: [503.4, -808.6],  // wall 1.09  open -0.30  reveal 116 m
+  dun_the_standing_nine: [239.4, -616.6],  // wall 0.71  open 0.05  reveal 48 m
+  // brackwater_isle
+  dun_hessas_cut: [-1662.0, 122.0],  // wall 0.82  open 0.19  reveal 28 m
+  dun_the_eel_stair: [-1830.0, 122.0],  // wall 0.63  open -0.08  reveal 28 m
+  // verdant_weald
+  dun_the_green_chapter: [311.4, -1304.6],  // wall 1.00  open -0.05  reveal 80 m
+  dun_thornhallow_deep: [767.4, -1856.6],  // wall 1.00  open 0.11  reveal 40 m
+  dun_greenheart: [863.4, -1232.6],  // wall 0.77  open -0.31  reveal 64 m
+  // greywater_fen
+  dun_the_drowned_chapel: [-1904.6, 695.4],  // wall 0.89  open 0.11  reveal 76 m
+  dun_the_wreck: [-1328.6, 335.4],  // wall 0.95  open 0.04  reveal 80 m
+  dun_reedmarrow: [-1280.6, 671.4],  // wall 0.68  open -0.06  reveal 172 m
+  // coldwater_sound
+  dun_the_whale_road: [-1280.6, -160.6],  // wall 0.85  open 0.09  reveal 44 m
+  dun_hollowfrost_keep: [-1208.6, -544.6],  // wall 0.90  open 0.20  reveal 80 m
+  // fallowmere
+  dun_the_old_grange: [-1495.2, 664.8],  // wall 0.76  open -0.10  reveal 116 m
+  dun_ansel_farmstead: [-1663.2, 664.8],  // wall 0.94  open 0.07  reveal 64 m
+  dun_the_empty_church: [-1663.2, 880.8],  // wall 0.41  open -0.06  reveal 108 m
+  // netherby_moors
+  dun_the_unlisted_door: [767.4, 359.4],  // wall 0.67  open -0.01  reveal 68 m
+  dun_the_ninth_barrow: [239.4, 335.4],  // wall 0.74  open -0.10  reveal 84 m
+  dun_the_opened_barrows: [263.4, 743.4],  // wall 0.85  open 0.09  reveal 140 m
+  // the_riven_steppe
+  dun_the_split_hall: [1239.4, -1808.6],  // wall 0.99  open -0.05  reveal 52 m
+  dun_windward_pits: [1599.4, -1688.6],  // wall 0.58  open -0.15  reveal 248 m
+  dun_hall_beneath: [1239.4, -1184.6],  // wall 0.61  open -0.24  reveal 352 m
+  // the_whitemantle
+  dun_the_wind_stair: [-256.6, -1784.6],  // wall 0.95  open 0.04  reveal 60 m
+  dun_the_blue_throat: [-592.6, -1376.6],  // wall 0.99  open 0.04  reveal 60 m
+  // gallowfen
+  dun_the_blighted_holt: [1167.4, 551.4],  // wall 0.98  open -0.11  reveal 284 m
+  dun_the_hanging_yard: [1887.4, 311.4],  // wall 0.97  open -0.14  reveal 44 m
+  dun_the_confessors_pit: [1743.4, 671.4],  // wall 0.63  open -0.09  reveal 88 m
+  // duskorn_waste
+  dun_choir_hall: [647.4, 1167.4],  // wall 0.76  open -0.11  reveal 48 m
+  dun_the_broken_post: [311.4, 1743.4],  // wall 0.27  open -0.13  reveal 136 m
+  dun_ossran_vaults: [239.4, 1359.4],  // wall 0.52  open -0.00  reveal 136 m
+  dun_the_duskorn_undercity: [815.4, 1527.4],  // wall 0.36  open 0.16  reveal 32 m
+  // emberhold
+  dun_undercaldera: [-1951.2, -251.2],  // wall 1.01  open -0.06  reveal 68 m
+  dun_the_caldera_stair: [-1759.2, -227.2],  // wall 0.98  open -0.01  reveal 68 m
+  dun_slagfall: [-1759.2, -35.2],  // wall 0.59  open 0.13  reveal 16 m
+  // malveth_spires
+  dun_the_needle_road: [-1688.6, -1832.6],  // wall 1.09  open -0.01  reveal 64 m
+  dun_malveth_hold: [-1376.6, -1736.6],  // wall 1.27  open -0.06  reveal 28 m
+  // verhal_sands
+  dun_the_buried_province: [1167.4, 1287.4],  // wall 0.59  open -0.21  reveal 220 m
+  dun_verhal_cisterns: [1623.4, 1167.4],  // wall 0.45  open -0.18  reveal 200 m
+};
+
 function placeEntrances() {
   const byRegion = new Map();
   for (const d of Object.values(dungeons)) {
@@ -870,9 +996,17 @@ function placeEntrances() {
     const sep = Math.max(70, Math.min(150, 0.40 * Math.min(x1 - x0, z1 - z0)));
 
     const pts = list.map((d) => {
-      const authored = AUTHORED_ENTRANCES[d.id];
-      return authored
-        ? { d, x: authored[0], z: authored[1], fixed: true }
+      // A sited door is fixed for the same reason an authored one is: its
+      // position is already the answer to a question about the ground, and
+      // pushing it off that answer to satisfy a separation rule would undo the
+      // work. The siting pass enforces its own separation, using this same
+      // `sep`, before it ever writes a coordinate down.
+      const pinned = AUTHORED_ENTRANCES[d.id] ?? SITED_ENTRANCES[d.id];
+      return pinned
+        ? {
+          d, x: pinned[0], z: pinned[1], fixed: true,
+          authored: !!AUTHORED_ENTRANCES[d.id], sited: !AUTHORED_ENTRANCES[d.id],
+        }
         : {
           d, fixed: false,
           x: x0 + (x1 - x0) * unit(`${d.id}:x`),
@@ -916,7 +1050,10 @@ function placeEntrances() {
       // journal and in a diff is worth more than the last twelve bits.
       const x = Math.round(p.x * 100) / 100;
       const z = Math.round(p.z * 100) / 100;
-      p.d.entrance = Object.freeze({ x, z, authored: !!p.fixed });
+      // `authored` still means the act-five line and nothing else; `sited`
+      // means the ground chose it. A door with neither is a hashed one, which
+      // is now only the fallback path.
+      p.d.entrance = Object.freeze({ x, z, authored: !!p.authored, sited: !!p.sited });
       p.d.entranceNormalized = Object.freeze({ x: x / half, z: z / half });
     }
   }

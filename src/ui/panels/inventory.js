@@ -1,5 +1,7 @@
 import './inventory.css';
-import { Panel, itemFootprint, itemSprite } from './base.js';
+import {
+  Panel, itemFootprint, itemSprite, itemPlateUrl, figureSpecFor, decodePlate,
+} from './base.js';
 import { el, setChildren, tooltip, tipMarkup, fmt, titleCase, nu, clamp } from '../widgets.js';
 import { byPointer, isCoarsePointer } from '../../input/pointer.js';
 import { getClass } from '../../game/data/Classes.js';
@@ -245,20 +247,46 @@ export class InventoryPanel extends Panel {
   /**
    * The painted body in the niche is a file, not a canvas, and a screen that is
    * opened and photographed in the same breath shows bare stone while it
-   * decodes. Warm the party's four plates as the interface is built instead —
-   * which also spares the character sheet the same flash, since it asks for the
-   * same four.
+   * decodes. Warm the plates as the interface is built instead — which also
+   * spares the character sheet the same flash, since it asks for the same ones.
+   *
+   * Three things were wrong with the version of this that only asked for
+   * `creationParty()`'s figures, and each of them is why the backpack still
+   * flickered:
+   *
+   *   · it warmed the SAMPLE party's figures, which are the party a *rolled*
+   *     game never has, so a real party's four bodies were still cold;
+   *   · it passed `vm.portraitSpec`, whose `classId` is a face and not a class
+   *     — the same field-name collision `refreshNiche` documents — so the url
+   *     it warmed was not the url the niche would ask for; and
+   *   · it warmed nothing at all for the items, which are the things the
+   *     playtest actually saw popping in.
+   *
+   * `startWarming` in `base.js` now covers the party's gear and bodies for
+   * every screen. What is left here is the screen's own claim on them: ask
+   * again for whoever is on show, so a member switched to with Tab is decoded
+   * before the grid is redrawn rather than after.
    */
   mount(parent) {
     const root = super.mount(parent);
-    for (const vm of this.ui.creationParty?.() ?? []) {
-      const url = this.ui.textures?.figurePlate?.(vm.portraitSpec);
-      if (url) new Image().src = url;
-    }
+    this._warmPack(this.ui.creationParty?.() ?? []);
     return root;
   }
 
+  /** Fetch and decode every sprite and body a set of characters will draw. */
+  _warmPack(members) {
+    for (const vm of members) {
+      if (!vm) continue;
+      for (const entry of vm.inventory ?? []) decodePlate(itemPlateUrl(entry?.item ?? entry));
+      for (const worn of Object.values(vm.equipment ?? {})) decodePlate(itemPlateUrl(worn));
+      decodePlate(this.ui.textures?.figurePlate?.(figureSpecFor(vm)));
+    }
+  }
+
   onOpen() {
+    // Tab moves to the next character's pack without leaving the screen, so
+    // every member's sprites are wanted, not just the one on show.
+    this._warmPack(this.ui.members?.() ?? []);
     // Keys are taken off the window rather than through `onKey`, because that
     // route needs the focus to still be inside the screen — and after a few
     // pick-ups it very often is not. The engine also reads Escape straight off
@@ -316,7 +344,13 @@ export class InventoryPanel extends Panel {
     this.nicheFigure.style.backgroundSize = plated ? `${FIG.css}, cover` : '';
     if (!this.figShadow) return;
     const vm = this.ui.active();
-    const body = plated && vm ? this.ui.textures.figurePlate?.(vm.portraitSpec ?? { classId: vm.classId }) : '';
+    // `figureSpecFor`, the same builder the niche itself uses. Asking for the
+    // plate a second way asked for a second PLATE: `portraitSpec.classId` is a
+    // face id, so this line resolved every character to the `thief` fallback
+    // while the body above it resolved correctly, and the screen fetched and
+    // decoded two 45-60 KB figures to draw one — the wrong one of them cast as
+    // the shadow of the right one.
+    const body = plated && vm ? this.ui.textures.figurePlate?.(figureSpecFor(vm)) : '';
     this.figShadow.style.backgroundImage = body ? `url("${body}")` : '';
     this.figShadow.style.backgroundSize = body ? FIG.css : '';
   }

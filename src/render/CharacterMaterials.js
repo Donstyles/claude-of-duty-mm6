@@ -6,12 +6,12 @@ import { getMaterialLibrary } from './MaterialLibrary.js';
  *
  * The world catalogue in `MaterialLibrary` covers surfaces you *walk on and
  * into* — stone, plaster, tile, timber. Characters need a different short list:
- * a coarse fulled wool, a fine dyed broadcloth, skin that is warm rather than
- * tinted, and hair that has a lie to it. Those are baked here, through the same
- * forge and the same three-pass contract, so they cost the same load budget and
- * benefit from the same noise library.
+ * a coarse fulled wool, a fine dyed broadcloth, faces, and hair that has a lie
+ * to it. Those are baked here, through the same forge and the same three-pass
+ * contract, so they cost the same load budget and benefit from the same noise
+ * library.
  *
- * Two decisions shape everything below.
+ * Three decisions shape everything below.
  *
  * **One bake dresses the whole town.** A townsperson's garment colour arrives
  * as a *vertex* colour, not as a material tint. The albedo pass therefore paints
@@ -24,6 +24,15 @@ import { getMaterialLibrary } from './MaterialLibrary.js';
  * hem is. Hem bleaching, shoulder rub and the darkness inside a fold are also
  * written into the vertex colour by the figure builder, so a garment is worn
  * where garments actually wear.
+ *
+ * **A face cannot be tiled at all, so it is an atlas.** `npc-skin` used to be a
+ * repeating swatch of pores and creases, which is the right texture for a hand
+ * and is the reason every townsperson had a blank ball for a head: a tiling map
+ * cannot know where an eye goes. `npc-face` replaces it with a grid of ELEVEN
+ * PAINTED HEADS plus one plain swatch, and the figure builder maps each part
+ * into the cell it needs — a head into a face, a hand into the plain corner. It
+ * is one material and one texture set, so a town of painted faces costs the
+ * same draw call the blank balls did.
  */
 
 /* ═══════════════════════════ shader scaffolding ══════════════════════════ */
@@ -109,6 +118,374 @@ void main() {
 #endif
 `;
 }
+
+/* ══════════════════════════════ the head atlas ═══════════════════════════ */
+
+/**
+ * The grid the heads are laid out on.
+ *
+ * Twelve cells: eleven people and one plain swatch. Four across rather than
+ * twelve in a row because a cell wants to be roughly as tall as it is wide — a
+ * head is — and because a square atlas is what the forge bakes.
+ *
+ * The plain cell is LAST on purpose. Every cell's outer border is bare skin
+ * (the sides of a head, the crown under the hair, the throat under the chin),
+ * so bilinear filtering and the derived normal/AO passes bleed plain skin into
+ * plain skin at every internal boundary. Put a mouth against a cell edge and
+ * that bleed would be visible; here it cannot be.
+ */
+export const FACE_COLS = 4;
+export const FACE_ROWS = 3;
+/** Cell index of the bare swatch that hands, ears and throats wear. */
+export const FACE_PLAIN = 11;
+
+/**
+ * Atlas resolution per quality tier, and what a face gets out of it.
+ *
+ *   tier      sheet   cell        a head at conversation range
+ *   low        512    128 × 170   about 1.7 screen pixels per texel
+ *   medium     768    192 × 256   1:1
+ *   high      1024    256 × 341   comfortably oversampled
+ *   ultra     1024    256 × 341   the same; a townsperson is not a hero asset
+ *
+ * `high` is what a phone gets, and it is the tier that has to be right.
+ */
+const FACE_RES = { low: 512, medium: 768, high: 1024, ultra: 1024 };
+
+/**
+ * Eleven people.
+ *
+ * Authored rather than hashed, because a hash gives eleven faces clustered
+ * around the mean and a town wants the tails: one gaunt old man, one round
+ * young woman, one heavy-jawed smith. Every field is 0..1 and every one of them
+ * changes something a player can see at four metres.
+ *
+ * `heavy` is the masculine/feminine axis — brow bone, jaw width, nose. It is
+ * the only thing that decides whether a figure gets a beard, which is a change
+ * of behaviour worth stating: beards used to be a function of AGE ALONE, so
+ * every older woman in the kingdom had one.
+ *
+ * This table is read twice — here, emitted into the shader as a branch chain,
+ * and by `NPCSystem` when it picks a cell and decides on facial hair — so it is
+ * exported rather than duplicated.
+ */
+export const FACE_PEOPLE = Object.freeze([
+  //                heavy  age   stubble lips  brow   eye   nose
+  { heavy: 0.86, age: 0.30, stubble: 0.75, lips: 0.30, brow: 0.90, eye: 0.42, nose: 0.78 },
+  { heavy: 0.12, age: 0.18, stubble: 0.00, lips: 0.78, brow: 0.34, eye: 0.78, nose: 0.28 },
+  { heavy: 0.62, age: 0.82, stubble: 0.45, lips: 0.24, brow: 0.62, eye: 0.34, nose: 0.66 },
+  { heavy: 0.30, age: 0.55, stubble: 0.00, lips: 0.52, brow: 0.44, eye: 0.56, nose: 0.40 },
+  { heavy: 0.94, age: 0.62, stubble: 0.62, lips: 0.36, brow: 0.78, eye: 0.30, nose: 0.90 },
+  { heavy: 0.05, age: 0.72, stubble: 0.00, lips: 0.40, brow: 0.22, eye: 0.48, nose: 0.34 },
+  { heavy: 0.48, age: 0.10, stubble: 0.22, lips: 0.62, brow: 0.52, eye: 0.70, nose: 0.46 },
+  { heavy: 0.74, age: 0.44, stubble: 0.58, lips: 0.44, brow: 0.70, eye: 0.52, nose: 0.56 },
+  { heavy: 0.22, age: 0.34, stubble: 0.00, lips: 0.70, brow: 0.30, eye: 0.66, nose: 0.32 },
+  { heavy: 0.56, age: 0.94, stubble: 0.30, lips: 0.18, brow: 0.58, eye: 0.24, nose: 0.72 },
+  { heavy: 0.38, age: 0.06, stubble: 0.10, lips: 0.66, brow: 0.40, eye: 0.82, nose: 0.38 },
+]);
+
+/** The people table as a GLSL branch chain, so both halves read one source. */
+function facePeopleGLSL() {
+  const rows = FACE_PEOPLE.map((p, i) => (
+    `  ${i ? 'else ' : ''}if (ci < ${(i + 0.5).toFixed(1)}) { `
+    + `heavy = ${p.heavy.toFixed(2)}; age = ${p.age.toFixed(2)}; stub = ${p.stubble.toFixed(2)}; `
+    + `lipFull = ${p.lips.toFixed(2)}; browT = ${p.brow.toFixed(2)}; `
+    + `eyeSz = ${p.eye.toFixed(2)}; noseL = ${p.nose.toFixed(2)}; }`
+  )).join('\n');
+  return /* glsl */ `
+void faceChar(float ci, out float heavy, out float age, out float stub,
+              out float lipFull, out float browT, out float eyeSz, out float noseL) {
+  heavy = 0.5; age = 0.4; stub = 0.0; lipFull = 0.5; browT = 0.5; eyeSz = 0.5; noseL = 0.5;
+${rows}
+}
+`;
+}
+
+/**
+ * How the head mesh is unwrapped into its cell, and where the features sit.
+ *
+ * `HeadGen` builds the head as a lattice in (azimuth, polar) and maps it here:
+ * `y` is the polar angle rescaled so 0 is the top of the forehead and 1 is
+ * under the chin, `x` is the azimuth about the face direction pushed through a
+ * `tanh` so the front of the head fills the cell and the whole back of it packs
+ * into the last few per cent — where nothing is painted and hair covers it
+ * anyway.
+ *
+ * These numbers are shared, not duplicated: they are exported to `HeadGen` and
+ * emitted into the shader below from the same object. Nothing else can keep a
+ * painted eye inside a modelled socket — the two are computed in different
+ * languages by different files, and the only thing holding them together is
+ * that both read this.
+ *
+ * Every value is a measurement off the head, not a preference. `eye` is the
+ * lattice's own equator; `chin` is where the modelled jaw ends.
+ */
+export const FACE_SPREAD = 1.2217;          // 70°: the tanh scale on azimuth
+export const FACE_ANCHOR = Object.freeze({
+  hair: 0.155,    // where the scalp meets the forehead
+  brow: 0.335,
+  eye: 0.440,     // the lattice equator
+  nose: 0.575,    // the base of the nose
+  mouth: 0.665,
+  chin: 0.815,
+  // 4.3 cm off the centre line on an 11.2 cm half-width head, through the warp.
+  eyeX: 0.5 * Math.tanh(Math.asin(0.043 / 0.112) / FACE_SPREAD),
+});
+
+const FACE_ANCHORS = /* glsl */ `
+const float A_HAIR  = ${FACE_ANCHOR.hair.toFixed(4)};
+const float A_BROW  = ${FACE_ANCHOR.brow.toFixed(4)};
+const float A_EYE   = ${FACE_ANCHOR.eye.toFixed(4)};
+const float A_NOSE  = ${FACE_ANCHOR.nose.toFixed(4)};
+const float A_MOUTH = ${FACE_ANCHOR.mouth.toFixed(4)};
+const float A_CHIN  = ${FACE_ANCHOR.chin.toFixed(4)};
+const float EYE_X   = ${FACE_ANCHOR.eyeX.toFixed(4)};
+`;
+
+/**
+ * One face, evaluated twice — once for relief and once for colour.
+ *
+ * Both passes need the same masks in the same places, and the alternative to
+ * recomputing them is a second render target nobody would read twice. The
+ * arithmetic is a few dozen ALU ops over a 1024² bake that happens once.
+ */
+const FACE_GLSL = /* glsl */ `
+struct Face {
+  // Two height channels, because they are worth different amounts.
+  //
+  // "relief" is the LARGE forms — brow bone, socket, cheek, chin, the bridge.
+  // Every one of them is already modelled in HeadGen, so this channel exists
+  // only to keep the shading continuous across the join and is applied at a
+  // tenth strength. Paying it full strength is what put pale ghost ovals on
+  // every chin and cheek in the first bake: the mesh raised the form and the
+  // normal map raised it again.
+  //
+  // "detail" is what geometry at this triangle count cannot hold — the lip
+  // seam, the nostril, the philtrum — and it gets the amplitude.
+  float relief;
+  float detail;
+  float brow;     // eyebrow hair
+  float lash;     // lash line and lid shadow
+  float sclera;
+  float iris;
+  float pupil;
+  float lipU;
+  float lipL;
+  float mouth;    // the seam between the lips
+  float nostril;
+  float stub;     // stubble
+  float flush;    // where the blood shows through
+  float crease;   // every line: lid, nasolabial, forehead, crow's foot
+};
+
+Face faceOf(vec2 f, float ci) {
+  float heavy, age, stub, lipFull, browT, eyeSz, noseL;
+  faceChar(ci, heavy, age, stub, lipFull, browT, eyeSz, noseL);
+
+  Face F;
+  F.relief = 0.0; F.detail = 0.0;
+  F.brow = 0.0; F.lash = 0.0; F.sclera = 0.0; F.iris = 0.0;
+  F.pupil = 0.0; F.lipU = 0.0; F.lipL = 0.0; F.mouth = 0.0; F.nostril = 0.0;
+  F.stub = 0.0; F.flush = 0.0; F.crease = 0.0;
+
+  // A perfectly mirrored face is the other half of what reads as a doll, so
+  // the centre line itself wanders by a couple of millimetres down the head.
+  float skew = (tFbm01(vec2(ci * 0.29 + 0.13, f.y * 0.8), vec2(1.0, 3.0), 2) - 0.5) * 0.013;
+  float x = f.x - skew;
+  float ax = abs(x);
+
+  /* ── the eye ───────────────────────────────────────────────────────────── */
+  float eyeX = EYE_X * (0.94 + heavy * 0.10);
+  float eyeY = A_EYE + age * 0.008;
+  vec2 e = vec2(ax - eyeX, f.y - eyeY);
+  // The outer corner sits a touch higher than the inner one on every face
+  // that is not a doll's, so the almond is tilted rather than level.
+  e = rotate2(e, 0.10);
+  vec2 er = vec2(0.058 * (0.92 + eyeSz * 0.16),
+                 (0.017 + eyeSz * 0.011) * (1.0 - age * 0.28));
+  // The upper lid RESTS on the eye, so the aperture is shallower above the
+  // centre line than below it and the top of the iris is under it. This is the
+  // difference between a person and a stare, and it is what the first pass of
+  // these faces got wrong: a clean symmetric almond with the whole iris inside
+  // it is an eye held wide open, which nobody does for four minutes while the
+  // party reads a signpost.
+  float lid = 0.60 - eyeSz * 0.16 + age * 0.14;
+  float dEye = sdEllipse2(vec2(e.x, e.y < 0.0 ? e.y / lid : e.y), er);
+  F.sclera = 1.0 - sstep(-0.0035, 0.0035, dEye);
+
+  vec2 ir = vec2(ax - eyeX, f.y - eyeY + 0.0015);
+  float irisR = min(er.y * 1.30, 0.0215);
+  F.iris = F.sclera * (1.0 - sstep(irisR - 0.004, irisR, length(ir)));
+  F.pupil = F.iris * (1.0 - sstep(irisR * 0.40, irisR * 0.52, length(ir)));
+
+  // The lash line is the top rim of the aperture, thickened; the lid crease
+  // is a second arc a few millimetres above it.
+  F.lash = (1.0 - sstep(0.0, 0.006, abs(dEye))) * sstep(-0.004, 0.006, -e.y)
+         + (1.0 - sstep(0.0, 0.010, abs(dEye + 0.012))) * sstep(0.0, 0.008, -e.y) * 0.45;
+  float lidCrease = (1.0 - sstep(0.004, 0.011, abs(dEye + 0.020))) * sstep(0.0, 0.010, -e.y);
+  F.crease += lidCrease * (0.55 + age * 0.45);
+
+  // The socket: a broad hollow the eye sits in, which is what stops a painted
+  // eye reading as a sticker.
+  float socket = (1.0 - sstep(0.0, 0.055, sdEllipse2(vec2(ax - eyeX, (f.y - eyeY) * 1.5), vec2(0.075, 0.045))));
+  F.relief -= socket * 0.16;
+  F.relief += F.sclera * 0.05;                       // the ball inside it
+
+  /* ── the brow ──────────────────────────────────────────────────────────── */
+  float bt = clamp((ax - 0.045) / 0.185, 0.0, 1.0);
+  float browY = A_BROW - 0.030 * sin(bt * PI_ * 0.80);
+  float bw = 0.0065 + 0.0115 * browT;
+  float browBand = (1.0 - sstep(bw * 0.55, bw, abs(f.y - browY)))
+                 * (1.0 - sstep(0.205, 0.265, ax)) * sstep(0.028, 0.052, ax);
+  // Hair, not a bar: break it up along its own direction.
+  float browHair = tAnisoFbm(vec2(ax * 3.0, f.y * 3.0 + ci), vec2(1.0, 0.25), vec2(0.0, 1.0), vec2(46.0, 9.0), 2);
+  F.brow = browBand * (0.55 + 0.45 * browHair) * (1.0 - age * 0.30);
+  // The bone under it, which is wider and softer than the hair on it.
+  F.relief += (1.0 - sstep(0.010, 0.034, abs(f.y - browY + 0.006)))
+            * (1.0 - sstep(0.19, 0.30, ax)) * (0.10 + heavy * 0.14);
+
+  /* ── the nose ──────────────────────────────────────────────────────────── */
+  //
+  // The whole nose is MODELLED — bridge, tip and wings all stand off the head
+  // in HeadGen. What is painted here is only what the mesh cannot hold: two
+  // nostrils and the shadow under the septum. Two earlier bakes drew the wedge
+  // and the wings here as well, and the sum of a modelled nose and a painted
+  // one is not a better nose, it is a mask: an inverted V with a bar under it.
+  float noseBase = A_NOSE + (noseL - 0.5) * 0.024;
+  // Gated on the anchor and not on the ramp parameter. Clamping the ramp at
+  // zero above the brow leaves it at zero, and a bridge multiplied by zero
+  // width is still full strength on the centre line — which painted a hairline
+  // stripe from the eyebrows to the top of the cell on all eleven faces.
+  float noseBand = sstep(A_BROW - 0.030, A_BROW + 0.030, f.y)
+                 * (1.0 - sstep(noseBase - 0.004, noseBase + 0.014, f.y));
+  float nt = clamp((f.y - A_BROW + 0.020) / max(noseBase - A_BROW + 0.020, 0.01), 0.0, 1.0);
+  float nw = mix(0.020, 0.040 + heavy * 0.014, nt * nt * (3.0 - 2.0 * nt));
+  F.relief += noseBand * (1.0 - sstep(nw * 0.60, nw * 1.40, ax)) * (0.030 + heavy * 0.020);
+
+  // Nostrils: slits under the wings, angled the way they actually sit. Round
+  // dots at the widest point of a nose read as a snout, which is what the pass
+  // before this one produced.
+  vec2 nl = rotate2(vec2(ax - nw * 0.72, (f.y - noseBase - 0.002) * 1.8), 0.60);
+  F.nostril = 1.0 - sstep(0.0, 0.005, sdEllipse2(nl, vec2(0.0095, 0.0048)));
+  // Under the septum only, and narrow: a shadow across the whole base is a
+  // moustache.
+  F.crease += (1.0 - sstep(0.003, 0.013, abs(f.y - noseBase - 0.005)))
+            * (1.0 - sstep(0.004, nw * 0.55, ax)) * 0.42;
+  // Philtrum.
+  F.detail -= (1.0 - sstep(0.006, 0.014, ax)) * sstep(noseBase, noseBase + 0.012, f.y)
+            * (1.0 - sstep(A_MOUTH - 0.032, A_MOUTH - 0.016, f.y)) * 0.22;
+  F.detail -= F.nostril * 0.55;
+
+  /* ── the mouth ─────────────────────────────────────────────────────────── */
+  float mw = 0.098 * (0.90 + lipFull * 0.18) * (0.94 + heavy * 0.10);
+  // The corners drop, but only just: at 0.014 every one of the eleven came out
+  // frowning, and a town of people pulling a face at you is its own problem.
+  float lineY = A_MOUTH + 0.007 * clamp(ax / mw, 0.0, 1.2) * clamp(ax / mw, 0.0, 1.2);
+  float inX = 1.0 - sstep(mw * 0.80, mw, ax);
+  float dy = f.y - lineY;
+  float hU = (0.013 + 0.010 * lipFull) * (1.0 - age * 0.35)
+           * (1.0 + 0.40 * (1.0 - sstep(0.0, 0.038, ax)));       // cupid's bow
+  float hL = (0.018 + 0.014 * lipFull) * (1.0 - age * 0.30);
+  F.lipU = inX * sstep(-hU, -hU * 0.55, dy) * (1.0 - sstep(-0.0035, 0.0015, dy));
+  F.lipL = inX * sstep(-0.0015, 0.0035, dy) * (1.0 - sstep(hL * 0.55, hL, dy));
+  F.mouth = inX * (1.0 - sstep(0.0, 0.0045, abs(dy)));
+  F.detail += (F.lipU * 0.22 + F.lipL * 0.30) - F.mouth * 0.34;
+  // The hollow under the lower lip, and the corners of the mouth. Both soft:
+  // a hard rule under a mouth is a hinge, not a chin.
+  F.crease += (1.0 - sstep(0.006, 0.020, abs(dy - hL - 0.012)))
+            * (1.0 - sstep(mw * 0.35, mw * 0.85, ax)) * 0.30;
+  F.crease += (1.0 - sstep(0.005, 0.015, length(vec2(ax - mw * 0.90, dy)))) * 0.55;
+
+  /* ── cheek, jaw and chin ───────────────────────────────────────────────── */
+  float cheek = 1.0 - sstep(0.0, 0.085, sdEllipse2(vec2(ax - 0.235, f.y - A_EYE - 0.070), vec2(0.075, 0.058)));
+  F.relief += cheek * (0.09 + (1.0 - heavy) * 0.05);
+  F.relief -= (1.0 - sstep(0.0, 0.070, sdEllipse2(vec2(ax - 0.190, f.y - A_MOUTH), vec2(0.060, 0.055)))) * (0.05 + age * 0.09);
+  F.relief += (1.0 - sstep(0.0, 0.060, sdEllipse2(vec2(x, f.y - A_CHIN + 0.020), vec2(0.052, 0.040)))) * (0.10 + heavy * 0.07);
+
+  // The nasolabial fold. The single line that ages a face fastest, and the
+  // single line that will wreck one if it is drawn as a line.
+  //
+  // The first bake ran it hard and straight from beside the BRIDGE down to the
+  // mouth corner, which with the nostrils inside it drew a clean V across the
+  // middle of every face — the hinged jaw of a ventriloquist's dummy, which is
+  // the exact thing this whole change exists to get rid of. It starts outside
+  // the nostril wing now, bows out on its way down, and is a soft valley rather
+  // than an inked stroke.
+  vec2 fa = vec2(nw * 1.45, noseBase + 0.004);
+  vec2 fb = vec2(mw + 0.026, A_MOUTH + 0.030);
+  vec2 fm = mix(fa, fb, 0.5) + vec2(0.016, -0.004);          // the bow
+  float fold = min(sdSegment2(vec2(ax, f.y), fa, fm), sdSegment2(vec2(ax, f.y), fm, fb));
+  F.crease += (1.0 - sstep(0.006, 0.030, fold)) * (0.12 + age * 0.40);
+
+  // Forehead lines and crow's feet, both entirely a function of age. Two, not
+  // three, and each with its own wander: three evenly spaced parallel lines is
+  // a musical stave, which is what the first bake put on every older brow.
+  float browsY = tFbm01(vec2(ax * 3.0 + ci, 0.5), vec2(4.0, 1.0), 2) * 0.016;
+  for (int i = 0; i < 2; i++) {
+    float ly = 0.222 + float(i) * 0.042 + browsY * (1.0 + float(i) * 0.7);
+    F.crease += (1.0 - sstep(0.0018, 0.0075, abs(f.y - ly)))
+              * (1.0 - sstep(0.13, 0.235, ax)) * age * 0.62;
+  }
+  for (int i = 0; i < 3; i++) {
+    float a2 = -0.32 + float(i) * 0.32;
+    vec2 o = vec2(eyeX + er.x * 0.96, eyeY - 0.003);
+    float cf = sdSegment2(vec2(ax, f.y), o, o + vec2(cos(a2), sin(a2)) * 0.030);
+    F.crease += (1.0 - sstep(0.0025, 0.010, cf)) * age * 0.40;
+  }
+
+  /* ── stubble ───────────────────────────────────────────────────────────── */
+  float jaw = sstep(0.585, 0.660, f.y) * (1.0 - sstep(0.845, 0.930, f.y))
+            * (1.0 - sstep(0.205, 0.290, ax));
+  float tache = sstep(noseBase + 0.004, noseBase + 0.016, f.y)
+              * (1.0 - sstep(A_MOUTH - 0.030, A_MOUTH - 0.014, f.y))
+              * (1.0 - sstep(0.075, 0.115, ax));
+  float grain = tFbm01(vec2(ax * 4.0 + ci * 0.7, f.y * 4.0), vec2(70.0, 90.0), 3);
+  F.stub = stub * max(jaw, tache) * (1.0 - F.lipU) * (1.0 - F.lipL)
+         * sstep(0.34, 0.72, grain);
+  F.relief += F.stub * 0.03;
+
+  /* ── where the blood shows ─────────────────────────────────────────────── */
+  F.flush = cheek * 0.9
+          + (1.0 - sstep(0.0, 0.030, length(vec2(x, f.y - noseBase + 0.014)))) * 0.7
+          + (F.lipU + F.lipL) * 0.5
+          + (1.0 - sstep(0.62, 0.90, f.y)) * 0.15;
+
+  F.crease = clamp(F.crease, 0.0, 1.0);
+  F.relief = clamp(F.relief, -0.5, 0.5);
+  F.detail = clamp(F.detail, -0.6, 0.6);
+  return F;
+}
+
+/**
+ * The bare swatch: a hand, an ear, a throat, and the ground every face is
+ * painted onto. Periodic in the cell, so a neck wrapped in it has no seam.
+ *
+ * The amplitudes are an order of magnitude below what a tiling skin map wants,
+ * and that is the whole subtlety here. The normal strength on this material is set
+ * for a LIP EDGE — three times what the old tiling skin used — and the first
+ * bake put a crack net at the old amplitude through it. The result was a
+ * beautiful, unmistakable crazed mosaic: every townsperson in the kingdom in
+ * lizard skin. So the wrinkle net runs at four times the frequency and a
+ * quarter the depth, which puts it back under a texel where skin texture
+ * belongs, and the placed features get the amplitude to themselves.
+ */
+float plainSkinH(vec2 p) {
+  float pore = 1.0 - sstep(0.0, 0.11, tWorley(p, 130.0, 1.0).x);
+  float net = tCracks(tWarp(p, 40.0, 0.004, 2), vec2(92.0, 80.0), 0.14, 0.9);
+  float flesh = tFbm01(p, vec2(3.0, 2.5), 3);
+  return 0.50 + flesh * 0.055 - pore * 0.0055 - net * 0.0028;
+}
+
+/** Split a texture coordinate into a cell index and a face-local coordinate. */
+vec2 faceLocal(vec2 uv, out float ci, out vec2 cellUv) {
+  vec2 g = uv * vec2(${FACE_COLS}.0, ${FACE_ROWS}.0);
+  vec2 c = min(floor(g), vec2(${FACE_COLS - 1}.0, ${FACE_ROWS - 1}.0));
+  ci = c.y * ${FACE_COLS}.0 + c.x;
+  cellUv = g - c;
+  // x from the centre line, y running crown to chin — the way a face is drawn.
+  return vec2(cellUv.x - 0.5, 1.0 - cellUv.y);
+}
+`;
 
 /* ═════════════════════════════ the catalogue ═════════════════════════════ */
 
@@ -277,77 +654,141 @@ const CHARACTER_DEFS = {
   },
 
   /**
-   * Skin. The point is not the tint — a tint is what it had before — but that
-   * light behaves differently across a face: warm where it scatters through
-   * thin flesh, cool and matte on a dry cheek, sharper on the oil of a nose or
-   * a brow. All three are written here; the *tone* still comes from the vertex
-   * colour so one bake serves every face in the town.
+   * Faces. Eleven of them and one bare swatch, on one texture.
+   *
+   * This is the material that decides whether the town is inhabited by people
+   * or by dolls, and the reason the old one could not is structural rather
+   * than a matter of effort: it was a TILING map. A repeating field of pores
+   * and creases is the right surface for a forearm and it is physically
+   * incapable of putting an eye in an eye socket, so the head came out a
+   * smooth ball with two black beads pushed into it — which is exactly the
+   * description of a toy.
+   *
+   * So the map is placed instead of tiled. `faceLocal` splits the texture into
+   * a 4×3 grid; `faceOf` paints one person into a cell from signed distance
+   * fields anchored to the head mesh's own spherical coordinates; the last
+   * cell is left as a bare swatch for hands, ears and throats. `NPCSystem`
+   * hands each part the cell it needs.
+   *
+   * The relief is deliberately split with the geometry. Brow bone, socket,
+   * nose, cheek and chin are MODELLED — they have to break the silhouette, and
+   * a normal map cannot — so the height field here carries them at about a
+   * third strength for continuity and spends its real amplitude on what
+   * geometry at this triangle count cannot hold: the lid crease, the lash
+   * line, the lip seam, the nostril, the nasolabial fold and the lines of age.
    */
-  'npc-skin': {
-    normalStrength: 0.018, ao: { radius: 0.024, amplitude: 0.30 },
+  'npc-face': {
+    atlas: true,
+    // The AO radius is the number that bit hardest here and it is worth saying
+    // why. Cavity occlusion divides a height difference by the sample radius,
+    // so at 0.008 a three-thousandth of relief in the skin's own wrinkle net
+    // came back as half a stop of shadow — and the whole town came out in
+    // crazed pottery. The lid crease and the lip seam are two orders larger
+    // than that noise, so they survive a radius wide enough to ignore it.
+    normalStrength: 0.060, ao: { radius: 0.016, amplitude: 0.34 },
     physical: { sheen: 0.35, sheenRoughness: 0.55, sheenColor: 0xff8f6a },
     glsl: /* glsl */ `
+      ${FACE_ANCHORS}
+      ${facePeopleGLSL()}
+      ${FACE_GLSL}
+
       vec3 mStruct(vec2 uv) {
-        // The skin tile is set at 30 cm — a little larger than a face — so the
-        // frequencies below read directly as "times across a head". Pores stay
-        // sub-pixel on purpose; what has to be legible is the flesh undulation
-        // and the lines, at roughly ten and twenty across the head.
-        float pore = 1.0 - smoothstep(0.0, 0.16, tWorley(uv, 118.0, 1.0).x);
-        float pore2 = 1.0 - smoothstep(0.0, 0.12, tWorley(uv + 0.44, 210.0, 1.0).x);
+        float ci; vec2 cu;
+        vec2 f = faceLocal(uv, ci, cu);
 
-        // The fine diamond wrinkle net every square centimetre of skin carries.
-        float net = tCracks(tWarp(uv, 26.0, 0.006, 2), vec2(46.0, 40.0), 0.16, 0.9);
+        // Bare skin under everything, so a cheek and a wrist are the same
+        // flesh and only the placed features tell them apart.
+        float base = plainSkinH(cu);
+        // Per-cell identity, so eleven faces do not share one blotch pattern.
+        float id = hash12(vec2(ci * 3.7 + 0.5, 1.3)) * 0.55
+                 + tFbm01(cu, vec2(4.0, 3.0), 3) * 0.45;
 
-        // Coarser lines — the ones that deepen with age around eye and mouth.
-        // Sparse on purpose: the crack helper lays a full network, and at face
-        // scale a full network is crazed pottery rather than skin, so most of
-        // it is masked away and what is left runs shallow.
-        float lines = tCracks(tWarp(uv, 5.0, 0.03, 2), vec2(8.0, 6.0), 0.07, 0.8)
-                    * smoothstep(0.58, 0.92, tFbm01(uv + 0.7, 2.5, 3));
+        if (ci > ${FACE_PLAIN}.0 - 0.5) return vec3(clamp(base, 0.0, 1.0), id, 0.0);
 
-        // Soft undulation of the flesh beneath: cheek, brow, jaw.
-        float flesh = tFbm01(uv, vec2(4.0, 3.5), 3);
-
-        float h = 0.52 + flesh * 0.30 - pore * 0.08 - pore2 * 0.04
-                - net * 0.045 - lines * 0.09;
-        return vec3(clamp(h, 0.0, 1.0), flesh, lines);
+        Face F = faceOf(f, ci);
+        // A tenth on the large forms, a half on the small ones. See the note
+        // on the two channels at the head of the Face struct.
+        float h = base
+                + F.relief * 0.11
+                + F.detail * 0.50
+                - F.crease * 0.16
+                - F.lash * 0.06
+                + F.brow * 0.035
+                + F.stub * 0.02;
+        return vec3(clamp(h, 0.0, 1.0), id, F.crease);
       }
+
       Surf mShade(vec2 uv, MSample m) {
+        float ci; vec2 cu;
+        vec2 f = faceLocal(uv, ci, cu);
+
         // Written light, so the vertex tone can be a mid value without the face
         // going muddy. The hue relationships are what matter here, not the
         // absolute values: blood red under the surface, sallow ochre on top.
         vec3 base   = col8(236, 214, 196);
-        vec3 blood  = col8(222, 158, 140);
+        vec3 blood  = col8(222, 152, 134);
         vec3 sallow = col8(210, 190, 160);
-        vec3 shade  = col8(168, 132, 116);
+        vec3 shade  = col8(166, 128, 112);
 
         // Subsurface: capillary flush pooled in broad soft patches, denser in
         // the hollows where flesh is thin. This is the whole trick — skin that
         // is one colour everywhere reads as painted plastic.
-        float flush = tFbm01(tWarp(uv, vec2(3.0), 0.06, 3), 6.0, 4);
+        float flushN = tFbm01(tWarp(cu, vec2(3.0), 0.06, 3), 6.0, 4);
         float thin = 1.0 - m.aoFar;
 
         vec3 c = base;
-        c = mix(c, blood, smoothstep(0.35, 0.95, flush) * 0.55 + thin * 0.30);
-        c = mix(c, sallow, smoothstep(0.55, 0.05, flush) * 0.35);
+        c = mix(c, blood, smoothstep(0.35, 0.95, flushN) * 0.46 + thin * 0.26);
+        c = mix(c, sallow, smoothstep(0.55, 0.05, flushN) * 0.32);
 
         // Freckling and small pigment blotches, sparse and irregular.
-        float speck = smoothstep(0.80, 0.98, tFbm01(uv + 0.9, 34.0, 3))
-                    * smoothstep(0.45, 0.85, tFbm01(uv + 0.2, 4.0, 3));
-        c = mix(c, shade, speck * 0.30);
+        float speck = smoothstep(0.80, 0.98, tFbm01(cu + 0.9, 30.0, 3))
+                    * smoothstep(0.45, 0.85, tFbm01(cu + 0.2, 4.0, 3));
+        c = mix(c, shade, speck * 0.28);
 
-        // Creases carry shadow and a little more blood than the plane around.
-        c = mix(c, mix(shade, blood, 0.4), m.mask * 0.35);
-        c = mix(c, shade * 0.92, (1.0 - m.ao) * 0.26);
+        float rough = 0.62;
+        float oil = smoothstep(0.48, 0.92, m.h) * (0.45 + 0.55 * tFbm01(cu + 0.33, 5.0, 3));
+        rough -= oil * 0.28;
+
+        if (ci < ${FACE_PLAIN}.0 - 0.5) {
+          Face F = faceOf(f, ci);
+
+          // Blood where blood shows: cheek, nose tip, lips, the whole lower
+          // face on a man who shaves.
+          c = mix(c, blood, clamp(F.flush, 0.0, 1.0) * 0.24);
+          // Every line carries shadow and a little more blood than its plane.
+          c = mix(c, mix(shade, blood, 0.35), F.crease * 0.50);
+          // Stubble is a value shift, not a colour: a shaved jaw goes grey.
+          c = mix(c, col8(118, 110, 106), F.stub * 0.50);
+
+          // Lips are a shift in hue and a drop in value, not a coat of paint:
+          // 0.74 of a saturated pink is a clown, and this is a market town.
+          vec3 lip = col8(192, 132, 118);
+          c = mix(c, lip, F.lipU * 0.60 + F.lipL * 0.66);
+          c = mix(c, lip * 0.40, F.mouth * 0.85);
+          c = mix(c, col8(58, 40, 36), F.nostril * 0.88);
+
+          // The eye, painted from the back forward. The sclera is deliberately
+          // NOT white: the vertex tone multiplies over everything here, and an
+          // eye that starts at 255 comes out the brightest thing on a
+          // townsperson at forty metres, which is its own kind of uncanny.
+          c = mix(c, col8(224, 220, 212), F.sclera * 0.88);
+          c = mix(c, col8(104, 78, 54), F.iris * 0.92);
+          c = mix(c, col8(18, 16, 16), F.pupil * 0.95);
+          c = mix(c, col8(44, 33, 26), F.lash * 0.82);
+          c = mix(c, col8(78, 58, 44), F.brow * 0.90);
+
+          // Wet things are smooth; a shaved jaw is not.
+          rough = mix(rough, 0.34, F.lipU + F.lipL);
+          rough = mix(rough, 0.14, F.sclera * 0.8);
+          rough = mix(rough, 0.90, F.stub * 0.6);
+          rough += F.crease * 0.10;
+        }
+
+        c = mix(c, shade * 0.92, (1.0 - m.ao) * 0.30);
         c *= 0.90 + 0.16 * m.ao;
 
-        // Roughness is where a face stops looking like a ball. Oil gathers on
-        // the raised planes — brow, nose, cheekbone — and the hollows stay dry.
-        float oil = smoothstep(0.48, 0.92, m.h) * (0.45 + 0.55 * tFbm01(uv + 0.33, 5.0, 3));
-        float dry = smoothstep(0.55, 0.15, m.h) * 0.5;
-        float rough = 0.62 - oil * 0.30 + dry * 0.16 + m.mask * 0.10;
-        Surf s = surf(c, clamp(rough, 0.22, 0.86), 0.0);
-        s.ao = mix(0.74, 1.0, m.aoFar);
+        Surf s = surf(c, clamp(rough, 0.12, 0.90), 0.0);
+        s.ao = mix(0.70, 1.0, m.aoFar);
         return s;
       }
     `,
@@ -435,7 +876,25 @@ export class CharacterMaterials {
     // every one of these maps is minified four to eight times before it reaches
     // a pixel. Baking them at the wall's resolution buys nothing visible and
     // costs real seconds on the software rasteriser the captures run on.
-    const res = Math.min(this.lib.resolution ?? 512, 384);
+    //
+    // The atlas is the exception, and it is arithmetic rather than a
+    // preference. A tiling map is minified; an atlas is MAGNIFIED, because the
+    // cell it hands a head is a twelfth of the sheet. At the old 384 a face
+    // would have had 96 × 128 texels against a head that is 75 screen pixels
+    // tall at conversation range — a smudge exactly where the player is
+    // looking. The tiers below give a cell 128 to 256 texels of width.
+    //
+    // On a software rasteriser it takes the same 512 cap `MaterialLibrary`
+    // puts on every other surface, and for the same reason: six passes over a
+    // 768² sheet of signed distance fields is seconds of fill on llvmpipe, and
+    // the capture harness was already losing shots to a 240-second boot
+    // timeout on a shared box. A cell is 128 × 170 there against 256 × 341 on
+    // the tier that ships, so a review capture is a little softer than the
+    // game — the shapes are identical, the sharpness is not, and that is worth
+    // knowing when reading one.
+    const res = def.atlas
+      ? Math.min(FACE_RES[this.lib.quality] ?? FACE_RES.high, this.lib.software ? 512 : 4096)
+      : Math.min(this.lib.resolution ?? 512, 384);
     const src = passSource(def.glsl);
     const tag = `char:${name}:${res}`;
 

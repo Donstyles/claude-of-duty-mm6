@@ -1,31 +1,67 @@
 /**
- * CREATE PARTY — the first screen anyone sees.
+ * CREATE PARTY — the first screen anyone sees, rebuilt to REFERENCE.md §3.4a.
  *
- * Dark green serpentine with black veining, four columns filling the width, a
- * marble title bar with a gold rule, a painted strip of sky over each column,
- * and braziers burning in the bottom corners. It is deliberately *not* the grey
- * granite of the character sheet: the reference screenshot is a different stone
- * and a remake that reuses the sheet's surface has already lost the screen.
+ * That section did not exist while this screen was being written, which is the
+ * whole story of what was wrong with it. Every other screen in this game was
+ * cut from a written reference study; this one — the one the owner explicitly
+ * handed a screenshot of — was built from memory, and it showed: a pale marble
+ * title bar with a gold rule under it, sky over all four columns, a small
+ * portrait with a stack of controls beside it, a sex selector, a `Roll` button,
+ * a derived-stats line, a mastery letter on every skill, three buttons per
+ * column and three more for the party, a class essay filling half the bottom
+ * strip and a lettered oval. MM6 has none of those.
  *
- * Colour carries the meaning here exactly as it does everywhere else —
+ * What MM6 has, and what this file now draws, measured in native 640x480 px:
  *
- *   #FFFF9C  headers, the bonus pool, and the profession being described
- *   #00FE00  a statistic raised above the class norm, and a chosen skill
- *   #FF0000  a statistic sold below the class norm, and anything illegal
- *   #4AD8F0  the profession this column holds, and the sex in force
- *   #FFFFFF  everything else
+ *   y   0- 25  a top band of three plaques: painted sky over column 1, the
+ *              title on dark serpentine over columns 2-3, sky over column 4
+ *   y  26-121  a pale marble header block per column: a 69x90 portrait egg
+ *              hard left, the two portrait chevrons hard top-right, the class
+ *              emblem painted on bare marble under them, and the class name
+ *              right-aligned white along the block's foot
+ *   y 122-145  a recessed name plaque, the name LEFT-aligned
+ *   y 146-375  serpentine: seven statistics at a pitch of 16, label flush left
+ *              and figure flush right, the selected row flanked by two brass
+ *              arrowheads OUTSIDE the text; then a gold `SKILLS` centred, then
+ *              the skill rows, centred, on the same 16
+ *   y 395-470  five cells: a burning torch in a niche at each end, the class
+ *              list, the available-skill list, and the bonus pool over one
+ *              unlettered gold oval
  *
- * The screen owns no rules. Every edit is a call into `game/PartyCreation.js`,
- * which either performs it or refuses with a sentence, and that sentence is
- * what the plaque prints — the tariff is taught by being quoted a price, never
- * by a manual. `Begin` asks the same model whether the party is legal and hands
- * the four built `Character`s to the party system.
+ * Colour, and it is not the interface's usual gold (REFERENCE.md §3.4a):
+ *
+ *   #FFFFFF  every ordinary word — labels, figures, names, the class name
+ *   #C8B87F  the four group headings, a DULL BRASS a clear step under --gold
+ *   #00FE00  a statistic above its class base, and a skill actually chosen
+ *   #00FFFF  the class in force, an available skill taken, an empty skill slot
+ *   #FF0000  a statistic sold below its class base
+ *
+ * Three deliberate departures, each because our content is not MM6's content
+ * and each written down rather than smuggled:
+ *
+ *   1. Nine professions, not six, so the class list is three sub-columns of
+ *      three rather than two of three. Same grid, same pitch, one more column.
+ *   2. Three fixed skills per class, not two, so a column's SKILLS block is
+ *      five rows rather than four. The 16-px pitch is unchanged.
+ *   3. A class here may learn 23-30 skills where MM6's may learn nine, so the
+ *      available-skill box holds more than its three rows can show and scrolls.
+ *      MM6's box never needed to. The wording that says so is routed through
+ *      `input/pointer.js` so it names a finger on a phone.
+ *
+ * And one addition, which STYLE.md §8a requires and MM6 does not have: a
+ * refusal has to be answerable in words. MM6 answers in the bottom bar's
+ * message strip, which this page removes. So the blank marble band the
+ * reference leaves at y 376-394 carries an engraved strip in the same idiom,
+ * empty rather than blank when there is nothing to say.
+ *
+ * The screen still owns no rules. Every edit is a call into
+ * `game/PartyCreation.js`, which performs it or refuses with a sentence.
  */
 
 import './create.css';
 import { Panel } from './base.js';
 import {
-  el, setChildren, tooltip, tipMarkup, titleCase, engraved, goldOval,
+  el, setChildren, tooltip, tipMarkup, titleCase, engraved, raised, goldOval,
 } from '../widgets.js';
 import { ATTRIBUTES, ATTRIBUTE_LABEL, SKILLS, MASTERY_LABEL, masteryRank } from '../../game/data/Skills.js';
 import { getClass } from '../../game/data/Classes.js';
@@ -48,9 +84,6 @@ const ATTRIBUTE_NOTE = {
   luck: 'Resistance checks, critical hits, and what a searched body gives up.',
 };
 
-/** The mastery cap, as the single letter the skill list prints after a name. */
-const CAP_LETTER = { normal: '', expert: 'E', master: 'M', grandmaster: 'G' };
-
 const signed = (n) => (n >= 0 ? `+${Math.round(n)}` : String(Math.round(n)));
 
 export class CreatePanel extends Panel {
@@ -63,10 +96,6 @@ export class CreatePanel extends Panel {
     // A forked stream, so rolling names never disturbs world generation.
     this.model = new PartyCreation(this.ctx?.rng?.fork?.('party-creation'));
     this.sel = 0;
-    /** Profession under the cursor in the class list; the detail follows it. */
-    this.preview = null;
-    /** Skill under the cursor in the picker; the note strip follows it. */
-    this.skillPreview = null;
     /** The last refusal, which outranks the validation line until the next edit. */
     this.notice = null;
     this.cols = [];
@@ -81,18 +110,29 @@ export class CreatePanel extends Panel {
     this.cols = [0, 1, 2, 3].map((i) => this._buildColumn(i));
     this.colsEl = el('div', { className: 'mm-create-cols' }, ...this.cols.map((c) => c.root));
 
-    body.appendChild(el('div', { className: 'mm-create' },
+    // The band is three plaques, not four: the title takes the middle half, so
+    // sky falls over the OUTER columns only. Sky over all four is the single
+    // most visible thing the old screen got wrong.
+    const band = el('div', { className: 'mm-create-band' },
+      el('div', { className: 'mm-create-sky is-left' }),
       el('div', { className: 'mm-create-title', text: 'CREATE PARTY' }),
-      this.colsEl,
-      el('div', { className: 'mm-create-bottom' },
-        this._buildClassBlock(),
-        this._buildSkillBlock(),
-        this._buildActionBlock()),
-      el('div', { className: 'mm-create-vignette' }),
-      el('div', { className: 'mm-create-edge is-left' }),
-      el('div', { className: 'mm-create-edge is-right' }),
-      el('div', { className: 'mm-torch is-left' }),
-      el('div', { className: 'mm-torch is-right' })));
+      el('div', { className: 'mm-create-sky is-right' }));
+
+    this.stripEl = engraved('mm-create-strip');
+
+    body.appendChild(el('div', { className: 'mm-create' },
+      el('div', { className: 'mm-create-page' },
+        band,
+        this.colsEl,
+        el('div', { className: 'mm-create-band-low' }, this.stripEl),
+        el('div', { className: 'mm-create-bottom' },
+          el('div', { className: 'mm-create-niche is-left' }, el('div', { className: 'mm-torch' })),
+          this._buildClassBlock(),
+          this._buildSkillBlock(),
+          this._buildBonusBlock(),
+          el('div', { className: 'mm-create-niche is-right' }, el('div', { className: 'mm-torch' }))),
+        el('div', { className: 'mm-create-edge is-left' }),
+        el('div', { className: 'mm-create-edge is-right' }))));
   }
 
   /**
@@ -108,34 +148,23 @@ export class CreatePanel extends Panel {
       className: 'mm-create-ring', type: 'button', 'aria-label': `Character ${index + 1} portrait`,
     }, portrait);
     ring.addEventListener('click', () => { pick(); this._act(this.model.cyclePortrait(index, 1)); });
+    tooltip.attach(ring, () => this._faceTip(index));
 
+    // Hollow outlined chevrons in a recessed pair, hard against the header
+    // block's top-right corner — MM6's `Change Portraits`.
     const arrow = (step, label) => {
-      const b = el('button', { className: 'mm-create-arrow', type: 'button', 'aria-label': label, text: step < 0 ? '◄' : '►' });
+      const b = el('button', {
+        className: 'mm-create-arrow', type: 'button', 'aria-label': label,
+        text: step < 0 ? '⇐' : '⇒',
+      });
       b.addEventListener('click', () => { pick(); this._act(this.model.cyclePortrait(index, step)); });
       return b;
     };
-    const emblem = el('div', { className: 'mm-create-emblem' });
     const arrows = engraved('mm-create-arrows', arrow(-1, 'Previous portrait'), arrow(1, 'Next portrait'));
-    tooltip.attach(arrows, () => {
-      const slot = this.model.get(index);
-      return tipMarkup({
-        title: 'Portrait',
-        subtitle: `${slot.faceDef.label} · ${slot.sex === 'female' ? 'woman' : 'man'}`,
-        lines: [{ k: 'Faces', v: `${slot.face + 1} of ${FACES.length}` }],
-        flavour: 'The face is yours to choose whatever the profession — and it is where the suggested name comes from.',
-      });
-    });
+    tooltip.attach(arrows, () => this._faceTip(index));
 
-    const sexButton = (sex) => {
-      const b = el('button', { className: 'mm-create-sex-opt', type: 'button', dataset: { sex }, text: sex === 'male' ? 'M' : 'F' });
-      b.addEventListener('click', () => { pick(); this._act(this.model.setSex(index, sex)); });
-      return b;
-    };
-    const sex = engraved('mm-create-sex', sexButton('male'), sexButton('female'));
-    tooltip.attach(sex, () => tipMarkup({
-      title: 'Man or woman',
-      flavour: 'Chooses the portrait plates on offer and the pool the suggested name is drawn from. Nothing mechanical turns on it.',
-    }));
+    const emblem = el('div', { className: 'mm-create-emblem' });
+    const className = el('div', { className: 'mm-create-classname' });
 
     const name = el('input', {
       className: 'mm-create-name', type: 'text', maxlength: '20', spellcheck: 'false',
@@ -146,133 +175,102 @@ export class CreatePanel extends Panel {
       this._select(index);
       // Typing repaints only what typing can change, so the caret stays put.
       name.classList.toggle('is-empty', !name.value.trim());
-      this._paintPlaque();
+      this._paintStrip();
     });
     name.addEventListener('focus', () => this._select(index));
-    const roll = el('button', { className: 'mm-create-roll', type: 'button', text: 'Roll', 'aria-label': 'Roll a name' });
-    roll.addEventListener('click', () => { pick(); this._act(this.model.rollName(index)); });
-    tooltip.attach(roll, () => tipMarkup({
-      title: 'Roll a name',
-      flavour: 'Given names off this coast are short; surnames are a trade, a place, or Old Cindric for the older blood.',
-    }));
-
-    const className = el('div', { className: 'mm-create-classname' });
+    // The name plate is the natural place to ask who this is, so the numbers
+    // MM6 does not print on the page live in its hover text instead.
+    const plate = engraved('mm-create-plate', name);
+    tooltip.attach(plate, () => this._whoTip(index));
 
     const statRows = {};
-    const stats = engraved('mm-create-stats');
+    const stats = el('div', { className: 'mm-create-stats' });
     for (const attr of ATTRIBUTES) {
-      const value = el('span', { className: 'mm-row-value' });
-      const down = el('button', { className: 'mm-create-step', type: 'button', text: '◄', 'aria-label': `Lower ${ATTRIBUTE_LABEL[attr]}` });
-      const up = el('button', { className: 'mm-create-step', type: 'button', text: '►', 'aria-label': `Raise ${ATTRIBUTE_LABEL[attr]}` });
+      const value = el('span', { className: 'mm-create-figure' });
+      const label = el('span', { className: 'mm-create-name-of', text: ATTRIBUTE_LABEL[attr] });
+      // The arrowheads are the whole selection indicator on this screen, and
+      // they are also the control: MM6 puts them outside the text, one a side.
+      const down = el('button', { className: 'mm-create-mark is-left', type: 'button', text: '◄', 'aria-label': `Lower ${ATTRIBUTE_LABEL[attr]}` });
+      const up = el('button', { className: 'mm-create-mark is-right', type: 'button', text: '►', 'aria-label': `Raise ${ATTRIBUTE_LABEL[attr]}` });
       down.addEventListener('click', (e) => { e.stopPropagation(); pick(); this._act(this.model.adjustStat(index, attr, -1)); });
       up.addEventListener('click', (e) => { e.stopPropagation(); pick(); this._act(this.model.adjustStat(index, attr, +1)); });
-      const row = el('div', { className: 'mm-create-stat', dataset: { attr } },
-        el('span', { className: 'mm-row-label', text: ATTRIBUTE_LABEL[attr] }),
-        down, value, up);
+      const row = el('div', { className: 'mm-create-stat', dataset: { attr } }, down, label, value, up);
       row.addEventListener('click', () => { pick(); this.model.get(index).cursor = attr; this._paint(); });
       tooltip.attach(row, () => this._statTip(index, attr));
       stats.appendChild(row);
-      statRows[attr] = { row, value };
+      statRows[attr] = { row, label, value };
     }
 
-    const vitals = el('div', { className: 'mm-create-vitals' });
-    tooltip.attach(vitals, () => this._vitalsTip(index));
-
-    const skillCount = el('span', {});
-    const skillHead = el('div', { className: 'mm-block-head' },
-      el('span', { text: 'SKILLS' }), skillCount);
     const skillList = el('div', { className: 'mm-create-skilllist' });
-    const skills = engraved('mm-create-skills', skillHead, skillList);
-
-    const tool = (label, title, fn) => {
-      const b = el('button', { className: 'mm-create-tool', type: 'button', text: label });
-      b.addEventListener('click', () => { pick(); fn(); this.notice = null; this._paint(); });
-      tooltip.attach(b, () => tipMarkup({ title, flavour: TOOL_NOTE[label] }));
-      return b;
-    };
-    const tools = el('div', { className: 'mm-create-tools' },
-      tool('Random', 'Roll this character', () => this.model.randomise(index)),
-      tool('Clear', 'Clear this character', () => this.model.clear(index)),
-      tool('Reset', 'Reset this character', () => this.model.reset(index)));
+    const skills = el('div', { className: 'mm-create-skills' },
+      el('div', { className: 'mm-create-grouphead', text: 'SKILLS' }),
+      skillList);
 
     const root = el('div', { className: 'mm-create-col', dataset: { index: String(index) } },
-      el('div', { className: 'mm-create-sky' }),
-      el('div', { className: 'mm-create-head' }, ring,
-        el('div', { className: 'mm-create-aside' }, emblem, arrows, sex)),
-      el('div', { className: 'mm-create-nameline' }, name, roll),
-      className, stats, vitals, skills, tools);
+      el('div', { className: 'mm-create-head' }, ring, arrows, emblem, className),
+      plate, stats, skills);
     root.addEventListener('mousedown', () => pick());
 
-    return { root, ring, portrait, emblem, sex, name, className, statRows, vitals, skills: skillList, skillCount };
+    return { root, ring, portrait, emblem, name, className, statRows, skills: skillList };
   }
 
-  /** Bottom left: the nine professions, and what the one under the cursor is. */
+  /** Bottom left: the professions, three sub-columns of three. */
   _buildClassBlock() {
-    this.classListEl = el('div', { className: 'mm-list-cols' });
+    this.classListEl = el('div', { className: 'mm-create-list is-three' });
     for (const id of CREATE_CLASSES) {
       const entry = el('div', { className: 'mm-create-entry', dataset: { classId: id }, text: getClass(id)?.name ?? titleCase(id) });
       entry.addEventListener('click', () => this._act(this.model.setClass(this.sel, id)));
-      entry.addEventListener('mouseenter', () => { this.preview = id; this._paintClassDetail(); });
-      entry.addEventListener('mouseleave', () => { this.preview = null; this._paintClassDetail(); });
       tooltip.attach(entry, () => this._classTip(id));
       this.classListEl.appendChild(entry);
     }
-    this.classDetailEl = el('div', { className: 'mm-create-detail' });
-    return engraved('mm-create-block is-class',
-      el('div', { className: 'mm-block-head' }, el('span', { text: 'Class' })),
-      el('div', { className: 'mm-create-classbody' }, this.classListEl, this.classDetailEl));
+    return el('div', { className: 'mm-create-block is-class' },
+      el('div', { className: 'mm-create-grouphead', text: 'CLASS' }),
+      this.classListEl);
   }
 
-  /** Bottom middle: every skill the profession may ever learn, and its cap. */
+  /** Bottom middle: every skill the profession may learn, in three sub-columns. */
   _buildSkillBlock() {
-    this.skillHeadEl = el('span', {});
-    this.skillListEl = el('div', { className: 'mm-list-cols is-three' });
-    this.skillNoteEl = el('div', { className: 'mm-create-note' });
-    return engraved('mm-create-block is-skills',
-      el('div', { className: 'mm-block-head' },
-        el('span', { text: 'Available Skills' }), this.skillHeadEl),
-      this.skillListEl, this.skillNoteEl);
+    this.skillListEl = el('div', { className: 'mm-create-list is-three' });
+    this.skillScrollEl = el('div', { className: 'mm-create-scroll' }, this.skillListEl);
+    const block = el('div', { className: 'mm-create-block is-skills' },
+      el('div', { className: 'mm-create-grouphead', text: 'Available Skills' }),
+      this.skillScrollEl);
+    this.skillScrollEl.addEventListener('scroll', () => this._paintScrollCue());
+    return block;
   }
 
-  /** Bottom right: the pool, the stepper, the message plaque and the buttons. */
-  _buildActionBlock() {
-    this.bonusEl = el('b', { className: 'mm-create-bonus-value' });
-    const step = (sign, label) => {
-      const b = el('button', { className: 'mm-create-step is-big', type: 'button', text: sign < 0 ? '−' : '+', 'aria-label': label });
+  /** Bottom right: the pool between its two steppers, and the one gold oval. */
+  _buildBonusBlock() {
+    this.bonusEl = el('div', { className: 'mm-create-pool-value' });
+    const step = (sign, label, glyph) => {
+      const b = raised('mm-create-stepper', el('span', { className: 'mm-create-stepper-glyph', text: glyph }));
+      b.setAttribute('role', 'button');
+      b.setAttribute('tabindex', '0');
+      b.setAttribute('aria-label', label);
       b.addEventListener('click', () => this._act(this.model.adjustStat(this.sel, this.slot.cursor, sign)));
+      tooltip.attach(b, () => this._bonusTip());
       return b;
     };
-    const bonusRow = el('div', { className: 'mm-create-bonus' },
-      step(-1, 'Sell a point back'), this.bonusEl, step(1, 'Spend a point'));
-    tooltip.attach(bonusRow, () => this._bonusTip());
+    const pool = el('div', { className: 'mm-create-pool' },
+      el('div', { className: 'mm-create-grouphead', text: 'Bonus Pts' }),
+      this.bonusEl);
+    tooltip.attach(pool, () => this._bonusTip());
 
-    this.spendingEl = el('div', { className: 'mm-create-spending' });
-    this.plaqueEl = engraved('mm-create-plaque');
-
-    // Three plaques for the party as a whole; the screen carries exactly one
-    // gold oval, and it is the one that starts the game.
-    const tool = (label, title, fn) => {
-      const b = el('button', { className: 'mm-create-tool', type: 'button', text: label });
-      b.addEventListener('click', () => { fn(); this.notice = null; this._paint(); });
-      tooltip.attach(b, () => tipMarkup({ title, flavour: TOOL_NOTE[label], footer: 'Applies to all four.' }));
-      return b;
-    };
-    const row = el('div', { className: 'mm-create-actions' },
-      tool('Random', 'Roll the whole party', () => this.model.randomiseParty()),
-      tool('Clear', 'Clear the whole party', () => this.model.clearParty()),
-      tool('Reset', 'Reset the whole party', () => this.model.resetParty()));
-
+    // MM6's OK oval carries a dark silhouette of a hand, thumb up, and no
+    // lettering. `GLYPHS` has no thumb; `fist` is the one hand in the set and
+    // it is the same read at 55 x 23. A thumb-up would be a new entry in
+    // `UITextures.js`, which is not this screen's file.
     this.startEl = goldOval({
-      glyph: 'blank', label: 'Begin the adventure', textures: this.ui.textures,
+      glyph: 'fist', label: 'Begin the adventure', textures: this.ui.textures,
       onClick: () => this._start(),
       tip: () => this._startTip(),
       className: 'mm-create-go',
     });
-    this.startEl.appendChild(el('span', { className: 'mm-create-oval-label', text: 'Begin' }));
 
-    return engraved('mm-create-block is-actions',
-      el('div', { className: 'mm-block-head' }, el('span', { text: 'Bonus Pts' })),
-      bonusRow, this.spendingEl, this.plaqueEl, row, this.startEl);
+    return el('div', { className: 'mm-create-block is-bonus' },
+      el('div', { className: 'mm-create-poolrow' },
+        step(-1, 'Sell a point back', '−'), pool, step(1, 'Spend a point', '+')),
+      engraved('mm-create-okbox', this.startEl));
   }
 
   // ── lifecycle ─────────────────────────────────────────────────────────────
@@ -290,8 +288,6 @@ export class CreatePanel extends Panel {
       this.model.resetParty();
       this.sel = 0;
       this.notice = null;
-      this.preview = null;
-      this.skillPreview = null;
     }
     this._staged = false;
   }
@@ -307,7 +303,7 @@ export class CreatePanel extends Panel {
   }
 
   /**
-   * The keyboard reaches everything the mouse does: digits pick a column, the
+   * The keyboard reaches everything the finger does: digits pick a column, the
    * up/down arrows walk the statistics and left/right buy and sell them.
    */
   onKey(e) {
@@ -338,7 +334,7 @@ export class CreatePanel extends Panel {
     this._paint();
   }
 
-  /** Apply a model result: a refusal becomes the plaque's line, in red. */
+  /** Apply a model result: a refusal becomes the strip's line, in red. */
   _act(result) {
     this.notice = result?.ok === false && result.reason ? { text: result.reason, kind: 'is-bad' } : null;
     this._paint();
@@ -349,10 +345,9 @@ export class CreatePanel extends Panel {
   _paint() {
     this.model.slots.forEach((slot, i) => this._paintColumn(i, slot));
     this._paintClassList();
-    this._paintClassDetail();
     this._paintSkillList();
-    this._paintActions();
-    this._paintPlaque();
+    this._paintBonus();
+    this._paintStrip();
   }
 
   _paintColumn(index, slot) {
@@ -360,16 +355,14 @@ export class CreatePanel extends Panel {
     if (!col) return;
     const T = this.ui.textures;
     const active = index === this.sel;
-    const legal = this.model.slotOk(index);
     col.root.classList.toggle('is-active', active);
-    col.root.classList.toggle('is-illegal', !legal);
+    col.root.classList.toggle('is-illegal', !this.model.slotOk(index));
     col.ring.classList.toggle('is-active', active);
 
     const face = T.portrait(slot.portraitSpec());
     col.portrait.style.backgroundImage = face ? `url("${face}")` : '';
     const emblem = T.classEmblem(slot.classId);
     col.emblem.style.backgroundImage = emblem ? `url("${emblem}")` : '';
-    for (const b of col.sex.children) b.classList.toggle('is-on', b.dataset.sex === slot.sex);
 
     // Only write the field when it disagrees, so a caret mid-word survives.
     if (col.name.value !== slot.name) col.name.value = slot.name;
@@ -377,41 +370,39 @@ export class CreatePanel extends Panel {
     col.className.textContent = slot.cls?.name ?? slot.classId;
 
     for (const attr of ATTRIBUTES) {
-      const { row, value } = col.statRows[attr];
+      const { row, label, value } = col.statRows[attr];
       const cur = slot.stats[attr];
       const base = statBase(slot.classId, attr);
       value.textContent = String(cur);
-      value.className = `mm-row-value ${cur > base ? 'mm-t-up' : cur < base ? 'mm-t-down' : ''}`.trim();
+      // Label and figure change together — MM6 turns the whole row, never the
+      // number on its own.
+      const tone = cur > base ? 'is-up' : cur < base ? 'is-down' : '';
+      row.className = `mm-create-stat ${tone}`.trim();
+      row.dataset.attr = attr;
+      label.textContent = ATTRIBUTE_LABEL[attr];
       row.classList.toggle('is-cursor', active && slot.cursor === attr);
       row.classList.toggle('is-floor', cur <= statFloor(slot.classId, attr));
     }
 
-    const d = slot.derived();
-    setChildren(col.vitals,
-      el('span', {}, el('i', { text: 'Hit Pts ' }), el('b', { text: String(d.hp) })),
-      el('span', {}, el('i', { text: 'Spell Pts ' }), el('b', { className: d.sp ? '' : 'mm-t-dim', text: String(d.sp) })),
-      el('span', {}, el('i', { text: 'AC ' }), el('b', { text: String(d.ac) })));
-
+    // Two blocks of rows on one 16-px pitch: the class's own skills in white,
+    // then one row per free pick, cyan and reading `None` until it is spent.
     const fixed = slot.cls?.startingSkills ?? [];
-    col.skillCount.textContent = `${slot.picks.length}/${FREE_SKILL_PICKS}`;
-    col.skillCount.className = slot.picks.length < FREE_SKILL_PICKS ? 'mm-t-down' : 'mm-t-up';
     const rows = fixed.map((id) => this._skillLine(index, id, 'is-fixed'));
     for (let k = 0; k < FREE_SKILL_PICKS; k++) {
       const id = slot.picks[k];
       rows.push(id
         ? this._skillLine(index, id, 'is-chosen')
-        : el('div', { className: 'mm-create-skillrow is-empty', text: 'choose a skill' }));
+        : el('div', { className: 'mm-create-skillrow is-none', text: 'None' }));
     }
     setChildren(col.skills, ...rows);
   }
 
   /** One line in a column's SKILLS block: fixed in white, chosen in green. */
   _skillLine(index, skillId, kind) {
-    const slot = this.model.get(index);
-    const cap = slot.cls?.skills?.[skillId];
-    const row = el('div', { className: `mm-create-skillrow ${kind}` },
-      el('span', { text: SKILLS[skillId]?.name ?? titleCase(skillId) }),
-      el('span', { className: 'mm-create-cap', text: CAP_LETTER[cap] ?? '' }));
+    const row = el('div', {
+      className: `mm-create-skillrow ${kind}`,
+      text: SKILLS[skillId]?.name ?? titleCase(skillId),
+    });
     tooltip.attach(row, () => this._skillTip(index, skillId));
     if (kind === 'is-chosen') {
       row.addEventListener('click', () => { this._select(index); this._act(this.model.toggleSkill(index, skillId)); });
@@ -422,109 +413,69 @@ export class CreatePanel extends Panel {
   _paintClassList() {
     const chosen = this.slot?.classId;
     for (const entry of this.classListEl.children) {
-      entry.classList.toggle('mm-t-cyan', entry.dataset.classId === chosen);
+      entry.classList.toggle('is-on', entry.dataset.classId === chosen);
     }
   }
 
-  /**
-   * The profession under the cursor, or the one this column holds: what it is,
-   * where it can be promoted to, and the skills it alone carries to the top.
-   */
-  _paintClassDetail() {
-    const id = this.preview ?? this.slot?.classId;
-    const cls = getClass(id);
-    if (!cls) return;
-    // The panel has room for what the profession is and where it goes; the
-    // mechanical summary and the full mastery lists live in the hover text.
-    setChildren(this.classDetailEl,
-      el('div', { className: 'mm-create-detail-head mm-t-gold', text: cls.name }),
-      el('div', { className: 'mm-create-detail-lore', text: classNote(id) }),
-      el('div', { className: 'mm-create-detail-line' },
-        el('i', { className: 'mm-t-gold', text: 'Becomes ' }),
-        el('span', { text: promotionChain(id).join(' → ') })),
-      el('div', { className: 'mm-create-detail-line' },
-        el('i', { className: 'mm-t-gold', text: 'Grandmaster ' }),
-        el('span', { text: this._capList(id, 'grandmaster', 'nothing — this line masters and stops') })),
-      el('div', { className: 'mm-create-detail-line' },
-        el('i', { className: 'mm-t-gold', text: 'Master ' }),
-        el('span', { text: this._capList(id, 'master', 'nothing') })));
-  }
-
-  /**
-   * The skills a class carries to one mastery, trimmed to what the panel has
-   * room for. The hover text below carries the whole list.
-   */
-  _capList(classId, mastery, empty, limit = 6) {
-    const names = skillsAtMastery(classId, mastery);
-    if (!names.length) return empty;
-    return names.length > limit ? `${names.slice(0, limit).join(', ')} and ${names.length - limit} more` : names.join(', ');
-  }
-
-  /** Every skill the profession may learn, its cap, and which two are chosen. */
+  /** Every skill the profession may learn; the ones in hand read cyan. */
   _paintSkillList() {
     const slot = this.slot;
     if (!slot) return;
     const fixed = new Set(slot.cls?.startingSkills ?? []);
     const chosen = new Set(slot.picks);
-    this.skillHeadEl.textContent = `${slot.picks.length} of ${FREE_SKILL_PICKS} chosen`;
-    this.skillHeadEl.className = slot.picks.length < FREE_SKILL_PICKS ? 'mm-t-down' : 'mm-t-up';
 
     const rows = learnableSkills(slot.classId).map((id) => {
-      const state = fixed.has(id) ? 'is-fixed' : chosen.has(id) ? 'is-chosen' : '';
-      const entry = el('div', { className: `mm-create-entry ${state}`.trim(), dataset: { skill: id } },
-        el('span', { text: SKILLS[id]?.name ?? titleCase(id) }),
-        el('span', { className: 'mm-create-cap', text: CAP_LETTER[slot.cls?.skills?.[id]] ?? '' }));
+      const state = fixed.has(id) ? 'is-fixed' : chosen.has(id) ? 'is-on' : '';
+      const entry = el('div', {
+        className: `mm-create-entry ${state}`.trim(),
+        dataset: { skill: id },
+        text: SKILLS[id]?.name ?? titleCase(id),
+      });
       entry.addEventListener('click', () => this._act(this.model.toggleSkill(this.sel, id)));
-      entry.addEventListener('mouseenter', () => { this.skillPreview = id; this._paintSkillNote(); });
-      entry.addEventListener('mouseleave', () => { this.skillPreview = null; this._paintSkillNote(); });
       tooltip.attach(entry, () => this._skillTip(this.sel, id));
       return entry;
     });
     setChildren(this.skillListEl, ...rows);
-    this._paintSkillNote();
+    this._paintScrollCue();
   }
 
-  _paintSkillNote() {
-    const slot = this.slot;
-    const id = this.skillPreview ?? slot?.picks[slot.picks.length - 1] ?? slot?.cls?.startingSkills?.[0];
-    const def = SKILLS[id];
-    if (!def) { this.skillNoteEl.textContent = ''; return; }
-    const cap = slot?.cls?.skills?.[id];
-    setChildren(this.skillNoteEl,
-      el('i', { className: 'mm-t-gold', text: `${def.name} ` }),
-      el('span', { className: 'mm-t-dim', text: cap ? `to ${MASTERY_LABEL[cap]} — ` : '— ' }),
-      el('span', { text: skillNote(id) }));
+  /**
+   * MM6's available-skill box holds nine and stops. Ours holds up to thirty, so
+   * it scrolls — and a box that scrolls with no edge to say so is a box whose
+   * bottom half nobody finds.
+   */
+  _paintScrollCue() {
+    const box = this.skillScrollEl;
+    if (!box) return;
+    const more = box.scrollHeight - box.clientHeight - box.scrollTop > 1;
+    box.classList.toggle('has-more', more);
+    box.classList.toggle('has-above', box.scrollTop > 1);
   }
 
-  _paintActions() {
+  _paintBonus() {
     const slot = this.slot;
     if (!slot) return;
     const left = slot.remaining();
     this.bonusEl.textContent = String(left);
-    this.bonusEl.className = `mm-create-bonus-value ${left > 0 ? 'mm-t-gold' : 'mm-t-dim'}`;
-    const price = slot.stats[slot.cursor] >= STAT_CEILING ? null : stepCost(slot.stats[slot.cursor]);
-    setChildren(this.spendingEl,
-      el('span', { className: 'mm-t-dim', text: 'Spending on ' }),
-      el('b', { text: ATTRIBUTE_LABEL[slot.cursor] }),
-      el('span', { className: 'mm-t-dim', text: price === null ? ' · at the ceiling' : ` · next point ${price}` }));
-
     const check = this.model.validate();
     this.startEl.disabled = !check.ok;
     this.startEl.classList.toggle('is-dead', !check.ok);
   }
 
   /**
-   * The plaque under the pool. A refusal outranks everything; then the first
-   * thing that blocks the start; then the first caution; then the hint.
+   * The engraved strip in the band above the bottom row — the one thing on this
+   * page the reference does not have, and STYLE.md §8a is why. A refusal
+   * outranks everything; then the first thing blocking the start; then the
+   * first caution. When there is nothing to say the strip is empty, not blank.
    */
-  _paintPlaque() {
+  _paintStrip() {
     const check = this.model.validate();
     const line = this.notice
       ?? (check.errors[0] ? { text: check.errors[0].text, kind: 'is-bad' } : null)
       ?? (check.cautions[0] ? { text: check.cautions[0].text, kind: 'is-warn' } : null)
-      ?? { text: 'Four are ready. Begin when you are.', kind: 'is-good' };
-    this.plaqueEl.className = `mm-engraved mm-create-plaque ${line.kind}`;
-    this.plaqueEl.textContent = line.text;
+      ?? null;
+    this.stripEl.className = `mm-engraved mm-create-strip ${line?.kind ?? 'is-quiet'}`;
+    this.stripEl.textContent = line?.text ?? '';
     if (this.startEl) {
       this.startEl.disabled = !check.ok;
       this.startEl.classList.toggle('is-dead', !check.ok);
@@ -533,6 +484,38 @@ export class CreatePanel extends Panel {
   }
 
   // ── hover text ────────────────────────────────────────────────────────────
+
+  _faceTip(index) {
+    const slot = this.model.get(index);
+    return tipMarkup({
+      title: 'Portrait',
+      subtitle: `${slot.faceDef.label} · ${slot.sex === 'female' ? 'woman' : 'man'}`,
+      lines: [{ k: 'Faces', v: `${slot.face + 1} of ${FACES.length}` }],
+      flavour: 'The face is yours to choose whatever the profession — and it is where the suggested name comes from.',
+      footer: `${selectHint('take the next face')}; the chevrons walk both ways.`,
+    });
+  }
+
+  /** Who this column is — including the numbers MM6 leaves off the page. */
+  _whoTip(index) {
+    const slot = this.model.get(index);
+    const d = slot.derived();
+    const cls = slot.cls;
+    return tipMarkup({
+      title: slot.name || 'Unnamed',
+      subtitle: `${cls?.name ?? ''} · at first level`,
+      lines: [
+        { k: 'Hit points', v: d.hp },
+        { k: 'Spell points', v: cls?.spStat ? d.sp : 'never any' },
+        { k: 'Armour class', v: d.ac },
+        { k: 'Endurance bonus', v: signed(statBonus(slot.stats.endurance)) },
+      ],
+      flavour: cls?.spStat
+        ? `Spell points follow ${cls.spStat === 'mixed' ? 'Intellect and Personality together' : titleCase(cls.spStat)}; raise it and the pool moves with it.`
+        : 'This profession never opens a spellbook, whatever it studies.',
+      footer: 'Both totals are recomputed the instant a statistic moves.',
+    });
+  }
 
   _statTip(index, attr) {
     const slot = this.model.get(index);
@@ -553,26 +536,6 @@ export class CreatePanel extends Panel {
       ],
       flavour: ATTRIBUTE_NOTE[attr],
       footer: floor > 3 ? `A ${slot.cls?.name} will not go below ${floor}.` : '',
-    });
-  }
-
-  _vitalsTip(index) {
-    const slot = this.model.get(index);
-    const d = slot.derived();
-    const cls = slot.cls;
-    return tipMarkup({
-      title: 'At first level',
-      subtitle: `${slot.name || 'This character'} the ${cls?.name ?? ''}`,
-      lines: [
-        { k: 'Hit points', v: d.hp },
-        { k: 'Spell points', v: cls?.spStat ? d.sp : 'never any' },
-        { k: 'Armour class', v: d.ac },
-        { k: 'Endurance bonus', v: signed(statBonus(slot.stats.endurance)) },
-      ],
-      flavour: cls?.spStat
-        ? `Spell points follow ${cls.spStat === 'mixed' ? 'Intellect and Personality together' : titleCase(cls.spStat)}; raise it and the pool moves with it.`
-        : 'This profession never opens a spellbook, whatever it studies.',
-      footer: 'Both totals are recomputed the instant a statistic moves.',
     });
   }
 
@@ -603,7 +566,11 @@ export class CreatePanel extends Panel {
     });
   }
 
-  /** The whole of a profession, for the hover the detail panel cannot hold. */
+  /**
+   * The whole of a profession. The reference's bottom-left cell is a list and
+   * nothing else, so everything the old detail panel printed on the panel is
+   * here instead — which is where STYLE.md §12 says it belonged all along.
+   */
   _classTip(classId) {
     const cls = getClass(classId);
     if (!cls) return tipMarkup({ title: titleCase(classId) });
@@ -623,12 +590,14 @@ export class CreatePanel extends Panel {
         gm.length ? `<b class="mm-t-gold">Grandmaster</b> — ${gm.join(', ')}` : null,
         master.length ? `<b class="mm-t-gold">Master</b> — ${master.join(', ')}` : null,
       ],
+      flavour: classNote(classId),
       footer: `${selectHint('give this profession to the column being edited')}.`,
     });
   }
 
   _bonusTip() {
     const slot = this.slot;
+    const words = pointerWords();
     return tipMarkup({
       title: 'Bonus points',
       subtitle: `${slot.remaining()} of ${BONUS_POOL} unspent`,
@@ -640,8 +609,8 @@ export class CreatePanel extends Panel {
         { k: 'Past 30', v: '5 points each' },
       ],
       flavour: 'Selling a statistic back pays the same tariff, which is how a spike is funded — within what the profession will tolerate.',
-      footer: `The stepper works on ${ATTRIBUTE_LABEL[slot.cursor]}; `
-        + `${lower(pointerWords().select)} another line to point it elsewhere.`,
+      footer: `The stepper works on ${ATTRIBUTE_LABEL[slot.cursor]}, the line wearing the two arrowheads; `
+        + `${lower(words.select)} another line to move them.`,
     });
   }
 
@@ -731,8 +700,8 @@ export class CreatePanel extends Panel {
     this.ctx.events?.on?.('capture:cameraSet', this._onCameraSet);
 
     cap.registerShot('ui-create-editing', {
-      description: 'Party creation mid-edit: the third column selected and part spent, a rolled second '
-        + 'character, the class list previewing another profession, and an illegal skill refused in red.',
+      description: 'Party creation mid-edit: the third column selected with its arrowheads on Intellect, '
+        + 'part of the pool spent, a rolled second character, and an illegal skill refused in red.',
       apply: () => {
         this.model.resetParty();
         this.model.randomise(1);
@@ -741,8 +710,6 @@ export class CreatePanel extends Panel {
         this.model.adjustStat(2, 'might', -1);
         this.sel = 2;
         this.model.get(2).cursor = 'intellect';
-        this.preview = 'druid';
-        this.skillPreview = 'meditation';
         this._staged = true;
         this.ui.openPanel('create');
         // A Sorcerer will never wear plate; the refusal is the teaching.
@@ -752,13 +719,11 @@ export class CreatePanel extends Panel {
 
     cap.registerShot('ui-create-invalid', {
       description: 'Party creation refusing to start: a cleared fourth character, its column marked, '
-        + 'what is wrong on the plaque and the Begin oval dead.',
+        + 'what is wrong on the strip and the Begin oval dead.',
       apply: () => {
         this.model.resetParty();
         this.model.clear(3);
         this.sel = 3;
-        this.preview = null;
-        this.skillPreview = null;
         this.notice = null;
         this._staged = true;
         this.ui.openPanel('create');
@@ -767,12 +732,5 @@ export class CreatePanel extends Panel {
     });
   }
 }
-
-/** Hover text for the three per-character tools and their party-wide twins. */
-const TOOL_NOTE = {
-  Random: 'Rolls a profession, a face, a name, a spend and two skills — all of it legal.',
-  Clear: 'Empties the name, the picks and the spend. The profession stays.',
-  Reset: 'Back to the character this slot opened on.',
-};
 
 export default CreatePanel;
