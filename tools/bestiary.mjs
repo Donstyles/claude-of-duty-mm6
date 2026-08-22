@@ -188,17 +188,63 @@ try {
       cam.aspect = 1;
       // Solve the distance from the creature's own extent, so every animal is
       // framed to the same fraction of the picture whatever its real size.
-      const span = Math.max(size.x, size.y, size.z);
+      // Frame by projecting the corners, not by guessing from the longest axis.
+      //
+      // Two passes got this wrong in opposite directions. Solving the distance
+      // from `max(size.x, size.y, size.z)` and a padding factor put creatures
+      // at ~40% of the frame (too small to read as a contact-sheet cell); the
+      // tighter constant that fixed the size then cut the elder dragon's head
+      // and tail off. Both failed for the same reason: the widest thing about a
+      // creature on SCREEN is not its longest axis, it is the diagonal of its
+      // box as seen from wherever the camera is, and a dragon photographed
+      // three-quarter-on presents nearly its full body diagonal.
+      //
+      // So the corners are projected and the answer is measured. Start from the
+      // bounding sphere, which cannot crop at any orientation, then scale the
+      // distance by how much of the frame the corners actually used. NDC extent
+      // goes as roughly 1/distance, so one correction lands it and the second
+      // pass is the check rather than the fit.
       const fov = (cam.fov * Math.PI) / 180;
-      const dist = (span * 0.62) / Math.tan(fov / 2) + span * 0.35;
+      let radius = 0;
+      for (let i = 0; i < 8; i++) {
+        p.set(i & 1 ? maxX : minX, i & 2 ? maxY : minY, i & 4 ? maxZ : minZ).sub(mid3);
+        radius = Math.max(radius, p.length());
+      }
       // Eye height, slightly above centre — the angle a party meets one at.
       const dir = vec().set(0.55, 0.30, 1).normalize();
-      cam.position.copy(mid3).addScaledVector(dir, dist);
-      cam.lookAt(mid3);
-      cam.near = Math.max(0.01, dist * 0.02);
-      cam.far = Math.max(400, dist * 40);
-      cam.updateProjectionMatrix();
-      cam.updateMatrixWorld(true);
+      const FILL = 0.86;                       // of the half-frame, so 14% margin
+      let dist = radius / Math.sin(fov / 2);
+      let used = 1;
+      for (let pass = 0; pass < 3; pass++) {
+        cam.position.copy(mid3).addScaledVector(dir, dist);
+        cam.lookAt(mid3);
+        cam.near = Math.max(0.01, dist * 0.02);
+        cam.far = Math.max(400, dist * 40);
+        cam.updateProjectionMatrix();
+        cam.updateMatrixWorld(true);
+        used = 0;
+        for (let i = 0; i < 8; i++) {
+          p.set(i & 1 ? maxX : minX, i & 2 ? maxY : minY, i & 4 ? maxZ : minZ).project(cam);
+          used = Math.max(used, Math.abs(p.x), Math.abs(p.y));
+        }
+        if (pass && used <= FILL + 0.02) break;   // close enough, and not cropping
+        dist *= used / FILL;
+      }
+      // Never leave a pass that ended over the frame edge: back off until the
+      // corners are inside it, because a cropped creature is a wrong picture
+      // and a slightly small one is only a less good picture.
+      for (let guard = 0; guard < 6 && used > 0.98; guard++) {
+        dist *= 1.08;
+        cam.position.copy(mid3).addScaledVector(dir, dist);
+        cam.lookAt(mid3);
+        cam.updateProjectionMatrix();
+        cam.updateMatrixWorld(true);
+        used = 0;
+        for (let i = 0; i < 8; i++) {
+          p.set(i & 1 ? maxX : minX, i & 2 ? maxY : minY, i & 4 ? maxZ : minZ).project(cam);
+          used = Math.max(used, Math.abs(p.x), Math.abs(p.y));
+        }
+      }
 
       // The render half of `tick`, without the systems that would move the
       // camera back to the party.
