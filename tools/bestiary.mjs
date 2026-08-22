@@ -102,10 +102,21 @@ try {
       if (child.visible) { hidden.push(child.name || '(unnamed)'); child.visible = false; }
     }
 
-    const THREE = await import('three');
+    // No `import('three')` here, and it is not an oversight.
+    //
+    // Vite rewrites bare specifiers when it SERVES a module. A string handed to
+    // `page.evaluate` is never served, so it is never transformed, and the
+    // browser is left to resolve `three` on its own — which it cannot.
+    // `/src/game/MonsterGen.js` below imports three itself and works fine,
+    // because that one goes through the dev server and gets rewritten.
+    //
+    // Rather than reach for the internal dep path, which is a build detail that
+    // changes, nothing here needs the namespace: a Vector3 is available by
+    // cloning one the engine already owns, and a bounding box is eight corners
+    // through `matrixWorld`.
     const gen = await import('/src/game/MonsterGen.js');
     const data = await import('/src/game/data/Monsters.js');
-    window.__bg = { THREE, gen, data, eng, ctx };
+    window.__bg = { gen, data, eng, ctx, vec: () => eng.camera.position.clone() };
 
     return {
       hidden: hidden.length,
@@ -135,7 +146,7 @@ try {
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
     const info = await page.evaluate((mid) => {
-      const { THREE, gen, data, eng, ctx } = window.__bg;
+      const { gen, data, eng, ctx, vec } = window.__bg;
       const def = data.MONSTERS[mid];
 
       for (const o of window.__bg.shown ?? []) eng.scene.remove(o);
@@ -147,9 +158,31 @@ try {
       window.__bg.shown = [g];
 
       g.updateWorldMatrix(true, true);
-      const box = new THREE.Box3().setFromObject(g);
-      const size = box.getSize(new THREE.Vector3());
-      const mid3 = box.getCenter(new THREE.Vector3());
+
+      // The world-space extent, by hand: every mesh's own bounding box has its
+      // eight corners pushed through `matrixWorld`. A creature is a tree of
+      // rotated and offset parts, so taking one geometry's box would frame the
+      // torso and cut the wings off.
+      const p = vec();
+      let minX = Infinity; let minY = Infinity; let minZ = Infinity;
+      let maxX = -Infinity; let maxY = -Infinity; let maxZ = -Infinity;
+      g.traverse((o) => {
+        if (!o.isMesh || !o.geometry) return;
+        o.geometry.computeBoundingBox();
+        const bb = o.geometry.boundingBox;
+        if (!bb) return;
+        for (let i = 0; i < 8; i++) {
+          p.set(i & 1 ? bb.max.x : bb.min.x,
+            i & 2 ? bb.max.y : bb.min.y,
+            i & 4 ? bb.max.z : bb.min.z).applyMatrix4(o.matrixWorld);
+          if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+          if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+        }
+      });
+      if (!Number.isFinite(minX)) return { id: mid, err: 'no mesh with geometry' };
+      const size = { x: maxX - minX, y: maxY - minY, z: maxZ - minZ };
+      const mid3 = vec().set((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
 
       const cam = eng.camera;
       cam.aspect = 1;
@@ -159,7 +192,7 @@ try {
       const fov = (cam.fov * Math.PI) / 180;
       const dist = (span * 0.62) / Math.tan(fov / 2) + span * 0.35;
       // Eye height, slightly above centre — the angle a party meets one at.
-      const dir = new THREE.Vector3(0.55, 0.30, 1).normalize();
+      const dir = vec().set(0.55, 0.30, 1).normalize();
       cam.position.copy(mid3).addScaledVector(dir, dist);
       cam.lookAt(mid3);
       cam.near = Math.max(0.01, dist * 0.02);
