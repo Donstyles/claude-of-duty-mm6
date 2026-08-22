@@ -155,7 +155,15 @@ function plateRecord(src) {
   return rec;
 }
 
-/** Put a plate in the browser's cache. Cheap — no decode, no bitmap. */
+/**
+ * Put a plate in the browser's cache. Cheap — no decode, no bitmap.
+ *
+ * Exported with `interiorPlateUrl` because together they are what
+ * `ServicesPanel._preload` should be: it warms `<kind>.jpg` by hand for three
+ * kinds, and the variant hash sends half of those venues to `<kind>_2.jpg`, so
+ * Saltmarch's tavern and Thornwick's temple have never been warmed by it. That
+ * file is not mine to change; the pair is here for whoever owns it.
+ */
 export function warmPlate(src) {
   if (src) plateRecord(src);
 }

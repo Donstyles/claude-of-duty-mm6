@@ -118,6 +118,15 @@ export class DialoguePanel extends Panel {
     this.conv = model.open(opts);
     // A venue-opened screen already has its room; one opened by a townsperson
     // in the street, or by the capture harness, does not — so ask for it.
+    //
+    // Not redundant, though it has been reported as such. `show()` resolves the
+    // kind from `opts.interior`, then `this.constructor.interior`, then the
+    // venue — and this class sets no `static interior`, so a conversation
+    // started in the street supplies none of the three and `show()` paints no
+    // room at all. This line is the only one that knows the speaker, and
+    // deleting it would blank the room behind every townsperson in Caerwen.
+    // The base class absorbing a second call is what makes it harmless, not
+    // what makes it pointless.
     try {
       this._applyInterior({ interior: model.interiorFor(this.conv.speaker) });
     } catch { /* a missing plate leaves the panel's own surface, which is fine */ }
