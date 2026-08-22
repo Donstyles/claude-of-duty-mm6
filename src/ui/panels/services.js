@@ -5,7 +5,6 @@ import {
 } from '../widgets.js';
 import { icon } from '../Icons.js';
 import { TownServices } from '../../game/TownServices.js';
-import { INTERIOR_BASE } from '../interiorPlates.js';
 import { hashSeed } from '../../core/RNG.js';
 
 /**
@@ -115,34 +114,25 @@ export class ServicesPanel extends Panel {
     this.amount = 100;
     this.rumour = null;
 
-    // The three rooms are fetched by `Panel` the instant a screen opens, and a
-    // door you walk through should not show a grey rectangle while the plate
-    // decodes. Warming them here costs three cached images and removes the
-    // flash entirely — including from the capture harness, which photographs
-    // shortly after opening.
-    this._warm = [];
-    // Relative, and resolved against the document by `_preload`. Written with a
-    // leading slash it asked the domain root for a file that only exists under
-    // the deployed project subpath, so on the phone these three warmed nothing
-    // and cost three 404s — the same one-character defect that left the room
-    // itself black. `INTERIOR_BASE` is the index `artpack.py` writes and is
-    // relative for exactly this reason.
-    for (const kind of ['bank', 'temple', 'tavern']) this._preload(`${INTERIOR_BASE}${kind}.jpg`);
-    // The keeper's face is a painted plate and arrives the same way, so warm
-    // every role the three buildings can ask for. There are more of them than
-    // there were — three roles became three short lists — but they are 256 px
-    // JPEGs and warming them is still cheaper than a frame with a hole in it.
-    // A tavern that lands on `townsfolk` warms one of that role's four plates
-    // rather than the one its own keeper will get, so that single house pays
-    // one decode on first open; every other building is covered exactly.
-    for (const pool of Object.values(KEEPER_LOOK)) {
-      for (const classId of pool) {
-        for (const gender of ['m', 'f']) {
-          this._preload(this.ui.textures?.portrait?.({ key: `svc-${classId}`, classId, gender }));
-        }
-      }
-    }
-
+    // No warming here any more. `base.js` does it, for the whole interface.
+    //
+    // This screen used to hold its own set of `Image` records: three interiors
+    // and every keeper face. It was a second warming system with its own idea
+    // of what a plate's URL is, and that is the failure this codebase keeps
+    // producing — the rooms it warmed were WRONG. A venue's interior is picked
+    // from `INTERIOR_VARIANTS` by a hash of the venue's own id, so Saltmarch's
+    // tavern is `tavern_2.jpg` and Thornwick's temple is `temple_2.jpg`, while
+    // this loop asked for the bare `tavern.jpg` and `temple.jpg`. It had never
+    // warmed either of those two rooms, and it paid ~150 KB a piece to fetch
+    // three plates that particular building would never show. On a phone.
+    //
+    // The shared warmer covers both halves properly and by construction:
+    // `rooms()` enumerates every venue in the town and asks
+    // `interiorPlateUrl(v.kind, v.id)` — the same call `_applyInterior` paints
+    // with, so the plate fetched and the plate painted cannot disagree — and
+    // `faces()` warms all of `PORTRAIT_PLATES.available`, which is a superset
+    // of anything `portrait()` can return, since `pick()` chooses out of that
+    // same set.
     this._registerShots();
   }
 
@@ -168,20 +158,9 @@ export class ServicesPanel extends Panel {
     return this._model;
   }
 
-  /**
-   * Hold a decoded copy of a plate so the first frame that needs it has it.
-   *
-   * The url is resolved against the document, which is what makes a relative
-   * plate path mean the same thing on the dev server at `/` and on the deployed
-   * site under `/claude-of-duty-mm6/`. Portrait urls arrive already absolute
-   * (`UITextures.artUrl` does the same thing) and pass through unchanged.
-   */
-  _preload(src) {
-    if (!src) return;
-    const img = new Image();
-    try { img.src = new URL(src, document.baseURI).href; } catch { img.src = src; }
-    this._warm.push(img);
-  }
+  // `_preload` and `_warm` are gone: see the constructor. `warmPlate` in
+  // `base.js` is the one warmer, and it memoises across every screen rather
+  // than per panel.
 
   // ── chrome ───────────────────────────────────────────────────────────────
 
