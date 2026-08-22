@@ -262,6 +262,43 @@ const AO_SPAN = 0.50;
 const AO_INDIRECT = 0.72;
 const AO_DIRECT = 0.26;
 
+/**
+ * The baked terrain AO the lean splat cannot sample, as one number.
+ *
+ * The lean form declares no ORM samplers — that is most of what makes it fit
+ * inside a phone's sixteen texture units — and it used to set
+ * `vec3 orm = vec3(1.0)`. The comment on that line argued the case for
+ * ROUGHNESS and only roughness. It did not notice that `<aomap_fragment>`,
+ * forty lines further down the same shader, reads the same variable:
+ *
+ *     float terrainAO = clamp(orm.r, 0.0, 1.0);
+ *     reflectedLight.indirectDiffuse *= mix(1.0, terrainAO, 0.75);
+ *
+ * Pinned at 1.0 that is a multiply by one, so the phone was throwing the baked
+ * occlusion away entirely and running BRIGHTER than the desktop the lighting
+ * was art-directed on — measured by `tools/skysweep.mjs` at +6% of ground
+ * luminance at noon rising to +30% at 22:00, the gap tracking the indirect
+ * term's share of the frame.
+ *
+ * 0.534 is measured, not chosen: `tools/aoprobe.mjs` reads the four baked ORM
+ * textures back off the GPU and averages the occlusion channel. Layer means are
+ * 0.5026, 0.5275, 0.5310, 0.5744 — a spread of 13.4% of the mean, tight enough
+ * that one constant is honest, and the probe fails rather than averaging if it
+ * ever stops being.
+ *
+ * Worth the instrument. The suggestion this came from was 0.82, which would
+ * have corrected about a third of the error and looked fine. The two
+ * measurements also agree with each other, which is the real check: solving the
+ * sky sweep's own lean-versus-full ratios for the direct/indirect balance they
+ * imply gives 4.77 at noon falling monotonically to 0.51 at 22:00 — sun
+ * dominant by day, fill dominant at night, which is the curve it has to be.
+ *
+ * What one number cannot restore is the SPATIAL variation: on a phone a crevice
+ * stays as bright as the ridge above it. There is no sampler left to carry it,
+ * and levelling the average is the part that matters.
+ */
+const LEAN_AO = 0.534;
+
 export class TerrainSystem extends System {
   static id = 'terrain';
   static order = 20;
@@ -659,7 +696,14 @@ export class TerrainSystem extends System {
           // No ORM set. Ground is rough by definition and the material's own
           // roughness is already 1.0; what actually reads on screen is the wet
           // and snow modulation below, which is regional and stays.
-          vec3 orm = vec3(1.0);
+          //
+          // The RED channel is not free in the same way, and pinning it at 1.0
+          // was a bug. <aomap_fragment> below reads \`orm.r\` as the baked
+          // terrain occlusion, so a flat 1.0 threw that away and lit the phone
+          // brighter than the desktop the lighting was directed on — +6% of
+          // ground luminance at noon, +30% at 22:00. LEAN_AO is the measured
+          // mean of the four baked occlusion maps; see its own comment.
+          vec3 orm = vec3(${LEAN_AO.toFixed(3)}, 1.0, 1.0);
           float roughnessFactor = roughness;
           ` : `
           vec3 orm =

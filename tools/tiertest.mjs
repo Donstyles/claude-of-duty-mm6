@@ -124,9 +124,25 @@ if (!process.env.TIERTEST_LOCKED) {
  * is checking asserts nothing. The failure message names the file to compare
  * against.
  */
+/*
+ * `bloom: false` at both tiers, and it is a transcription like the rest.
+ *
+ * It read `true` until `render/PostFXSystem.js` turned bloom off at every tier,
+ * and this gate did exactly what the paragraph above says it is for: it went
+ * red and made somebody look. Looked at — the change was deliberate and it was
+ * the owner's, who asked for a picture that is "low res, but very sharp, never
+ * blurry, no bloom". `PostFXSystem`'s own docstring now reads "No bloom, at any
+ * tier". So the CODE is right and this EXPECTATION was the stale half.
+ *
+ * Written down because the obvious repair from the other direction — seeing
+ * `bloom is false, expected true` and switching bloom back on to make the gate
+ * pass — would undo a thing that was asked for, and the failure message alone
+ * does not say which side is wrong. `?bloom=1` still forces it on for anyone
+ * who wants to look at it.
+ */
 const EXPECT = {
-  high:  { lights: 12, particles: 3000, rain: 9000,  bloom: true, smaa: true, detail: true },
-  ultra: { lights: 16, particles: 5000, rain: 16000, bloom: true, smaa: true, detail: true },
+  high:  { lights: 12, particles: 3000, rain: 9000,  bloom: false, smaa: true, detail: true },
+  ultra: { lights: 16, particles: 5000, rain: 16000, bloom: false, smaa: true, detail: true },
 };
 
 /** For contrast in the report: what `low` — every other tool's tier — gives. */

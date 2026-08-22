@@ -1318,11 +1318,36 @@ export class SpellSystem extends System {
     }
   }
 
-  /** Dark enough to want one, and nobody is already carrying a light. */
+  /**
+   * Dark enough to want one, and nobody is already carrying a light.
+   *
+   * Evening opens at 18.75, not 19.5, and the three quarters of an hour that
+   * buys are the ones the owner photographed. `tools/skysweep.mjs` measures the
+   * ground band through a day, and the evening does not fall to night's level
+   * at 19:30 — it gets there sooner and then goes PAST it. Ground luminance
+   * reads 29 at 18:45, 19 at 19:00 and 19 at 19:30, against 24 at midnight. So
+   * for half an hour the outdoors was darker than the middle of the night with
+   * no torch permitted, which is a hole no palette work closes: the twilight
+   * keys were also broken and are fixed, but even repaired, dusk bottoms out
+   * below night.
+   *
+   * 18.75 is where the curve crosses, not a round number chosen to be safe —
+   * at 18:45 the ground is still above its night value, and by 19:00 it is
+   * under it.
+   *
+   * Dawn keeps 5.5, and that is the same test rather than an omission: the
+   * morning climbs back through night's level early, reading 26 at 04:00 and
+   * 31 at 05:00, so the light is already there before the torch would go out.
+   *
+   * It costs torches. A torch burns an hour of world time, so a night went from
+   * ten to about eleven — the consumable was already the dominant cost of being
+   * out after dark and this moves it by a tenth, which is worth paying to not
+   * hand the player a black screen. Dungeons are unconditional and unaffected.
+   */
   _wantTorch(ctx) {
     if (ctx.get('dungeon')?.isInside?.(ctx.get('player').position)) return true;
     const hour = ((ctx.state.worldTime ?? 0) / 3600) % 24;
-    return hour >= 19.5 || hour < 5.5;
+    return hour >= 18.75 || hour < 5.5;
   }
 
   /** Spend a torch out of somebody's pack and burn it for an hour of world time. */
