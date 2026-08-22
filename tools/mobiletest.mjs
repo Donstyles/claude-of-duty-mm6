@@ -86,6 +86,22 @@ try {
   ok(at.status() === 200, 'apple-touch-icon resolves', `status ${at.status()}`);
   const sw = await plain.goto(`http://127.0.0.1:${port}/sw.js`);
   ok(sw.status() === 200, 'service worker served', `status ${sw.status()}`);
+
+  // The cache name has to be a stamp, not a literal.
+  //
+  // `sw.js` caches everything under `/art/` cache-first and forever, and
+  // `artpack.py` rewrites the plates IN PLACE — same filenames, different
+  // pixels. So the cache name is the ONLY thing that gets a repainted icon onto
+  // a phone that already installed the game, and a version somebody has to
+  // remember to bump is one that gets forgotten: it sat at 'caerwen-v2' through
+  // two rounds of repainted art. `stampServiceWorker` in vite.config.js now
+  // derives it from a digest of the build, and 'caerwen-dev' is the unstamped
+  // source literal. Shipping that would mean a cache no phone ever drops.
+  const swBody = await sw.text();
+  const version = swBody.match(/const VERSION = '([^']*)'/)?.[1];
+  ok(!!version && version !== 'caerwen-dev' && /^caerwen-[0-9a-f]{12}$/.test(version),
+    'and its cache name was stamped from the build, not left at the source literal',
+    `VERSION = ${version ?? 'not found'}`);
   await plain.close();
 
   // ── iPhone 14 Pro Max, landscape ───────────────────────────────────────

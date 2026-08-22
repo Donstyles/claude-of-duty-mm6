@@ -16,11 +16,19 @@
  * activate, which is the whole upgrade story — there is no partial migration
  * because there is no state in here worth migrating.
  */
-// Bumped to 'v2' to evict a poisoned shell. See the navigation handler below:
-// v1 could cache a 404 page AS THE APP, and an installed app that did so had no
-// way back on its own. Every old cache is dropped on activate, so a bump is the
-// rescue for anybody already holding one.
-const VERSION = 'caerwen-v2';
+// Stamped at build time by `stampServiceWorker` in vite.config.js, which
+// replaces this line with a digest of every file that ships. Read that plugin
+// for why: the rule above — "art that only changes when its name does" — is
+// false of `/art/`, because `artpack.py` rewrites the plates in place. A
+// repainted item icon keeps its filename, so a hand-written version leaves the
+// fix visible on a fresh device and invisible on the phone that reported it.
+// It was hand-written as 'caerwen-v2' and sat through two rounds of repainted
+// art before anybody noticed.
+//
+// 'dev' is what the dev server serves, and is also the tell: a built `sw.js`
+// still saying 'dev' means the stamp did not run, and `tools/mobiletest.mjs`
+// fails on it rather than shipping a cache that can never expire.
+const VERSION = 'caerwen-dev';
 const SHELL = './index.html';
 
 self.addEventListener('install', (e) => {
