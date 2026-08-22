@@ -828,9 +828,11 @@ for (const [id, c] of Object.entries(CHARACTER)) {
  *   · the mean framing index was **−0.09**, meaning the average door had more
  *     hill in front of it, blocking the approach, than behind it holding it up.
  *     Twenty-eight of fifty-five were on ground you looked down on;
- *   · doors standing at the head of one of the heightfield's own channels: 11,
- *     against a blind-hash expectation of 10.7. Exactly none of the correlation
- *     a landscape is supposed to have with the things in it.
+ *   · doors standing at the head of one of the heightfield's own channels: 10,
+ *     against a blind-hash expectation of 10.7 — a figure computed from the
+ *     density of channel heads over the land, so it is what a coin would score.
+ *     Exactly none of the correlation a landscape is supposed to have with the
+ *     things standing in it. It is now 29.
  *
  * So the door positions are now *searched* rather than hashed: `SITED_ENTRANCES`
  * below is the output of `node tools/approach.mjs --site`, which scores a 12 m

@@ -70,13 +70,15 @@
  *   node tools/approach.mjs --site print           # re-derive SITED_ENTRANCES
  *   node tools/approach.mjs --walk dun_wolf_den --out shots/approach-before
  *   node tools/approach.mjs --walk near --every 30 # the three doors nearest Millhaven
+ *   node tools/approach.mjs --relief out.raw        # …then tools/relief.py paints it
+ *   node tools/approach.mjs --compare before.json,after.json
  *
  * Builds into `dist-check-ravine/`, never `dist/`: nine agents share this
  * checkout and a measurement served from a tree somebody else is rewriting is
  * not a measurement.
  */
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { RNG, WORLD_SEED } from '../src/core/RNG.js';

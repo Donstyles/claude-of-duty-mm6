@@ -976,9 +976,15 @@ def _reach(m):
 def _flat_ground_mask(a):
     """The connected run of flat backdrop reachable from the frame edge.
 
-    What the paper dolls take, and what the item sprites took until the matte
-    was measured. Correct for a solid object; see `_item_ground_mask` for the
-    two ways it fails on an object with a hole in it, and for the numbers.
+    What the item sprites and the paper dolls both took until the matte was
+    measured; both now take `_item_ground_mask`. Correct for a solid object,
+    and see the note over `_item_ground_mask` for the three ways it fails on an
+    object with a hole in it and for the numbers.
+
+    Kept, and called by nothing in this file: it is the BEFORE of that change,
+    and `tools/mattecheck.py --matte border` rebuilds every plate through it so
+    the two mattes can be measured against each other out of one tree rather
+    than out of one tree and somebody's memory.
     """
     return _reach(np.linalg.norm(a - _ground_colour(a), axis=2) < GROUND_NEAR)
 

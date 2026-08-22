@@ -674,18 +674,20 @@ height at **x 1–7** and **x 634–639**; a marble band across the foot at
 **y 471–479**. Three more ribs of the same 7 px width divide the page into four
 character columns:
 
-| | rib | column interior |
+| | rib | column interior, inside its 1 px bevel |
 |---|---|---|
 | 1 | x 1–7 | **x 9–157** |
 | 2 | x 159–165 | **x 167–315** |
-| 3 | x 317–323 | **x 325–473** |
+| 3 | x 317–323 | **x 325–472** |
 | 4 | x 474–480 | **x 482–632** |
 | — | x 634–639 | — |
 
-Each interior is **149 px** wide and the **pitch is 158 px** — measured three
-ways that agree: rib centres, stat-label left edges (33.7 / 190.7 / 348.7) and
-class-name right edges (151.3 / 310.0 / 467.3 / 626.7). Every per-column figure
-below is given for column 1; **add 158 per column.**
+An interior is **149 px** wide — measured 149, 149, 148, 151, which is the
+half-pixel wobble of reading a 1.5× capture and not four different widths — and
+the **pitch is 158 px**, which is measured three ways that agree: rib centres,
+stat-label left edges (33.7 / 190.7 / 348.7) and class-name right edges (151.3 /
+310.0 / 467.3 / 626.7). Every per-column figure below is given for column 1;
+**add 158 per column.**
 
 **The top band, y 0–25.** Three plaques side by side, all with the same 1 px
 dark bevel:
