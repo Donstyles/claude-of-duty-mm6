@@ -65,6 +65,25 @@ html, body {
   height: 100%;
   display: block;
   touch-action: none;
+  /* Low resolution is a STYLE. Low resolution plus a smooth upscale is a fault.
+   *
+   * The renderer draws into a buffer well under the panel's own pixel count —
+   * an iPhone reports a device ratio of 3 and this game caps at 1.25 and climbs
+   * from there, so roughly 1165x537 is being stretched onto 2796x1290. With no
+   * instruction the browser does that stretch bilinearly, and every edge in the
+   * world arrives softened. The owner's words: "Mm6 was low res, but very
+   * sharp, never blurry".
+   *
+   * That is exactly right, and it is not nostalgia. MM6 ran at 640x480 and
+   * point-sampled, so its pixels stayed pixels — the image read as small,
+   * never as out of focus. Ours had the small and the blur, and the blur is
+   * what makes a reduced resolution read as a defect rather than a decision.
+   *
+   * `pixelated` is one word and it turns the adaptive resolution scaler from
+   * something that degrades the picture into something that changes its grain.
+   * The same call the party portraits needed for the same reason. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;   /* Firefox spells it this way */
 }
 
 #ui-root {

@@ -261,6 +261,9 @@ async function main() {
     // one, buying anti-aliasing the panel's own upscale is already doing. See
     // `PostFXSystem.init`. `?postAA=auto` puts it back for a comparison.
     postAA: params.get('postAA') ?? (coarse ? 'off' : 'auto'),
+    // `?bloom=1` restores the pass the tiers all switch off, so the two can be
+    // photographed side by side rather than argued about.
+    bloom: params.get('bloom') === '1',
   });
 
   // Android, launched from the browser rather than the home screen: take

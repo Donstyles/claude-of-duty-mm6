@@ -99,6 +99,9 @@ export class Engine {
       // 'auto' = whatever the quality tier says; 'off' = no SMAA pass at all.
       // `PostFXSystem` explains why a phone sets this.
       postAA: 'auto',
+      // Force the bloom pass back on for a comparison. Off at every tier —
+      // see `PostFXSystem`'s QUALITY table for why.
+      bloom: false,
       anisotropy: 16,
       exposure: 1.0,
       // Pretend the GPU reports this many fragment texture units. 0 = ask it.

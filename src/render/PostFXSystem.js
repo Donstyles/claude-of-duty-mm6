@@ -10,22 +10,44 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 /**
  * The post pipeline.
  *
- * Deliberately restrained. MM6's look is clean and bright, and the modern
- * instinct — heavy bloom, strong vignette, filmic crush, chromatic aberration —
- * would smother exactly the flat, sunny, saturated quality the reference is
- * built on. So: bloom tight enough to catch torches, the sun and spell cores;
- * a grade that warms without crushing; a whisper of vignette and grain; and
- * SMAA, since the sharp edges of stonework alias badly without it.
+ * Almost nothing, on purpose. MM6's look is clean, bright and SHARP, and every
+ * modern instinct — bloom, strong vignette, filmic crush, film grain — smothers
+ * exactly the flat, sunny, crisp quality the reference is built on. What is
+ * left is a warm grade that does not crush, a whisper of vignette where the
+ * painted stone chrome meets the view, and the underwater and damage tints,
+ * which are gameplay signals rather than photography.
+ *
+ * Bloom and grain were both here and are both gone; `?bloom=1` puts bloom back
+ * for a comparison. The reasoning is at `QUALITY` and at `uGrain`.
  *
  * Renders through `engine.renderPipeline`, which the Engine calls in place of
  * its own direct render.
  */
 
+/**
+ * No bloom, at any tier.
+ *
+ * "Mm6 was low res, but very sharp, never blurry, no bloom, no blur" — and
+ * that is a correct reading of the reference rather than a preference. A 1998
+ * software rasteriser had no framebuffer to blur; every bright thing in MM6 is
+ * bright because its texels are bright, and the crispness that comes with that
+ * is most of why the game still reads well today.
+ *
+ * What bloom was buying here was a halo on torches and spell cores. It was
+ * also costing about twelve passes, two of them at full resolution, and
+ * spreading every highlight into its neighbours — which is the same softening
+ * the canvas upscale was doing, applied a second time. A torch reads as fire
+ * because of its colour, its flicker and the pool of light it throws, and all
+ * three of those are still here.
+ *
+ * `?bloom=1` puts it back for a comparison rather than deleting the code: the
+ * pass is still built, it is simply not added.
+ */
 const QUALITY = {
   low: { bloom: false, smaa: false, scale: 1.0 },
-  medium: { bloom: true, smaa: false, scale: 1.0, strength: 0.22 },
-  high: { bloom: true, smaa: true, scale: 1.0, strength: 0.28 },
-  ultra: { bloom: true, smaa: true, scale: 1.0, strength: 0.32 },
+  medium: { bloom: false, smaa: false, scale: 1.0, strength: 0.22 },
+  high: { bloom: false, smaa: true, scale: 1.0, strength: 0.28 },
+  ultra: { bloom: false, smaa: true, scale: 1.0, strength: 0.32 },
 };
 
 /** Warm grade, vignette, grain and a subtle underwater tint. */
@@ -33,8 +55,15 @@ const GradeShader = {
   uniforms: {
     tDiffuse: { value: null },
     uTime: { value: 0 },
-    uVignette: { value: 0.16 },
-    uGrain: { value: 0.012 },
+    // Both cut to what a 1998 rasteriser could have produced, which is nearly
+    // nothing. Film grain is a camera artefact and MM6 had no camera; it was
+    // adding noise to every dark surface in the game, which on a phone panel
+    // reads as compression rather than as film. The vignette stays as a
+    // whisper — the chrome frames the view with real painted stone and a
+    // little fall-off at the edge helps that join — but at a third of what it
+    // was, because the rest of it was a modern lens convention.
+    uVignette: { value: 0.05 },
+    uGrain: { value: 0.0 },
     uWarmth: { value: 0.055 },
     uContrast: { value: 1.0 },
     uSaturation: { value: 1.05 },
@@ -122,7 +151,7 @@ export class PostFXSystem extends System {
 
     this.composer.addPass(new RenderPass(ctx.scene, ctx.camera));
 
-    if (q.bloom) {
+    if (q.bloom || ctx.config.bloom) {
       // Threshold high: only genuinely bright things — flames, the sun disc,
       // spell cores — should glow. A low threshold hazes the whole daylight
       // scene and is the single fastest way to lose MM6's crispness.
@@ -150,15 +179,22 @@ export class PostFXSystem extends System {
     // 0.63 of actual world, so the anti-aliasing was costing three times what
     // drawing the game cost.
     //
-    // And it buys least exactly there. A phone renders at a pixel ratio well
-    // under its device ratio and the panel upscales the result, and that
-    // upscale is itself a low-pass — it softens the stair-steps SMAA exists to
-    // find. MM6's own look is crisp and slightly aliased; this is one of the
-    // rare places where the cheaper choice is also the more faithful one.
+    // The reason given here was WRONG and is worth correcting rather than
+    // quietly replacing. It read: a phone upscales its reduced buffer and that
+    // upscale is itself a low-pass, so it softens the stair-steps SMAA exists
+    // to find. That was true when the canvas scaled bilinearly. It stopped
+    // being true the moment `#viewport` took `image-rendering: pixelated` —
+    // nearest-neighbour preserves every hard edge and magnifies it, so there
+    // is now MORE aliasing on a phone, not less.
+    //
+    // Off anyway, and now for the honest reason: MM6 is aliased. Its edges are
+    // hard because a 1998 rasteriser had no way to soften them, and that
+    // hardness is the look this game is chasing. Smoothing the stair-steps
+    // would fight the sharpness the canvas change was made to get. The three
+    // full-resolution passes it costs are a bonus, not the argument.
     //
     // A device decision rather than a tier one, because `high` is what a phone
-    // gets AND what a modest desktop asks for, and a desktop at 1.0 device
-    // ratio has none of the upscale that makes this safe.
+    // gets AND what a modest desktop asks for.
     if (q.smaa && ctx.config.postAA !== 'off') {
       this.composer.addPass(new SMAAPass(size.x, size.y));
       this.smaa = true;
@@ -198,7 +234,7 @@ export class PostFXSystem extends System {
 
     // Interiors get slightly more vignette and less warmth than open daylight.
     const indoors = !!ctx.get('dungeon')?.current;
-    const targetVig = indoors ? 0.34 : 0.15;
+    const targetVig = indoors ? 0.12 : 0.05;
     const targetWarm = indoors ? 0.015 : 0.055;
     u.uVignette.value += (targetVig - u.uVignette.value) * Math.min(1, dt * 2);
     u.uWarmth.value += (targetWarm - u.uWarmth.value) * Math.min(1, dt * 2);
