@@ -493,6 +493,41 @@ def pack_figures(width=320, feather=0.012):
     native pixel higher than before. That is a fifth of a millimetre and the
     slot boxes are unaffected — they are placed from `FIG.ox/oy`, not from the
     file.
+
+    **The matte is `_item_ground_mask`**, the same as the item sprites take,
+    and for the same reason: a border flood cannot remove the backdrop a
+    SUBJECT ENCLOSES, and a standing human encloses three of them — between
+    the legs, and under each arm. The owner's words were "grey between the
+    paper doll's legs", and `f-thief` is the plate to look at: a solid slab of
+    the generator's grey from her crotch to her boots, composited into the
+    equipment doll on the character screen at phone size.
+
+    The note over `_item_ground_mask` is the one to read for how and why. What
+    is worth adding HERE is that the figures are the harder half of the two
+    populations, and the reason is the control problem: a knight in plate and a
+    mailed cleric are grey almost everywhere, so the affected set and the
+    grey-subject control set are the same eighteen plates. There is no separate
+    control group to hold up.
+
+    What stands in for one is the per-plate safety number `tools/mattecheck.py`
+    prints — the local variation INSIDE what the matte cut, against the
+    backdrop's own, near 1.0 for backdrop and well above it for paint. Over all
+    eighteen the worst is **1.19** (`f-cleric`), which is to say the cut took
+    backdrop everywhere and paint nowhere, on the mailed plates as much as on
+    the robed ones. Retained backdrop, as a share of the plate:
+
+        f-thief    6.6 -> 0.6      m-ranger   2.7 -> 0.5
+        f-archer   3.5 -> 0.1      m-archer   2.1 -> 0.1
+        f-druid    3.4 -> 0.7      mean over 18: 1.21% -> 0.17%
+
+    Ten of the eighteen move. The eight that do not are the ones that stand
+    with their feet apart under a cloak: both knights, both paladins, the male
+    cleric, druid, monk and sorcerer already had a gap the border flood could
+    walk into from below, so there was nothing enclosed to remove.
+
+    `f-thief` keeps a smudge of her own contact shadow at the boots, for the
+    reason `ring_loop` does: a soft shadow is a gradient and the walk stops at
+    gradients. It was there before, underneath the slab.
     """
     out = 0
     tw = width // UPSCALE
@@ -503,7 +538,7 @@ def pack_figures(width=320, feather=0.012):
         a = np.asarray(Image.open(src).convert('RGB'), dtype=np.float32)
         h, w, _ = a.shape
 
-        bg = _flat_ground_mask(a)
+        bg = _item_ground_mask(a, name=os.path.basename(src)[:-4])
         soft = np.asarray(
             Image.fromarray(((~bg) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(2.0)),
             dtype=np.float32) / 255.0
@@ -528,6 +563,14 @@ def pack_items(area=ITEM_TEXEL_AREA, feather=0.012):
     Same treatment as the standing figures, and it now IS — this said so for
     months while doing a LANCZOS resize and a save, which is why every item in
     the game was 24-bit painting next to a party bar of 1998 bitmaps.
+
+    **The matte is `_item_ground_mask`, not `_flat_ground_mask`**, and the note
+    over it is the one to read: a border-reachable flood cannot remove backdrop
+    the SUBJECT ENCLOSES, so 33 plates shipped with the generator's grey still
+    in them — a long bow with a solid panel between its back and its string,
+    a trident on 92% of its own frame. The fix is a flatness test rather than a
+    colour key, because a colour key would have punched holes through 62
+    grey-subject plates to close 33. `tools/mattecheck.py` is the measurement.
 
     The plate is `sqrt(area)` texels on its geometric mean (see the note over
     `ITEM_TEXEL_AREA` for why that measure and not the longest side), quantised
@@ -611,7 +654,8 @@ def pack_items(area=ITEM_TEXEL_AREA, feather=0.012):
         a = np.asarray(Image.open(src).convert('RGB'), dtype=np.float32)
         h, w, _ = a.shape
 
-        bg = _flat_ground_mask(a)
+        base = os.path.basename(src)[:-4]
+        bg = _item_ground_mask(a, name=base)
         soft = np.asarray(
             Image.fromarray(((~bg) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.6)),
             dtype=np.float32) / 255.0
@@ -628,7 +672,6 @@ def pack_items(area=ITEM_TEXEL_AREA, feather=0.012):
         t = np.asarray(im, dtype=np.float32)
         t[..., :3] = retro(t[..., :3], ITEM_BITS, ITEM_AMP)
         im = _hard_double(Image.fromarray(t.astype(np.uint8), 'RGBA'))
-        base = os.path.basename(src)[:-4]
         im.save(os.path.join(ROOT, 'items', base + '.plate.png'), 'PNG', optimize=True)
         # The ratio is still measured off the CROP, not off the texel grid:
         # `ITEM_FOOTPRINT` in `src/game/data/Items.js` was solved against these
@@ -636,12 +679,13 @@ def pack_items(area=ITEM_TEXEL_AREA, feather=0.012):
         # dozen backpack footprints.
         names.append((base, round(cw / ch, 4)))
         # Say when the matte kept nearly the whole frame, exactly as
-        # `pack_spells` does. `_flat_ground_mask` floods from the border and
-        # stops at the first hard edge, so a raw the generator painted on two
-        # grounds — `helm_great` has a dark teal margin round a pale grey
-        # vignette — keeps the inner one as a visible square behind the object.
-        # Nothing here can fix that; the raw has to be repainted, and a line in
-        # the run log is how anybody finds out it needs to be.
+        # `pack_spells` does. This used to be the only warning that a plate had
+        # kept its backdrop, and it under-reported badly: it fires on a plate
+        # that keeps 90% of its frame, and a long bow keeping the panel between
+        # its back and its string keeps 47%. `tools/mattecheck.py` is the real
+        # measurement and it names the share that is backdrop rather than the
+        # share that is opaque. The line stays because a plate over 90% is
+        # still worth a shout in the run log.
         cover = float((np.asarray(im)[..., 3] > 128).mean())
         if cover > 0.90:
             suspect.append((base, round(cover, 3)))
@@ -903,22 +947,355 @@ def _write_interior_index():
     return len(kinds)
 
 
-def _flat_ground_mask(a):
-    """The connected run of flat backdrop reachable from the frame edge."""
-    ring = np.concatenate([
+def _ground_colour(a):
+    """The colour of the backdrop, read off the outermost 8 pixels."""
+    return np.median(np.concatenate([
         a[:8].reshape(-1, 3), a[-8:].reshape(-1, 3),
         a[:, :8].reshape(-1, 3), a[:, -8:].reshape(-1, 3),
-    ])
-    ground = np.median(ring, axis=0)
-    near = (np.linalg.norm(a - ground, axis=2) < 26).astype(np.uint8) * 255
+    ]), axis=0)
 
-    h, w = near.shape
+
+def _reach(m):
+    """The run of `m` a flood fill reaches from OUTSIDE the frame.
+
+    A one-pixel apron of `True` is padded round the mask so the fill always has
+    somewhere to start, even on a raw whose paint runs into a corner.
+
+    RGB, not 'L': Pillow 12's floodfill silently does nothing on a single-band
+    image, which is a very quiet way to get a full-frame matte.
+    """
+    h, w = m.shape
     padded = np.full((h + 2, w + 2), 255, np.uint8)
-    padded[1:-1, 1:-1] = near
+    padded[1:-1, 1:-1] = m.astype(np.uint8) * 255
     im = Image.fromarray(np.dstack([padded] * 3), 'RGB')
     ImageDraw.floodfill(im, (0, 0), (255, 0, 0), thresh=0)
     filled = np.asarray(im)[1:-1, 1:-1]
     return (filled[:, :, 0] == 255) & (filled[:, :, 1] == 0)
+
+
+def _flat_ground_mask(a):
+    """The connected run of flat backdrop reachable from the frame edge.
+
+    What the paper dolls take, and what the item sprites took until the matte
+    was measured. Correct for a solid object; see `_item_ground_mask` for the
+    two ways it fails on an object with a hole in it, and for the numbers.
+    """
+    return _reach(np.linalg.norm(a - _ground_colour(a), axis=2) < GROUND_NEAR)
+
+
+# ── what counts as background, and why it is flatness and not colour ────────
+#
+# A menu review photographed all 88 screens and found a long bow hanging on a
+# shop wall with a SOLID GREY PANEL between its back and its string. It was
+# never one bad plate. `_flat_ground_mask` removes the backdrop that is
+# REACHABLE FROM THE FRAME EDGE by a flood fill, so any backdrop the subject
+# encloses survives into the plate as opaque render background, and the
+# signature is exactly "things with holes". Measured by `tools/mattecheck.py`
+# over all 207 raws, as the share of the finished plate that is opaque AND
+# still the generator's backdrop — before this change, and after it:
+#
+#     spear_trident   83.2 -> 0.0     bow_long        25.1 -> 0.4
+#     qi_choir_key    64.0 -> 0.0     bow_composite   22.6 -> 0.1
+#     ring_loop       35.8 -> 5.6     amulet_necklace 16.2 -> 2.2
+#     helm_great      31.9 -> 1.2     amulet_reliquary 13.7 -> 0.1
+#
+#     over 6% of the plate:  20 plates -> 2      mean over all 207:
+#     over 3%:               33       -> 3      2.59% -> 0.31%
+#
+# The two left over 6% are `_potion_round` and `_potion_flat` and they are
+# deliberate; see `SOLID_GLASS`. The third over 3% is `ring_loop`'s cast
+# shadow. Everything else — every bow, every ring with a visible band, four
+# buckles, both blasters, a coil of rope, the wedge of grey between a pair of
+# greaves — is gone.
+#
+# Three different failures, one cause:
+#
+#   · a hole in the subject — the gap a bow encloses between back and string,
+#     the eye of a ring, the loop of a buckle. Unreachable from the border.
+#   · a painted frame line — `spear_trident` and `qi_choir_key` were generated
+#     with a hairline drawn round the frame, so the fill cannot get past it and
+#     the WHOLE ground survives. `spear_trident` shipped 92% backdrop.
+#   · a backdrop painted as a gradient rather than a flat field — `helm_great`
+#     (a pale disc inside a dark margin), `ring_loop`, `qi_choir_key` again.
+#     The fill stops where the ramp leaves the 26-unit colour window.
+#
+# **The obvious fix is a regression and this is the whole difficulty.** Keying
+# every pixel by distance to the ground colour catches all three AND punches
+# holes through every grey object in the game: a steel blade, a chain hauberk,
+# a pewter buckle are the same grey as the backdrop. The control set is 62
+# plates (`mattecheck.CONTROL`, read off the catalogue's own weapon types and
+# armour skills) and a colour key trades 33 visible defects for sixty-two
+# invisible ones.
+#
+# The property that separates them is not colour, it is FLATNESS. The
+# generator's backdrop is a flat field — its local variation is the PNG's
+# rounding noise and nothing else — while painted metal carries gradient,
+# highlight and edge. Local standard deviation over a 5x5 window, per plate,
+# then the median across all 207:
+#
+#     the render's backdrop      p50 0.53   p75 0.75   p95 1.12
+#     the painted subject        p01 1.55   p05 2.55   p10 3.53   p25 5.92
+#
+# — a factor of two clear at the very tails, and five to ten through the body
+# of each distribution. That is the whole basis of what follows.
+#
+# **Nothing here is an absolute threshold.** The backdrop's own local variation
+# is measured on each raw and every tolerance is a multiple of it, so these are
+# ratios within one image and cannot be wrong the way an absolute figure can
+# (STYLE.md §0). It is not a nicety: `qi_choir_key` was generated on a grainy
+# backdrop that reads 3.85 where `bow_long`'s reads 0.00, and one constant
+# could not have served both. The 75th percentile rather than the 95th, because
+# the 95th is contaminated by the antialiased rim where the backdrop meets the
+# subject — taking it cost `ring_loop` a hole in its band and `gem_emerald`
+# most of its middle.
+#
+# The rule, in one sentence: **a pixel is PASSABLE if it is flat and a shade of
+# the ground; the background is everything the frame edge can reach through
+# passable or ground-coloured pixels, plus every pocket of passable pixels it
+# cannot reach.** A pocket is what a hole in the subject looks like from the
+# outside. "A shade of the ground" is the ground colour scaled — same
+# chromaticity, brightness free within a band — because a gradient backdrop is
+# a lighting ramp and a lighting ramp keeps its hue; it is what holds the walk
+# out of `gem_emerald`, whose middle is flat, enclosed and green.
+#
+# **The safety measurement, and it is the one that matters.** `GROUND_FLAT_K`
+# and `GROUND_POCKET_R` were swept over the 33 defective plates and the 62-plate
+# grey control set. `gain` is backdrop newly removed, as a share of the raw
+# frame. `cut/ground` is the safety number: take what the matte removed, erode
+# it by 4 so the antialiased rim of every hole is excluded, and read that
+# interior's 95th-percentile local variation against the backdrop's own 95th.
+# **Near 1.0 the matte took backdrop; well above 1.0 the matte took paint**, and
+# taking paint is the regression this whole exercise exists to avoid. The rim
+# has to be excluded or the number measures nothing: an edge is high-variance by
+# construction, and the first version of this sweep reported 40x on a plate
+# whose cut was a buckle's empty loop.
+#
+#     K / R    defect: mean gain   n over 1pt   control: WORST cut/ground
+#     ---------------------------------------------------------------------
+#     1.5 / 4        9.20              29             1.05
+#     2.0 / 4        9.80              31             1.23   <- taken
+#     3.0 / 4       10.13              31             1.50
+#     2.0 / 2        9.98              31             1.38
+#     2.0 / 8        9.45              29             1.07
+#
+# Read the right-hand column first. At the setting taken, the single worst cut
+# anywhere in sixty-two plates of steel, mail, plate and pewter has an interior
+# reading 1.23x the backdrop it stands on — which is to say all of them removed
+# backdrop and none of them removed paint. `mace_flail` is that worst case and
+# it is 0.10% of a frame. K = 3.0 buys 0.33 more points of defect and pushes the
+# worst cut to 1.50; K = 1.5 costs 0.60 points and two whole plates. R = 2 lets
+# thinner pockets through and the worst cut goes to 1.38; R = 8 starts refusing
+# real holes.
+#
+# The control set is not curated to flatter this. `spear_trident` and
+# `helm_great` are IN it — they are spear and plate — and they are also two of
+# the worst defects in the set, which is why their gains read 82% and 31% in a
+# column where the next largest is 6%. Every other control plate that moves at
+# all moves because it had the same defect: the loop of `belt_plate`'s buckle,
+# the ring guard of `dagger_main_gauche`, the wedge of grey between
+# `boots_greaves`' two boots. **Twelve of sixty-two move and fifty do not move
+# at all**, and the control set's mean retained backdrop goes 2.32% -> 0.04%.
+#
+# What this does NOT fix, stated plainly: `ring_loop` keeps a smudge of its own
+# cast shadow, because a soft shadow on the render's ground plane is a gradient
+# and the walk stops at gradients. It is grey mush at the edge of a 48-texel
+# plate and it is not worth loosening a rule that is holding sixty-two other
+# plates intact to chase it.
+GROUND_NEAR = 26.0            # how close to the ground colour counts, unchanged
+GROUND_FLAT_WIN = 2           # radius, so a 5x5 window
+GROUND_FLAT_K = 2.0           # multiples of the backdrop's own local variation
+GROUND_FLAT_FLOOR = 0.75      # a lossless flat backdrop measures 0.00; it needs a floor
+GROUND_SHADE_K = 2.0
+GROUND_SHADE_FLOOR = 6.0
+GROUND_SHADE_BAND = (0.55, 1.8)   # how far a lighting ramp may lift or drop the ground
+GROUND_POCKET_R = 4           # a pocket thinner than 9 raw pixels is not a hole
+
+# When a pocket turns out to be MOST of the frame, the thing enclosing it is a
+# frame line and not an object, so the line goes too.
+#
+# `spear_trident` is why. Its raw carries a painted hairline 17 pixels in from
+# each edge and 7 pixels thick; removing the backdrop inside it left the line
+# standing as a faint grey rectangle round the trident at 25% alpha, which on
+# the shop wall is a box drawn round one weapon and none of the others — a
+# smaller defect than the one being fixed, but the same kind.
+#
+# There is no general test that separates a frame line from a bow's string:
+# both are thin paint with backdrop on either side, both are 4 to 8 pixels
+# wide, and a closing wide enough to swallow the one swallows the other. What
+# separates them is what they ENCLOSE. A bow's string encloses a sliver; a
+# frame line encloses the whole picture. So the rule fires only when the pocket
+# just accepted is over half the frame, and then only on paint within
+# `FRAME_LINE_R` of BOTH that pocket and the border-reachable margin outside
+# it — which is the ribbon between them and nothing else. Two of 207 raws
+# trip it, `spear_trident` at a 82% pocket and `qi_choir_key` at 53%; the next
+# largest pocket in the set is `amulet_reliquary`'s at 11%, so there is a
+# factor of five of daylight under the threshold.
+FRAME_LINE_SHARE = 0.5
+FRAME_LINE_R = 12             # a drawn frame up to 24 raw pixels thick
+
+# The three plates whose enclosed backdrop is the PICTURE and not a defect.
+#
+# A bottle is glass and you see the room through its belly, so the flat mass
+# inside `_potion_round` measures exactly like a hole in a bow and is nothing
+# of the kind. **No test on the raw can tell them apart** — both are the
+# render's backdrop, seen through nothing and seen through glass — so this is a
+# list of names and has to be.
+#
+# It is also load-bearing rather than merely cosmetic: twelve tinted potions
+# share these three plates, and `base.js:itemSprite` paints the liquid as
+# `.mm-item-fill` MASKED BY THE PLATE'S OWN ALPHA — "the painted bottle is
+# opaque through the belly", in that file's own words, written when the tint
+# was moved in front of the glass for exactly this reason. Punch the belly out
+# and all twelve potions become wire outlines with nothing in them.
+#
+# Looked at before deciding, not assumed: `_potion_round` reads 16.2% retained
+# backdrop and `_potion_flat` 15.1%, both of it the glass; `_potion_tall` reads
+# 0.2% because its own glass is tinted enough to fail the shade test anyway. It
+# is named here with the other two so a re-generated raw cannot quietly change
+# that. The three are correct as they stand and are left alone.
+SOLID_GLASS = ('_potion_flat', '_potion_round', '_potion_tall')
+
+
+def _box_sum(x, r):
+    """Sum over a (2r+1)-square window, separably, edges extended.
+
+    Written out rather than taken from a summed-area table on purpose: a SAT
+    over a megapixel accumulates to 1e8 and the difference of two neighbouring
+    entries loses every digit that matters, which is how the first version of
+    this measurement reported a local deviation of 9.0 on a patch that is
+    literally constant. Twenty-five adds cannot cancel.
+    """
+    h, w = x.shape[:2]
+    padded = np.pad(x, [(r, r), (r, r)] + [(0, 0)] * (x.ndim - 2), mode='edge')
+    k = 2 * r + 1
+    row = padded[:, 0:w].copy()
+    for i in range(1, k):
+        row += padded[:, i:i + w]
+    out = row[0:h].copy()
+    for i in range(1, k):
+        out += row[i:i + h]
+    return out
+
+
+def _local_sd(a, ground, r=GROUND_FLAT_WIN):
+    """Local standard deviation over a (2r+1)-square window, worst channel.
+
+    Centred on the ground colour before squaring, so the backdrop — the one
+    place the answer has to be exact — is arithmetic on numbers near zero.
+    """
+    x = (a - ground).astype(np.float32)
+    n = float((2 * r + 1) ** 2)
+    mean = _box_sum(x, r) / n
+    var = np.maximum(_box_sum(x * x, r) / n - mean * mean, 0.0)
+    return np.sqrt(var).max(axis=2)
+
+
+def _shade(a, ground):
+    """How far each pixel is off the ground's own colour, and how bright.
+
+    `scale` is the pixel projected onto the ground colour and `resid` what is
+    left over, so a backdrop dimmed or lifted by a lighting ramp keeps a small
+    residual at any brightness while anything of a different hue does not.
+    Scale-free by construction, which is why it survives a coloured backdrop:
+    `ring_loop` is painted on blue-grey and `helm_great` on green-grey.
+    """
+    gg = float(ground @ ground)
+    scale = (a @ ground) / max(gg, 1.0)
+    return np.linalg.norm(a - scale[..., None] * ground, axis=2), scale
+
+
+def _ground_level(field, rim, seed, q=75):
+    """The backdrop's own level of `field`, from two samples that cannot both lie.
+
+    The 8-pixel frame edge, and the run the border flood already proved to be
+    backdrop. Either can be contaminated UPWARD — the frame edge by a subject
+    that runs off the plate or by a painted frame line, the flood by having
+    caught almost nothing at all (`spear_trident`'s flood reaches 6.8% of its
+    own frame) — and neither can be contaminated downward. So the smaller of
+    the two is the honest reading.
+    """
+    levels = [float(np.percentile(field[rim], q))]
+    if seed.sum() > 2000:
+        levels.append(float(np.percentile(field[seed], q)))
+    return min(levels)
+
+
+def _win_count(m, r):
+    """How many of the (2r+1)-square window's pixels are set, outside counted 0."""
+    h, w = m.shape
+    padded = np.zeros((h + 2 * r, w + 2 * r), np.int32)
+    padded[r:r + h, r:r + w] = m
+    k = 2 * r + 1
+    row = padded[:, 0:w].copy()
+    for i in range(1, k):
+        row += padded[:, i:i + w]
+    out = row[0:h].copy()
+    for i in range(1, k):
+        out += row[i:i + h]
+    return out
+
+
+def _erode(m, r):
+    return _win_count(m, r) == (2 * r + 1) ** 2
+
+
+def _dilate(m, r):
+    return _win_count(m, r) > 0
+
+
+def _item_ground_mask(a, name=None):
+    """The backdrop behind an item sprite, holes in the subject included.
+
+    See the note above for why this is a flatness test and not a colour key,
+    and for what each clause is holding out. In order:
+
+      1. the ground colour and the old border-reachable flood, unchanged. It is
+         the seed and it is never wrong — only incomplete.
+      2. the backdrop's own local variation and colour spread, measured off
+         that seed and the frame edge, at the 75th percentile.
+      3. `walk`: flat enough, and a shade of the ground.
+      4. everything the frame edge reaches through `near` OR `walk`. The second
+         alternative is what crosses a gradient backdrop; the first is what
+         keeps the antialiased rim where backdrop meets subject.
+      5. the pockets it could not reach, opened at `GROUND_POCKET_R` so a few
+         flat pixels on a blade are not mistaken for a hole, then grown back
+         over the rim so the cut lands where the old matte's cuts land.
+    """
+    ground = _ground_colour(a)
+    near = np.linalg.norm(a - ground, axis=2) < GROUND_NEAR
+    seed = _reach(near)
+    if name in SOLID_GLASS:
+        return seed
+
+    sd = _local_sd(a, ground)
+    resid, scale = _shade(a, ground)
+    rim = np.zeros(sd.shape, bool)
+    rim[:8] = rim[-8:] = True
+    rim[:, :8] = rim[:, -8:] = True
+
+    tau = max(GROUND_FLAT_K * _ground_level(sd, rim, seed), GROUND_FLAT_FLOOR)
+    rtol = max(GROUND_SHADE_K * _ground_level(resid, rim, seed), GROUND_SHADE_FLOOR)
+    lo, hi = GROUND_SHADE_BAND
+    walk = (sd <= tau) & (resid < rtol) & (scale > lo) & (scale < hi)
+
+    bg = _reach(near | walk)
+    pocket = walk & ~bg
+    core = _erode(pocket, GROUND_POCKET_R)
+    if not core.any():
+        return bg
+
+    # Grown back over `pocket | near` rather than over `pocket` alone: the flat
+    # test is false for two or three pixels either side of every edge, and
+    # without the rim the plate keeps a bright hairline round each hole.
+    kept = _dilate(core, GROUND_POCKET_R + 4) & (pocket | (near & ~bg))
+    seed_ring = bg
+    bg = bg | kept
+
+    # 6. and if that pocket is most of the frame, what enclosed it was a frame
+    #    line rather than an object. See `FRAME_LINE_SHARE`.
+    if kept.mean() > FRAME_LINE_SHARE:
+        bg = bg | (_dilate(kept, FRAME_LINE_R) & _dilate(seed_ring, FRAME_LINE_R) & ~bg)
+    return bg
 
 
 def _side_falloff(h, w, feather):

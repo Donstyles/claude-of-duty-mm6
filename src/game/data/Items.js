@@ -174,7 +174,15 @@ const KIND_FOOTPRINT = {
 const ITEM_FOOTPRINT = {
   shield_buckler: [2, 2], // 1.0000
   shield_small: [2, 2], // 1.0000
-  spear_trident: [2, 3], // 0.5581
+  // No `spear_trident` line. It read `[2, 3], // 0.5581`, and that 0.5581 was
+  // not the trident — it was a painted frame line around the raw that the old
+  // border flood could not get past, so the crop kept the whole render
+  // backdrop and the plate measured squat. With the backdrop gone the plate is
+  // 0.2292, which is a spear, and `weapon:spear`'s own [1, 5] is right. An
+  // override recorded against a defect outlives the defect unless someone
+  // checks, so the numbers in these comments are worth re-running against
+  // `ITEM_PLATE_ASPECT` whenever the packer changes: this was the only one of
+  // the twenty-six that had gone stale.
   boots_sandals: [3, 1], // 1.4746
   art_alderquiet: [2, 2], // 0.9905
   art_assessor: [2, 2], // 1.1468
