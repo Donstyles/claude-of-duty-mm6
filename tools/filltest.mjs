@@ -45,6 +45,16 @@ const browser = await chromium.launch({
   executablePath: CHROME, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
 
+// Watch the BROWSER, not just the page.
+//
+// Two runs died with "Target page, context or browser has been closed" while
+// the page-level crash, close, pageerror and console listeners printed
+// NOTHING. An event that never fires is evidence too: it rules out the page
+// and points one level up, at the browser process going away underneath every
+// retry — which is why retrying inside one browser could never have helped.
+let browserGone = null;
+browser.on('disconnected', () => { browserGone = 'the browser process disconnected'; });
+
 /** Walk the composer and price every pass in megapixels. */
 async function measure(label, query, phone) {
   // A device scale factor of 1, not the 3 a 14 Pro Max reports.
@@ -133,7 +143,8 @@ async function measure(label, query, phone) {
       };
     });
   } catch (err) {
-    if (why.length) console.log(`  ..    ${label}: ${why.slice(0, 4).join(' | ')}`);
+    const said = [...why, browserGone].filter(Boolean);
+    console.log(`  ..    ${label} died: ${said.length ? said.slice(0, 4).join(' | ') : 'nothing was reported at any level'}`);
     throw err;
   } finally {
     try { await page.close(); } catch { /* already gone */ }
