@@ -634,7 +634,19 @@ def our_items(paths=None, long_side=ITEM_LONG_CELL):
     longest side, because the plate is that grid hard-doubled. That answers
     "what palette is in the file", with nothing resampled and no assumption
     about which box it lands in; the fixed sizes answer "what survives the trip
-    to a backpack cell / a shop wall"."""
+    to a backpack cell / a shop wall".
+
+    **The row's population is not fixed, and two runs of it are not always
+    comparable.** `measure` returns None below `ITEM_SAMPLE` painted pixels, so
+    anything that changes a SILHOUETTE changes which plates the family row
+    speaks for. The matte change of `artpack._item_ground_mask` cut the enclosed
+    backdrop out of every bow and out of `spear_trident`, and that took nine
+    plates under the line: the same tree reads 155 plates before and 146 after
+    at the own-grid convention. The numbers themselves did not move — pooled
+    over the 146 both runs can measure, `c95` is 204 against 204 and `step`
+    0.97x against 0.97x — but a reader comparing 155 rows with 146 rows is
+    comparing two samples. Pass the same `paths` to both sides, or intersect the
+    names, whenever a before and an after are being read against each other."""
     paths = paths or sorted(p for p in glob.glob(os.path.join(ART, 'items', '*.plate.png'))
                             if not p.endswith('.plate.plate.png'))
     rows = []

@@ -26,3 +26,9 @@ reference/
 # Byte-cache from importing tools/artpack.py as a module.
 __pycache__/
 *.pyc
+
+# The plate book is generated: `python3 tools/platebook/build.py` rebuilds it
+# from `template.html` plus whatever is in `public/art` right now. Committing the
+# 5.9 MB output would be committing a copy of art that is already in the tree,
+# and a copy is exactly what went stale last time.
+tools/platebook/plate-book.html

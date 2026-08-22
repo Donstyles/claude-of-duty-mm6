@@ -512,7 +512,7 @@ def pack_figures(width=320, feather=0.012):
     What stands in for one is the per-plate safety number `tools/mattecheck.py`
     prints — the local variation INSIDE what the matte cut, against the
     backdrop's own, near 1.0 for backdrop and well above it for paint. Over all
-    eighteen the worst is **1.19** (`f-cleric`), which is to say the cut took
+    eighteen the worst is **1.07** (`f-monk`), which is to say the cut took
     backdrop everywhere and paint nowhere, on the mailed plates as much as on
     the robed ones. Retained backdrop, as a share of the plate:
 
@@ -1001,7 +1001,7 @@ def _flat_ground_mask(a):
 # still the generator's backdrop — before this change, and after it:
 #
 #     spear_trident   83.2 -> 0.0     bow_long        25.1 -> 0.4
-#     qi_choir_key    64.0 -> 0.0     bow_composite   22.6 -> 0.1
+#     qi_choir_key    64.0 -> 0.1     bow_composite   22.6 -> 0.1
 #     ring_loop       35.8 -> 5.6     amulet_necklace 16.2 -> 2.2
 #     helm_great      31.9 -> 1.2     amulet_reliquary 13.7 -> 0.1
 #
@@ -1028,10 +1028,11 @@ def _flat_ground_mask(a):
 # **The obvious fix is a regression and this is the whole difficulty.** Keying
 # every pixel by distance to the ground colour catches all three AND punches
 # holes through every grey object in the game: a steel blade, a chain hauberk,
-# a pewter buckle are the same grey as the backdrop. The control set is 62
+# a pewter buckle are the same grey as the backdrop. The control set is 63
 # plates (`mattecheck.CONTROL`, read off the catalogue's own weapon types and
-# armour skills) and a colour key trades 33 visible defects for sixty-two
-# invisible ones.
+# armour skills — the rule is written out over that tuple and was re-derived
+# from the tree, not remembered) and a colour key trades 33 visible defects for
+# sixty-three invisible ones.
 #
 # The property that separates them is not colour, it is FLATNESS. The
 # generator's backdrop is a flat field — its local variation is the PNG's
@@ -1093,19 +1094,41 @@ def _flat_ground_mask(a):
 # thinner pockets through and the worst cut goes to 1.38; R = 8 starts refusing
 # real holes.
 #
+# **Re-run afterwards with `tools/mattecheck.py` over the shipped plates, which
+# is a second instrument on the same question and agrees:** the control set's
+# mean retained backdrop goes 2.31% -> 0.05%, with 13 of the 63 moving and 50
+# byte-identical.
+#
+# The safety number has to be read against WHICH plates this change touched,
+# and the distinction is worth spelling out because the largest figure in the
+# column belongs to neither category. Of the thirteen that moved, the worst cut
+# is `sword_cutlass` at **1.05** — backdrop, not paint. The worst across all
+# sixty-three is `axe_battle` at 1.23, and that plate DID NOT MOVE: its file is
+# byte-identical before and after, so 1.23 is the old border flood's own cut
+# being reported, not anything this change did. A number from an unmoved plate
+# cannot be evidence about a change.
+#
+# `spear_trident` is the one figure that looks alarming and is not — it reads
+# 4.53, because the thing its cut removed IS paint: the hairline frame drawn
+# round its raw, taken deliberately by the `FRAME_LINE_SHARE` clause below. No
+# other plate in the game trips that clause but `qi_choir_key`, which reads
+# 1.09. Measured pocket shares: `spear_trident` 81.7%, `qi_choir_key` 53.3%,
+# and the next largest anywhere is `amulet_reliquary` at 10.5%.
+#
 # The control set is not curated to flatter this. `spear_trident` and
 # `helm_great` are IN it — they are spear and plate — and they are also two of
 # the worst defects in the set, which is why their gains read 82% and 31% in a
 # column where the next largest is 6%. Every other control plate that moves at
 # all moves because it had the same defect: the loop of `belt_plate`'s buckle,
 # the ring guard of `dagger_main_gauche`, the wedge of grey between
-# `boots_greaves`' two boots. **Twelve of sixty-two move and fifty do not move
-# at all**, and the control set's mean retained backdrop goes 2.32% -> 0.04%.
+# `boots_greaves`' two boots. **Thirteen of sixty-three move and fifty do not
+# move at all** — fifty are byte-identical files before and after — and the
+# control set's mean retained backdrop goes 2.31% -> 0.05%.
 #
 # What this does NOT fix, stated plainly: `ring_loop` keeps a smudge of its own
 # cast shadow, because a soft shadow on the render's ground plane is a gradient
 # and the walk stops at gradients. It is grey mush at the edge of a 48-texel
-# plate and it is not worth loosening a rule that is holding sixty-two other
+# plate and it is not worth loosening a rule that is holding sixty-three other
 # plates intact to chase it.
 GROUND_NEAR = 26.0            # how close to the ground colour counts, unchanged
 GROUND_FLAT_WIN = 2           # radius, so a 5x5 window

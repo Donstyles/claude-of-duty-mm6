@@ -224,16 +224,22 @@ def figure_raws():
 #               (`Icons.js:itemMaterial` says exactly this: everything that is
 #               not a staff and not a bow is steel)
 #     armour    skill `chain` or `plate` — NOT `leather`
-#     helm      unless the record itself says leather, cap or crown
+#     helm / gauntlets / boots   skill set and not `leather`
 #     shield    every one of ours is a metal-faced board
-#     gauntlets / boots / belt whose record is a plate, ring-mail or forge piece
 #
-# That rule returns 60 plates. This tuple is 63: it keeps three the rule does
-# not reach — `boots_boots`, `gauntlets_gauntlets` and `ring_ring`, whose art is
-# metal-fitted leather and a metal band — and adds `belt_forgeband`, which the
-# rule finds and the first hand-written version of this list missed. Erring
-# wide is the safe direction: every extra plate is one more chance for the
-# matte to be caught taking paint, and none of them can flatter the result.
+# That rule returns 60 plates. This tuple is 63, and the three it adds are
+# `belt_plate`, `belt_forgeband` and `ring_ring` — because **`arm()` is called
+# with `skill: null` for every belt and every ring in the catalogue**, so no
+# skill-based rule can reach them however it is phrased. They are kept by what
+# the catalogue calls them: Plate Belt, Forge Band, Iron Ring ("hammered off a
+# nail"). Erring wide is the safe direction — every extra plate is one more
+# chance for the matte to be caught taking paint, and none of them can flatter
+# the result.
+#
+# Two that an earlier draft of this note put outside the rule are in fact inside
+# it: `boots_boots` is `skill: 'chain'` and `gauntlets_gauntlets` is
+# `skill: 'chain'`. Re-derived from the tree, not remembered; the script is
+# eleven lines of node over `Items.js` and the plate directory.
 #
 # `Icons.js:itemMaterial` alone is NOT the instrument, and it is worth saying
 # why since it looks like one: it is the ramp for the SVG fallback icon, it
