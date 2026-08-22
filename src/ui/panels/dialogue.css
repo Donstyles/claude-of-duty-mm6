@@ -226,6 +226,30 @@
   gap: calc(var(--u) * 8);
   overflow-y: auto;
   scrollbar-width: none;
+  /* Fade the list where it runs out of board.
+   *
+   * A shop keeper's board carries six topics — Their Trade, the trade's own
+   * two, the town, News, Directions — and six do not fit. The list scrolls,
+   * which is correct, and `scrollbar-width: none` hides the only thing that
+   * said so. What the owner saw on a phone was a "small white hyphen under
+   * News": the top two or three pixels of the word `Directions`, clipped by
+   * the board's own `overflow: hidden`, reading as a stray dash with no
+   * affordance anywhere near it.
+   *
+   * The same remedy the quest book already uses on its two scrolling columns
+   * (`quests.css`, 10u and 12u): mask the edges so a part-row FADES rather
+   * than being guillotined. A dash is a glyph and invites you to read it; a
+   * fade is a gradient and tells you to scroll.
+   *
+   * Top and bottom both, because the list is centred and can overflow either
+   * way. When it fits, the auto margins leave blank board at both ends and the
+   * fade lands on nothing — so this costs a short list exactly nothing. */
+  -webkit-mask-image: linear-gradient(180deg,
+    transparent 0, #000 calc(var(--u) * 8),
+    #000 calc(100% - var(--u) * 8), transparent 100%);
+  mask-image: linear-gradient(180deg,
+    transparent 0, #000 calc(var(--u) * 8),
+    #000 calc(100% - var(--u) * 8), transparent 100%);
 }
 
 .mm-panel-side[data-panel='dialogue'] .mm-npc-options > *:first-child { margin-top: auto; }

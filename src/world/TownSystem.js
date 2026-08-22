@@ -702,7 +702,23 @@ export class TownSystem extends System {
 
     if (p.centrepiece === 'well') {
       const well = new THREE.Group();
-      const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.6, 0.95, 20, 1, true), granite);
+      // Double-sided, because the shaft is an OPEN cylinder.
+      //
+      // The `true` at the end of `CylinderGeometry` is `openEnded`, so this is
+      // a tube with no lid and no floor — which is what a well is. But the
+      // shared granite is front-side only, so the far wall's inner surface
+      // faced away from the camera and was culled: standing at the rim you
+      // looked through the stone at the cobbles behind it. "Inside of well is
+      // transparent", in the owner's words, and exactly right.
+      //
+      // A clone rather than a flag on `granite` itself: that material is on
+      // every kerb, plinth and doorstep in the kingdom, and making all of them
+      // two-sided to fix one tube would double the fragment work on hundreds
+      // of surfaces whose backs nobody can ever see. One material, one mesh,
+      // no extra draw call.
+      const shaftStone = this._own(granite.clone());
+      shaftStone.side = THREE.DoubleSide;
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.6, 0.95, 20, 1, true), shaftStone);
       ring.position.y = 0.48;
       ring.castShadow = true;
       ring.receiveShadow = true;
