@@ -1,0 +1,320 @@
+<title>The Pipeline That Accumulated</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Public+Sans:wght@400;500;600&family=Source+Code+Pro:wght@400;500&display=swap">
+<style>
+/* A report, so: paper first. Light is the designed state and dark is built
+   underneath it, rather than the other way round — this is a document meant to
+   be read start to finish, not a dashboard to be scanned. */
+:root{
+  --paper:#F5F3EE; --card:#FFFFFF; --sunk:#EDEAE2; --rule:#D7D2C6;
+  --ink:#1A1A18; --ink-2:#54524C; --ink-3:#86837B;
+  --accent:#8A5A2B;              /* annotation ink */
+  --accent-soft:#F0E4D4;
+  --flag:#8C2F2F;                /* spent once, on the cause */
+  --kind-a:#5B6B4E; --kind-b:#8A5A2B; --kind-c:#4E5F73;
+  --shadow:0 1px 2px rgba(30,25,15,.06),0 10px 30px rgba(30,25,15,.06);
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#131311; --card:#1B1B18; --sunk:#232320; --rule:#33332E;
+  --ink:#E6E3DB; --ink-2:#A09D94; --ink-3:#726F68;
+  --accent:#C8935A; --accent-soft:#2D231A;
+  --flag:#C96A62;
+  --kind-a:#8FA57E; --kind-b:#C8935A; --kind-c:#7E9AB8;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 32px rgba(0,0,0,.38);
+}}
+:root[data-theme="dark"]{
+  --paper:#131311; --card:#1B1B18; --sunk:#232320; --rule:#33332E;
+  --ink:#E6E3DB; --ink-2:#A09D94; --ink-3:#726F68;
+  --accent:#C8935A; --accent-soft:#2D231A;
+  --flag:#C96A62;
+  --kind-a:#8FA57E; --kind-b:#C8935A; --kind-c:#7E9AB8;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 32px rgba(0,0,0,.38);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:400 17px/1.68 "Source Serif 4",Georgia,serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:760px;margin:0 auto;padding:0 26px 120px}
+code{font:500 .88em/1.4 "Source Code Pro",ui-monospace,monospace;
+  background:var(--sunk);padding:1px 5px;border-radius:2px}
+
+.mast{padding:80px 0 26px;border-bottom:2px solid var(--ink)}
+.docline{font:500 11px/1 "Public Sans",system-ui,sans-serif;letter-spacing:.17em;
+  text-transform:uppercase;color:var(--accent);margin:0 0 22px;
+  display:flex;gap:14px;flex-wrap:wrap}
+.docline span{color:var(--ink-3)}
+h1{font:600 clamp(36px,6vw,58px)/1.04 "Source Serif 4",Georgia,serif;
+  letter-spacing:-.02em;margin:0 0 20px;text-wrap:balance}
+.lede{font:400 19px/1.62 "Source Serif 4",Georgia,serif;color:var(--ink-2);margin:0}
+
+.cause{margin:38px 0 0;padding:24px 26px;background:var(--card);
+  border:1px solid var(--rule);border-left:3px solid var(--flag);border-radius:3px;
+  box-shadow:var(--shadow)}
+.cause h2{font:500 11px/1 "Public Sans",system-ui,sans-serif;letter-spacing:.17em;
+  text-transform:uppercase;color:var(--flag);margin:0 0 12px}
+.cause p{margin:0;font:400 19px/1.55 "Source Serif 4",Georgia,serif}
+.cause strong{font-weight:600}
+
+h2.sec{font:600 13px/1.3 "Public Sans",system-ui,sans-serif;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:64px 0 8px;
+  padding-bottom:8px;border-bottom:1px solid var(--rule)}
+
+.f{margin:34px 0 0;padding-top:4px}
+.f-h{display:flex;gap:14px;align-items:baseline;margin:0 0 4px}
+.f-n{font:500 13px/1.3 "Source Code Pro",ui-monospace,monospace;color:var(--accent);
+  flex:0 0 auto;padding-top:5px}
+.f-h h3{font:600 24px/1.28 "Source Serif 4",Georgia,serif;margin:0;letter-spacing:-.01em}
+.kind{display:inline-block;font:500 10px/1 "Public Sans",system-ui,sans-serif;
+  letter-spacing:.11em;text-transform:uppercase;padding:4px 7px;border-radius:2px;
+  border:1px solid currentColor;margin:0 0 12px 0}
+.kind[data-k="decision"]{color:var(--kind-c)}
+.kind[data-k="non-decision"]{color:var(--kind-b)}
+.kind[data-k="process"]{color:var(--kind-a)}
+.f p{margin:0 0 13px;color:var(--ink-2)}
+.f p strong{color:var(--ink);font-weight:600}
+.f p:last-child{margin-bottom:0}
+blockquote{margin:16px 0;padding:12px 18px;border-left:2px solid var(--accent);
+  background:var(--accent-soft);font-style:italic;color:var(--ink);border-radius:0 3px 3px 0}
+blockquote p{margin:0;color:inherit}
+.cost{margin-top:14px;padding:12px 16px;background:var(--sunk);border-radius:3px;
+  font:400 15.5px/1.55 "Source Serif 4",Georgia,serif;color:var(--ink-2)}
+.cost b{font:500 10px/1 "Public Sans",system-ui,sans-serif;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:6px}
+
+ol.fix{counter-reset:fix;list-style:none;padding:0;margin:26px 0 0}
+ol.fix li{counter-increment:fix;position:relative;padding-left:52px;margin:0 0 24px}
+ol.fix li::before{content:counter(fix);position:absolute;left:0;top:1px;
+  width:32px;height:32px;border-radius:50%;border:1px solid var(--accent);
+  color:var(--accent);display:grid;place-items:center;
+  font:500 14px/1 "Source Code Pro",ui-monospace,monospace}
+ol.fix b{display:block;font:600 18px/1.35 "Source Serif 4",Georgia,serif;
+  color:var(--ink);margin-bottom:5px}
+ol.fix span{color:var(--ink-2);font-size:16.5px}
+
+.cols{display:grid;gap:22px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-top:24px}
+.col{background:var(--card);border:1px solid var(--rule);border-radius:3px;
+  padding:20px 22px;box-shadow:var(--shadow)}
+.col h4{font:500 11px/1 "Public Sans",system-ui,sans-serif;letter-spacing:.14em;
+  text-transform:uppercase;margin:0 0 14px}
+.col.keep h4{color:var(--kind-a)} .col.bin h4{color:var(--flag)}
+.col ul{margin:0;padding-left:18px;color:var(--ink-2);font-size:16px;line-height:1.62}
+.col li{margin-bottom:7px}
+
+.closing{margin:64px 0 0;padding:28px 30px;background:var(--card);
+  border:1px solid var(--rule);border-top:3px solid var(--accent);border-radius:3px;
+  box-shadow:var(--shadow)}
+.closing p{margin:0;font:400 20px/1.55 "Source Serif 4",Georgia,serif}
+.closing strong{font-weight:600}
+
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--rule);
+  font:400 14px/1.65 "Public Sans",system-ui,sans-serif;color:var(--ink-3)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="docline">Post-mortem <span>· Caerwen / MM6 in Three.js</span> <span>· art pipeline</span></p>
+  <h1>The Pipeline That Accumulated</h1>
+  <p class="lede">Not a list of the bugs. A reading of how the work was approached, and why an
+  unusually disciplined process still produced an architecture nobody would have chosen on
+  purpose.</p>
+</header>
+
+<div class="cause">
+  <h2>Cause</h2>
+  <p>The pipeline was never designed. It <strong>accumulated</strong> — each layer a locally
+  correct, carefully measured response to the layer beneath it, and no step anywhere in the
+  process whose job was to ask what the whole was supposed to be.</p>
+</div>
+
+<h2 class="sec">Findings</h2>
+
+<section class="f">
+  <div class="f-h"><span class="f-n">01</span><h3>The reference was demoted from specification to style guide</h3></div>
+  <span class="kind" data-k="decision">Decision · recorded · never revisited</span>
+  <p><code>REFERENCE.md</code> was rebuilt from real screenshots and is the most rigorous document
+  in the project. It establishes that MM6's monsters are flat billboarded sprites. The creature
+  builder opens by saying so, and then departing:</p>
+  <blockquote><p>MM6's monsters are flat billboarded sprites. We build real articulated meshes
+  instead.</p></blockquote>
+  <p>From then on the reference was consulted on <strong>appearance</strong> — chrome, palettes,
+  type ladders, panel geometry, where a plaque sits — and overruled on <strong>structure</strong>.
+  No single instance of this was wrong. The pattern was: wherever the reference and the
+  implementation disagreed about what a thing <em>is</em>, the implementation won, and the
+  disagreement was closed with prose rather than reopened as a question.</p>
+  <div class="cost"><b>What it cost</b>Every downstream constraint. A sprite pipeline's texture
+  problem is trivial, because the sprite <em>is</em> the texture. A primitive-assembly pipeline's
+  is unsolvable without a mesh-authoring step that was never built — and never identified as
+  missing.</div>
+</section>
+
+<section class="f">
+  <div class="f-h"><span class="f-n">02</span><h3>There was no asset contract, and no moment where its absence could show</h3></div>
+  <span class="kind" data-k="non-decision">Non-decision · the root</span>
+  <p>Nothing anywhere defines what a creature asset <em>is</em>: geometry source, UV authority,
+  texture channels, resolution, view directions, animation representation. So the question never
+  arrived as a question. It arrived as a sequence of small ones, each with an obvious local
+  answer:</p>
+  <p>The creature needs geometry, so assemble primitives. It needs a surface, so bind a tiling
+  texture. The texture darkens everything by five times, so divide the palette by the texture's
+  measured mean. That collapses a family's tier ladder to a single colour, so lift per family
+  rather than per creature.</p>
+  <p><strong>Four defensible steps, each measured, each correct given the one before it.</strong>
+  The result is a structure in which a texture cannot place a feature anywhere in particular — and
+  nobody ever decided that. It was arrived at.</p>
+  <div class="cost"><b>What it cost</b>The correction machinery is real engineering spent
+  neutralising a texture that contributes about 8% surface variation and no colour at all.
+  Sophistication accumulated at the bottom of the stack while the top of it went unexamined.</div>
+</section>
+
+<section class="f">
+  <div class="f-h"><span class="f-n">03</span><h3>Art was commissioned before the thing that would consume it existed</h3></div>
+  <span class="kind" data-k="decision">Sequencing</span>
+  <p>561 assets were generated against prompts rather than against a contract. The generator
+  chosen produces <strong>3D meshes</strong>; nothing downstream could load one, so the budget was
+  spent on 2D swatches instead — 256&nbsp;px, near-greyscale, median saturation 0.028.</p>
+  <p>The order was backwards. The spend was committed before anything in the project could state
+  what shape the output needed to be, so what came back was shaped by what was easy to ask for.</p>
+  <div class="cost"><b>What it cost</b>The capability paid for went unused. The capability actually
+  needed — geometry with a UV layout — was never requested, because nothing existed to request it
+  on behalf of.</div>
+</section>
+
+<section class="f">
+  <div class="f-h"><span class="f-n">04</span><h3>The measurement culture verified inside the frame, never at it</h3></div>
+  <span class="kind" data-k="process">Process · the uncomfortable one</span>
+  <p>This is the project's own strength turned against it. Thirty-two gates, calibration-free
+  metrics, an explicit written rule against quoting an uncalibrated number. All of it aimed one
+  level below the architecture.</p>
+  <p>The gates ask: does the arrow point where the party faces. Is the ground the right brightness
+  at 19:00. Does the hide darken the creature it is bound to. Not one of them can ask
+  <strong>whether a creature should be a mesh at all</strong>, because every one of them
+  presupposes that it is.</p>
+  <p>A gate suite is a conservative instrument. It locks in whatever exists, and the better it
+  gets, the more expensive the frame becomes to question. What was built was an excellent immune
+  system around an architecture that never had a review.</p>
+  <div class="cost"><b>The evidence</b>The structural limit surfaced only when the owner asked a
+  pointed question about the textures. No gate could have raised it. Passing 32 of 32 was
+  compatible with the pipeline being wrong.</div>
+</section>
+
+<section class="f">
+  <div class="f-h"><span class="f-n">05</span><h3>Screen-level fidelity selected for a standard primitives could meet</h3></div>
+  <span class="kind" data-k="process">Process</span>
+  <p>The blind critic loop compared our screens against MM6's screens, and it worked — the
+  interface chrome reached genuine fidelity that way. But a screenshot cannot show that a creature
+  is an assembly of capsules and cones, because at the distance a creature is seen, it doesn't.</p>
+  <p>So the loop converged on precisely the standard the code had already written for itself:
+  <em>identifiable by silhouette alone at forty metres</em>. That standard is true, defensible,
+  and permits primitives forever.</p>
+  <div class="cost"><b>What it cost</b>The optimiser found the cheapest way to satisfy the judge,
+  which is what optimisers do. The judge was the wrong one — and it was the wrong one in a way
+  that looked like rigour.</div>
+</section>
+
+<section class="f">
+  <div class="f-h"><span class="f-n">06</span><h3>Prose was used to settle questions instead of to keep them open</h3></div>
+  <span class="kind" data-k="process">Process · culture</span>
+  <p>The comments in this codebase are unusually good. They carry measurements, retracted claims,
+  alternatives that were tried and rejected with the numbers that rejected them. That is a real
+  asset, and it had a side effect worth naming.</p>
+  <p><strong>A well-argued comment makes a decision feel concluded.</strong> The sentence that
+  departed from the reference reads as a settled trade-off, complete with the thing it preserves
+  in exchange — and it sat at the head of a 1,426-line file, unchallenged, for the life of the
+  project.</p>
+  <p>Comments recorded conclusions. Nothing recorded which conclusions were load-bearing, or what
+  would have to become true for one to be re-argued.</p>
+</section>
+
+<section class="f">
+  <div class="f-h"><span class="f-n">07</span><h3>Fan-out amplified the frame instead of testing it</h3></div>
+  <span class="kind" data-k="process">Process</span>
+  <p>Agents ran in parallel, each rigorous within its brief, each brief scoped to a symptom that
+  had been reported. Parallelism multiplies whatever direction you are already pointed; it is not
+  a check on the direction.</p>
+  <p>The critics were <strong>comparison</strong> critics — does this look like MM6 — and never
+  <strong>architecture</strong> critics. Nothing in the loop had standing to say "this whole
+  approach is wrong for what you are building", so nothing did. Seven agents in a wave produced
+  seven excellent answers to seven questions that all took the pipeline as given.</p>
+</section>
+
+<section class="f">
+  <div class="f-h"><span class="f-n">08</span><h3>Coverage was measurable, so coverage became the goal</h3></div>
+  <span class="kind" data-k="process">Process</span>
+  <p>"Don't infringe" correctly forced original art. That turned art into a
+  <strong>generation</strong> problem, and generation problems are naturally measured by coverage.
+  One of the project's own tasks read: <em>replace every remaining placeholder graphic with painted
+  art</em> — and it passed, 561 of 561.</p>
+  <p>Coverage is easy to measure. Direction is not. The easy measure became the objective, and a
+  pipeline can be at 100% coverage and still be incapable of the look it is covering for.</p>
+</section>
+
+<h2 class="sec">What would have caught it</h2>
+<ol class="fix">
+  <li><b>One vertical slice before any volume.</b><span>A single creature carried end to end —
+  prompt, generation, ingestion, UVs, material, animation, on screen at final quality — before the
+  second asset is generated. The missing UV authority would have surfaced on day one, for the cost
+  of one asset. This alone catches findings 02 and 03, which are the expensive ones.</span></li>
+
+  <li><b>An asset contract as a gate, not a document.</b><span>Write down what a creature asset
+  consists of, then make it machine-checkable so an asset that doesn't satisfy it fails the build.
+  This is what converts finding 02 from a non-decision into a decision somebody has to make on
+  the record.</span></li>
+
+  <li><b>An adversarial architecture critic, separate from the comparison critic.</b><span>Its
+  brief is not "does this look right" but "is this made of the right thing, and what does the
+  reference say it is made of". Run before each wave rather than after, and give it standing to
+  stop work.</span></li>
+
+  <li><b>Departures from the reference get a decision record with a re-open trigger.</b><span>"We
+  depart here because X. Re-open this if Y becomes expensive." The mesh decision would have been
+  re-opened the first time a texture had to be mean-corrected to stop it ruining the
+  palette.</span></li>
+
+  <li><b>Instrument composition, not only correctness.</b><span>"How many draw calls" and "does
+  the arrow point the right way" are correctness. "What is a creature made of, and can that thing
+  carry a feature where a feature needs to be" is composition. The second class was never
+  instrumented, and it is the class that decides whether the first class matters.</span></li>
+</ol>
+
+<h2 class="sec">What carries over</h2>
+<div class="cols">
+  <div class="col keep">
+    <h4>Sound, and renderer-independent</h4>
+    <ul>
+      <li>World generation, the region and travel graph</li>
+      <li>55 dungeons and their generative grammar</li>
+      <li>Quest and campaign data, dialogue, the NPC roster</li>
+      <li>Combat rules, skills, spells, items — all data-driven</li>
+      <li>Save/load, with round-trip verification</li>
+      <li>The panel layer and its measurement system — the one place reference-as-spec actually held</li>
+      <li>The gate harness as a <em>practice</em>. It was pointed at one altitude; the machinery is right</li>
+      <li>The 561 prompts</li>
+    </ul>
+  </div>
+  <div class="col bin">
+    <h4>Does not survive the diagnosis</h4>
+    <ul>
+      <li>Procedural creature construction from primitives</li>
+      <li>The figure and head construction that inherited the same limit</li>
+      <li>The creature material paths</li>
+      <li>The monster and figure plate pipeline</li>
+      <li>Every correction built to compensate for the above — the mean division, the per-family lift, the anchor constants</li>
+    </ul>
+  </div>
+</div>
+
+<div class="closing">
+  <p>One line for the successor's design documents: <strong>decide the asset unit first, in
+  writing, before a single asset is generated</strong> — and let the reference be the specification
+  for what things <em>are</em>, not only for what they look like.</p>
+</div>
+
+<footer>Written against the codebase and its measurements rather than from memory. Every figure
+quoted here — the 8% surface variation, the 0.028 saturation, the five-times darkening, the 32
+gates — was measured during the work described, and several of them only because the pipeline was
+being defended at the time.</footer>
+
+</div>
