@@ -32,3 +32,10 @@ __pycache__/
 # 5.9 MB output would be committing a copy of art that is already in the tree,
 # and a copy is exactly what went stale last time.
 tools/platebook/plate-book.html
+
+# Same rule for the bestiary sheet: `node tools/bestiary.mjs` photographs the
+# 99 creatures into `.agent-tmp/bestiary/`, and `python3 tools/bestiary-page.py`
+# composes them. Both the shots and the page are derived from the tree, so the
+# generators are the thing worth keeping and their output is not.
+tools/platebook/bestiary.html
+.agent-tmp/
