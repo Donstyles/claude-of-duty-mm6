@@ -17,15 +17,24 @@
  * Method — the same creature, twice, everything else held:
  *
  *   1. Build it, render at a real distance in metres, read the framebuffer.
- *   2. Strip `map` from every material on it. Change NOTHING else — not the
- *      colour, not the light, not the camera.
+ *   2. Replace `map` on every material with a FLAT texture at that map's own
+ *      measured mean. Change NOTHING else — not the colour, not the light, not
+ *      the camera.
  *   3. Render again, and difference the two.
  *
- * Because only the map changed, every pixel that differs is a pixel the hide
- * paid for, and the background differences to exactly zero. That is a
+ * Because only the map's variation changed, every pixel that differs is a pixel
+ * the hide paid for, and the background differences to exactly zero. That is a
  * within-frame comparison and needs no calibration (STYLE.md §0): the numbers
  * are the hide's contribution as a fraction of the creature's own luminance, in
  * the same frame, on the same rasteriser.
+ *
+ * Step 2 STRIPPED the map in the first version, and that measured something
+ * else entirely — see the long note at the swap. `albedo = color * map` with
+ * `color` already divided by the plate mean of 0.497 linear, so removing the
+ * map multiplies the creature by 2.01x, and the result was a brightness jump
+ * reported as texture detail. It read 27-31% at every range including 30 m,
+ * where the creature is 38 pixels; detail has to wash out under minification,
+ * and the fact that it did not is what gave the control away.
  *
  * Distances are real metres at the phone's own viewport, because the honest
  * version of this question is not "can I see it in a close-up" — the contact
@@ -51,7 +60,7 @@ const RANGES = [3, 8, 16, 30];
 /** A spread of families, plans and hide characters rather than a favourable
  *  dozen — including the flat-shaded ones, where a texture has least to do. */
 const SAMPLE = [
-  'goblin', 'goblin_king', 'wolf', 'cave_bear', 'skeleton', 'skeleton_knight',
+  'goblin', 'goblin_king', 'wolf', 'dire_wolf', 'skeleton', 'skeleton_knight',
   'green_ooze', 'fire_elemental', 'dragon', 'iron_sentinel', 'giant_spider',
   'harpy', 'troll', 'ghost', 'plague_rat',
 ];
@@ -145,17 +154,60 @@ try {
 
         const withMap = grab();
 
-        // Strip the map and nothing else.
+        // The control is a FLAT texture at the hide's own mean — not no texture.
+        //
+        // The first version of this stripped `map` outright, and that measured
+        // the wrong thing entirely. `albedo = color * map`, and `color` has
+        // already been divided by the hide's mean; every monster plate averages
+        // 0.497 in linear light, so removing the map does not remove detail, it
+        // multiplies the whole creature by 1/0.497 = 2.01x. The 27-31% figures
+        // that came out of it were a brightness jump wearing the shape of
+        // texture detail, at every range including 30 m — which is exactly the
+        // tell, since real detail has to wash out under minification and that
+        // did not.
+        //
+        // Swapping in a flat texture of the same mean holds the product's
+        // average fixed and leaves only the variation around it, which is the
+        // one thing the hide can contribute. The mean is measured off the
+        // texture's own image rather than taken from the table, so the control
+        // cannot be wrong in the same direction as the thing it is controlling.
         const saved = [];
+        const T = (() => {
+          let ctor = null;
+          g.traverse((o) => { if (!ctor && o.material?.map) ctor = o.material.map.constructor; });
+          return ctor;
+        })();
         g.traverse((o) => {
-          if (!o.isMesh || !o.material) return;
+          if (!o.isMesh || !o.material || !T) return;
           for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
-            if (m.map) { saved.push([m, m.map]); m.map = null; m.needsUpdate = true; }
+            if (!m.map?.image) continue;
+            const img = m.map.image;
+            const cv = document.createElement('canvas');
+            cv.width = Math.min(128, img.width || 128);
+            cv.height = Math.min(128, img.height || 128);
+            const c2 = cv.getContext('2d', { willReadFrequently: true });
+            c2.drawImage(img, 0, 0, cv.width, cv.height);
+            const d = c2.getImageData(0, 0, cv.width, cv.height).data;
+            let sr = 0; let sg = 0; let sb = 0;
+            for (let i = 0; i < d.length; i += 4) { sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; }
+            const n = d.length / 4;
+            const flat = document.createElement('canvas');
+            flat.width = 4; flat.height = 4;
+            const f2 = flat.getContext('2d');
+            f2.fillStyle = `rgb(${Math.round(sr / n)},${Math.round(sg / n)},${Math.round(sb / n)})`;
+            f2.fillRect(0, 0, 4, 4);
+            const ft = new T(flat);
+            ft.colorSpace = m.map.colorSpace;
+            ft.wrapS = m.map.wrapS; ft.wrapT = m.map.wrapT;
+            ft.needsUpdate = true;
+            saved.push([m, m.map]);
+            m.map = ft;
+            m.needsUpdate = true;
           }
         });
         const textured = saved.length;
         const without = grab();
-        for (const [m, t] of saved) { m.map = t; m.needsUpdate = true; }
+        for (const [m, t] of saved) { m.map.dispose?.(); m.map = t; m.needsUpdate = true; }
 
         // Luminance difference, and the creature's own luminance to divide by.
         const lum = (b, i) => 0.2126 * b[i] + 0.7152 * b[i + 1] + 0.0722 * b[i + 2];
